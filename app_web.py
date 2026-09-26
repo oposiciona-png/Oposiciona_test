@@ -17,24 +17,22 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# Inyección de CSS general (Ocultar menús A LA FUERZA, Opciones visibles y botones)
+# Inyección de CSS general (Ocultar botones flotantes, opciones visibles y diseño)
 st.markdown("""
 <style>
-/* --- ANIQUILADOR DE RASTROS DE STREAMLIT --- */
+/* --- ANIQUILADOR DE BOTONES FLOTANTES DE STREAMLIT CLOUD (AVATAR Y BARQUITO) --- */
 #MainMenu {visibility: hidden !important;}
 footer {visibility: hidden !important;}
 header {visibility: hidden !important; height: 0px !important;}
 
 [data-testid="stHeader"] {display: none !important;}
-[data-testid="stToolbar"] {display: none !important;}
+[data-testid="stToolbar"] {display: none !important; visibility: hidden !important;}
 [data-testid="stDecoration"] {display: none !important;}
-[data-testid="manage-app-button"] {display: none !important;}
+[data-testid="stAppDeployButton"] {display: none !important; visibility: hidden !important;}
+[data-testid="manage-app-button"] {display: none !important; visibility: hidden !important;}
 .stDeployButton {display: none !important;}
-
-/* El infame botón de Streamlit Cloud */
-.viewerBadge_container {display: none !important; visibility: hidden !important; opacity: 0 !important;}
+.viewerBadge_container {display: none !important;}
 .viewerBadge_link {display: none !important;}
-#viewerBadgeToCompile {display: none !important;}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {
@@ -67,10 +65,16 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
 </style>
 
 <script>
-// Refuerzo en Javascript para cazar el botón si aparece tarde
+// Refuerzo en Javascript para cazar el botón rojo y el avatar si aparecen tarde
 setTimeout(function() {
-    var els = window.parent.document.querySelectorAll('.viewerBadge_container, [data-testid="stToolbar"], .stDeployButton');
-    els.forEach(function(el) { el.style.display = 'none'; });
+    try {
+        var els = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], [data-testid="stToolbar"], .viewerBadge_container');
+        els.forEach(function(el) { 
+            el.style.display = 'none'; 
+            el.style.visibility = 'hidden';
+            el.style.opacity = '0';
+        });
+    } catch(e) {}
 }, 1000);
 </script>
 """, unsafe_allow_html=True)
@@ -181,6 +185,9 @@ if not st.session_state.autenticado:
             st.session_state.rol = rol_usuario
             
             # --- 📡 CHIVATAZO AL GOOGLE SHEETS (DESACTIVADO POR AHORA) ---
+            # Lo dejo comentado para que no cause ningún retraso ni error.
+            # Cuando quieras usarlo, solo borra el símbolo '#' de estas 6 líneas y pon tu URL:
+            
             # try:
             #     URL_GOOGLE_SCRIPT = "PEGA_AQUÍ_LA_URL_DEL_SCRIPT" 
             #     hora_actual = datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
