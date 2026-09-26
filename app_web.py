@@ -3,56 +3,11 @@ import fitz  # PyMuPDF
 import re
 import random
 import requests
-import base64
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", layout="centered")
 
-# --- FUNCIÓN PARA EL FONDO DE PANTALLA ---
-def set_background(image_file):
-    try:
-        with open(image_file, "rb") as f:
-            encoded_string = base64.b64encode(f.read()).decode()
-        
-        st.markdown(
-        f"""
-        <style>
-        /* Imagen ajustada para que se vea COMPLETA sin recortarse */
-        .stApp {{
-            background-image: url(data:image/png;base64,{encoded_string});
-            background-size: contain; /* En lugar de cover, para verla entera */
-            background-position: center bottom; /* Centrada y anclada abajo */
-            background-attachment: fixed;
-            background-repeat: no-repeat;
-            background-color: #e9ecef; /* Un color neutro de fondo por si la pantalla es muy ancha */
-        }}
-        /* Reducir drásticamente los márgenes para que el logo se vea al abrir */
-        .block-container {{
-            background-color: rgba(255, 255, 255, 0.96) !important;
-            border-radius: 15px;
-            padding-top: 1.5rem !important; /* Menos espacio arriba */
-            padding-bottom: 2rem !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-            max-width: 720px !important; /* Entorno más compacto (antes era ~800px) */
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }}
-        /* Cabecera transparente para que no corte el fondo */
-        header[data-testid="stHeader"] {{
-            background-color: transparent !important;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True
-        )
-    except FileNotFoundError:
-        pass 
-
-# Aplicamos el fondo usando tu imagen
-set_background("test-utiles-768x768.png")
-
-
-# Inyección de CSS adicional para las tipografías y botones
+# Inyección de CSS para mejorar tipografías, opciones y botones
 st.markdown("""
 <style>
 /* Aumentar tamaño de las opciones de respuesta y añadir separación */
@@ -64,15 +19,19 @@ div[role="radiogroup"] > label > div:first-child > p {
     line-height: 1.5 !important;
 }
 
-/* --- CÍRCULOS DE OPCIONES MÁS OSCUROS --- */
-/* Borde del círculo más oscuro (casi negro/azul noche) */
+/* Círculos de opciones más oscuros */
 div[data-baseweb="radio"] > div:first-child {
     border-color: #1a252f !important;
     border-width: 2px !important;
 }
-/* Punto interior más oscuro al seleccionar */
 div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     background-color: #1a252f !important;
+}
+
+/* Ajustes del contenedor para aprovechar el espacio */
+.block-container {
+    padding-top: 1.5rem !important;
+    max-width: 750px !important; 
 }
 </style>
 """, unsafe_allow_html=True)
@@ -110,20 +69,28 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 
-# CABECERA VISUAL CENTRADA (Más pequeña y ajustada)
-col1, col2, col3 = st.columns([1, 0.8, 1])
+# CABECERA VISUAL MINIMALISTA
+col1, col2, col3 = st.columns([1, 0.35, 1]) # Columna central muy pequeña para minimizar el logo
 with col2:
     try:
         st.image("oposiciona (320 x 132 px).png", use_container_width=True)
     except:
         pass
-    st.markdown("<p style='text-align: center; font-size: 15px; margin-top: -10px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4; font-weight: bold;'>🌐 www.oposiciona.es</a></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("---")
 
 
 if not st.session_state.autenticado:
-    st.markdown("<h2 style='text-align: center; color: #2C3E50;'>🔒 Acceso Restringido</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
+    # ADORNO DE BIENVENIDA
+    c_img1, c_img2, c_img3 = st.columns([1, 0.5, 1])
+    with c_img2:
+        try:
+            st.image("test-utiles-768x768.png", use_container_width=True)
+        except:
+            pass
+            
+    st.markdown("<h2 style='text-align: center; color: #2C3E50; margin-top: -10px;'>🔒 Acceso Restringido</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 15px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     email_input = st.text_input("Correo electrónico asociado a tu cuenta")
@@ -378,35 +345,44 @@ def action_finalizar_sesion():
 
 
 if not st.session_state.questions:
-    st.markdown("<h3 style='color:#2C3E50;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
-    
-    rol = st.session_state.rol
-    
-    # --- 1. MENÚ DE ESPECIALIDAD SEGÚN EL ROL ---
-    st.markdown("#### 1. Especialidad")
-    
-    if rol == "ACCESO TOTAL":
-        lista_especialidades = list(TESTS_DISPONIBLES.keys())
-        especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
-    elif rol == "ADMTVOS":
-        especialidad = "ADMINISTRATIVOS"
-        st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
-    elif rol == "GESTION":
-        especialidad = "GESTION"
-        st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
-    else:
-        st.error("Error en los permisos de usuario.")
-        st.stop()
-    
-    # --- 2. CATEGORÍA ---
-    st.markdown("#### 2. Categoría")
-    lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
-    categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
-    
-    # --- 3. SELECCIÓN FINAL DE TEST ---
-    st.markdown("#### 3. Selección de Test")
-    tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
-    opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
+    # Mostramos el adorno junto al selector de tests
+    col_texto, col_img = st.columns([2.5, 1])
+    with col_img:
+        try:
+            st.image("test-utiles-768x768.png", use_container_width=True)
+        except:
+            pass
+            
+    with col_texto:
+        st.markdown("<h3 style='color:#2C3E50; margin-top: 10px;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
+        
+        rol = st.session_state.rol
+        
+        # --- 1. MENÚ DE ESPECIALIDAD SEGÚN EL ROL ---
+        st.markdown("#### 1. Especialidad")
+        
+        if rol == "ACCESO TOTAL":
+            lista_especialidades = list(TESTS_DISPONIBLES.keys())
+            especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
+        elif rol == "ADMTVOS":
+            especialidad = "ADMINISTRATIVOS"
+            st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
+        elif rol == "GESTION":
+            especialidad = "GESTION"
+            st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
+        else:
+            st.error("Error en los permisos de usuario.")
+            st.stop()
+        
+        # --- 2. CATEGORÍA ---
+        st.markdown("#### 2. Categoría")
+        lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
+        categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
+        
+        # --- 3. SELECCIÓN FINAL DE TEST ---
+        st.markdown("#### 3. Selección de Test")
+        tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
+        opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
     
     st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
@@ -426,7 +402,7 @@ if not st.session_state.questions:
                 except Exception as e:
                     st.error(f"Error de conexión: {e}")
     
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # CARGA MANUAL DE EMERGENCIA
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
