@@ -18,6 +18,9 @@ CORREOS_AUTORIZADOS = [
     "alumno1@gmail.com",
     "juan.opositor@hotmail.com",
     "tu_correo@gmail.com"
+    "oposiciona@oposiciona.es"
+    "ignacio.garcia.heras@gmail.com"
+    "info@oposiciona.es"
 ]
 
 # 2. Contraseña maestra para que puedan entrar
