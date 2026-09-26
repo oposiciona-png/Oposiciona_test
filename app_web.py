@@ -453,19 +453,33 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO EXTREMO (MODIFICA LAS VARIABLES RAÍZ DE STREAMLIT PARA QUE AFECTE AL PC)
+    # 🌟 FONDO AMARILLO MUY CLARO (A PRUEBA DE PC)
     st.markdown("""
     <style>
-    :root {
-        --background-color: #FFFDE7 !important;
-        --secondary-background-color: #FFFDE7 !important;
-    }
-    html, body, [class*="stApp"], .main, header, section {
+    /* Forzar fondo en el body general de la página */
+    body {
         background-color: #FFFDE7 !important;
-        background-image: none !important;
     }
-    /* Hace transparente la "caja blanca" central del PC */
-    .block-container, div[data-testid="stAppViewContainer"], div[data-testid="stVerticalBlock"] {
+    
+    /* Apuntar directamente a las capas internas de Streamlit en versión PC */
+    .stApp {
+        background-color: #FFFDE7 !important;
+    }
+    
+    div[data-testid="stAppViewContainer"] {
+        background-color: #FFFDE7 !important;
+    }
+    
+    div[data-testid="stMain"] {
+        background-color: #FFFDE7 !important;
+    }
+    
+    header[data-testid="stHeader"] {
+        background-color: transparent !important;
+    }
+    
+    /* En PC, Streamlit usa un contenedor de bloque extra con fondo blanco. Lo volvemos transparente. */
+    .block-container, div.block-container {
         background-color: transparent !important;
     }
     </style>
