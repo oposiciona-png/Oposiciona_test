@@ -3,11 +3,52 @@ import fitz  # PyMuPDF
 import re
 import random
 import requests
+import base64
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", layout="centered")
 
-# Inyección de CSS para mejorar tipografías, opciones y botones
+# --- FUNCIÓN PARA EL FONDO DE PANTALLA ---
+def set_background(image_file):
+    try:
+        with open(image_file, "rb") as f:
+            encoded_string = base64.b64encode(f.read()).decode()
+        
+        st.markdown(
+        f"""
+        <style>
+        /* Imagen de fondo ajustada a la ventana */
+        .stApp {{
+            background-image: url(data:image/png;base64,{encoded_string});
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }}
+        /* Cabecera transparente para que no corte el fondo */
+        header[data-testid="stHeader"] {{
+            background-color: transparent !important;
+        }}
+        /* Panel semitransparente para que el texto sea perfectamente legible */
+        .block-container {{
+            background-color: rgba(255, 255, 255, 0.93) !important;
+            border-radius: 20px;
+            padding: 2.5rem 3rem !important;
+            margin-top: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+        )
+    except FileNotFoundError:
+        pass # Si no subes la imagen a GitHub, el programa seguirá funcionando con fondo normal
+
+# Aplicamos el fondo usando tu imagen
+set_background("test-utiles-768x768.png")
+
+
+# Inyección de CSS adicional para las tipografías y botones
 st.markdown("""
 <style>
 /* Aumentar tamaño de las opciones de respuesta y añadir separación */
@@ -18,10 +59,6 @@ div[role="radiogroup"] > label > div:first-child > p {
     font-size: 18px !important; /* Letra un poco más grande para las opciones */
     line-height: 1.5 !important;
 }
-/* Estilo del contenedor principal para dar un toque más premium */
-.stApp {
-    background-color: #f8f9fa;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -30,7 +67,7 @@ div[role="radiogroup"] > label > div:first-child > p {
 # 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES (AGRUPADO)
 # ==============================================================================
 
-# Lista actualizada de correos
+# Lista actualizada de correos con acceso a la plataforma
 USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
         "ignacio@gmail.com",
@@ -238,35 +275,35 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-# 📂 LISTADO DE TESTS OBTENIDO DEL SCRIPT DE GOOGLE
+# 📂 LISTADO DE TESTS ORDENADO ALFABÉTICAMENTE Y OBTENIDO DE DRIVE
 TESTS_DISPONIBLES = {
-    "GESTION": {
-        "EXAMENES": {
-            "Elige un test de examenes...": None,
-        },
+    "ADMINISTRATIVOS": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
-            "PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
+            "TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
+            "TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
+            "TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
+            "TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
+            "TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
+            "TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
+            "Tema 4 COTIZACION": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
+            "TEMA 8B IP": "https://drive.google.com/uc?export=download&id=1e_ZHpayJ6jm4mIOvQN4joteVAWIIZyPB",
+            "TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None,
         },
         "GENERAL": {
             "Elige un test de general...": None,
         },
     },
-    "ADMINISTRATIVOS": {
-        "EXAMENES": {
-            "Elige un test de examenes...": None,
-        },
+    "GESTION": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
-            "TEMA 8B IP": "https://drive.google.com/uc?export=download&id=1e_ZHpayJ6jm4mIOvQN4joteVAWIIZyPB",
-            "TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
-            "TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
-            "TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
-            "TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
-            "TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
-            "TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
-            "Tema 4 COTIZACION": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
-            "TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
+            "PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None,
         },
         "GENERAL": {
             "Elige un test de general...": None,
