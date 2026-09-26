@@ -6,7 +6,7 @@ import random
 import requests
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
-st.set_page_config(page_title="Plataforma de Tests Oposiciona", layout="centered")
+st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="ICONO OPOSICIONA.png", layout="centered")
 
 # Inyección de CSS general para mejorar tipografías, opciones y botones
 st.markdown("""
