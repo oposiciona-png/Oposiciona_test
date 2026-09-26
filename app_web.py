@@ -453,11 +453,19 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO MUY CLARO (SOLO DURANTE EL TEST) FORZANDO CONTENEDORES MAESTROS
+    # 🌟 FONDO AMARILLO MUY CLARO AGRESIVO PARA PC Y MÓVIL (SOLO DURANTE EL TEST)
     st.markdown("""
     <style>
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    /* Forzar fondo amarillo en TODAS las capas principales de Streamlit */
+    .stApp, 
+    .main,
+    [data-testid="stAppViewContainer"], 
+    [data-testid="stHeader"], 
+    [data-testid="stMain"], 
+    [data-testid="stMainBlockContainer"],
+    .block-container {
         background-color: #FFFDE7 !important; /* Amarillo pastel muy suave */
+        background-image: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
