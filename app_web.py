@@ -52,51 +52,51 @@ USUARIOS_AUTORIZADOS = {
         "ponentes@oposiciona.es",
         "gonzalogonzaleztejedor@gmail.com",
         "ignacio.garcia.heras@gmai.com",
-	"alvarezpugamartin@gmail.com",
-	"claratoledo06@gmail.com",
-	"blancazortega@gmail.com",
-	"mijurista@gmail.com",
-	"silviacabello81@gmail.com",
-	"isabelmgutierrogil@gmail.com",
-	"carmenvl28@gmail.com",
-	"leticiagenerelosolana@gmail.com",
-	"sion.nuba@gmail.com",
+        "alvarezpugamartin@gmail.com",
+        "claratoledo06@gmail.com",
+        "blancazortega@gmail.com",
+        "mijurista@gmail.com",
+        "silviacabello81@gmail.com",
+        "isabelmgutierrogil@gmail.com",
+        "carmenvl28@gmail.com",
+        "leticiagenerelosolana@gmail.com",
+        "sion.nuba@gmail.com",
         "alumno_total2@gmail.com"
     ],
     "ADMTVOS": [
         "alumno1@gmail.com",
-	"andreitalopeamor1@gmail.com",
-	"elenavegasanchez73@gmail.com",
-	" josemurillomoreno.mail@gmail.com",
-	"raulff1997.rfg@gmail.com",
-	"sandradcastanares@gmail.com",
-	"joycewayland@gmail.com",
-	"celia.pks@gmail.com",
-	"cynthiaflafla14@gmail.com",
-	"fragosotorbellinocarmen@gmail.com",
-	"pherrerojulian@gmail.com",
-	"rsilveiraescudero@gmail.com",
-	"delfijv19@gmail.com",
-	"marielipedreira@hotmail.com",
-	"raquelkmacho@gmail.com",
+        "andreitalopeamor1@gmail.com",
+        "elenavegasanchez73@gmail.com",
+        "josemurillomoreno.mail@gmail.com",
+        "raulff1997.rfg@gmail.com",
+        "sandradcastanares@gmail.com",
+        "joycewayland@gmail.com",
+        "celia.pks@gmail.com",
+        "cynthiaflafla14@gmail.com",
+        "fragosotorbellinocarmen@gmail.com",
+        "pherrerojulian@gmail.com",
+        "rsilveiraescudero@gmail.com",
+        "delfijv19@gmail.com",
+        "marielipedreira@hotmail.com",
+        "raquelkmacho@gmail.com",
         "juan_admtvo@hotmail.com"
     ],
     "GESTION": [
         "alumno2@gmail.com",
-	"mariafolgoso@gmail.com",
-	"vsaurod@gmail.com",
-	"mariaquirosmonge5@gmail.com",
-	"vanessagomeztdla@gmail.com",
-	"zoemorcor@gmail.com",
-	"julianayem@gmail.com",
-	"yasminkhalili@gmail.com",
-	"monetcacerescc@gmail.com",
-	"maariiamaji@gmail.com",
-	"micastroespejo@gmail.com",
-	"aisacarrerapexe@gmail.com",
-	"csanchezssmm@gmail.com",
-	"maria.concal@gmail.com",
-	"manuelsan240902@gmail.com",
+        "mariafolgoso@gmail.com",
+        "vsaurod@gmail.com",
+        "mariaquirosmonge5@gmail.com",
+        "vanessagomeztdla@gmail.com",
+        "zoemorcor@gmail.com",
+        "julianayem@gmail.com",
+        "yasminkhalili@gmail.com",
+        "monetcacerescc@gmail.com",
+        "maariiamaji@gmail.com",
+        "micastroespejo@gmail.com",
+        "aisacarrerapexe@gmail.com",
+        "csanchezssmm@gmail.com",
+        "maria.concal@gmail.com",
+        "manuelsan240902@gmail.com",
         "maria_gestion@gmail.com"
     ]
 }
@@ -415,6 +415,24 @@ def action_finalizar_sesion():
 
 if not st.session_state.questions:
 
+    # 🌟 LIMPIEZA DE FONDO (Para cuando se vuelve al menú principal)
+    components.html(
+        """
+        <script>
+            try {
+                var doc = window.parent.document;
+                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], div, section, body');
+                els.forEach(function(el) {
+                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
+                        el.style.removeProperty('background-color');
+                    }
+                });
+            } catch(e) {}
+        </script>
+        """,
+        height=0
+    )
+
     # Mostramos el adorno junto al selector de tests
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -487,34 +505,34 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO EXTREMO POR CSS (ATACA A TODAS LAS CAPAS POSIBLES)
-    st.markdown("""
-    <style>
-    /* Forzamos el root, el html, el body y todas las clases base de Streamlit */
-    :root {
-        --background-color: #FFFDE7 !important;
-        --secondary-background-color: #FFFDE7 !important;
-    }
-    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #FFFDE7 !important;
-        background-image: none !important;
-    }
-    /* Esta es la infame caja blanca central de Streamlit en PC, la volvemos transparente */
-    .block-container, [data-testid="stMainBlockContainer"], div[data-testid="stVerticalBlock"] {
-        background-color: transparent !important;
-        background: transparent !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # 🌟 AUTO-SCROLL AL TOP EN CADA PREGUNTA
+    # 🌟 ATAQUE JS MASIVO PARA FORZAR EL FONDO AMARILLO EN PC Y MÓVIL
     components.html(
         """
         <script>
-            var main = window.parent.document.querySelector('.main');
-            if (main) {
-                main.scrollTo(0, 0);
-            }
+            try {
+                var doc = window.parent.document;
+                
+                // 1. Auto-scroll arriba del todo
+                var mainScroll = doc.querySelector('.main');
+                if (mainScroll) mainScroll.scrollTo(0, 0);
+
+                // 2. Pintar TODO de amarillo bloqueando las cajas blancas del PC
+                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"]');
+                els.forEach(function(el) {
+                    el.style.setProperty('background-color', '#FFFDE7', 'important');
+                    el.style.setProperty('background-image', 'none', 'important');
+                });
+                
+                // Pintar el fondo base de la ventana
+                doc.body.style.setProperty('background-color', '#FFFDE7', 'important');
+
+                // Si hay cajas invisibles que tapan el fondo en PC, volverlas transparentes
+                var innerBlocks = doc.querySelectorAll('div[data-testid="stVerticalBlock"], .block-container');
+                innerBlocks.forEach(function(b) {
+                    b.style.setProperty('background-color', 'transparent', 'important');
+                });
+
+            } catch(e) {}
         </script>
         """,
         height=0
@@ -581,14 +599,25 @@ elif not st.session_state.finished:
 else:
     # --- RESULTADOS FINALES ---
     
-    # 🌟 SCROLL AL TOP EN LOS RESULTADOS
+    # 🌟 LIMPIEZA DE FONDO Y SCROLL AL TOP EN LOS RESULTADOS
     components.html(
         """
         <script>
-            var main = window.parent.document.querySelector('.main');
-            if (main) {
-                main.scrollTo(0, 0);
-            }
+            try {
+                var doc = window.parent.document;
+                
+                // Scroll arriba
+                var mainScroll = doc.querySelector('.main');
+                if (mainScroll) mainScroll.scrollTo(0, 0);
+
+                // Quitar amarillo
+                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], body');
+                els.forEach(function(el) {
+                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
+                        el.style.removeProperty('background-color');
+                    }
+                });
+            } catch(e) {}
         </script>
         """,
         height=0
