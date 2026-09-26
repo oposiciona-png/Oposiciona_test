@@ -17,20 +17,29 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# Inyección de CSS general (Ocultar menú, opciones súper visibles y botones)
+# Inyección de CSS general (Ocultar menús y "Gestionar App", Opciones visibles y botones)
 st.markdown("""
 <style>
-/* --- OCULTAR MENÚ DE STREAMLIT, GITHUB Y FOOTER --- */
+/* --- OCULTAR TODO RASTRO DE STREAMLIT (Botón Manage App, Menú, Footer) --- */
 [data-testid="stHeader"] {
     display: none !important;
 }
 [data-testid="stToolbar"] {
     display: none !important;
 }
+[data-testid="stDeployButton"] {
+    display: none !important;
+}
 #MainMenu {
     display: none !important;
 }
 footer {
+    display: none !important;
+}
+.viewerBadge_container {
+    display: none !important; /* Elimina el botón flotante inferior de GESTIONAR APLICACIÓN */
+}
+.viewerBadge_link {
     display: none !important;
 }
 
