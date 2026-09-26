@@ -193,7 +193,7 @@ except:
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
 
-# 📂 LISTADO DE TESTS CON SUB-CATEGORÍAS
+# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE
 TESTS_DISPONIBLES = {
     "GESTION": {
         "EXAMENES": {
@@ -284,21 +284,25 @@ def action_finalizar_sesion():
 if not st.session_state.questions:
     st.header("Comienza a practicar")
     
-    # --- MENÚ EN CASCADA (Especialidad -> Categoría -> Test) ---
+    # --- MENÚ EN CASCADA DINÁMICO ---
     st.markdown("### 1. Especialidad")
-    especialidad = st.radio("Selecciona tu especialidad:", ["Administrativo", "Gestión"], horizontal=True, label_visibility="collapsed")
+    # Genera la lista leyendo las llaves ("GESTION", "ADMINISTRATIVOS")
+    lista_especialidades = list(TESTS_DISPONIBLES.keys())
+    especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
     
     st.markdown("### 2. Categoría")
-    categoria = st.radio("Selecciona el tipo de test:", ["Específico", "General", "Exámenes"], horizontal=True, label_visibility="collapsed")
+    # Genera la lista leyendo lo que hay dentro de la especialidad elegida ("EXAMENES", "ESPECIFICO"...)
+    lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
+    categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
     
     st.markdown("### 3. Selección de Test")
     tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
-    opcion_seleccionada = st.selectbox(f"Tests de {categoria} ({especialidad}):", list(tests_categoria.keys()), label_visibility="collapsed")
+    opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
     
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-        if st.button(f"Cargar {opcion_seleccionada}", type="primary", use_container_width=True):
+        if st.button(f"Cargar Test Seleccionado", type="primary", use_container_width=True):
             url_descarga = tests_categoria[opcion_seleccionada]
-            with st.spinner(f"Extrayendo {opcion_seleccionada} de forma segura..."):
+            with st.spinner(f"Extrayendo archivo de forma segura..."):
                 try:
                     respuesta = requests.get(url_descarga)
                     if respuesta.status_code == 200:
@@ -314,7 +318,7 @@ if not st.session_state.questions:
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # 2. CARGA MANUAL
+    # 2. CARGA MANUAL DE EMERGENCIA
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
         uploaded_file = st.file_uploader("", type="pdf")
         if uploaded_file is not None:
