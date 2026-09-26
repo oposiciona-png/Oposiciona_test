@@ -30,7 +30,7 @@ div[role="radiogroup"] > label > div:first-child > p {
 # 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES (AGRUPADO)
 # ==============================================================================
 
-# Lista actualizada de correos con las comas corregidas
+# Lista actualizada de correos
 USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
         "ignacio@gmail.com",
@@ -238,7 +238,7 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE Y ACTUALIZADO
+# 📂 LISTADO DE TESTS OBTENIDO DEL SCRIPT DE GOOGLE
 TESTS_DISPONIBLES = {
     "GESTION": {
         "EXAMENES": {
