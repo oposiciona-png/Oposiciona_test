@@ -16,20 +16,14 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# Inyección de CSS general (Ocultar botones flotantes dinámicos, opciones visibles y diseño)
+# 1. INYECCIÓN DE CSS (Para ocultar menús internos, arreglar modo oscuro y opciones)
 st.markdown("""
 <style>
-/* --- ANIQUILADOR BASE DE STREAMLIT --- */
+/* --- ANIQUILADOR BASE DE STREAMLIT (Menús internos) --- */
 #MainMenu, footer, header {visibility: hidden !important; display: none !important;}
 [data-testid="stHeader"] {display: none !important;}
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
-
-/* Cazamos cualquier clase que contenga la palabra "viewerBadge" o "Deploy" */
-[class*="viewerBadge"] {display: none !important; opacity: 0 !important; visibility: hidden !important;}
-[class*="styles_viewerBadge"] {display: none !important; opacity: 0 !important; visibility: hidden !important;}
-[data-testid*="Deploy"] {display: none !important;}
-[data-testid*="manage-app"] {display: none !important;}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {margin-bottom: 12px !important;}
@@ -58,28 +52,33 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     max-width: 750px !important; 
 }
 </style>
-
-<script>
-// --- EL CAZADOR DE BOTONES (Se ejecuta en bucle para cazar al barquito cuando aparezca) ---
-setInterval(function() {
-    try {
-        // Buscamos en el documento principal y en la ventana padre (Cloud Wrapper)
-        var docs = [window.document, window.parent.document];
-        
-        docs.forEach(function(d) {
-            var elementosMalos = d.querySelectorAll('[class*="viewerBadge"], [class*="styles_viewerBadge"], [data-testid*="Deploy"], [data-testid*="manage-app"]');
-            elementosMalos.forEach(function(el) {
-                el.style.display = 'none';
-                el.style.visibility = 'hidden';
-                el.style.opacity = '0';
-                el.style.width = '0px';
-                el.style.height = '0px';
-            });
-        });
-    } catch(e) {}
-}, 500); // Revisa la pantalla cada medio segundo
-</script>
 """, unsafe_allow_html=True)
+
+
+# 2. INYECCIÓN DE JAVASCRIPT INVISIBLE (Para borrar los botones flotantes externos de Streamlit Cloud)
+components.html(
+    """
+    <script>
+    // Bucle para cazar y destruir el barquito y el avatar que Streamlit inyecta por fuera
+    setInterval(function() {
+        try {
+            // "window.top" accede a la capa más alta del navegador, donde Streamlit esconde los botones
+            var topDoc = window.top.document;
+            var elementosMalos = topDoc.querySelectorAll('[class*="viewerBadge"], [class*="styles_viewerBadge"], [data-testid="stAppDeployButton"], [data-testid="manage-app-button"]');
+            
+            elementosMalos.forEach(function(el) {
+                el.style.setProperty('display', 'none', 'important');
+                el.style.setProperty('visibility', 'hidden', 'important');
+                el.style.setProperty('opacity', '0', 'important');
+            });
+        } catch(e) {
+            // Ignorar errores de seguridad cruzada si los hubiera
+        }
+    }, 500); // Revisa cada medio segundo
+    </script>
+    """,
+    height=0, width=0
+)
 
 
 # ==============================================================================
@@ -185,6 +184,15 @@ if not st.session_state.autenticado:
         if rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
+            
+            # --- 📡 CHIVATAZO AL GOOGLE SHEETS (DESACTIVADO POR AHORA) ---
+            # try:
+            #     URL_GOOGLE_SCRIPT = "PEGA_AQUÍ_LA_URL_DEL_SCRIPT" 
+            #     hora_actual = datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
+            #     requests.post(URL_GOOGLE_SCRIPT, json={"correo": correo_limpio, "fecha": hora_actual}, timeout=2)
+            # except:
+            #     pass 
+                
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -458,7 +466,7 @@ if not st.session_state.questions:
     st.markdown("""
     <style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
-    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background-color: #FFFFFF !important; }
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -528,14 +536,14 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # FONDO AMARILLO
+    # FONDO AMARILLO Y SCROLL
     st.markdown("""
     <style>
     :root {
         --background-color: #FFFDE7 !important;
         --secondary-background-color: #FFFDE7 !important;
     }
-    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"] {
         background-color: #FFFDE7 !important;
         background-image: none !important;
     }
@@ -546,7 +554,6 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
-    # SCROLL SEGURO
     components.html(
         """
         <script>
@@ -627,7 +634,7 @@ else:
     st.markdown("""
     <style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
-    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background-color: #FFFFFF !important; }
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
     </style>
     """, unsafe_allow_html=True)
     
