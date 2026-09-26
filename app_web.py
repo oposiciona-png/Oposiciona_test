@@ -381,6 +381,25 @@ def action_finalizar_sesion():
 
 
 if not st.session_state.questions:
+
+    # 🌟 LIMPIEZA DE FONDO (Para cuando se vuelve al menú principal)
+    components.html(
+        """
+        <script>
+            try {
+                var doc = window.parent.document;
+                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], div, section, body');
+                els.forEach(function(el) {
+                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
+                        el.style.removeProperty('background-color');
+                    }
+                });
+            } catch(e) {}
+        </script>
+        """,
+        height=0
+    )
+
     # Mostramos el adorno junto al selector de tests
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -453,46 +472,34 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO MUY CLARO (A PRUEBA DE PC)
-    st.markdown("""
-    <style>
-    /* Forzar fondo en el body general de la página */
-    body {
-        background-color: #FFFDE7 !important;
-    }
-    
-    /* Apuntar directamente a las capas internas de Streamlit en versión PC */
-    .stApp {
-        background-color: #FFFDE7 !important;
-    }
-    
-    div[data-testid="stAppViewContainer"] {
-        background-color: #FFFDE7 !important;
-    }
-    
-    div[data-testid="stMain"] {
-        background-color: #FFFDE7 !important;
-    }
-    
-    header[data-testid="stHeader"] {
-        background-color: transparent !important;
-    }
-    
-    /* En PC, Streamlit usa un contenedor de bloque extra con fondo blanco. Lo volvemos transparente. */
-    .block-container, div.block-container {
-        background-color: transparent !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # 🌟 AUTO-SCROLL AL TOP EN CADA PREGUNTA
+    # 🌟 ATAQUE JS MASIVO PARA FORZAR EL FONDO AMARILLO EN PC Y MÓVIL
     components.html(
         """
         <script>
-            var main = window.parent.document.querySelector('.main');
-            if (main) {
-                main.scrollTo(0, 0);
-            }
+            try {
+                var doc = window.parent.document;
+                
+                // 1. Auto-scroll arriba del todo
+                var mainScroll = doc.querySelector('.main');
+                if (mainScroll) mainScroll.scrollTo(0, 0);
+
+                // 2. Pintar TODO de amarillo bloqueando las cajas blancas del PC
+                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"]');
+                els.forEach(function(el) {
+                    el.style.setProperty('background-color', '#FFFDE7', 'important');
+                    el.style.setProperty('background-image', 'none', 'important');
+                });
+                
+                // Pintar el fondo base de la ventana
+                doc.body.style.setProperty('background-color', '#FFFDE7', 'important');
+
+                // Si hay cajas invisibles que tapan el fondo en PC, volverlas transparentes
+                var innerBlocks = doc.querySelectorAll('div[data-testid="stVerticalBlock"], .block-container');
+                innerBlocks.forEach(function(b) {
+                    b.style.setProperty('background-color', 'transparent', 'important');
+                });
+
+            } catch(e) {}
         </script>
         """,
         height=0
@@ -559,14 +566,25 @@ elif not st.session_state.finished:
 else:
     # --- RESULTADOS FINALES ---
     
-    # 🌟 AUTO-SCROLL AL TOP EN LOS RESULTADOS
+    # 🌟 LIMPIEZA DE FONDO Y SCROLL AL TOP EN LOS RESULTADOS
     components.html(
         """
         <script>
-            var main = window.parent.document.querySelector('.main');
-            if (main) {
-                main.scrollTo(0, 0);
-            }
+            try {
+                var doc = window.parent.document;
+                
+                // Scroll arriba
+                var mainScroll = doc.querySelector('.main');
+                if (mainScroll) mainScroll.scrollTo(0, 0);
+
+                // Quitar amarillo
+                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], body');
+                els.forEach(function(el) {
+                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
+                        el.style.removeProperty('background-color');
+                    }
+                });
+            } catch(e) {}
         </script>
         """,
         height=0
