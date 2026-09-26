@@ -20,13 +20,17 @@ div[role="radiogroup"] > label > div:first-child > p {
     line-height: 1.5 !important;
 }
 
-/* --- CÍRCULOS DE OPCIONES SÚPER NÍTIDOS Y OSCUROS --- */
+/* --- CÍRCULOS DE OPCIONES SÚPER NÍTIDOS, MÁS GRANDES Y NEGRO PURO --- */
 div[data-baseweb="radio"] > div:first-child {
-    border-color: #333333 !important; /* Casi negro */
-    border-width: 3px !important; /* Más gruesos y nítidos */
+    border: 3px solid #000000 !important; /* Borde negro puro y grueso */
+    width: 22px !important; /* Círculo un poco más grande */
+    height: 22px !important;
+    background-color: transparent !important;
 }
 div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
-    background-color: #333333 !important; /* Interior oscuro al seleccionar */
+    background-color: #000000 !important; /* Punto interior negro puro */
+    width: 12px !important; /* Punto interior un poco más grande */
+    height: 12px !important;
 }
 
 /* Ajustes del contenedor para aprovechar el espacio */
