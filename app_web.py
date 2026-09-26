@@ -19,13 +19,13 @@ div[role="radiogroup"] > label > div:first-child > p {
     line-height: 1.5 !important;
 }
 
-/* Círculos de opciones más oscuros */
+/* --- CÍRCULOS DE OPCIONES SÚPER NÍTIDOS Y OSCUROS --- */
 div[data-baseweb="radio"] > div:first-child {
-    border-color: #1a252f !important;
-    border-width: 2px !important;
+    border-color: #333333 !important; /* Casi negro */
+    border-width: 3px !important; /* Más gruesos y nítidos */
 }
 div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
-    background-color: #1a252f !important;
+    background-color: #333333 !important; /* Interior oscuro al seleccionar */
 }
 
 /* Ajustes del contenedor para aprovechar el espacio */
@@ -69,8 +69,8 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 
-# CABECERA VISUAL MINIMALISTA
-col1, col2, col3 = st.columns([1, 0.35, 1]) # Columna central muy pequeña para minimizar el logo
+# CABECERA VISUAL (Ajustada para que el logo se vea completo)
+col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
     try:
         st.image("oposiciona (320 x 132 px).png", use_container_width=True)
@@ -81,16 +81,16 @@ st.markdown("---")
 
 
 if not st.session_state.autenticado:
-    # ADORNO DE BIENVENIDA
-    c_img1, c_img2, c_img3 = st.columns([1, 0.5, 1])
+    # ADORNO DE BIENVENIDA (Muy pequeño y bajo el enlace)
+    c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
         try:
             st.image("test-utiles-768x768.png", use_container_width=True)
         except:
             pass
             
-    st.markdown("<h2 style='text-align: center; color: #2C3E50; margin-top: -10px;'>🔒 Acceso Restringido</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size: 15px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: 5px;'>🔒 Acceso Restringido</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 14px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     email_input = st.text_input("Correo electrónico asociado a tu cuenta")
@@ -402,7 +402,7 @@ if not st.session_state.questions:
                 except Exception as e:
                     st.error(f"Error de conexión: {e}")
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
     
     # CARGA MANUAL DE EMERGENCIA
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
@@ -475,7 +475,7 @@ elif not st.session_state.finished:
         st.info(f"**Explicación:**\n\n{exp if exp else 'No hay explicación disponible.'}")
 
 else:
-    st.header("📊 RESULTADOS FINALES")
+    # --- RESULTADOS FINALES ---
     aciertos = 0
     fallos = 0
     blancos = 0
@@ -495,8 +495,25 @@ else:
             
     nota = (aciertos / len(st.session_state.questions)) * 10 if len(st.session_state.questions) > 0 else 0
     
-    st.markdown(f"### ✅ Acertadas: {aciertos} | ❌ Falladas: {fallos} | ⚪ En blanco: {blancos}")
-    st.markdown(f"## 🎓 NOTA FINAL: {nota:.2f} / 10")
+    # MOSTRAR IMAGEN SEGÚN LA NOTA OBTENIDA
+    c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
+    with c_res2:
+        if nota >= 5.0:
+            try:
+                st.image("test-utiles-768x768.png", use_container_width=True)
+            except:
+                pass
+        else:
+            try:
+                st.image("lloron.jpg", use_container_width=True)
+            except:
+                pass
+    
+    st.markdown("<h3 style='text-align: center; color: #2C3E50;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
+    
+    # TEXTOS DE RESUMEN MÁS PEQUEÑOS Y CENTRADOS
+    st.markdown(f"<h4 style='text-align: center; font-size: 16px; color: #555;'>✅ Acertadas: {aciertos} &nbsp;|&nbsp; ❌ Falladas: {fallos} &nbsp;|&nbsp; ⚪ En blanco: {blancos}</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align: center; font-size: 22px;'>🎓 NOTA FINAL: {nota:.2f} / 10</h3>", unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     c1_top, c2_top, c3_top = st.columns(3)
@@ -505,17 +522,18 @@ else:
     c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
     st.markdown("---")
     
+    # DETALLE DE PREGUNTAS (Con letras reducidas para mayor estética)
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
-        st.markdown(f"<h3 style='color: {color}; font-size: 22px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h3>", unsafe_allow_html=True)
-        st.markdown(f"<p style='font-size:18px;'><b>Pregunta:</b> {q['question_text']}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='font-size:18px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='font-size:18px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color: {color}; font-size: 18px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h4>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:15px;'><b>Pregunta:</b> {q['question_text']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:15px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:15px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
         exp_text = q.get('explanation', 'No disponible.')
-        st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:15px; border-radius:8px;'><p style='font-size:17px;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:12px; border-radius:8px;'><p style='font-size:14px; margin: 0;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
