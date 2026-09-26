@@ -505,7 +505,7 @@ else:
                 pass
         else:
             try:
-                st.image("lloron.jpg", use_container_width=True)
+                st.image("llorona.jpeg", use_container_width=True)
             except:
                 pass
     
