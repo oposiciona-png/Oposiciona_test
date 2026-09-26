@@ -197,9 +197,16 @@ st.markdown("---")
 # Sustituye o añade los IDs de cada test usando la misma estructura
 TESTS_DISPONIBLES = {
     "Elige un test de la lista...": None,
-    "Test de Prueba (Enlace real)": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
-    "TEMA 75": "https://drive.google.com/uc?export=download&id=AQUI_EL_ID_DEL_TEMA_75",
-    "Examen 5 de Septiembre": "https://drive.google.com/uc?export=download&id=AQUI_EL_ID_DEL_EXAMEN"
+    "GESTION - ESPECIFICO - Copia de PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS TEST  TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS CASO PRÁCTICO TEMA 8B INCAPACIDAD PERMANENTE": "https://drive.google.com/uc?export=download&id=1MTmYVUK5nSCgI6L8iM_Zg1kz0E0nycho",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de profesor TEST + SUPUESTO tema 4": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST + SUPUESTO TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
+    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST Y SUPUESTOS TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
 }
 
 if 'questions' not in st.session_state:
