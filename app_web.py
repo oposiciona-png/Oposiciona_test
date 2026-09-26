@@ -18,7 +18,7 @@ CORREOS_AUTORIZADOS = [
     "alumno1@gmail.com",
     "juan.opositor@hotmail.com",
     "tu_correo@gmail.com"
-    "oposiciona@oposiciona.es"
+    "ponentes@oposiciona.es"
     "ignacio.garcia.heras@gmail.com"
     "info@oposiciona.es"
 ]
