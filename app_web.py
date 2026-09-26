@@ -193,23 +193,35 @@ except:
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
 
-# 📂 LISTADO DE TESTS AUTOMÁTICOS CLASIFICADOS
+# 📂 LISTADO DE TESTS CON SUB-CATEGORÍAS
 TESTS_DISPONIBLES = {
     "Administrativo": {
-        "Elige un test de Administrativo...": None,
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS TEST  TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS CASO PRÁCTICO TEMA 8B INCAPACIDAD PERMANENTE": "https://drive.google.com/uc?export=download&id=1MTmYVUK5nSCgI6L8iM_Zg1kz0E0nycho",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de profesor TEST + SUPUESTO tema 4": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST + SUPUESTO TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST Y SUPUESTOS TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
+        "Específico": {
+            "Elige un test específico...": None,
+            "TEMA 75 - Minería": "https://drive.google.com/uc?export=download&id=AQUI_ID_ADMIN_ESPECIFICO_1",
+        },
+        "General": {
+            "Elige un test general...": None,
+            "Simulacro General 1": "https://drive.google.com/uc?export=download&id=AQUI_ID_ADMIN_GENERAL_1",
+        },
+        "Exámenes": {
+            "Elige un examen oficial...": None,
+            "Examen Administrativo 2023": "https://drive.google.com/uc?export=download&id=AQUI_ID_ADMIN_EXAMEN_1",
+        }
     },
     "Gestión": {
-        "Elige un test de Gestión...": None,
-        "GESTION - ESPECIFICO - Copia de PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
+        "Específico": {
+            "Elige un test específico...": None,
+            "TEMA 1 - Constitución": "https://drive.google.com/uc?export=download&id=AQUI_ID_GESTION_ESPECIFICO_1",
+        },
+        "General": {
+            "Elige un test general...": None,
+            "Test de Prueba (Enlace real)": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
+        },
+        "Exámenes": {
+            "Elige un examen oficial...": None,
+            "Examen Gestión 2023": "https://drive.google.com/uc?export=download&id=AQUI_ID_GESTION_EXAMEN_1",
+        }
     }
 }
 
@@ -268,13 +280,16 @@ def action_finalizar_sesion():
 if not st.session_state.questions:
     st.header("Comienza a practicar")
     
-    # --- SELECTOR DE ESPECIALIDAD ---
-    especialidad = st.radio("Selecciona tu especialidad:", ["Administrativo", "Gestión"], horizontal=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --- MENÚ EN CASCADA (Especialidad -> Categoría -> Test) ---
+    st.markdown("### 1. Especialidad")
+    especialidad = st.radio("Selecciona tu especialidad:", ["Administrativo", "Gestión"], horizontal=True, label_visibility="collapsed")
     
-    # 1. CARGA AUTOMÁTICA DESDE DRIVE DEPENDIENDO DE LA ESPECIALIDAD
-    tests_categoria = TESTS_DISPONIBLES[especialidad]
-    opcion_seleccionada = st.selectbox(f"Tests oficiales de {especialidad}:", list(tests_categoria.keys()))
+    st.markdown("### 2. Categoría")
+    categoria = st.radio("Selecciona el tipo de test:", ["Específico", "General", "Exámenes"], horizontal=True, label_visibility="collapsed")
+    
+    st.markdown("### 3. Selección de Test")
+    tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
+    opcion_seleccionada = st.selectbox(f"Tests de {categoria} ({especialidad}):", list(tests_categoria.keys()), label_visibility="collapsed")
     
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
         if st.button(f"Cargar {opcion_seleccionada}", type="primary", use_container_width=True):
@@ -289,7 +304,7 @@ if not st.session_state.questions:
                         else:
                             procesar_preguntas(raw_qs)
                     else:
-                        st.error("Error de descarga. Comprueba que el enlace tiene permisos de lectura ('Cualquier persona con el enlace').")
+                        st.error("Error de descarga. Comprueba que el archivo en Drive tiene permisos de lectura ('Cualquier persona con el enlace').")
                 except Exception as e:
                     st.error(f"Error de conexión: {e}")
     
