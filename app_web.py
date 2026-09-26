@@ -14,7 +14,6 @@ st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centere
 CORREOS_AUTORIZADOS = [
     "ignacio@gmail.com",
     "alumno1@gmail.com",
-    "ponentes@oposiciona.es",
     "juan@hotmail.com"
 ]
 
@@ -194,7 +193,7 @@ except:
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
 
-# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE
+# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE Y ACTUALIZADO
 TESTS_DISPONIBLES = {
     "GESTION": {
         "EXAMENES": {
@@ -214,15 +213,15 @@ TESTS_DISPONIBLES = {
         },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
-            "Copia de RESPUESTAS TEST  TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
-            "Copia de RESPUESTAS CASO PRÁCTICO TEMA 8B INCAPACIDAD PERMANENTE": "https://drive.google.com/uc?export=download&id=1MTmYVUK5nSCgI6L8iM_Zg1kz0E0nycho",
-            "Copia de profesor TEST + SUPUESTO tema 4": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
-            "Copia de PROFESOR TEST + SUPUESTO TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
-            "Copia de PROFESOR TEST y SUPUESTOS TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
-            "Copia de PROFESOR TEST y SUPUESTOS TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
-            "Copia de PROFESOR TEST y SUPUESTOS TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
-            "Copia de PROFESOR TEST y SUPUESTOS TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
-            "Copia de PROFESOR TEST Y SUPUESTOS TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
+            "TEMA 8B IP": "https://drive.google.com/uc?export=download&id=1e_ZHpayJ6jm4mIOvQN4joteVAWIIZyPB",
+            "TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
+            "TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
+            "TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
+            "TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
+            "TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
+            "TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
+            "Tema 4 COTIZACION": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
+            "TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
         },
         "GENERAL": {
             "Elige un test de general...": None,
