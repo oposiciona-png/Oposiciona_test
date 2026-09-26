@@ -453,10 +453,10 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO MUY CLARO (SOLO DURANTE EL TEST)
+    # 🌟 FONDO AMARILLO MUY CLARO (SOLO DURANTE EL TEST) FORZANDO CONTENEDORES MAESTROS
     st.markdown("""
     <style>
-    .stApp {
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: #FFFDE7 !important; /* Amarillo pastel muy suave */
     }
     </style>
