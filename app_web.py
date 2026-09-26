@@ -17,32 +17,36 @@ def set_background(image_file):
         st.markdown(
         f"""
         <style>
-        /* Imagen de fondo ajustada a la ventana */
+        /* Imagen ajustada para que se vea COMPLETA sin recortarse */
         .stApp {{
             background-image: url(data:image/png;base64,{encoded_string});
-            background-size: cover;
-            background-position: center;
+            background-size: contain; /* En lugar de cover, para verla entera */
+            background-position: center bottom; /* Centrada y anclada abajo */
             background-attachment: fixed;
             background-repeat: no-repeat;
+            background-color: #e9ecef; /* Un color neutro de fondo por si la pantalla es muy ancha */
+        }}
+        /* Reducir drásticamente los márgenes para que el logo se vea al abrir */
+        .block-container {{
+            background-color: rgba(255, 255, 255, 0.96) !important;
+            border-radius: 15px;
+            padding-top: 1.5rem !important; /* Menos espacio arriba */
+            padding-bottom: 2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            max-width: 720px !important; /* Entorno más compacto (antes era ~800px) */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }}
         /* Cabecera transparente para que no corte el fondo */
         header[data-testid="stHeader"] {{
             background-color: transparent !important;
-        }}
-        /* Panel semitransparente para que el texto sea perfectamente legible */
-        .block-container {{
-            background-color: rgba(255, 255, 255, 0.93) !important;
-            border-radius: 20px;
-            padding: 2.5rem 3rem !important;
-            margin-top: 2rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }}
         </style>
         """,
         unsafe_allow_html=True
         )
     except FileNotFoundError:
-        pass # Si no subes la imagen a GitHub, el programa seguirá funcionando con fondo normal
+        pass 
 
 # Aplicamos el fondo usando tu imagen
 set_background("test-utiles-768x768.png")
@@ -53,11 +57,22 @@ st.markdown("""
 <style>
 /* Aumentar tamaño de las opciones de respuesta y añadir separación */
 div[role="radiogroup"] > label {
-    margin-bottom: 12px !important; /* Media línea de separación extra */
+    margin-bottom: 12px !important; 
 }
 div[role="radiogroup"] > label > div:first-child > p {
-    font-size: 18px !important; /* Letra un poco más grande para las opciones */
+    font-size: 17px !important; 
     line-height: 1.5 !important;
+}
+
+/* --- CÍRCULOS DE OPCIONES MÁS OSCUROS --- */
+/* Borde del círculo más oscuro (casi negro/azul noche) */
+div[data-baseweb="radio"] > div:first-child {
+    border-color: #1a252f !important;
+    border-width: 2px !important;
+}
+/* Punto interior más oscuro al seleccionar */
+div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
+    background-color: #1a252f !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -67,7 +82,7 @@ div[role="radiogroup"] > label > div:first-child > p {
 # 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES (AGRUPADO)
 # ==============================================================================
 
-# Lista actualizada de correos con acceso a la plataforma
+# Lista actualizada de correos
 USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
         "ignacio@gmail.com",
@@ -95,15 +110,14 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 
-# CABECERA VISUAL CENTRADA (Se muestra tanto en el login como dentro)
-col1, col2, col3 = st.columns([1, 1.2, 1])
+# CABECERA VISUAL CENTRADA (Más pequeña y ajustada)
+col1, col2, col3 = st.columns([1, 0.8, 1])
 with col2:
     try:
-        # El logo se ajustará automáticamente a esta columna central (más pequeño)
         st.image("oposiciona (320 x 132 px).png", use_container_width=True)
     except:
         pass
-    st.markdown("<p style='text-align: center; font-size: 16px; margin-top: -10px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4; font-weight: bold;'>🌐 www.oposiciona.es</a></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 15px; margin-top: -10px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4; font-weight: bold;'>🌐 www.oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("---")
 
 
@@ -275,7 +289,7 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-# 📂 LISTADO DE TESTS ORDENADO ALFABÉTICAMENTE Y OBTENIDO DE DRIVE
+# 📂 LISTADO DE TESTS OBTENIDO DE DRIVE
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -435,7 +449,7 @@ elif not st.session_state.finished:
     if q['preamble']:
         st.write(q['preamble'])
         
-    # TEXTO DE LA PREGUNTA MÁS ESTÉTICO Y LIGERAMENTE MÁS PEQUEÑO
+    # TEXTO DE LA PREGUNTA
     st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 20px; line-height: 1.4;'>{q['question_text']}</p>", unsafe_allow_html=True)
     
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
