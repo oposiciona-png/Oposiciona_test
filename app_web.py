@@ -16,14 +16,35 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# 1. INYECCIÓN DE CSS (Para ocultar menús internos, arreglar modo oscuro y opciones)
+# 1. INYECCIÓN DE CSS (Ocultar menús, arreglar opciones y BOMBA NUCLEAR para botones flotantes)
 st.markdown("""
 <style>
 /* --- ANIQUILADOR BASE DE STREAMLIT (Menús internos) --- */
 #MainMenu, footer, header {visibility: hidden !important; display: none !important;}
-[data-testid="stHeader"] {display: none !important;}
+[data-testid="stHeader"] {display: none !important; height: 0px !important;}
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
+
+/* --- OCULTAR BOTONES POR NOMBRE (Si Streamlit los inyecta dentro) --- */
+[data-testid="stAppDeployButton"], 
+[data-testid="manage-app-button"],
+[class*="viewerBadge"], 
+[class*="stDeployButton"], 
+[class*="manage-app-button"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* --- LA BOMBA NUCLEAR: Ocultar TODO lo que flote en la esquina inferior derecha --- */
+div[style*="position: fixed"][style*="bottom:"][style*="right:"],
+div[style*="position: absolute"][style*="bottom:"][style*="right:"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: -9999 !important;
+}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {margin-bottom: 12px !important;}
@@ -55,14 +76,12 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
 """, unsafe_allow_html=True)
 
 
-# 2. INYECCIÓN DE JAVASCRIPT INVISIBLE (Para borrar los botones flotantes externos de Streamlit Cloud)
+# 2. INYECCIÓN DE JAVASCRIPT INVISIBLE (Refuerzo por si Streamlit Cloud se salta el CSS)
 components.html(
     """
     <script>
-    // Bucle para cazar y destruir el barquito y el avatar que Streamlit inyecta por fuera
     setInterval(function() {
         try {
-            // "window.top" accede a la capa más alta del navegador, donde Streamlit esconde los botones
             var topDoc = window.top.document;
             var elementosMalos = topDoc.querySelectorAll('[class*="viewerBadge"], [class*="styles_viewerBadge"], [data-testid="stAppDeployButton"], [data-testid="manage-app-button"]');
             
@@ -71,10 +90,19 @@ components.html(
                 el.style.setProperty('visibility', 'hidden', 'important');
                 el.style.setProperty('opacity', '0', 'important');
             });
-        } catch(e) {
-            // Ignorar errores de seguridad cruzada si los hubiera
-        }
-    }, 500); // Revisa cada medio segundo
+            
+            // Buscar div genéricos en la esquina
+            var todosDivs = topDoc.querySelectorAll('div');
+            todosDivs.forEach(function(el) {
+                var estilo = window.getComputedStyle(el);
+                if ((estilo.position === 'fixed' || estilo.position === 'absolute') && 
+                    estilo.bottom !== 'auto' && estilo.right !== 'auto' && 
+                    parseInt(estilo.zIndex) > 100) {
+                    el.style.setProperty('display', 'none', 'important');
+                }
+            });
+        } catch(e) {}
+    }, 500); 
     </script>
     """,
     height=0, width=0
@@ -462,7 +490,6 @@ def action_finalizar_sesion():
 
 if not st.session_state.questions:
 
-    # LIMPIEZA DE FONDO
     st.markdown("""
     <style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
@@ -536,7 +563,6 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # FONDO AMARILLO Y SCROLL
     st.markdown("""
     <style>
     :root {
