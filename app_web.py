@@ -17,9 +17,9 @@ st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centere
 CORREOS_AUTORIZADOS = [
     "alumno1@gmail.com",
     "juan.opositor@hotmail.com",
-    "tu_correo@gmail.com"
-    "ponentes@oposiciona.es"
-    "ignacio.garcia.heras@gmail.com"
+    "tu_correo@gmail.com",
+    "ponentes@oposiciona.es",
+    "ignacio.garcia.heras@gmail.com",
     "info@oposiciona.es"
 ]
 
