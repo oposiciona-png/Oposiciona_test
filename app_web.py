@@ -7,44 +7,22 @@ import requests
 import os
 from datetime import datetime
 
-# --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
+# --- CONFIGURACIÓN VISUAL DE LA PÁGINA ---
 icono_ruta = "ICONO OPOSICIONA.png"
-
 if os.path.exists(icono_ruta):
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta, layout="centered")
 else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# 1. INYECCIÓN DE CSS (Ocultar menús, arreglar opciones y BOMBA NUCLEAR para botones flotantes)
+# INYECCIÓN DE CSS (Ocultar cabeceras y blindar móviles)
 st.markdown("""
 <style>
-/* --- ANIQUILADOR BASE DE STREAMLIT (Menús internos) --- */
+/* --- ANIQUILAR RASTROS INTERNOS DE STREAMLIT --- */
 #MainMenu, footer, header {visibility: hidden !important; display: none !important;}
-[data-testid="stHeader"] {display: none !important; height: 0px !important;}
+[data-testid="stHeader"] {display: none !important;}
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
-
-/* --- OCULTAR BOTONES POR NOMBRE (Si Streamlit los inyecta dentro) --- */
-[data-testid="stAppDeployButton"], 
-[data-testid="manage-app-button"],
-[class*="viewerBadge"], 
-[class*="stDeployButton"], 
-[class*="manage-app-button"] {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-}
-
-/* --- LA BOMBA NUCLEAR: Ocultar TODO lo que flote en la esquina inferior derecha --- */
-div[style*="position: fixed"][style*="bottom:"][style*="right:"],
-div[style*="position: absolute"][style*="bottom:"][style*="right:"] {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    opacity: 0 !important;
-    z-index: -9999 !important;
-}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {margin-bottom: 12px !important;}
@@ -76,44 +54,10 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
 """, unsafe_allow_html=True)
 
 
-# 2. INYECCIÓN DE JAVASCRIPT INVISIBLE (Refuerzo por si Streamlit Cloud se salta el CSS)
-components.html(
-    """
-    <script>
-    setInterval(function() {
-        try {
-            var topDoc = window.top.document;
-            var elementosMalos = topDoc.querySelectorAll('[class*="viewerBadge"], [class*="styles_viewerBadge"], [data-testid="stAppDeployButton"], [data-testid="manage-app-button"]');
-            
-            elementosMalos.forEach(function(el) {
-                el.style.setProperty('display', 'none', 'important');
-                el.style.setProperty('visibility', 'hidden', 'important');
-                el.style.setProperty('opacity', '0', 'important');
-            });
-            
-            // Buscar div genéricos en la esquina
-            var todosDivs = topDoc.querySelectorAll('div');
-            todosDivs.forEach(function(el) {
-                var estilo = window.getComputedStyle(el);
-                if ((estilo.position === 'fixed' || estilo.position === 'absolute') && 
-                    estilo.bottom !== 'auto' && estilo.right !== 'auto' && 
-                    parseInt(estilo.zIndex) > 100) {
-                    el.style.setProperty('display', 'none', 'important');
-                }
-            });
-        } catch(e) {}
-    }, 500); 
-    </script>
-    """,
-    height=0, width=0
-)
-
-
 # ==============================================================================
-# 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES (AGRUPADO)
+# 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES
 # ==============================================================================
 
-# Lista actualizada de correos
 USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
         "ponentes@oposiciona.es",
@@ -174,7 +118,6 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 
-# CABECERA VISUAL (Ajustada para que el logo se vea completo)
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
     try:
@@ -183,7 +126,6 @@ with col2:
         pass
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("---")
-
 
 if not st.session_state.autenticado:
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
@@ -369,7 +311,6 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-# 📂 LISTADO DE TESTS OBTENIDO DE DRIVE
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
