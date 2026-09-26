@@ -1,32 +1,99 @@
 import streamlit as st
 import fitz  # PyMuPDF
 import re
+import sys
+import os
 import random
+import webbrowser
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
 
-# --- LÓGICA MAESTRA DE EXTRACCIÓN (Adaptada para Web) ---
+# ==============================================================================
+# 🔒 SISTEMA DE SEGURIDAD Y ACCESO RESTRINGIDO
+# ==============================================================================
+
+# 1. Añade aquí los correos de los alumnos a los que das permiso
+CORREOS_AUTORIZADOS = [
+    "alumno1@gmail.com",
+    "juan.opositor@hotmail.com",
+    "tu_correo@gmail.com"
+]
+
+# 2. Contraseña maestra para que puedan entrar
+PASSWORD_ACCESO = "plaza2026" 
+
+# Inicializar variables de sesión para la seguridad
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+if 'usuario_actual' not in st.session_state:
+    st.session_state.usuario_actual = ""
+
+# PANTALLA DE LOGIN (Bloquea todo lo demás)
+if not st.session_state.autenticado:
+    try:
+        st.image("oposiciona (320 x 132 px).png", width=320)
+    except:
+        pass
+    
+    st.markdown("## 🔒 Acceso Restringido")
+    st.markdown("Plataforma exclusiva de Oposiciona. Introduce tus credenciales para acceder a los tests.")
+    
+    email_input = st.text_input("Correo electrónico asociado a tu cuenta")
+    password_input = st.text_input("Contraseña de acceso", type="password")
+    
+    if st.button("Entrar a la plataforma"):
+        correo_limpio = email_input.lower().strip()
+        if correo_limpio in CORREOS_AUTORIZADOS and password_input == PASSWORD_ACCESO:
+            st.session_state.autenticado = True
+            st.session_state.usuario_actual = correo_limpio
+            st.rerun() # Recarga la página y quita el muro
+        else:
+            st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
+    
+    # st.stop() detiene la ejecución del código. Nada de lo que hay debajo se cargará.
+    st.stop()
+
+# ==============================================================================
+# 🚪 MENÚ LATERAL (CERRAR SESIÓN)
+# ==============================================================================
+with st.sidebar:
+    st.markdown(f"👤 **Usuario:** {st.session_state.usuario_actual}")
+    if st.button("🚪 Cerrar Sesión"):
+        # Borramos todos los datos y la autorización
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+
+# ==============================================================================
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN Y APP PRINCIPAL
+# ==============================================================================
+
 class PDFQuizParser:
     @staticmethod
     def parse(pdf_bytes):
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         questions = []
+        
         lines = []
-        stop_reading = False
+        stop_reading = False 
         
         for page in doc:
-            if stop_reading: break
+            if stop_reading:
+                break
             blocks = page.get_text("dict")["blocks"]
             for b in blocks:
-                if stop_reading: break
+                if stop_reading:
+                    break
                 if b.get("type", 0) == 0:  
                     for l in b["lines"]:
                         line_text = ""
                         is_bold = False
                         for s in l["spans"]:
                             text = s["text"].strip()
-                            if not text: continue
+                            if not text:
+                                continue
                             line_text += text + " "
                             if "bold" in s["font"].lower() or (s["flags"] & 2 != 0):
                                 is_bold = True
@@ -36,7 +103,6 @@ class PDFQuizParser:
                             tl = line_text.lower()
                             tl_nospace = tl.replace(" ", "").replace(".", "").replace("-", "").replace(":", "")
                             
-                            # Freno de emergencia absoluto
                             if ("preguntadedesarrollo" in tl_nospace or 
                                 "preguntasdedesarrollo" in tl_nospace or 
                                 "supuestopractico" in tl_nospace or 
@@ -46,7 +112,6 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # Filtro universal
                             is_header = False
                             if len(tl) < 80:
                                 if "www.oposiciona.es" in tl or re.search(r'^p[áa]gina\s+\d+\s+de\s+\d+', tl) or tl == "oposiciona":
@@ -56,7 +121,9 @@ class PDFQuizParser:
                                 elif "examen repaso" in tl or "test tema" in tl or "respuestas test" in tl or re.search(r'^tema\s+\d+', tl) or re.search(r'^examen\s+', tl) or "normas para la realización" in tl:
                                     is_header = True
                             
-                            if is_header: continue
+                            if is_header:
+                                continue
+                                
                             lines.append({"text": line_text, "bold": is_bold})
                             
         current_q = None
@@ -72,7 +139,8 @@ class PDFQuizParser:
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
             if re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower):
-                if current_q and current_q["options"]: questions.append(current_q)
+                if current_q and current_q["options"]:
+                    questions.append(current_q)
                 current_q = None 
                 preamble += text + "\n"
                 continue
@@ -84,24 +152,38 @@ class PDFQuizParser:
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    if re.match(r'^\s*\d+¿', text_clean) or (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')):
+                    if re.match(r'^\s*\d+¿', text_clean) or (
+                       re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')
+                    ):
                         m_rescue = True
 
             if m_num:
                 num = int(m_num.group(1))
                 if current_q is None:
-                    is_new_q, expected_q_num = True, num + 1
+                    is_new_q = True
+                    expected_q_num = num + 1
                 elif expected_q_num - 20 <= num <= expected_q_num + 50:
-                    is_new_q, expected_q_num = True, num + 1
+                    is_new_q = True
+                    expected_q_num = num + 1
             elif m_rescue:
                 is_new_q = True
                 expected_q_num += 1
 
             if is_new_q:
-                if current_q and current_q["options"]: questions.append(current_q)
+                if current_q and current_q["options"]:
+                    questions.append(current_q)
+                
                 clean_text = re.sub(r'^\s*\d+[\.-]+\s*(-*\s*)?', '', text)
                 clean_text = re.sub(r'^\s*\d+¿', '¿', clean_text)
-                current_q = {"preamble": preamble.strip(), "question_text": clean_text, "options": [], "answer": -1, "explanation": "", "state": "Q"}
+                
+                current_q = {
+                    "preamble": preamble.strip(),
+                    "question_text": clean_text,
+                    "options": [],
+                    "answer": -1,
+                    "explanation": "",
+                    "state": "Q"
+                }
                 preamble = "" 
                 continue
                 
@@ -112,17 +194,21 @@ class PDFQuizParser:
             if is_option and current_q["state"] in ["Q", "O"]:
                 current_q["options"].append(text)
                 current_q["state"] = "O"
-                if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
+                if is_bold and current_q["answer"] == -1:
+                    current_q["answer"] = len(current_q["options"]) - 1
                 continue
                 
             if is_explanation:
-                if current_q: current_q["explanation"] += text + " "; current_q["state"] = "E"
+                if current_q:
+                    current_q["explanation"] += text + " "
+                    current_q["state"] = "E"
                 continue
                 
             if current_q["state"] == "Q":
                 current_q["question_text"] += " " + text
             elif current_q["state"] == "O":
                 last_opt = current_q["options"][-1].strip()
+                
                 is_new_paragraph = len(current_q["options"]) >= 2 and re.search(r'[\.;]$', last_opt) and re.match(r'^[A-Z0-9¿¡"\'«]', text)
                 is_legal_ref = re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|según|normativa)', text_lower)
                 
@@ -130,27 +216,24 @@ class PDFQuizParser:
                     current_q["state"] = "E"
                     current_q["explanation"] = text
                 else:
-                    if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
+                    if is_bold and current_q["answer"] == -1:
+                        current_q["answer"] = len(current_q["options"]) - 1
                     current_q["options"][-1] += " " + text
             elif current_q["state"] == "E":
-                if re.match(r'^[A-Z][\)\.]\s+', text):
-                    preamble += text + "\n"
-                    current_q = None 
-                    continue
-                else:
-                    current_q["explanation"] += " " + text
+                current_q["explanation"] += " " + text
 
-        if current_q and current_q["options"]: questions.append(current_q)
+        if current_q and current_q["options"]:
+            questions.append(current_q)
+            
         return questions
 
-# --- INTERFAZ WEB STREAMLIT ---
+# --- INTERFAZ WEB ---
 try:
-    st.image("oposiciona (320 x 132 px).png", use_column_width=False, width=320)
+    st.image("oposiciona (320 x 132 px).png", width=320)
 except:
     pass
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 
-# Inicializar memoria (estado) de la web
 if 'questions' not in st.session_state:
     st.session_state.questions = []
     st.session_state.current_index = 0
@@ -175,11 +258,18 @@ if not st.session_state.questions:
                 st.error("No se encontraron preguntas válidas en este PDF.")
             else:
                 for q in raw_qs:
-                    cleaned_options = [re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip() for opt in q["options"]]
-                    correct_opt_text = cleaned_options[q["answer"]] if q["answer"] != -1 and q["answer"] < len(cleaned_options) else None
+                    cleaned_options = []
+                    for opt in q["options"]:
+                        cleaned_options.append(re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip())
+                    
+                    correct_opt_text = None
+                    if q["answer"] != -1 and q["answer"] < len(cleaned_options):
+                        correct_opt_text = cleaned_options[q["answer"]]
+                        
                     random.shuffle(cleaned_options)
                     if correct_opt_text:
                         q["answer"] = cleaned_options.index(correct_opt_text)
+                    
                     q["options"] = [f"{chr(97+i)}) {opt}" for i, opt in enumerate(cleaned_options)]
                 
                 random.shuffle(raw_qs)
@@ -197,7 +287,6 @@ elif not st.session_state.finished:
         st.write(q['preamble'])
     st.markdown(f"#### {q['question_text']}")
     
-    # Recuperar opción de memoria
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}")
     
@@ -268,8 +357,15 @@ else:
     st.markdown(f"## 🎓 NOTA FINAL: {nota:.2f} / 10")
     
     if st.button("🔄 Repetir / Subir otro PDF"):
+        # Limpiamos las variables del test, PERO MANTENEMOS el login del usuario
+        usuario_guardado = st.session_state.usuario_actual
+        autenticado_guardado = st.session_state.autenticado
+        
         for key in list(st.session_state.keys()):
             del st.session_state[key]
+            
+        st.session_state.usuario_actual = usuario_guardado
+        st.session_state.autenticado = autenticado_guardado
         st.rerun()
     
     st.markdown("---")
@@ -277,9 +373,9 @@ else:
         stat = st.session_state.stats[i]
         correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
         
-        st.markdown(f"### Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}")
-        st.markdown(f"**Pregunta:** {q['question_text']}")
-        st.markdown(f"**Tu respuesta:** {stat['selected'] if stat['selected'] else 'Ninguna'}")
-        st.markdown(f"**Respuesta correcta:** {correct_opt}")
+        st.markdown(f"<h3 style='color: {'green' if stat['final_status'] == '✅ Correcta' else 'red' if stat['final_status'] == '❌ Incorrecta' else 'orange'};'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:18px;'><b>Pregunta:</b> {q['question_text']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:18px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size:18px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
         st.info(f"**Explicación:** {q.get('explanation', 'No disponible.')}")
         st.markdown("---")
