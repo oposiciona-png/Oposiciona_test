@@ -17,6 +17,8 @@ USUARIOS_AUTORIZADOS = {
         "ignacio@gmail.com",
         "alumno_total1@gmail.com",
         "ponentes@oposiciona.es",
+        "gonzalogonzaleztejedor@gmail.com"
+        "ignacio.garcia.heras@gmai.com"
         "alumno_total2@gmail.com"
     ],
     "ADMTVOS": [
