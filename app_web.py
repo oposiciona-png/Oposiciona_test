@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components  # Nueva librería para el auto-scroll
 import fitz  # PyMuPDF
 import re
 import random
@@ -476,6 +477,20 @@ elif not st.session_state.finished:
 
 else:
     # --- RESULTADOS FINALES ---
+    
+    # 🌟 INYECCIÓN DE JS PARA HACER AUTO-SCROLL AL TOP AL LLEGAR AQUÍ
+    components.html(
+        """
+        <script>
+            var main = window.parent.document.querySelector('.main');
+            if (main) {
+                main.scrollTo(0, 0);
+            }
+        </script>
+        """,
+        height=0
+    )
+
     aciertos = 0
     fallos = 0
     blancos = 0
