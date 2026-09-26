@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components  # Nueva librería para el auto-scroll
+import streamlit.components.v1 as components  # Librería para el auto-scroll
 import fitz  # PyMuPDF
 import re
 import random
@@ -417,6 +417,20 @@ if not st.session_state.questions:
                     procesar_preguntas(raw_qs)
 
 elif not st.session_state.finished:
+    
+    # 🌟 INYECCIÓN DE JS PARA HACER AUTO-SCROLL AL TOP EN CADA PREGUNTA
+    components.html(
+        """
+        <script>
+            var main = window.parent.document.querySelector('.main');
+            if (main) {
+                main.scrollTo(0, 0);
+            }
+        </script>
+        """,
+        height=0
+    )
+    
     idx = st.session_state.current_index
     q = st.session_state.questions[idx]
     stat = st.session_state.stats[idx]
@@ -478,7 +492,7 @@ elif not st.session_state.finished:
 else:
     # --- RESULTADOS FINALES ---
     
-    # 🌟 INYECCIÓN DE JS PARA HACER AUTO-SCROLL AL TOP AL LLEGAR AQUÍ
+    # 🌟 INYECCIÓN DE JS PARA HACER AUTO-SCROLL AL TOP EN LOS RESULTADOS
     components.html(
         """
         <script>
