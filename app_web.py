@@ -4,9 +4,64 @@ import fitz  # PyMuPDF
 import re
 import random
 import requests
+import base64
+from PIL import Image
+
+# Cargamos la imagen con PIL para que Streamlit la procese de forma nativa
+try:
+    icono_app = Image.open("ICONO OPOSICIONA.png")
+except:
+    icono_app = "📚" # Fallback por si la imagen no carga
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
-st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="ICONO OPOSICIONA.png", layout="centered")
+st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_app, layout="centered")
+
+# --- INYECCIÓN FORZADA DE ICONO PARA MÓVILES (PWA / APPLE TOUCH) ---
+def inyectar_icono_movil(ruta_imagen):
+    try:
+        with open(ruta_imagen, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        
+        js = f"""
+        <script>
+            try {{
+                var doc = window.parent.document;
+                
+                // Forzar icono para iPhone / iPad
+                var appleIcon = doc.querySelector("link[rel='apple-touch-icon']");
+                if (!appleIcon) {{
+                    appleIcon = doc.createElement('link');
+                    appleIcon.rel = 'apple-touch-icon';
+                    doc.head.appendChild(appleIcon);
+                }}
+                appleIcon.href = 'data:image/png;base64,{encoded}';
+                
+                // Forzar icono para Android / Chrome
+                var shortcutIcon = doc.querySelector("link[rel='shortcut icon']");
+                if (!shortcutIcon) {{
+                    shortcutIcon = doc.createElement('link');
+                    shortcutIcon.rel = 'shortcut icon';
+                    doc.head.appendChild(shortcutIcon);
+                }}
+                shortcutIcon.href = 'data:image/png;base64,{encoded}';
+                
+                var icon = doc.querySelector("link[rel='icon']");
+                if (!icon) {{
+                    icon = doc.createElement('link');
+                    icon.rel = 'icon';
+                    doc.head.appendChild(icon);
+                }}
+                icon.href = 'data:image/png;base64,{encoded}';
+            }} catch(e) {{}}
+        </script>
+        """
+        components.html(js, height=0)
+    except Exception:
+        pass
+
+# Ejecutamos la inyección del icono
+inyectar_icono_movil("ICONO OPOSICIONA.png")
+
 
 # Inyección de CSS general para mejorar tipografías, opciones y botones
 st.markdown("""
