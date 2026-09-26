@@ -496,14 +496,17 @@ else:
     nota = (aciertos / len(st.session_state.questions)) * 10 if len(st.session_state.questions) > 0 else 0
     
     # MOSTRAR IMAGEN SEGÚN LA NOTA OBTENIDA
-    c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
-    with c_res2:
-        if nota >= 5.0:
+    if nota >= 5.0:
+        c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
+        with c_res2:
             try:
                 st.image("test-utiles-768x768.png", use_container_width=True)
             except:
                 pass
-        else:
+    else:
+        # Columna central gigante para la llorona si suspende
+        c_res1, c_res2, c_res3 = st.columns([1, 1.5, 1])
+        with c_res2:
             try:
                 st.image("llorona.jpeg", use_container_width=True)
             except:
