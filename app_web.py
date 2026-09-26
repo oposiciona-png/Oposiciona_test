@@ -4,27 +4,46 @@ import re
 import random
 import requests
 
-# --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
+# --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
+st.set_page_config(page_title="Plataforma de Tests Oposiciona", layout="centered")
+
+# Inyección de CSS para mejorar tipografías, opciones y botones
+st.markdown("""
+<style>
+/* Aumentar tamaño de las opciones de respuesta y añadir separación */
+div[role="radiogroup"] > label {
+    margin-bottom: 12px !important; /* Media línea de separación extra */
+}
+div[role="radiogroup"] > label > div:first-child > p {
+    font-size: 18px !important; /* Letra un poco más grande para las opciones */
+    line-height: 1.5 !important;
+}
+/* Estilo del contenedor principal para dar un toque más premium */
+.stApp {
+    background-color: #f8f9fa;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ==============================================================================
 # 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES (AGRUPADO)
 # ==============================================================================
 
-# Añade los correos de tus alumnos en la lista de la categoría que les corresponda
+# Lista actualizada de correos con las comas corregidas
 USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
         "ignacio@gmail.com",
         "alumno_total1@gmail.com",
         "ponentes@oposiciona.es",
-        "gonzalogonzaleztejedor@gmail.com"
-        "ignacio.garcia.heras@gmai.com"
+        "gonzalogonzaleztejedor@gmail.com",
+        "ignacio.garcia.heras@gmai.com",
         "alumno_total2@gmail.com"
     ],
     "ADMTVOS": [
         "alumno_admtvo1@gmail.com",
         "alumno1@gmail.com",
-         "juan_admtvo@hotmail.com"
+        "juan_admtvo@hotmail.com"
     ],
     "GESTION": [
         "alumno_gestion1@gmail.com",
@@ -39,22 +58,29 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 
-if not st.session_state.autenticado:
+# CABECERA VISUAL CENTRADA (Se muestra tanto en el login como dentro)
+col1, col2, col3 = st.columns([1, 1.2, 1])
+with col2:
     try:
-        st.image("oposiciona (320 x 132 px).png", width=320)
+        # El logo se ajustará automáticamente a esta columna central (más pequeño)
+        st.image("oposiciona (320 x 132 px).png", use_container_width=True)
     except:
         pass
+    st.markdown("<p style='text-align: center; font-size: 16px; margin-top: -10px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4; font-weight: bold;'>🌐 www.oposiciona.es</a></p>", unsafe_allow_html=True)
+st.markdown("---")
+
+
+if not st.session_state.autenticado:
+    st.markdown("<h2 style='text-align: center; color: #2C3E50;'>🔒 Acceso Restringido</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
     
-    st.markdown("## 🔒 Acceso Restringido")
-    st.markdown("Plataforma exclusiva de Oposiciona. Introduce tus credenciales para acceder.")
-    
+    st.markdown("<br>", unsafe_allow_html=True)
     email_input = st.text_input("Correo electrónico asociado a tu cuenta")
     password_input = st.text_input("Contraseña de acceso", type="password")
     
     if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
         correo_limpio = email_input.lower().strip()
         
-        # Buscamos a qué grupo pertenece el correo
         rol_usuario = None
         for rol, lista_correos in USUARIOS_AUTORIZADOS.items():
             if correo_limpio in lista_correos:
@@ -212,14 +238,6 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-try:
-    st.image("oposiciona (320 x 132 px).png", width=320)
-except:
-    pass
-
-st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
-st.markdown("---")
-
 # 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE Y ACTUALIZADO
 TESTS_DISPONIBLES = {
     "GESTION": {
@@ -309,12 +327,12 @@ def action_finalizar_sesion():
 
 
 if not st.session_state.questions:
-    st.header("Comienza a practicar")
+    st.markdown("<h3 style='color:#2C3E50;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
     
     rol = st.session_state.rol
     
     # --- 1. MENÚ DE ESPECIALIDAD SEGÚN EL ROL ---
-    st.markdown("### 1. Especialidad")
+    st.markdown("#### 1. Especialidad")
     
     if rol == "ACCESO TOTAL":
         lista_especialidades = list(TESTS_DISPONIBLES.keys())
@@ -330,17 +348,18 @@ if not st.session_state.questions:
         st.stop()
     
     # --- 2. CATEGORÍA ---
-    st.markdown("### 2. Categoría")
+    st.markdown("#### 2. Categoría")
     lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
     categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
     
     # --- 3. SELECCIÓN FINAL DE TEST ---
-    st.markdown("### 3. Selección de Test")
+    st.markdown("#### 3. Selección de Test")
     tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
     opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
     
+    st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-        if st.button(f"Cargar Test Seleccionado", type="primary", use_container_width=True):
+        if st.button(f"🚀 Cargar Test Seleccionado", type="primary", use_container_width=True):
             url_descarga = tests_categoria[opcion_seleccionada]
             with st.spinner(f"Extrayendo archivo de forma segura..."):
                 try:
@@ -374,14 +393,18 @@ elif not st.session_state.finished:
     q = st.session_state.questions[idx]
     stat = st.session_state.stats[idx]
     
-    st.subheader(f"Pregunta {idx + 1} de {len(st.session_state.questions)}")
+    st.markdown(f"<p style='color: #7f8c8d; font-size: 14px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
+    
     if q['preamble']:
         st.write(q['preamble'])
-    st.markdown(f"#### {q['question_text']}")
+        
+    # TEXTO DE LA PREGUNTA MÁS ESTÉTICO Y LIGERAMENTE MÁS PEQUEÑO
+    st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 20px; line-height: 1.4;'>{q['question_text']}</p>", unsafe_allow_html=True)
     
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
-    selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}")
+    selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}", label_visibility="collapsed")
     
+    st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     
     if col1.button("🡄 Anterior", use_container_width=True) and idx > 0:
@@ -465,7 +488,7 @@ else:
         st.markdown(f"<p style='font-size:18px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:18px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
         exp_text = q.get('explanation', 'No disponible.')
-        st.markdown(f"<div style='background-color:#f0f2f6; padding:15px; border-radius:5px;'><p style='font-size:18px;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:15px; border-radius:8px;'><p style='font-size:17px;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -473,3 +496,53 @@ else:
     c1_bot.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
     c2_bot.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_bot.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
+2. El script de Google Apps Script (Recordatorio)
+Aquí lo tienes tal cual lo configuramos, listo para que siempre que lo necesites lo ejecutes y puedas mantener el orden en tu Google Drive copiando y pegando el diccionario resultante.
+
+JavaScript
+function generarEnlacesTresNiveles() {
+  // ID de tu carpeta principal
+  var folderId = '1AGIx26EgLE2L0PRKnL0Nce7pvLDmokz7'; 
+  var mainFolder = DriveApp.getFolderById(folderId);
+  
+  // Obtenemos las carpetas de Nivel 1 (Administrativo, Gestión...)
+  var especialidades = mainFolder.getFolders();
+  
+  var resultado = 'TESTS_DISPONIBLES = {\n';
+  
+  while (especialidades.hasNext()) {
+    var especialidadFolder = especialidades.next();
+    var especialidadNombre = especialidadFolder.getName();
+    
+    resultado += '    "' + especialidadNombre + '": {\n';
+    
+    // Obtenemos las carpetas de Nivel 2 (Específico, General, Exámenes...)
+    var categorias = especialidadFolder.getFolders();
+    while (categorias.hasNext()) {
+      var categoriaFolder = categorias.next();
+      var categoriaNombre = categoriaFolder.getName();
+      
+      resultado += '        "' + categoriaNombre + '": {\n';
+      resultado += '            "Elige un test de ' + categoriaNombre.toLowerCase() + '...": None,\n';
+      
+      // Obtenemos los PDFs dentro de esa Categoría
+      var archivos = categoriaFolder.getFilesByType(MimeType.PDF);
+      while (archivos.hasNext()) {
+        var archivo = archivos.next();
+        // Quitamos "Copia de" y ".pdf" para dejar el nombre limpio
+        var nombreArchivo = archivo.getName().replace('.pdf', '').replace('Copia de ', '').trim(); 
+        var id = archivo.getId();
+        
+        resultado += '            "' + nombreArchivo + '": "https://drive.google.com/uc?export=download&id=' + id + '",\n';
+      }
+      
+      resultado += '        },\n';
+    }
+    
+    resultado += '    },\n';
+  }
+  
+  resultado += '}';
+  
+  console.log(resultado);
+}
