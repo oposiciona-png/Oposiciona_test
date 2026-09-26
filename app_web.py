@@ -8,15 +8,27 @@ import requests
 st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
 
 # ==============================================================================
-# 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES
+# 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES (AGRUPADO)
 # ==============================================================================
 
-# Añade aquí los correos y asigna el ROL exacto en mayúsculas a cada uno
+# Añade los correos de tus alumnos en la lista de la categoría que les corresponda
 USUARIOS_AUTORIZADOS = {
-    "ignacio@gmail.com": "ACCESO TOTAL",
-    "alumno_total@gmail.com": "ACCESO TOTAL",
-    "alumno_admtvo@gmail.com": "ADMTVOS",
-    "alumno_gestion@gmail.com": "GESTION"
+    "ACCESO TOTAL": [
+        "ignacio@gmail.com",
+        "alumno_total1@gmail.com",
+        "ponentes@oposiciona.es",
+        "alumno_total2@gmail.com"
+    ],
+    "ADMTVOS": [
+        "alumno_admtvo1@gmail.com",
+        "juan_admtvo@hotmail.com"
+        "alumno1@gmail.com",
+    ],
+    "GESTION": [
+        "alumno_gestion1@gmail.com",
+        "alumno2@gmail.com",
+        "maria_gestion@gmail.com"
+    ]
 }
 
 PASSWORD_ACCESO = "plaza2026" 
@@ -39,9 +51,17 @@ if not st.session_state.autenticado:
     
     if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
         correo_limpio = email_input.lower().strip()
-        if correo_limpio in USUARIOS_AUTORIZADOS and password_input == PASSWORD_ACCESO:
+        
+        # Buscamos a qué grupo pertenece el correo
+        rol_usuario = None
+        for rol, lista_correos in USUARIOS_AUTORIZADOS.items():
+            if correo_limpio in lista_correos:
+                rol_usuario = rol
+                break
+                
+        if rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
-            st.session_state.rol = USUARIOS_AUTORIZADOS[correo_limpio] # Guardamos su rol
+            st.session_state.rol = rol_usuario
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -198,7 +218,7 @@ except:
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
 
-# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE
+# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE Y ACTUALIZADO
 TESTS_DISPONIBLES = {
     "GESTION": {
         "EXAMENES": {
@@ -206,7 +226,7 @@ TESTS_DISPONIBLES = {
         },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
-            "Copia de PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
+            "PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
         },
         "GENERAL": {
             "Elige un test de general...": None,
