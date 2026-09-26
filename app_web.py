@@ -4,11 +4,11 @@ import fitz  # PyMuPDF
 import re
 import random
 import requests
-import base64
 import os
+from datetime import datetime
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
-# Usamos directamente la ruta de la imagen. Streamlit la procesa internamente.
+# Usamos directamente la ruta de la imagen para que Streamlit lo gestione de forma nativa
 icono_ruta = "ICONO OPOSICIONA.png"
 
 if os.path.exists(icono_ruta):
@@ -16,81 +16,34 @@ if os.path.exists(icono_ruta):
 else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
-# --- INYECCIÓN FORZADA DE ICONO PARA MÓVILES Y PC ---
-def inyectar_icono(ruta_imagen):
-    try:
-        with open(ruta_imagen, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode()
-        
-        js = f"""
-        <script>
-            try {{
-                var doc = window.parent.document;
-                var iconData = 'data:image/png;base64,{encoded}';
-                
-                // Forzar apple-touch-icon (iPhone/iPad)
-                var appleIcon = doc.querySelector("link[rel='apple-touch-icon']");
-                if (!appleIcon) {{
-                    appleIcon = doc.createElement('link');
-                    appleIcon.rel = 'apple-touch-icon';
-                    doc.head.appendChild(appleIcon);
-                }}
-                appleIcon.href = iconData;
-                
-                // Forzar shortcut icon (Android/PC)
-                var shortcutIcon = doc.querySelector("link[rel='shortcut icon']");
-                if (!shortcutIcon) {{
-                    shortcutIcon = doc.createElement('link');
-                    shortcutIcon.rel = 'shortcut icon';
-                    doc.head.appendChild(shortcutIcon);
-                }}
-                shortcutIcon.href = iconData;
-                
-                // Forzar icon estándar
-                var icon = doc.querySelector("link[rel='icon']");
-                if (!icon) {{
-                    icon = doc.createElement('link');
-                    icon.rel = 'icon';
-                    doc.head.appendChild(icon);
-                }}
-                icon.href = iconData;
-            }} catch(e) {{}}
-        </script>
-        """
-        components.html(js, height=0)
-    except Exception:
-        pass
 
-# Ejecutamos la inyección del icono
-inyectar_icono(icono_ruta)
-
-
-# Inyección de CSS general para mejorar tipografías, opciones y botones
+# Inyección de CSS general (Opciones súper visibles y botones)
 st.markdown("""
 <style>
-/* Aumentar tamaño de las opciones de respuesta y añadir separación */
-div[role="radiogroup"] > label {
+/* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
+div[role="radiogroup"] label {
     margin-bottom: 12px !important; 
 }
-div[role="radiogroup"] > label > div:first-child > p {
+div[role="radiogroup"] label, 
+div[role="radiogroup"] label p, 
+div[role="radiogroup"] label div,
+div[role="radiogroup"] label span {
     font-size: 17px !important; 
     line-height: 1.5 !important;
+    color: #000000 !important; /* FORZAMOS NEGRO PURO para que no se ponga blanco en modo oscuro */
+    white-space: normal !important; /* Evita que el texto desaparezca o se corte */
 }
 
-/* --- CÍRCULOS DE OPCIONES SÚPER NÍTIDOS, MÁS GRANDES Y NEGRO PURO --- */
+/* --- CÍRCULOS DE OPCIONES NÍTIDOS Y NEGROS --- */
 div[data-baseweb="radio"] > div:first-child {
-    border: 3px solid #000000 !important; 
-    width: 22px !important; 
-    height: 22px !important;
-    background-color: transparent !important;
+    border-color: #000000 !important; 
+    border-width: 2px !important;
 }
 div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     background-color: #000000 !important; 
-    width: 12px !important; 
-    height: 12px !important;
 }
 
-/* Ajustes del contenedor para aprovechar el espacio */
+/* Espaciado del contenedor principal */
 .block-container {
     padding-top: 1.5rem !important;
     max-width: 750px !important; 
@@ -176,7 +129,6 @@ st.markdown("---")
 
 
 if not st.session_state.autenticado:
-    # ADORNO DE BIENVENIDA (Muy pequeño y bajo el enlace)
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
         try:
@@ -203,6 +155,18 @@ if not st.session_state.autenticado:
         if rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
+            
+            # --- 📡 CHIVATAZO AL GOOGLE SHEETS (DESACTIVADO POR AHORA) ---
+            # Lo dejo comentado para que no cause ningún retraso ni error.
+            # Cuando quieras usarlo, solo borra el símbolo '#' de estas 6 líneas y pon tu URL:
+            
+            # try:
+            #     URL_GOOGLE_SCRIPT = "PEGA_AQUÍ_LA_URL_DEL_SCRIPT" 
+            #     hora_actual = datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
+            #     requests.post(URL_GOOGLE_SCRIPT, json={"correo": correo_limpio, "fecha": hora_actual}, timeout=2)
+            # except:
+            #     pass 
+                
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -472,23 +436,13 @@ def action_finalizar_sesion():
 
 if not st.session_state.questions:
 
-    # 🌟 LIMPIEZA DE FONDO (Para cuando se vuelve al menú principal)
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], div, section, body');
-                els.forEach(function(el) {
-                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
-                        el.style.removeProperty('background-color');
-                    }
-                });
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
+    # LIMPIEZA DE FONDO (Para cuando se vuelve al menú principal) - Seguro para Safari
+    st.markdown("""
+    <style>
+    :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background-color: #FFFFFF !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
     # Mostramos el adorno junto al selector de tests
     col_texto, col_img = st.columns([2.5, 1])
@@ -503,9 +457,7 @@ if not st.session_state.questions:
         
         rol = st.session_state.rol
         
-        # --- 1. MENÚ DE ESPECIALIDAD SEGÚN EL ROL ---
         st.markdown("#### 1. Especialidad")
-        
         if rol == "ACCESO TOTAL":
             lista_especialidades = list(TESTS_DISPONIBLES.keys())
             especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
@@ -519,12 +471,10 @@ if not st.session_state.questions:
             st.error("Error en los permisos de usuario.")
             st.stop()
         
-        # --- 2. CATEGORÍA ---
         st.markdown("#### 2. Categoría")
         lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
         categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
         
-        # --- 3. SELECCIÓN FINAL DE TEST ---
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
@@ -562,10 +512,9 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO EXTREMO POR CSS (ATACA A TODAS LAS CAPAS POSIBLES)
+    # FONDO AMARILLO POR CSS PURO (A prueba de PC y móvil)
     st.markdown("""
     <style>
-    /* Forzamos el root, el html, el body y todas las clases base de Streamlit */
     :root {
         --background-color: #FFFDE7 !important;
         --secondary-background-color: #FFFDE7 !important;
@@ -574,7 +523,6 @@ elif not st.session_state.finished:
         background-color: #FFFDE7 !important;
         background-image: none !important;
     }
-    /* Esta es la infame caja blanca central de Streamlit en PC, la volvemos transparente */
     .block-container, [data-testid="stMainBlockContainer"], div[data-testid="stVerticalBlock"] {
         background-color: transparent !important;
         background: transparent !important;
@@ -582,14 +530,19 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
-    # 🌟 AUTO-SCROLL AL TOP EN CADA PREGUNTA
+    # SCROLL SEGURO PARA iOS
     components.html(
         """
         <script>
-            var main = window.parent.document.querySelector('.main');
-            if (main) {
-                main.scrollTo(0, 0);
-            }
+            try {
+                var doc = window.parent.document;
+                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
+                if (main) {
+                    main.scrollTo({top: 0, behavior: 'smooth'});
+                } else {
+                    window.parent.scrollTo(0, 0);
+                }
+            } catch(e) {}
         </script>
         """,
         height=0
@@ -604,7 +557,6 @@ elif not st.session_state.finished:
     if q['preamble']:
         st.write(q['preamble'])
         
-    # TEXTO DE LA PREGUNTA
     st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 20px; line-height: 1.4;'>{q['question_text']}</p>", unsafe_allow_html=True)
     
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
@@ -656,14 +608,26 @@ elif not st.session_state.finished:
 else:
     # --- RESULTADOS FINALES ---
     
-    # 🌟 SCROLL AL TOP EN LOS RESULTADOS
+    # LIMPIEZA DE FONDO EN RESULTADOS Y SCROLL
+    st.markdown("""
+    <style>
+    :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { background-color: #FFFFFF !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    
     components.html(
         """
         <script>
-            var main = window.parent.document.querySelector('.main');
-            if (main) {
-                main.scrollTo(0, 0);
-            }
+            try {
+                var doc = window.parent.document;
+                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
+                if (main) {
+                    main.scrollTo({top: 0, behavior: 'smooth'});
+                } else {
+                    window.parent.scrollTo(0, 0);
+                }
+            } catch(e) {}
         </script>
         """,
         height=0
@@ -688,7 +652,6 @@ else:
             
     nota = (aciertos / len(st.session_state.questions)) * 10 if len(st.session_state.questions) > 0 else 0
     
-    # MOSTRAR IMAGEN SEGÚN LA NOTA OBTENIDA
     if nota >= 5.0:
         c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
         with c_res2:
@@ -697,7 +660,6 @@ else:
             except:
                 pass
     else:
-        # Columna central gigante para la llorona si suspende
         c_res1, c_res2, c_res3 = st.columns([1, 1.5, 1])
         with c_res2:
             try:
@@ -706,8 +668,6 @@ else:
                 pass
     
     st.markdown("<h3 style='text-align: center; color: #2C3E50;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
-    
-    # TEXTOS DE RESUMEN MÁS PEQUEÑOS Y CENTRADOS
     st.markdown(f"<h4 style='text-align: center; font-size: 16px; color: #555;'>✅ Acertadas: {aciertos} &nbsp;|&nbsp; ❌ Falladas: {fallos} &nbsp;|&nbsp; ⚪ En blanco: {blancos}</h4>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center; font-size: 22px;'>🎓 NOTA FINAL: {nota:.2f} / 10</h3>", unsafe_allow_html=True)
     
@@ -718,7 +678,6 @@ else:
     c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
     st.markdown("---")
     
-    # DETALLE DE PREGUNTAS (Con letras reducidas para mayor estética)
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
