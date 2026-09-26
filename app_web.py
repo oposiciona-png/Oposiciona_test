@@ -226,7 +226,7 @@ TESTS_DISPONIBLES = {
         "GENERAL": {
             "Elige un test de general...": None,
         },
-
+}
 if 'questions' not in st.session_state:
     st.session_state.questions = []
     st.session_state.current_index = 0
