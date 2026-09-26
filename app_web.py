@@ -7,44 +7,6 @@ import random
 st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
 
 # ==============================================================================
-# 🔒 SISTEMA DE SEGURIDAD Y ACCESO RESTRINGIDO
-# ==============================================================================
-
-CORREOS_AUTORIZADOS = [
-    "ignacio@gmail.com",
-    "alumno1@gmail.com",
-    "ponentes@oposiciona.es",
-    "juan@hotmail.com"
-]
-
-PASSWORD_ACCESO = "plaza2026" 
-
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-
-if not st.session_state.autenticado:
-    try:
-        st.image("oposiciona (320 x 132 px).png", width=320)
-    except:
-        pass
-    
-    st.markdown("## 🔒 Acceso Restringido")
-    st.markdown("Plataforma exclusiva de Oposiciona. Introduce tus credenciales.")
-    
-    email_input = st.text_input("Correo electrónico asociado a tu cuenta")
-    password_input = st.text_input("Contraseña de acceso", type="password")
-    
-    if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
-        if email_input.lower().strip() in CORREOS_AUTORIZADOS and password_input == PASSWORD_ACCESO:
-            st.session_state.autenticado = True
-            st.rerun()
-        else:
-            st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
-    
-    st.stop()
-
-
-# ==============================================================================
 # 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
@@ -217,20 +179,12 @@ def action_repetir_test():
     st.session_state.checked = False
 
 def action_subir_otro():
-    st.session_state.questions = []
-    st.session_state.current_index = 0
-    st.session_state.stats = {}
-    st.session_state.finished = False
-    st.session_state.checked = False
-
-def action_finalizar_sesion():
     st.session_state.clear()
 
 
 if not st.session_state.questions:
     st.header("Comienza a practicar")
     
-    # --- NUEVO ENLACE A GOOGLE DRIVE ---
     st.info("Paso 1: Descarga el test que quieras practicar desde nuestra carpeta compartida de Google Drive.")
     st.link_button("📂 Abrir Carpeta de Tests en Google Drive", "https://drive.google.com/drive/folders/1AGIx26EgLE2L0PRKnL0Nce7pvLDmokz7?usp=drive_link", use_container_width=True)
     
@@ -346,10 +300,9 @@ else:
     
     # --- BOTONES SUPERIORES DE RESULTADOS ---
     st.markdown("<br>", unsafe_allow_html=True)
-    c1_top, c2_top, c3_top = st.columns(3)
+    c1_top, c2_top = st.columns(2)
     c1_top.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
-    c2_top.button("📁 Subir otro PDF", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
-    c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
+    c2_top.button("🚪 Salir y Subir otro PDF", key="btn_out_top", on_click=action_subir_otro, use_container_width=True, type="primary")
     st.markdown("---")
     
     # --- INFORME DETALLADO ---
@@ -369,7 +322,6 @@ else:
 
     # --- BOTONES INFERIORES DE RESULTADOS ---
     st.markdown("<br>", unsafe_allow_html=True)
-    c1_bot, c2_bot, c3_bot = st.columns(3)
+    c1_bot, c2_bot = st.columns(2)
     c1_bot.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
-    c2_bot.button("📁 Subir otro PDF", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
-    c3_bot.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
+    c2_bot.button("🚪 Salir y Subir otro PDF", key="btn_out_bot", on_click=action_subir_o
