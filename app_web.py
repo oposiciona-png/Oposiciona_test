@@ -5,19 +5,19 @@ import re
 import random
 import requests
 import base64
-from PIL import Image
-
-# Cargamos la imagen con PIL para que Streamlit la procese de forma nativa
-try:
-    icono_app = Image.open("ICONO OPOSICIONA.png")
-except:
-    icono_app = "📚" # Fallback por si la imagen no carga
+import os
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
-st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_app, layout="centered")
+# Usamos directamente la ruta de la imagen. Streamlit la procesa internamente.
+icono_ruta = "ICONO OPOSICIONA.png"
 
-# --- INYECCIÓN FORZADA DE ICONO PARA MÓVILES (PWA / APPLE TOUCH) ---
-def inyectar_icono_movil(ruta_imagen):
+if os.path.exists(icono_ruta):
+    st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta, layout="centered")
+else:
+    st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
+
+# --- INYECCIÓN FORZADA DE ICONO PARA MÓVILES Y PC ---
+def inyectar_icono(ruta_imagen):
     try:
         with open(ruta_imagen, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
@@ -26,32 +26,34 @@ def inyectar_icono_movil(ruta_imagen):
         <script>
             try {{
                 var doc = window.parent.document;
+                var iconData = 'data:image/png;base64,{encoded}';
                 
-                // Forzar icono para iPhone / iPad
+                // Forzar apple-touch-icon (iPhone/iPad)
                 var appleIcon = doc.querySelector("link[rel='apple-touch-icon']");
                 if (!appleIcon) {{
                     appleIcon = doc.createElement('link');
                     appleIcon.rel = 'apple-touch-icon';
                     doc.head.appendChild(appleIcon);
                 }}
-                appleIcon.href = 'data:image/png;base64,{encoded}';
+                appleIcon.href = iconData;
                 
-                // Forzar icono para Android / Chrome
+                // Forzar shortcut icon (Android/PC)
                 var shortcutIcon = doc.querySelector("link[rel='shortcut icon']");
                 if (!shortcutIcon) {{
                     shortcutIcon = doc.createElement('link');
                     shortcutIcon.rel = 'shortcut icon';
                     doc.head.appendChild(shortcutIcon);
                 }}
-                shortcutIcon.href = 'data:image/png;base64,{encoded}';
+                shortcutIcon.href = iconData;
                 
+                // Forzar icon estándar
                 var icon = doc.querySelector("link[rel='icon']");
                 if (!icon) {{
                     icon = doc.createElement('link');
                     icon.rel = 'icon';
                     doc.head.appendChild(icon);
                 }}
-                icon.href = 'data:image/png;base64,{encoded}';
+                icon.href = iconData;
             }} catch(e) {{}}
         </script>
         """
@@ -60,7 +62,7 @@ def inyectar_icono_movil(ruta_imagen):
         pass
 
 # Ejecutamos la inyección del icono
-inyectar_icono_movil("ICONO OPOSICIONA.png")
+inyectar_icono(icono_ruta)
 
 
 # Inyección de CSS general para mejorar tipografías, opciones y botones
@@ -444,7 +446,7 @@ def procesar_preguntas(raw_qs):
         if correct_opt_text:
             q["answer"] = cleaned_options.index(correct_opt_text)
         
-        q["options"] = [f"{chr(97+i)}) {opt}" for i, opt in enumerate(cleaned_options)]
+        q["options"] = [f"{chr(97+i)}) {opt}" for i, enumerate(cleaned_options)]
     
     random.shuffle(raw_qs)
     st.session_state.questions = raw_qs
