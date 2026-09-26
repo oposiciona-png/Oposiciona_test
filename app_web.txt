@@ -1,0 +1,285 @@
+import streamlit as st
+import fitz  # PyMuPDF
+import re
+import random
+
+# --- CONFIGURACIÓN DE LA PÁGINA ---
+st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
+
+# --- LÓGICA MAESTRA DE EXTRACCIÓN (Adaptada para Web) ---
+class PDFQuizParser:
+    @staticmethod
+    def parse(pdf_bytes):
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        questions = []
+        lines = []
+        stop_reading = False
+        
+        for page in doc:
+            if stop_reading: break
+            blocks = page.get_text("dict")["blocks"]
+            for b in blocks:
+                if stop_reading: break
+                if b.get("type", 0) == 0:  
+                    for l in b["lines"]:
+                        line_text = ""
+                        is_bold = False
+                        for s in l["spans"]:
+                            text = s["text"].strip()
+                            if not text: continue
+                            line_text += text + " "
+                            if "bold" in s["font"].lower() or (s["flags"] & 2 != 0):
+                                is_bold = True
+                        
+                        line_text = line_text.strip()
+                        if line_text:
+                            tl = line_text.lower()
+                            tl_nospace = tl.replace(" ", "").replace(".", "").replace("-", "").replace(":", "")
+                            
+                            # Freno de emergencia absoluto
+                            if ("preguntadedesarrollo" in tl_nospace or 
+                                "preguntasdedesarrollo" in tl_nospace or 
+                                "supuestopractico" in tl_nospace or 
+                                "supuestopráctico" in tl_nospace or 
+                                "plantilladerespuesta" in tl_nospace or 
+                                "plantillasderespuesta" in tl_nospace):
+                                stop_reading = True
+                                break
+                            
+                            # Filtro universal
+                            is_header = False
+                            if len(tl) < 80:
+                                if "www.oposiciona.es" in tl or re.search(r'^p[áa]gina\s+\d+\s+de\s+\d+', tl) or tl == "oposiciona":
+                                    is_header = True
+                                elif "administrativo de la seguridad social" in tl or "gestion de la seguridad social" in tl or "gestión de la seguridad social" in tl:
+                                    is_header = True
+                                elif "examen repaso" in tl or "test tema" in tl or "respuestas test" in tl or re.search(r'^tema\s+\d+', tl) or re.search(r'^examen\s+', tl) or "normas para la realización" in tl:
+                                    is_header = True
+                            
+                            if is_header: continue
+                            lines.append({"text": line_text, "bold": is_bold})
+                            
+        current_q = None
+        preamble = "" 
+        expected_q_num = 1  
+        
+        for line in lines:
+            text = line["text"]
+            is_bold = line["bold"]
+            text_lower = text.lower()
+            
+            is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
+            is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
+            
+            if re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower):
+                if current_q and current_q["options"]: questions.append(current_q)
+                current_q = None 
+                preamble += text + "\n"
+                continue
+
+            is_new_q = False
+            m_num = re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or re.match(r'^\s*(\d+)\s+[\.-]', text)
+            m_rescue = False
+            
+            if not m_num and not is_option and not is_explanation:
+                text_clean = text.strip()
+                if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
+                    if re.match(r'^\s*\d+¿', text_clean) or (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')):
+                        m_rescue = True
+
+            if m_num:
+                num = int(m_num.group(1))
+                if current_q is None:
+                    is_new_q, expected_q_num = True, num + 1
+                elif expected_q_num - 20 <= num <= expected_q_num + 50:
+                    is_new_q, expected_q_num = True, num + 1
+            elif m_rescue:
+                is_new_q = True
+                expected_q_num += 1
+
+            if is_new_q:
+                if current_q and current_q["options"]: questions.append(current_q)
+                clean_text = re.sub(r'^\s*\d+[\.-]+\s*(-*\s*)?', '', text)
+                clean_text = re.sub(r'^\s*\d+¿', '¿', clean_text)
+                current_q = {"preamble": preamble.strip(), "question_text": clean_text, "options": [], "answer": -1, "explanation": "", "state": "Q"}
+                preamble = "" 
+                continue
+                
+            if not current_q:
+                preamble += text + "\n"
+                continue
+                
+            if is_option and current_q["state"] in ["Q", "O"]:
+                current_q["options"].append(text)
+                current_q["state"] = "O"
+                if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
+                continue
+                
+            if is_explanation:
+                if current_q: current_q["explanation"] += text + " "; current_q["state"] = "E"
+                continue
+                
+            if current_q["state"] == "Q":
+                current_q["question_text"] += " " + text
+            elif current_q["state"] == "O":
+                last_opt = current_q["options"][-1].strip()
+                is_new_paragraph = len(current_q["options"]) >= 2 and re.search(r'[\.;]$', last_opt) and re.match(r'^[A-Z0-9¿¡"\'«]', text)
+                is_legal_ref = re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|según|normativa)', text_lower)
+                
+                if is_new_paragraph or is_legal_ref:
+                    current_q["state"] = "E"
+                    current_q["explanation"] = text
+                else:
+                    if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
+                    current_q["options"][-1] += " " + text
+            elif current_q["state"] == "E":
+                if re.match(r'^[A-Z][\)\.]\s+', text):
+                    preamble += text + "\n"
+                    current_q = None 
+                    continue
+                else:
+                    current_q["explanation"] += " " + text
+
+        if current_q and current_q["options"]: questions.append(current_q)
+        return questions
+
+# --- INTERFAZ WEB STREAMLIT ---
+try:
+    st.image("oposiciona (320 x 132 px).png", use_column_width=False, width=320)
+except:
+    pass
+st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
+
+# Inicializar memoria (estado) de la web
+if 'questions' not in st.session_state:
+    st.session_state.questions = []
+    st.session_state.current_index = 0
+    st.session_state.stats = {}
+    st.session_state.finished = False
+    st.session_state.checked = False
+
+def save_answer(selected):
+    idx = st.session_state.current_index
+    stat = st.session_state.stats[idx]
+    if selected and selected != stat['selected']:
+        stat['selected'] = selected
+        stat['attempts'] += 1
+
+if not st.session_state.questions:
+    st.header("Sube un PDF de Test")
+    uploaded_file = st.file_uploader("", type="pdf")
+    if uploaded_file is not None:
+        with st.spinner("Procesando documento..."):
+            raw_qs = PDFQuizParser.parse(uploaded_file.read())
+            if not raw_qs:
+                st.error("No se encontraron preguntas válidas en este PDF.")
+            else:
+                for q in raw_qs:
+                    cleaned_options = [re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip() for opt in q["options"]]
+                    correct_opt_text = cleaned_options[q["answer"]] if q["answer"] != -1 and q["answer"] < len(cleaned_options) else None
+                    random.shuffle(cleaned_options)
+                    if correct_opt_text:
+                        q["answer"] = cleaned_options.index(correct_opt_text)
+                    q["options"] = [f"{chr(97+i)}) {opt}" for i, opt in enumerate(cleaned_options)]
+                
+                random.shuffle(raw_qs)
+                st.session_state.questions = raw_qs
+                st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
+                st.rerun()
+
+elif not st.session_state.finished:
+    idx = st.session_state.current_index
+    q = st.session_state.questions[idx]
+    stat = st.session_state.stats[idx]
+    
+    st.subheader(f"Pregunta {idx + 1} de {len(st.session_state.questions)}")
+    if q['preamble']:
+        st.write(q['preamble'])
+    st.markdown(f"#### {q['question_text']}")
+    
+    # Recuperar opción de memoria
+    default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
+    selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    if col1.button("🡄 Anterior") and idx > 0:
+        save_answer(selected_option)
+        st.session_state.checked = False
+        st.session_state.current_index -= 1
+        st.rerun()
+        
+    if col2.button("Comprobar"):
+        save_answer(selected_option)
+        st.session_state.checked = True
+        st.rerun()
+        
+    if idx < len(st.session_state.questions) - 1:
+        if col3.button("Siguiente ➔"):
+            save_answer(selected_option)
+            st.session_state.checked = False
+            st.session_state.current_index += 1
+            st.rerun()
+    else:
+        if col3.button("Terminar ➔"):
+            save_answer(selected_option)
+            st.session_state.finished = True
+            st.rerun()
+            
+    if col4.button("⏹ Finalizar"):
+        save_answer(selected_option)
+        st.session_state.finished = True
+        st.rerun()
+
+    if st.session_state.checked:
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
+        if selected_option == correct_opt:
+            st.success("✅ ¡CORRECTO!")
+        elif not selected_option:
+            st.warning(f"⚪ EN BLANCO. La correcta era: {correct_opt}")
+        else:
+            st.error(f"❌ INCORRECTO. La respuesta correcta era: {correct_opt}")
+            
+        exp = q.get('explanation', '').strip()
+        st.info(f"**Explicación:**\n\n{exp if exp else 'No hay explicación disponible.'}")
+
+else:
+    st.header("📊 RESULTADOS FINALES")
+    aciertos = 0
+    fallos = 0
+    blancos = 0
+    
+    for i, q in enumerate(st.session_state.questions):
+        stat = st.session_state.stats[i]
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
+        if stat['selected'] == correct_opt:
+            aciertos += 1
+            stat['final_status'] = "✅ Correcta"
+        elif stat['selected'] is None:
+            blancos += 1
+            stat['final_status'] = "⚪ En blanco"
+        else:
+            fallos += 1
+            stat['final_status'] = "❌ Incorrecta"
+            
+    nota = (aciertos / len(st.session_state.questions)) * 10
+    
+    st.markdown(f"### ✅ Acertadas: {aciertos} | ❌ Falladas: {fallos} | ⚪ En blanco: {blancos}")
+    st.markdown(f"## 🎓 NOTA FINAL: {nota:.2f} / 10")
+    
+    if st.button("🔄 Repetir / Subir otro PDF"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+    
+    st.markdown("---")
+    for i, q in enumerate(st.session_state.questions):
+        stat = st.session_state.stats[i]
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
+        
+        st.markdown(f"### Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}")
+        st.markdown(f"**Pregunta:** {q['question_text']}")
+        st.markdown(f"**Tu respuesta:** {stat['selected'] if stat['selected'] else 'Ninguna'}")
+        st.markdown(f"**Respuesta correcta:** {correct_opt}")
+        st.info(f"**Explicación:** {q.get('explanation', 'No disponible.')}")
+        st.markdown("---")
