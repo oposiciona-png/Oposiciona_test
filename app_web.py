@@ -193,20 +193,18 @@ except:
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
 
-# 📂 LISTADO DE TESTS AUTOMÁTICOS EN DRIVE
-# Sustituye o añade los IDs de cada test usando la misma estructura
+# 📂 LISTADO DE TESTS AUTOMÁTICOS CLASIFICADOS
 TESTS_DISPONIBLES = {
-    "Elige un test de la lista...": None,
-    "GESTION - ESPECIFICO - Copia de PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS TEST  TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS CASO PRÁCTICO TEMA 8B INCAPACIDAD PERMANENTE": "https://drive.google.com/uc?export=download&id=1MTmYVUK5nSCgI6L8iM_Zg1kz0E0nycho",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de profesor TEST + SUPUESTO tema 4": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST + SUPUESTO TEMA 3 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST y SUPUESTOS TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
-    "ADMINISTRATIVOS - ESPECIFICO - Copia de PROFESOR TEST Y SUPUESTOS TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
+    "Administrativo": {
+        "Elige un test de Administrativo...": None,
+        "Test de Prueba (Enlace real)": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
+        "TEMA 75 - Minería": "https://drive.google.com/uc?export=download&id=AQUI_ID_ADMIN_1",
+    },
+    "Gestión": {
+        "Elige un test de Gestión...": None,
+        "Simulacro General": "https://drive.google.com/uc?export=download&id=AQUI_ID_GESTION_1",
+        "Examen 5 de Septiembre": "https://drive.google.com/uc?export=download&id=AQUI_ID_GESTION_2",
+    }
 }
 
 if 'questions' not in st.session_state:
@@ -264,11 +262,17 @@ def action_finalizar_sesion():
 if not st.session_state.questions:
     st.header("Comienza a practicar")
     
-    # 1. CARGA AUTOMÁTICA DESDE DRIVE
-    opcion_seleccionada = st.selectbox("Selecciona un test oficial de la plataforma:", list(TESTS_DISPONIBLES.keys()))
-    if opcion_seleccionada != "Elige un test de la lista...":
+    # --- SELECTOR DE ESPECIALIDAD ---
+    especialidad = st.radio("Selecciona tu especialidad:", ["Administrativo", "Gestión"], horizontal=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 1. CARGA AUTOMÁTICA DESDE DRIVE DEPENDIENDO DE LA ESPECIALIDAD
+    tests_categoria = TESTS_DISPONIBLES[especialidad]
+    opcion_seleccionada = st.selectbox(f"Tests oficiales de {especialidad}:", list(tests_categoria.keys()))
+    
+    if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
         if st.button(f"Cargar {opcion_seleccionada}", type="primary", use_container_width=True):
-            url_descarga = TESTS_DISPONIBLES[opcion_seleccionada]
+            url_descarga = tests_categoria[opcion_seleccionada]
             with st.spinner(f"Extrayendo {opcion_seleccionada} de forma segura..."):
                 try:
                     respuesta = requests.get(url_descarga)
