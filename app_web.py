@@ -8,7 +8,6 @@ import os
 from datetime import datetime
 
 # --- CONFIGURACIÓN Y ESTILOS VISUALES DE LA PÁGINA ---
-# Usamos directamente la ruta de la imagen para que Streamlit lo gestione de forma nativa
 icono_ruta = "ICONO OPOSICIONA.png"
 
 if os.path.exists(icono_ruta):
@@ -17,35 +16,31 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# Inyección de CSS general (Ocultar botones flotantes, opciones visibles y diseño)
+# Inyección de CSS general (Ocultar botones flotantes dinámicos, opciones visibles y diseño)
 st.markdown("""
 <style>
-/* --- ANIQUILADOR DE BOTONES FLOTANTES DE STREAMLIT CLOUD (AVATAR Y BARQUITO) --- */
-#MainMenu {visibility: hidden !important;}
-footer {visibility: hidden !important;}
-header {visibility: hidden !important; height: 0px !important;}
-
+/* --- ANIQUILADOR BASE DE STREAMLIT --- */
+#MainMenu, footer, header {visibility: hidden !important; display: none !important;}
 [data-testid="stHeader"] {display: none !important;}
-[data-testid="stToolbar"] {display: none !important; visibility: hidden !important;}
+[data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
-[data-testid="stAppDeployButton"] {display: none !important; visibility: hidden !important;}
-[data-testid="manage-app-button"] {display: none !important; visibility: hidden !important;}
-.stDeployButton {display: none !important;}
-.viewerBadge_container {display: none !important;}
-.viewerBadge_link {display: none !important;}
+
+/* Cazamos cualquier clase que contenga la palabra "viewerBadge" o "Deploy" */
+[class*="viewerBadge"] {display: none !important; opacity: 0 !important; visibility: hidden !important;}
+[class*="styles_viewerBadge"] {display: none !important; opacity: 0 !important; visibility: hidden !important;}
+[data-testid*="Deploy"] {display: none !important;}
+[data-testid*="manage-app"] {display: none !important;}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
-div[role="radiogroup"] label {
-    margin-bottom: 12px !important; 
-}
+div[role="radiogroup"] label {margin-bottom: 12px !important;}
 div[role="radiogroup"] label, 
 div[role="radiogroup"] label p, 
 div[role="radiogroup"] label div,
 div[role="radiogroup"] label span {
     font-size: 17px !important; 
     line-height: 1.5 !important;
-    color: #000000 !important; /* FORZAMOS NEGRO PURO para que no se ponga blanco en modo oscuro */
-    white-space: normal !important; /* Evita que el texto desaparezca o se corte */
+    color: #000000 !important; /* NEGRO PURO siempre */
+    white-space: normal !important; 
 }
 
 /* --- CÍRCULOS DE OPCIONES NÍTIDOS Y NEGROS --- */
@@ -65,17 +60,24 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
 </style>
 
 <script>
-// Refuerzo en Javascript para cazar el botón rojo y el avatar si aparecen tarde
-setTimeout(function() {
+// --- EL CAZADOR DE BOTONES (Se ejecuta en bucle para cazar al barquito cuando aparezca) ---
+setInterval(function() {
     try {
-        var els = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], [data-testid="stToolbar"], .viewerBadge_container');
-        els.forEach(function(el) { 
-            el.style.display = 'none'; 
-            el.style.visibility = 'hidden';
-            el.style.opacity = '0';
+        // Buscamos en el documento principal y en la ventana padre (Cloud Wrapper)
+        var docs = [window.document, window.parent.document];
+        
+        docs.forEach(function(d) {
+            var elementosMalos = d.querySelectorAll('[class*="viewerBadge"], [class*="styles_viewerBadge"], [data-testid*="Deploy"], [data-testid*="manage-app"]');
+            elementosMalos.forEach(function(el) {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.opacity = '0';
+                el.style.width = '0px';
+                el.style.height = '0px';
+            });
         });
     } catch(e) {}
-}, 1000);
+}, 500); // Revisa la pantalla cada medio segundo
 </script>
 """, unsafe_allow_html=True)
 
@@ -183,18 +185,6 @@ if not st.session_state.autenticado:
         if rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
-            
-            # --- 📡 CHIVATAZO AL GOOGLE SHEETS (DESACTIVADO POR AHORA) ---
-            # Lo dejo comentado para que no cause ningún retraso ni error.
-            # Cuando quieras usarlo, solo borra el símbolo '#' de estas 6 líneas y pon tu URL:
-            
-            # try:
-            #     URL_GOOGLE_SCRIPT = "PEGA_AQUÍ_LA_URL_DEL_SCRIPT" 
-            #     hora_actual = datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
-            #     requests.post(URL_GOOGLE_SCRIPT, json={"correo": correo_limpio, "fecha": hora_actual}, timeout=2)
-            # except:
-            #     pass 
-                
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -464,7 +454,7 @@ def action_finalizar_sesion():
 
 if not st.session_state.questions:
 
-    # LIMPIEZA DE FONDO (Para cuando se vuelve al menú principal) - Seguro para Safari
+    # LIMPIEZA DE FONDO
     st.markdown("""
     <style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
@@ -472,7 +462,6 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
-    # Mostramos el adorno junto al selector de tests
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
         try:
@@ -527,7 +516,6 @@ if not st.session_state.questions:
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # CARGA MANUAL DE EMERGENCIA
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
         uploaded_file = st.file_uploader("", type="pdf")
         if uploaded_file is not None:
@@ -540,7 +528,7 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # FONDO AMARILLO POR CSS PURO (A prueba de PC y móvil)
+    # FONDO AMARILLO
     st.markdown("""
     <style>
     :root {
@@ -558,7 +546,7 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
-    # SCROLL SEGURO PARA iOS
+    # SCROLL SEGURO
     components.html(
         """
         <script>
@@ -636,7 +624,6 @@ elif not st.session_state.finished:
 else:
     # --- RESULTADOS FINALES ---
     
-    # LIMPIEZA DE FONDO EN RESULTADOS Y SCROLL
     st.markdown("""
     <style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
