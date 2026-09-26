@@ -453,19 +453,20 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 FONDO AMARILLO MUY CLARO AGRESIVO PARA PC Y MÓVIL (SOLO DURANTE EL TEST)
+    # 🌟 FONDO AMARILLO EXTREMO (MODIFICA LAS VARIABLES RAÍZ DE STREAMLIT PARA QUE AFECTE AL PC)
     st.markdown("""
     <style>
-    /* Forzar fondo amarillo en TODAS las capas principales de Streamlit */
-    .stApp, 
-    .main,
-    [data-testid="stAppViewContainer"], 
-    [data-testid="stHeader"], 
-    [data-testid="stMain"], 
-    [data-testid="stMainBlockContainer"],
-    .block-container {
-        background-color: #FFFDE7 !important; /* Amarillo pastel muy suave */
+    :root {
+        --background-color: #FFFDE7 !important;
+        --secondary-background-color: #FFFDE7 !important;
+    }
+    html, body, [class*="stApp"], .main, header, section {
+        background-color: #FFFDE7 !important;
         background-image: none !important;
+    }
+    /* Hace transparente la "caja blanca" central del PC */
+    .block-container, div[data-testid="stAppViewContainer"], div[data-testid="stVerticalBlock"] {
+        background-color: transparent !important;
     }
     </style>
     """, unsafe_allow_html=True)
