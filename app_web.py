@@ -22,14 +22,14 @@ div[role="radiogroup"] > label > div:first-child > p {
 
 /* --- CÍRCULOS DE OPCIONES SÚPER NÍTIDOS, MÁS GRANDES Y NEGRO PURO --- */
 div[data-baseweb="radio"] > div:first-child {
-    border: 3px solid #000000 !important; /* Borde negro puro y grueso */
-    width: 22px !important; /* Círculo un poco más grande */
+    border: 3px solid #000000 !important; 
+    width: 22px !important; 
     height: 22px !important;
     background-color: transparent !important;
 }
 div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
-    background-color: #000000 !important; /* Punto interior negro puro */
-    width: 12px !important; /* Punto interior un poco más grande */
+    background-color: #000000 !important; 
+    width: 12px !important; 
     height: 12px !important;
 }
 
@@ -382,24 +382,6 @@ def action_finalizar_sesion():
 
 if not st.session_state.questions:
 
-    # 🌟 LIMPIEZA DE FONDO (Para cuando se vuelve al menú principal)
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], div, section, body');
-                els.forEach(function(el) {
-                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
-                        el.style.removeProperty('background-color');
-                    }
-                });
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
-
     # Mostramos el adorno junto al selector de tests
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -472,34 +454,34 @@ if not st.session_state.questions:
 
 elif not st.session_state.finished:
     
-    # 🌟 ATAQUE JS MASIVO PARA FORZAR EL FONDO AMARILLO EN PC Y MÓVIL
+    # 🌟 FONDO AMARILLO EXTREMO POR CSS (ATACA A TODAS LAS CAPAS POSIBLES)
+    st.markdown("""
+    <style>
+    /* Forzamos el root, el html, el body y todas las clases base de Streamlit */
+    :root {
+        --background-color: #FFFDE7 !important;
+        --secondary-background-color: #FFFDE7 !important;
+    }
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: #FFFDE7 !important;
+        background-image: none !important;
+    }
+    /* Esta es la infame caja blanca central de Streamlit en PC, la volvemos transparente */
+    .block-container, [data-testid="stMainBlockContainer"], div[data-testid="stVerticalBlock"] {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # 🌟 AUTO-SCROLL AL TOP EN CADA PREGUNTA
     components.html(
         """
         <script>
-            try {
-                var doc = window.parent.document;
-                
-                // 1. Auto-scroll arriba del todo
-                var mainScroll = doc.querySelector('.main');
-                if (mainScroll) mainScroll.scrollTo(0, 0);
-
-                // 2. Pintar TODO de amarillo bloqueando las cajas blancas del PC
-                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"]');
-                els.forEach(function(el) {
-                    el.style.setProperty('background-color', '#FFFDE7', 'important');
-                    el.style.setProperty('background-image', 'none', 'important');
-                });
-                
-                // Pintar el fondo base de la ventana
-                doc.body.style.setProperty('background-color', '#FFFDE7', 'important');
-
-                // Si hay cajas invisibles que tapan el fondo en PC, volverlas transparentes
-                var innerBlocks = doc.querySelectorAll('div[data-testid="stVerticalBlock"], .block-container');
-                innerBlocks.forEach(function(b) {
-                    b.style.setProperty('background-color', 'transparent', 'important');
-                });
-
-            } catch(e) {}
+            var main = window.parent.document.querySelector('.main');
+            if (main) {
+                main.scrollTo(0, 0);
+            }
         </script>
         """,
         height=0
@@ -566,25 +548,14 @@ elif not st.session_state.finished:
 else:
     # --- RESULTADOS FINALES ---
     
-    # 🌟 LIMPIEZA DE FONDO Y SCROLL AL TOP EN LOS RESULTADOS
+    # 🌟 SCROLL AL TOP EN LOS RESULTADOS
     components.html(
         """
         <script>
-            try {
-                var doc = window.parent.document;
-                
-                // Scroll arriba
-                var mainScroll = doc.querySelector('.main');
-                if (mainScroll) mainScroll.scrollTo(0, 0);
-
-                // Quitar amarillo
-                var els = doc.querySelectorAll('.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], body');
-                els.forEach(function(el) {
-                    if (el.style.backgroundColor === 'rgb(255, 253, 231)' || el.style.backgroundColor === '#FFFDE7') {
-                        el.style.removeProperty('background-color');
-                    }
-                });
-            } catch(e) {}
+            var main = window.parent.document.querySelector('.main');
+            if (main) {
+                main.scrollTo(0, 0);
+            }
         </script>
         """,
         height=0
