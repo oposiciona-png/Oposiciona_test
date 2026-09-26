@@ -2,6 +2,7 @@ import streamlit as st
 import fitz  # PyMuPDF
 import re
 import random
+import requests
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
@@ -10,15 +11,12 @@ st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centere
 # 🔒 SISTEMA DE SEGURIDAD Y ACCESO RESTRINGIDO
 # ==============================================================================
 
-# Añade aquí los correos de tus alumnos autorizados
 CORREOS_AUTORIZADOS = [
     "ignacio@gmail.com",
     "alumno1@gmail.com",
-    "ponentes@oposiciona.es",
     "juan@hotmail.com"
 ]
 
-# Contraseña maestra de la plataforma
 PASSWORD_ACCESO = "plaza2026" 
 
 if 'autenticado' not in st.session_state:
@@ -43,7 +41,6 @@ if not st.session_state.autenticado:
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
     
-    # Detenemos la ejecución si no están logueados
     st.stop()
 
 
@@ -80,7 +77,6 @@ class PDFQuizParser:
                             tl = line_text.lower()
                             tl_nospace = tl.replace(" ", "").replace(".", "").replace("-", "").replace(":", "")
                             
-                            # FRENO DE EMERGENCIA DE HIERRO
                             if ("preguntadedesarrollo" in tl_nospace or 
                                 "preguntasdedesarrollo" in tl_nospace or 
                                 "supuestopractico" in tl_nospace or 
@@ -185,7 +181,6 @@ class PDFQuizParser:
         if current_q and current_q["options"]: questions.append(current_q)
         return questions
 
-
 # ==============================================================================
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
@@ -197,6 +192,15 @@ except:
 
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
+
+# 📂 LISTADO DE TESTS AUTOMÁTICOS EN DRIVE
+# Sustituye o añade los IDs de cada test usando la misma estructura
+TESTS_DISPONIBLES = {
+    "Elige un test de la lista...": None,
+    "Test de Prueba (Enlace real)": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
+    "TEMA 75": "https://drive.google.com/uc?export=download&id=AQUI_EL_ID_DEL_TEMA_75",
+    "Examen 5 de Septiembre": "https://drive.google.com/uc?export=download&id=AQUI_EL_ID_DEL_EXAMEN"
+}
 
 if 'questions' not in st.session_state:
     st.session_state.questions = []
@@ -212,7 +216,27 @@ def save_answer(selected):
         stat['selected'] = selected
         stat['attempts'] += 1
 
-# --- FUNCIONES PARA BOTONES DE RESULTADOS ---
+def procesar_preguntas(raw_qs):
+    for q in raw_qs:
+        cleaned_options = []
+        for opt in q["options"]:
+            cleaned_options.append(re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip())
+        
+        correct_opt_text = None
+        if q["answer"] != -1 and q["answer"] < len(cleaned_options):
+            correct_opt_text = cleaned_options[q["answer"]]
+            
+        random.shuffle(cleaned_options)
+        if correct_opt_text:
+            q["answer"] = cleaned_options.index(correct_opt_text)
+        
+        q["options"] = [f"{chr(97+i)}) {opt}" for i, opt in enumerate(cleaned_options)]
+    
+    random.shuffle(raw_qs)
+    st.session_state.questions = raw_qs
+    st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
+    st.rerun()
+
 def action_repetir_test():
     st.session_state.current_index = 0
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))}
@@ -233,39 +257,37 @@ def action_finalizar_sesion():
 if not st.session_state.questions:
     st.header("Comienza a practicar")
     
-    st.info("Paso 1: Descarga el test que quieras practicar desde nuestra carpeta compartida de Google Drive.")
-    st.link_button("📂 Abrir Carpeta de Tests en Google Drive", "https://drive.google.com/drive/folders/1AGIx26EgLE2L0PRKnL0Nce7pvLDmokz7?usp=drive_link", use_container_width=True)
+    # 1. CARGA AUTOMÁTICA DESDE DRIVE
+    opcion_seleccionada = st.selectbox("Selecciona un test oficial de la plataforma:", list(TESTS_DISPONIBLES.keys()))
+    if opcion_seleccionada != "Elige un test de la lista...":
+        if st.button(f"Cargar {opcion_seleccionada}", type="primary", use_container_width=True):
+            url_descarga = TESTS_DISPONIBLES[opcion_seleccionada]
+            with st.spinner(f"Extrayendo {opcion_seleccionada} de forma segura..."):
+                try:
+                    respuesta = requests.get(url_descarga)
+                    if respuesta.status_code == 200:
+                        raw_qs = PDFQuizParser.parse(respuesta.content)
+                        if not raw_qs:
+                            st.error("No se encontraron preguntas válidas en este PDF.")
+                        else:
+                            procesar_preguntas(raw_qs)
+                    else:
+                        st.error("Error de descarga. Comprueba que el enlace tiene permisos de lectura ('Cualquier persona con el enlace').")
+                except Exception as e:
+                    st.error(f"Error de conexión: {e}")
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
     
-    st.info("Paso 2: Sube el archivo PDF que has descargado a continuación.")
-    uploaded_file = st.file_uploader("Sube aquí el PDF del test", type="pdf")
-    
-    if uploaded_file is not None:
-        with st.spinner("Procesando documento..."):
-            raw_qs = PDFQuizParser.parse(uploaded_file.read())
-            if not raw_qs:
-                st.error("No se encontraron preguntas válidas en este PDF.")
-            else:
-                for q in raw_qs:
-                    cleaned_options = []
-                    for opt in q["options"]:
-                        cleaned_options.append(re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip())
-                    
-                    correct_opt_text = None
-                    if q["answer"] != -1 and q["answer"] < len(cleaned_options):
-                        correct_opt_text = cleaned_options[q["answer"]]
-                        
-                    random.shuffle(cleaned_options)
-                    if correct_opt_text:
-                        q["answer"] = cleaned_options.index(correct_opt_text)
-                    
-                    q["options"] = [f"{chr(97+i)}) {opt}" for i, opt in enumerate(cleaned_options)]
-                
-                random.shuffle(raw_qs)
-                st.session_state.questions = raw_qs
-                st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
-                st.rerun()
+    # 2. CARGA MANUAL
+    with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
+        uploaded_file = st.file_uploader("", type="pdf")
+        if uploaded_file is not None:
+            with st.spinner("Procesando documento local..."):
+                raw_qs = PDFQuizParser.parse(uploaded_file.read())
+                if not raw_qs:
+                    st.error("No se encontraron preguntas válidas en este PDF.")
+                else:
+                    procesar_preguntas(raw_qs)
 
 elif not st.session_state.finished:
     idx = st.session_state.current_index
@@ -346,19 +368,16 @@ else:
     st.markdown(f"### ✅ Acertadas: {aciertos} | ❌ Falladas: {fallos} | ⚪ En blanco: {blancos}")
     st.markdown(f"## 🎓 NOTA FINAL: {nota:.2f} / 10")
     
-    # --- BOTONES SUPERIORES DE RESULTADOS ---
     st.markdown("<br>", unsafe_allow_html=True)
     c1_top, c2_top, c3_top = st.columns(3)
     c1_top.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
-    c2_top.button("📁 Subir otro PDF", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
+    c2_top.button("📁 Cambiar de Test", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
     c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
     st.markdown("---")
     
-    # --- INFORME DETALLADO ---
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
-        
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         st.markdown(f"<h3 style='color: {color}; font-size: 22px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h3>", unsafe_allow_html=True)
@@ -369,9 +388,8 @@ else:
         st.markdown(f"<div style='background-color:#f0f2f6; padding:15px; border-radius:5px;'><p style='font-size:18px;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
-    # --- BOTONES INFERIORES DE RESULTADOS ---
     st.markdown("<br>", unsafe_allow_html=True)
     c1_bot, c2_bot, c3_bot = st.columns(3)
     c1_bot.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
-    c2_bot.button("📁 Subir otro PDF", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
+    c2_bot.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_bot.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
