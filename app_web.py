@@ -8,19 +8,22 @@ import requests
 st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centered")
 
 # ==============================================================================
-# 🔒 SISTEMA DE SEGURIDAD Y ACCESO RESTRINGIDO
+# 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES
 # ==============================================================================
 
-CORREOS_AUTORIZADOS = [
-    "ignacio@gmail.com",
-    "alumno1@gmail.com",
-    "juan@hotmail.com"
-]
+# Añade aquí los correos y asigna el ROL exacto en mayúsculas a cada uno
+USUARIOS_AUTORIZADOS = {
+    "ignacio@gmail.com": "ACCESO TOTAL",
+    "alumno_total@gmail.com": "ACCESO TOTAL",
+    "alumno_admtvo@gmail.com": "ADMTVOS",
+    "alumno_gestion@gmail.com": "GESTION"
+}
 
 PASSWORD_ACCESO = "plaza2026" 
 
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
+    st.session_state.rol = None
 
 if not st.session_state.autenticado:
     try:
@@ -35,8 +38,10 @@ if not st.session_state.autenticado:
     password_input = st.text_input("Contraseña de acceso", type="password")
     
     if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
-        if email_input.lower().strip() in CORREOS_AUTORIZADOS and password_input == PASSWORD_ACCESO:
+        correo_limpio = email_input.lower().strip()
+        if correo_limpio in USUARIOS_AUTORIZADOS and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
+            st.session_state.rol = USUARIOS_AUTORIZADOS[correo_limpio] # Guardamos su rol
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -193,7 +198,7 @@ except:
 st.markdown("[www.oposiciona.es](https://oposiciona.es/)")
 st.markdown("---")
 
-# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE Y ACTUALIZADO
+# 📂 LISTADO DE TESTS GENERADO AUTOMÁTICAMENTE
 TESTS_DISPONIBLES = {
     "GESTION": {
         "EXAMENES": {
@@ -284,17 +289,30 @@ def action_finalizar_sesion():
 if not st.session_state.questions:
     st.header("Comienza a practicar")
     
-    # --- MENÚ EN CASCADA DINÁMICO ---
-    st.markdown("### 1. Especialidad")
-    # Genera la lista leyendo las llaves ("GESTION", "ADMINISTRATIVOS")
-    lista_especialidades = list(TESTS_DISPONIBLES.keys())
-    especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
+    rol = st.session_state.rol
     
+    # --- 1. MENÚ DE ESPECIALIDAD SEGÚN EL ROL ---
+    st.markdown("### 1. Especialidad")
+    
+    if rol == "ACCESO TOTAL":
+        lista_especialidades = list(TESTS_DISPONIBLES.keys())
+        especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
+    elif rol == "ADMTVOS":
+        especialidad = "ADMINISTRATIVOS"
+        st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
+    elif rol == "GESTION":
+        especialidad = "GESTION"
+        st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
+    else:
+        st.error("Error en los permisos de usuario.")
+        st.stop()
+    
+    # --- 2. CATEGORÍA ---
     st.markdown("### 2. Categoría")
-    # Genera la lista leyendo lo que hay dentro de la especialidad elegida ("EXAMENES", "ESPECIFICO"...)
     lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
     categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
     
+    # --- 3. SELECCIÓN FINAL DE TEST ---
     st.markdown("### 3. Selección de Test")
     tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
     opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
@@ -318,7 +336,7 @@ if not st.session_state.questions:
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # 2. CARGA MANUAL DE EMERGENCIA
+    # CARGA MANUAL DE EMERGENCIA
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
         uploaded_file = st.file_uploader("", type="pdf")
         if uploaded_file is not None:
