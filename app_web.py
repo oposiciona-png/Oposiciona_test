@@ -7,6 +7,15 @@ import requests
 import os
 from datetime import datetime
 
+# --- AUTO-CONFIGURADOR DE RESPALDO ---
+try:
+    os.makedirs(".streamlit", exist_ok=True)
+    if not os.path.exists(".streamlit/config.toml"):
+        with open(".streamlit/config.toml", "w") as f:
+            f.write('[client]\ntoolbarMode = "minimal"\n')
+except:
+    pass
+
 # --- CONFIGURACIÓN VISUAL DE LA PÁGINA ---
 icono_ruta = "ICONO OPOSICIONA.png"
 if os.path.exists(icono_ruta):
@@ -15,7 +24,7 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# INYECCIÓN DE CSS (Ocultar cabeceras y blindar móviles)
+# INYECCIÓN DE CSS (Bomba nuclear contra los iconos y blindaje de letras)
 st.markdown("""
 <style>
 /* --- ANIQUILAR RASTROS INTERNOS DE STREAMLIT --- */
@@ -23,6 +32,23 @@ st.markdown("""
 [data-testid="stHeader"] {display: none !important;}
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
+
+/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD (Barquito y Avatar) --- */
+.stDeployButton {display: none !important;}
+[data-testid="stAppDeployButton"] {display: none !important;}
+[class*="viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
+[class*="styles_viewerBadge"] {display: none !important;}
+[data-testid*="manage-app"] {display: none !important;}
+
+/* --- LA BOMBA NUCLEAR: Ocultar TODO lo que flote en la esquina inferior derecha --- */
+div[style*="position: fixed"][style*="bottom"][style*="right"],
+div[style*="position: absolute"][style*="bottom"][style*="right"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    z-index: -9999 !important;
+}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {margin-bottom: 12px !important;}
@@ -154,15 +180,6 @@ if not st.session_state.autenticado:
         if rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
-            
-            # --- 📡 CHIVATAZO AL GOOGLE SHEETS (DESACTIVADO POR AHORA) ---
-            # try:
-            #     URL_GOOGLE_SCRIPT = "PEGA_AQUÍ_LA_URL_DEL_SCRIPT" 
-            #     hora_actual = datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
-            #     requests.post(URL_GOOGLE_SCRIPT, json={"correo": correo_limpio, "fecha": hora_actual}, timeout=2)
-            # except:
-            #     pass 
-                
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
