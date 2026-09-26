@@ -49,21 +49,54 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
 # Lista actualizada de correos
 USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
-        "ignacio@gmail.com",
-        "alumno_total1@gmail.com",
         "ponentes@oposiciona.es",
         "gonzalogonzaleztejedor@gmail.com",
         "ignacio.garcia.heras@gmai.com",
+	"alvarezpugamartin@gmail.com",
+	"claratoledo06@gmail.com",
+	"blancazortega@gmail.com",
+	"mijurista@gmail.com",
+	"silviacabello81@gmail.com",
+	"isabelmgutierrogil@gmail.com",
+	"carmenvl28@gmail.com",
+	"leticiagenerelosolana@gmail.com",
+	"sion.nuba@gmail.com",
         "alumno_total2@gmail.com"
     ],
     "ADMTVOS": [
-        "alumno_admtvo1@gmail.com",
         "alumno1@gmail.com",
+	"andreitalopeamor1@gmail.com",
+	"elenavegasanchez73@gmail.com",
+	" josemurillomoreno.mail@gmail.com",
+	"raulff1997.rfg@gmail.com",
+	"sandradcastanares@gmail.com",
+	"joycewayland@gmail.com",
+	"celia.pks@gmail.com",
+	"cynthiaflafla14@gmail.com",
+	"fragosotorbellinocarmen@gmail.com",
+	"pherrerojulian@gmail.com",
+	"rsilveiraescudero@gmail.com",
+	"delfijv19@gmail.com",
+	"marielipedreira@hotmail.com",
+	"raquelkmacho@gmail.com",
         "juan_admtvo@hotmail.com"
     ],
     "GESTION": [
-        "alumno_gestion1@gmail.com",
         "alumno2@gmail.com",
+	"mariafolgoso@gmail.com",
+	"vsaurod@gmail.com",
+	"mariaquirosmonge5@gmail.com",
+	"vanessagomeztdla@gmail.com",
+	"zoemorcor@gmail.com",
+	"julianayem@gmail.com",
+	"yasminkhalili@gmail.com",
+	"monetcacerescc@gmail.com",
+	"maariiamaji@gmail.com",
+	"micastroespejo@gmail.com",
+	"aisacarrerapexe@gmail.com",
+	"csanchezssmm@gmail.com",
+	"maria.concal@gmail.com",
+	"manuelsan240902@gmail.com",
         "maria_gestion@gmail.com"
     ]
 }
