@@ -21,8 +21,8 @@ USUARIOS_AUTORIZADOS = {
     ],
     "ADMTVOS": [
         "alumno_admtvo1@gmail.com",
-        "juan_admtvo@hotmail.com"
         "alumno1@gmail.com",
+         "juan_admtvo@hotmail.com"
     ],
     "GESTION": [
         "alumno_gestion1@gmail.com",
