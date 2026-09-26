@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components  # Librería para el auto-scroll
+import streamlit.components.v1 as components  
 import fitz  # PyMuPDF
 import re
 import random
@@ -278,21 +278,52 @@ TESTS_DISPONIBLES = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
+            "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
         },
         "GENERAL": {
             "Elige un test de general...": None,
+            "TEMA 1 a 3 CONSTITUCIONAL": "https://drive.google.com/uc?export=download&id=14z3ZzvLLVZQ0XiUKx4qmiyneMoldZIB2",
+            "TEMA 4 LA JEFATURA DEL ESTADO": "https://drive.google.com/uc?export=download&id=1y-u-_wTqfIyB_fn0he0cvyKAPLjsM06A",
+            "TEMA 5 y 6 PODER LEGISLATIVO Y JUDICIAL": "https://drive.google.com/uc?export=download&id=1Hog53fH7CsG1FCk6CC0X4m4tIXZ2tPYd",
+            "TEMA 7 PODER EJECUTIVO": "https://drive.google.com/uc?export=download&id=1BXKLo950u1GSODuag-lds2SCbBTYF2UD",
         },
     },
     "GESTION": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
-            "PROFESOR TEST + PREGUNTA +  SUPUESTOS TEMA 51 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1WZRt_NvefPgaDGGYymwxO7k2JNwd8vqB",
+            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS": "https://drive.google.com/uc?export=download&id=1LlQvfrYuVXx2mJETTpfDGdhE2hyAWUZn",
+            "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA": "https://drive.google.com/uc?export=download&id=1ZcpNzh3IIu40K8eDcQCKpmWKrhvBUE_v",
+            "TEMA 53 - AFILIACION": "https://drive.google.com/uc?export=download&id=1CUhqhupF7_aiL5vjvP6aZlLjPay9xTOs",
+            "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES": "https://drive.google.com/uc?export=download&id=1OmVgiP6fGsGAYZ71v-vIKahly4V06-6o",
+            "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES": "https://drive.google.com/uc?export=download&id=1xLJwqD3zFtgGS-Q_jGa3fHFZPnNacGwz",
+            "TEMA 57 INCAPACIDAD TEMPORAL": "https://drive.google.com/uc?export=download&id=1lrSFSMDbecfW_aGYId5QChIhgVyYFKC5",
+            "TEMA 58 - NYCM": "https://drive.google.com/uc?export=download&id=1iw4NDqaC1gMGiMgd-VZTbtaoWyWKLE8L",
+            "TEMA 59 y 60 IP": "https://drive.google.com/uc?export=download&id=16ahUMTSgXAcjTVH700BoL6eZgwQo2_7E",
+            "Tema 67 COTIZACION": "https://drive.google.com/uc?export=download&id=1kErdym1yxTP-Qd0Frx-5XIwOkI3aq5aL",
+            "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
+            "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
+            "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
+            "DOMINGO 6 SEP 2026": "https://drive.google.com/uc?export=download&id=1pEuW36jClxKZQjwAuSx6TpfFaxlmkcln",
         },
         "GENERAL": {
             "Elige un test de general...": None,
+            "TEMA 06 -  LA EMPRESA MERCANTIL": "https://drive.google.com/uc?export=download&id=17myj2PoQaWv_wZn7OV13wESOS7gBVNSN",
+            "TEMA 07 - SOCIEDAD ANONIMA": "https://drive.google.com/uc?export=download&id=1_vZNRIHwJIcoPHdGyhbg7s-UEQEGrvMK",
+            "TEMA 08 - TITULOS VALORES": "https://drive.google.com/uc?export=download&id=1JjPfA7i3yP1Xuqx19IBJQrYYZMYh6MoS",
+            "TEMA 09 - LAS OBLIGACIONES MERCANTILES": "https://drive.google.com/uc?export=download&id=1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
+            "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
+            "TEMA 40 - IGUALDAD": "https://drive.google.com/uc?export=download&id=1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
+            "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": "https://drive.google.com/uc?export=download&id=1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
+            "TEMA 42 EL DERECHO DEL TRABAJO": "https://drive.google.com/uc?export=download&id=1ARQ8PoNtyTykdcbixOxWgEr4SZ7sZV6c",
+            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=11uc4s9pZP5-vAnbUY7klhQOVR10rCpYg",
+            "TEMA 44 CONTRATOS": "https://drive.google.com/uc?export=download&id=1LRLQAx8Ql3MnMEe1kksaBQIiXUvuR2VT",
+            "TEMA 45 SALARIO Y JORNADA": "https://drive.google.com/uc?export=download&id=1RRl35OdPYxOVs4f2L1GZkQO4EAgZoSWm",
+            "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
+            "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
+            "TEMA 48 EXTINCIÓN": "https://drive.google.com/uc?export=download&id=1Vhy345KHpLoebUVENZOLVlUzHYPWXd-g",
         },
     },
 }
