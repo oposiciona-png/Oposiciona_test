@@ -17,9 +17,23 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# Inyección de CSS general (Opciones súper visibles y botones)
+# Inyección de CSS general (Ocultar menú, opciones súper visibles y botones)
 st.markdown("""
 <style>
+/* --- OCULTAR MENÚ DE STREAMLIT, GITHUB Y FOOTER --- */
+[data-testid="stHeader"] {
+    display: none !important;
+}
+[data-testid="stToolbar"] {
+    display: none !important;
+}
+#MainMenu {
+    display: none !important;
+}
+footer {
+    display: none !important;
+}
+
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {
     margin-bottom: 12px !important; 
