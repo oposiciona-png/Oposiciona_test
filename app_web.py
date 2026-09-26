@@ -13,8 +13,6 @@ st.set_page_config(page_title="Practicador de Tests Oposiciona", layout="centere
 CORREOS_AUTORIZADOS = [
     "ignacio@gmail.com",
     "alumno1@gmail.com",
-    "ponentes@oposiciona.es",
-    "ignacio.garcia.heras@gmail.com",
     "juan@hotmail.com"
 ]
 
@@ -229,8 +227,17 @@ def action_finalizar_sesion():
 
 
 if not st.session_state.questions:
-    st.header("Sube un PDF de Test")
-    uploaded_file = st.file_uploader("", type="pdf")
+    st.header("Comienza a practicar")
+    
+    # --- NUEVO ENLACE A GOOGLE DRIVE ---
+    st.info("Paso 1: Descarga el test que quieras practicar desde nuestra carpeta compartida de Google Drive.")
+    st.link_button("📂 Abrir Carpeta de Tests en Google Drive", "https://drive.google.com/drive/folders/1AGIx26EgLE2L0PRKnL0Nce7pvLDmokz7?usp=drive_link", use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.info("Paso 2: Sube el archivo PDF que has descargado a continuación.")
+    uploaded_file = st.file_uploader("Sube aquí el PDF del test", type="pdf")
+    
     if uploaded_file is not None:
         with st.spinner("Procesando documento..."):
             raw_qs = PDFQuizParser.parse(uploaded_file.read())
