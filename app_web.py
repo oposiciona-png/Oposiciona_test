@@ -197,8 +197,6 @@ st.markdown("---")
 TESTS_DISPONIBLES = {
     "Administrativo": {
         "Elige un test de Administrativo...": None,
-        TESTS_DISPONIBLES = {
-    "Elige un test de la lista...": None,
     "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS TEST  TEMA 9 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
     "ADMINISTRATIVOS - ESPECIFICO - Copia de RESPUESTAS CASO PRÁCTICO TEMA 8B INCAPACIDAD PERMANENTE": "https://drive.google.com/uc?export=download&id=1MTmYVUK5nSCgI6L8iM_Zg1kz0E0nycho",
     "ADMINISTRATIVOS - ESPECIFICO - Copia de profesor TEST + SUPUESTO tema 4": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
