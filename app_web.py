@@ -652,18 +652,17 @@ if not st.session_state.questions:
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
         # --- SECCIÓN: CREAR EXAMEN ALEATORIO (CAJA LLAMATIVA) ---
-        es_ponente = (st.session_state.get("email") == "ponentes@oposiciona.es")
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
         with st.container(border=True):
             st.markdown("""
             <div style="text-align: center; padding-bottom: 5px;">
-                <h4 style="color: #856404; margin-top: 0; margin-bottom: 10px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
+                <h4 style="color: #856404; margin-top: 0; margin-bottom: 2px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
                 <p style="color: #856404; font-size: 14px; margin-bottom: 0;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
             </div>
             """, unsafe_allow_html=True)
             
-            if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", disabled=not es_ponente, use_container_width=True, type="primary"):
+            if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
                 with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
                     preguntas_por_pdf = []
                     for cat, tests in TESTS_DISPONIBLES[especialidad].items():
