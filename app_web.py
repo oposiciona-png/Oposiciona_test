@@ -224,7 +224,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD COMPLETO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD REFINADO PARA PREGUNTAS PARTIDAS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -360,7 +360,7 @@ class PDFQuizParser:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) MEJORADO ---
+            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) AFINADO ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -374,7 +374,11 @@ class PDFQuizParser:
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
                     m_future_rescue = (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', future_text, re.IGNORECASE) and future_text.endswith('?'))
                     
-                    if m_future_num or m_future_rescue:
+                    # Cortamos inmediatamente si encontramos otro NÚMERO
+                    if m_future_num:
+                        break
+                    # Solo cortamos por pregunta de rescate si está separada (protegemos los enunciados en 2 líneas)
+                    if m_future_rescue and j > idx + 2:
                         break
                 
                 if is_real_q_candidate:
@@ -670,10 +674,9 @@ if not st.session_state.questions:
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
         with st.container():
-            # Inyectamos el contenedor invisible para anclar nuestro CSS verde al botón
+            # Inyectamos el contenedor invisible para anclar nuestro CSS verde al botón de Cargar Test normal
             st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
             
-            # Y generamos la caja amarilla visualmente atractiva con HTML y columnas
             st.markdown("""
             <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 20px 0 10px 0;">
                 <h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
@@ -681,7 +684,6 @@ if not st.session_state.questions:
             </div>
             """, unsafe_allow_html=True)
             
-            # El botón nativo de Streamlit que queda visualmente debajo del texto, pero dentro del layout
             if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
                 with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
                     preguntas_por_pdf = []
@@ -742,7 +744,6 @@ if not st.session_state.questions:
     
     st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-        # Volvemos a meter nuestro contenedor verde para este botón específico
         with st.container():
             st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
             if st.button(f"🚀 Cargar Test Seleccionado", use_container_width=True):
