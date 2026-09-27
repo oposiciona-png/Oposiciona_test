@@ -24,7 +24,7 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# INYECCIÓN DE CSS
+# INYECCIÓN DE CSS (Bomba nuclear contra iconos y blindaje de letras)
 st.markdown("""
 <style>
 /* --- ANIQUILAR RASTROS INTERNOS DE STREAMLIT --- */
@@ -219,13 +219,13 @@ class PDFQuizParser:
                         if line_text:
                             tl = line_text.lower()
                             
-                            # Normalización exhaustiva de caracteres extraños y tildes
+                            # Normalización exhaustiva
                             tl_norm = tl.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ä", "a")
                             tl_norm = tl_norm.replace("τ", "t").replace("ε", "e").replace("μ", "m").replace("α", "a") 
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
                             tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) 
                             
-                            # 🛑 CORTAFUEGOS: Detener extracción inteligentemente
+                            # CORTAFUEGOS
                             is_stop_phrase = (
                                 tl_clean_spaces.startswith("supuesto practico") or 
                                 tl_clean_spaces.startswith("supuestos practicos") or 
@@ -243,9 +243,8 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # 🧹 FILTRO DINÁMICO DE CABECERAS Y PIES DE PÁGINA
+                            # FILTRO DE CABECERAS
                             is_header = False
-                            
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+)?TEMA\s+\d+', line_text):
                                 is_header = True
                                 
@@ -261,6 +260,7 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^examen\s+repaso',
                                     r'^test\s+tema',
+                                    r'^test\s+profesor',
                                     r'^respuestas\s+test',
                                     r'^respuestas\s+tema',
                                     r'^normas\s+para\s+la\s+realizacion'
@@ -344,7 +344,27 @@ class PDFQuizParser:
                 is_new_paragraph = len(current_q["options"]) >= 2 and re.search(r'[\.;]$', last_opt) and re.match(r'^[A-Z0-9¿¡"\'«]', text)
                 is_legal_ref = re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|según|normativa)', text_lower)
                 
-                if is_new_paragraph or is_legal_ref:
+                # --- NUEVA LÓGICA INTELIGENTE PARA DETECTAR EXPLICACIONES Y PROTEGER TEST DE 4 OPCIONES ---
+                is_implicit_explanation = False
+                
+                # Exigimos tener al menos 3 opciones (para cubrir test tanto de 3 como de 4 opciones).
+                # (Nota: Si es la opción D, el filtro 'is_option' de arriba ya la ha atrapado y no llega hasta aquí)
+                if len(current_q["options"]) >= 3 and re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text):
+                    
+                    # 1. Si la frase empieza claramente con vocabulario jurídico, es explicación 100% segura
+                    if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower):
+                        is_implicit_explanation = True
+                        
+                    # 2. Si empieza por palabras comunes (El, La, Para...) evaluamos cómo terminó la última opción
+                    elif re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower):
+                        # Si la última opción terminó en punto o punto y coma, casi seguro que esto es una nueva frase (explicación)
+                        if re.search(r'[\.;]$', last_opt):
+                            is_implicit_explanation = True
+                        # Si no hay punto, comprobamos que no termine en conectores que indicarían que la opción sigue en la línea siguiente
+                        elif not re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', last_opt, re.IGNORECASE):
+                            is_implicit_explanation = True
+
+                if is_new_paragraph or is_legal_ref or is_implicit_explanation:
                     current_q["state"] = "E"
                     current_q["explanation"] = text
                 else:
@@ -503,7 +523,6 @@ if not st.session_state.questions:
         if rol == "ACCESO TOTAL":
             lista_especialidades = list(TESTS_DISPONIBLES.keys())
             
-            # Recuperar memoria
             idx_esp = 0
             if "saved_esp" in st.session_state and st.session_state.saved_esp in lista_especialidades:
                 idx_esp = lista_especialidades.index(st.session_state.saved_esp)
@@ -524,7 +543,6 @@ if not st.session_state.questions:
         st.markdown("#### 2. Categoría")
         lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
         
-        # Recuperar memoria
         idx_cat = 0
         if "saved_cat" in st.session_state and st.session_state.saved_cat in lista_categorias:
             idx_cat = lista_categorias.index(st.session_state.saved_cat)
