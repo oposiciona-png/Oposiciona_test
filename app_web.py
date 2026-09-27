@@ -292,13 +292,18 @@ class PDFQuizParser:
                 continue
 
             is_new_q = False
-            m_num = re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or re.match(r'^\s*(\d+)\s+[\.-]', text)
+            
+            # --- ACTUALIZACIÓN: Atrapar números sueltos seguidos de interrogación ---
+            m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
+                     re.match(r'^\s*(\d+)\s+[\.-]', text) or
+                     re.match(r'^\s*(\d+)\s*¿', text))
+                     
             m_rescue = False
             
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    if re.match(r'^\s*\d+¿', text_clean) or (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')):
+                    if re.match(r'^\s*\d+\s*¿', text_clean) or (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')):
                         m_rescue = True
 
             if m_num:
@@ -316,7 +321,7 @@ class PDFQuizParser:
             if is_new_q:
                 if current_q and current_q["options"]: questions.append(current_q)
                 clean_text = re.sub(r'^\s*\d+[\.-]+\s*(-*\s*)?', '', text)
-                clean_text = re.sub(r'^\s*\d+¿', '¿', clean_text)
+                clean_text = re.sub(r'^\s*\d+\s*¿', '¿', clean_text)
                 current_q = {"preamble": preamble.strip(), "question_text": clean_text, "options": [], "answer": -1, "explanation": "", "state": "Q"}
                 preamble = "" 
                 continue
@@ -344,23 +349,16 @@ class PDFQuizParser:
                 is_new_paragraph = len(current_q["options"]) >= 2 and re.search(r'[\.;]$', last_opt) and re.match(r'^[A-Z0-9¿¡"\'«]', text)
                 is_legal_ref = re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|según|normativa)', text_lower)
                 
-                # --- NUEVA LÓGICA INTELIGENTE PARA DETECTAR EXPLICACIONES Y PROTEGER TEST DE 4 OPCIONES ---
                 is_implicit_explanation = False
                 
-                # Exigimos tener al menos 3 opciones (para cubrir test tanto de 3 como de 4 opciones).
-                # (Nota: Si es la opción D, el filtro 'is_option' de arriba ya la ha atrapado y no llega hasta aquí)
                 if len(current_q["options"]) >= 3 and re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text):
                     
-                    # 1. Si la frase empieza claramente con vocabulario jurídico, es explicación 100% segura
                     if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower):
                         is_implicit_explanation = True
                         
-                    # 2. Si empieza por palabras comunes (El, La, Para...) evaluamos cómo terminó la última opción
                     elif re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower):
-                        # Si la última opción terminó en punto o punto y coma, casi seguro que esto es una nueva frase (explicación)
                         if re.search(r'[\.;]$', last_opt):
                             is_implicit_explanation = True
-                        # Si no hay punto, comprobamos que no termine en conectores que indicarían que la opción sigue en la línea siguiente
                         elif not re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', last_opt, re.IGNORECASE):
                             is_implicit_explanation = True
 
