@@ -187,7 +187,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (LIMPIEZA DE CABECERAS CON REGEX)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CORTAFUEGOS MEJORADO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -221,23 +221,27 @@ class PDFQuizParser:
                             
                             # Normalización exhaustiva de caracteres extraños y tildes
                             tl_norm = tl.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ä", "a")
-                            tl_norm = tl_norm.replace("τ", "t").replace("ε", "e").replace("μ", "m").replace("α", "a") # Conversión de grafías griegas de PDF
+                            tl_norm = tl_norm.replace("τ", "t").replace("ε", "e").replace("μ", "m").replace("α", "a") 
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
-                            tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) # Unifica espacios múltiples
+                            tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) 
                             
-                            # 🛑 CORTAFUEGOS: Detener extracción en Supuestos Prácticos y Preguntas de Desarrollo
-                            if (tl_clean_spaces.startswith("supuesto practico") or 
+                            # 🛑 CORTAFUEGOS MEJORADO: Detener extracción inteligentemente
+                            is_stop_phrase = (
+                                tl_clean_spaces.startswith("supuesto practico") or 
                                 tl_clean_spaces.startswith("supuestos practicos") or 
-                                tl_clean_spaces == "supuesto" or 
-                                tl_clean_spaces == "supuestos" or 
-                                tl_clean_spaces == "pregunta" or 
-                                tl_clean_spaces == "preguntas" or 
                                 tl_clean_spaces.startswith("pregunta de desarrollo") or 
                                 tl_clean_spaces.startswith("preguntas de desarrollo") or 
                                 tl_clean_spaces.startswith("plantilla de respuesta") or
                                 tl_clean_spaces.startswith("plantillas de respuesta") or
-                                re.match(r'^pregunta\s+\d+', tl_clean_spaces) or
-                                re.match(r'^supuestos?\s+\d+', tl_clean_spaces)):
+                                re.match(r'^preguntas?\s+\d+$', tl_clean_spaces) or
+                                re.match(r'^supuestos?\s+\d+$', tl_clean_spaces)
+                            )
+                            
+                            # Para evitar falsos positivos con frases cortadas (ej: "¿...en este supuesto?"), 
+                            # exigimos que la palabra suelta esté escrita originalmente en MAYÚSCULAS (como un título real)
+                            is_stop_word_upper = (tl_clean_spaces in ["supuesto", "supuestos", "pregunta", "preguntas"]) and text.strip().isupper()
+                            
+                            if is_stop_phrase or is_stop_word_upper:
                                 stop_reading = True
                                 break
                             
@@ -252,6 +256,7 @@ class PDFQuizParser:
                                     r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social\s+tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
                                     r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
+                                    r'^tema\s+\d+\s+cotizacion',
                                     r'^examen\s+repaso',
                                     r'^test\s+tema',
                                     r'^respuestas\s+test',
