@@ -189,7 +189,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD COMPLETO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (LOOKAHEAD REFINADO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -293,7 +293,6 @@ class PDFQuizParser:
         preamble = "" 
         expected_q_num = 1  
         
-        # Iteramos con índice para poder mirar hacia adelante (lookahead)
         for idx, line in enumerate(lines):
             text = line["text"]
             is_bold = line["bold"]
@@ -311,22 +310,21 @@ class PDFQuizParser:
 
             is_new_q = False
             
-            # 1. Reconocimiento de números
+            # Reconocimiento de números
             m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[\.-]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
                      
             m_rescue = False
             
-            # 2. Reconocimiento de preguntas retóricas / de rescate sin número
+            # Reconocimiento de preguntas retóricas / de rescate sin número
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    # Detecta frases que empiezan y terminan con interrogación pura
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) MEJORADO ---
+            # --- ALGORITMO LOOKAHEAD MEJORADO ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -335,23 +333,24 @@ class PDFQuizParser:
                     if re.match(r'^[a-eA-E][\)\.]\s', future_text):
                         is_real_q_candidate = True
                         break
-                    # Si vemos otro número o pregunta de rescate antes de encontrar opciones, rompemos 
+                    
+                    # Si vemos otro NÚMERO de pregunta antes de encontrar opciones, rompemos.
+                    # NOTA VITAL: Ya NO rompemos si vemos una pregunta de rescate (¿...?),
+                    # porque muchas veces es la segunda línea de un enunciado largo que el PDF cortó en dos.
                     m_future_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', future_text) or 
                                     re.match(r'^\s*(\d+)\s+[\.-]', future_text) or
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
-                    m_future_rescue = (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', future_text, re.IGNORECASE) and future_text.endswith('?'))
                     
-                    if m_future_num or m_future_rescue:
+                    if m_future_num:
                         break
                 
-                # Solo si hemos confirmado que hay opciones debajo, procedemos a crear la nueva pregunta
+                # Procedemos a crear la nueva pregunta si confirmamos que abajo hay opciones
                 if is_real_q_candidate:
                     if m_num:
                         num = int(m_num.group(1))
                         if current_q is None:
                             is_new_q = True
                             expected_q_num = num + 1
-                        # Margen de seguridad tolerante
                         elif expected_q_num - 2 <= num <= expected_q_num + 15:
                             is_new_q = True
                             expected_q_num = num + 1
@@ -711,7 +710,6 @@ elif not st.session_state.finished:
     
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     
-    # Vinculamos el evento on_change a la selección
     selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -755,7 +753,6 @@ elif not st.session_state.finished:
             st.error(f"❌ INCORRECTO. La respuesta correcta era: {correct_opt}")
             
         exp = q.get('explanation', '').strip()
-        # Aquí renderizamos la explicación inyectando los saltos de párrafo para Markdown
         st.info(f"**Explicación:**\n\n{exp if exp else 'No hay explicación disponible.'}")
 
 else:
