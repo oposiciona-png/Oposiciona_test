@@ -615,16 +615,19 @@ if not st.session_state.questions:
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
-        # --- SECCIÓN: CREAR EXAMEN ALEATORIO (COCTELERA PROPORCIONAL) ---
+        # --- SECCIÓN: CREAR EXAMEN ALEATORIO ---
         es_ponente = (st.session_state.get("email") == "ponentes@oposiciona.es")
-        
-        # Determinamos dinámicamente el número de preguntas según la especialidad
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
-        if st.button(f"🎲 CREAR SIMULACRO GLOBAL ({total_deseadas} preg. de TODOS los bloques y temas)", disabled=not es_ponente, use_container_width=True):
+        st.markdown("""
+        <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px; text-align: center; margin: 20px 0;">
+            <h4 style="color: #856404; margin-top: 0;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
+            <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
+        """, unsafe_allow_html=True)
+        
+        if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", disabled=not es_ponente, use_container_width=True, type="primary"):
             with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
                 preguntas_por_pdf = []
-                # 1. Descargar todos los PDFs de TODAS las categorías
                 for cat, tests in TESTS_DISPONIBLES[especialidad].items():
                     for test_name, url in tests.items():
                         if url is None: continue
@@ -633,7 +636,6 @@ if not st.session_state.questions:
                             if resp.status_code == 200:
                                 qs = PDFQuizParser.parse(resp.content)
                                 if qs:
-                                    # Etiquetar con bloque y tema
                                     for q in qs:
                                         fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
                                         if q["preamble"]:
@@ -644,7 +646,6 @@ if not st.session_state.questions:
                         except Exception as e:
                             pass
                 
-                # 2. Algoritmo de Reparto Aleatorio Equitativo
                 if not preguntas_por_pdf:
                     st.error("No se pudo extraer ninguna pregunta.")
                 else:
@@ -663,13 +664,13 @@ if not st.session_state.questions:
                     examen_total = []
                     for i in range(num_pdfs):
                         if cuotas[i] > 0:
-                            # 3. Selección a ciegas de las preguntas que tocan de ese PDF
                             seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
                             examen_total.extend(seleccionadas)
                     
-                    # 4. Mezcla final
                     random.shuffle(examen_total)
                     procesar_preguntas(examen_total)
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("#### 4. Modo de avance")
         opciones_avance = [
@@ -686,7 +687,7 @@ if not st.session_state.questions:
     
     st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-        if st.button(f"🚀 Cargar Test Seleccionado", type="primary", use_container_width=True):
+        if st.button(f"🚀 Cargar Test Seleccionado", type="secondary", use_container_width=True):
             url_descarga = tests_categoria[opcion_seleccionada]
             with st.spinner(f"Extrayendo archivo de forma segura..."):
                 try:
