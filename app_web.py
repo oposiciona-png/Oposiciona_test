@@ -75,6 +75,21 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     padding-top: 1.5rem !important;
     max-width: 750px !important; 
 }
+
+/* --- BOTÓN VERDE CARGAR TEST (Blindado contra Modo Oscuro) --- */
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button {
+    background-color: #2e7d32 !important; /* Verde oscuro elegante */
+    border-color: #2e7d32 !important;
+}
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button p {
+    color: #ffffff !important; /* Blanco puro garantizado */
+    font-weight: 600 !important;
+    font-size: 17px !important;
+}
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button:hover {
+    background-color: #1b5e20 !important; /* Verde más oscuro al pasar el ratón */
+    border-color: #1b5e20 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -654,14 +669,19 @@ if not st.session_state.questions:
         # --- SECCIÓN: CREAR EXAMEN ALEATORIO (CAJA LLAMATIVA) ---
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
-        with st.container(border=True):
+        with st.container():
+            # Inyectamos el contenedor invisible para anclar nuestro CSS verde al botón
+            st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
+            
+            # Y generamos la caja amarilla visualmente atractiva con HTML y columnas
             st.markdown("""
-            <div style="text-align: center; padding-bottom: 5px;">
-                <h4 style="color: #856404; margin-top: 0; margin-bottom: 2px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
-                <p style="color: #856404; font-size: 14px; margin-bottom: 0;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
+            <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 20px 0 10px 0;">
+                <h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
+                <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
             </div>
             """, unsafe_allow_html=True)
             
+            # El botón nativo de Streamlit que queda visualmente debajo del texto, pero dentro del layout
             if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
                 with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
                     preguntas_por_pdf = []
@@ -722,21 +742,24 @@ if not st.session_state.questions:
     
     st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-        if st.button(f"🚀 Cargar Test Seleccionado", type="secondary", use_container_width=True):
-            url_descarga = tests_categoria[opcion_seleccionada]
-            with st.spinner(f"Extrayendo archivo de forma segura..."):
-                try:
-                    respuesta = requests.get(url_descarga)
-                    if respuesta.status_code == 200:
-                        raw_qs = PDFQuizParser.parse(respuesta.content)
-                        if not raw_qs:
-                            st.error("No se encontraron preguntas válidas en este PDF.")
+        # Volvemos a meter nuestro contenedor verde para este botón específico
+        with st.container():
+            st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
+            if st.button(f"🚀 Cargar Test Seleccionado", use_container_width=True):
+                url_descarga = tests_categoria[opcion_seleccionada]
+                with st.spinner(f"Extrayendo archivo de forma segura..."):
+                    try:
+                        respuesta = requests.get(url_descarga)
+                        if respuesta.status_code == 200:
+                            raw_qs = PDFQuizParser.parse(respuesta.content)
+                            if not raw_qs:
+                                st.error("No se encontraron preguntas válidas en este PDF.")
+                            else:
+                                procesar_preguntas(raw_qs)
                         else:
-                            procesar_preguntas(raw_qs)
-                    else:
-                        st.error("Error de descarga. Comprueba que el archivo en Drive tiene permisos de lectura ('Cualquier persona con el enlace').")
-                except Exception as e:
-                    st.error(f"Error de conexión: {e}")
+                            st.error("Error de descarga. Comprueba que el archivo en Drive tiene permisos de lectura ('Cualquier persona con el enlace').")
+                    except Exception as e:
+                        st.error(f"Error de conexión: {e}")
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
