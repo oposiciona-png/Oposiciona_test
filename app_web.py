@@ -142,6 +142,8 @@ PASSWORD_ACCESO = "plaza2026"
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
+if 'modo_avance' not in st.session_state:
+    st.session_state.modo_avance = "Manual"
 
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
@@ -293,7 +295,7 @@ class PDFQuizParser:
 
             is_new_q = False
             
-            # --- ACTUALIZACIÓN: Atrapar números sueltos seguidos de interrogación ---
+            # Reconocimiento de números seguidos de guiones, puntos o signos de interrogación
             m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[\.-]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
@@ -352,10 +354,8 @@ class PDFQuizParser:
                 is_implicit_explanation = False
                 
                 if len(current_q["options"]) >= 3 and re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text):
-                    
                     if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower):
                         is_implicit_explanation = True
-                        
                     elif re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower):
                         if re.search(r'[\.;]$', last_opt):
                             is_implicit_explanation = True
@@ -458,6 +458,22 @@ def save_answer(selected):
         stat['selected'] = selected
         stat['attempts'] += 1
 
+def handle_radio_change():
+    """Función que se activa al pinchar una opción de respuesta."""
+    idx = st.session_state.current_index
+    selected = st.session_state.get(f"radio_{idx}")
+    
+    # 1. Guardar la respuesta elegida
+    save_answer(selected)
+    
+    # 2. Si el modo es Automático y ha seleccionado algo, avanzar
+    if st.session_state.modo_avance == "Automático (Pasar al marcar)" and selected:
+        if idx < len(st.session_state.questions) - 1:
+            st.session_state.current_index += 1
+            st.session_state.checked = False
+        else:
+            st.session_state.finished = True
+
 def procesar_preguntas(raw_qs):
     for q in raw_qs:
         cleaned_options = []
@@ -551,6 +567,17 @@ if not st.session_state.questions:
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
+        
+        # --- NUEVA SECCIÓN MODO AVANCE ---
+        st.markdown("#### 4. Modo de avance")
+        opciones_avance = ["Manual (Comprobar cada pregunta)", "Automático (Pasar al marcar)"]
+        idx_avance = 0
+        if "saved_avance" in st.session_state and st.session_state.saved_avance in opciones_avance:
+            idx_avance = opciones_avance.index(st.session_state.saved_avance)
+            
+        modo_avance = st.radio("Modo de avance:", opciones_avance, index=idx_avance, horizontal=True, label_visibility="collapsed")
+        st.session_state.saved_avance = modo_avance
+        st.session_state.modo_avance = modo_avance
     
     st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
@@ -575,6 +602,8 @@ if not st.session_state.questions:
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
         uploaded_file = st.file_uploader("", type="pdf")
         if uploaded_file is not None:
+            # Asegurar que si suben archivo el modo quede registrado
+            st.session_state.modo_avance = modo_avance
             with st.spinner("Procesando documento local..."):
                 raw_qs = PDFQuizParser.parse(uploaded_file.read())
                 if not raw_qs:
@@ -630,7 +659,9 @@ elif not st.session_state.finished:
     st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 20px; line-height: 1.4;'>{q['question_text']}</p>", unsafe_allow_html=True)
     
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
-    selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}", label_visibility="collapsed")
+    
+    # Vinculamos el evento on_change a la selección
+    selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
     
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
