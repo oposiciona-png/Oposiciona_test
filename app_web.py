@@ -142,6 +142,7 @@ PASSWORD_ACCESO = "plaza2026"
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
+    st.session_state.email = None
 if 'modo_avance' not in st.session_state:
     st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
 
@@ -181,6 +182,7 @@ if not st.session_state.autenticado:
         if rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
+            st.session_state.email = correo_limpio
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -189,7 +191,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (LOOKAHEAD REFINADO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD COMPLETO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -293,6 +295,7 @@ class PDFQuizParser:
         preamble = "" 
         expected_q_num = 1  
         
+        # Iteramos con índice para poder mirar hacia adelante (lookahead)
         for idx, line in enumerate(lines):
             text = line["text"]
             is_bold = line["bold"]
@@ -310,41 +313,37 @@ class PDFQuizParser:
 
             is_new_q = False
             
-            # Reconocimiento de números
+            # 1. Reconocimiento de números
             m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[\.-]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
                      
             m_rescue = False
             
-            # Reconocimiento de preguntas retóricas / de rescate sin número
+            # 2. Reconocimiento de preguntas retóricas / de rescate sin número
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- ALGORITMO LOOKAHEAD MEJORADO ---
+            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) MEJORADO ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
                     future_text = lines[j]["text"].strip()
-                    # Si encontramos una opción clara cerca, es una pregunta de verdad
                     if re.match(r'^[a-eA-E][\)\.]\s', future_text):
                         is_real_q_candidate = True
                         break
                     
-                    # Si vemos otro NÚMERO de pregunta antes de encontrar opciones, rompemos.
-                    # NOTA VITAL: Ya NO rompemos si vemos una pregunta de rescate (¿...?),
-                    # porque muchas veces es la segunda línea de un enunciado largo que el PDF cortó en dos.
                     m_future_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', future_text) or 
                                     re.match(r'^\s*(\d+)\s+[\.-]', future_text) or
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
+                    m_future_rescue = (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', future_text, re.IGNORECASE) and future_text.endswith('?'))
                     
-                    if m_future_num:
+                    if m_future_num or m_future_rescue:
                         break
                 
-                # Procedemos a crear la nueva pregunta si confirmamos que abajo hay opciones
                 if is_real_q_candidate:
                     if m_num:
                         num = int(m_num.group(1))
@@ -616,7 +615,61 @@ if not st.session_state.questions:
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
-        # --- SECCIÓN MODO AVANCE ---
+        # --- SECCIÓN: CREAR EXAMEN ALEATORIO (COCTELERA PROPORCIONAL) ---
+        es_ponente = (st.session_state.get("email") == "ponentes@oposiciona.es")
+        if st.button("🎲 CREAR EXAMEN (75 preg. de toda la especialidad)", disabled=not es_ponente, use_container_width=True):
+            with st.spinner(f"Extrayendo y combinando preguntas de todos los PDFs de {especialidad} (puede tardar un minuto)..."):
+                preguntas_por_pdf = []
+                # 1. Descargar todos los PDFs disponibles de la especialidad
+                for cat, tests in TESTS_DISPONIBLES[especialidad].items():
+                    for test_name, url in tests.items():
+                        if url is None: continue
+                        try:
+                            resp = requests.get(url)
+                            if resp.status_code == 200:
+                                qs = PDFQuizParser.parse(resp.content)
+                                if qs:
+                                    # Etiquetar la fuente
+                                    for q in qs:
+                                        fuente = f"🏷️ **Fuente: {test_name}**"
+                                        if q["preamble"]:
+                                            q["preamble"] = fuente + "\n\n" + q["preamble"]
+                                        else:
+                                            q["preamble"] = fuente
+                                    preguntas_por_pdf.append(qs)
+                        except Exception as e:
+                            pass
+                
+                # 2. Algoritmo de Reparto Aleatorio y Proporcional
+                if not preguntas_por_pdf:
+                    st.error("No se pudo extraer ninguna pregunta.")
+                else:
+                    num_pdfs = len(preguntas_por_pdf)
+                    total_deseadas = 75
+                    cuotas = [0] * num_pdfs
+                    
+                    # Repartimos las 75 plazas equitativamente priorizando a los que menos tienen, 
+                    # rompiendo los empates al azar.
+                    for _ in range(total_deseadas):
+                        disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
+                        if not disponibles:
+                            break
+                        min_cuota = min(cuotas[i] for i in disponibles)
+                        candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
+                        idx = random.choice(candidatos_min)
+                        cuotas[idx] += 1
+                        
+                    examen_75 = []
+                    for i in range(num_pdfs):
+                        if cuotas[i] > 0:
+                            # 3. Selección a ciegas dentro del propio PDF
+                            seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
+                            examen_75.extend(seleccionadas)
+                    
+                    # 4. Mezclado explosivo final
+                    random.shuffle(examen_75)
+                    procesar_preguntas(examen_75)
+
         st.markdown("#### 4. Modo de avance")
         opciones_avance = [
             "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
