@@ -189,7 +189,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -220,7 +220,6 @@ class PDFQuizParser:
                         line_text = line_text.strip()
                         
                         # --- CIRUGÍA DE CABECERAS FUSIONADAS CON PÁRRAFOS ---
-                        # Si el PDF pega el título a la primera línea del párrafo, lo recortamos de raíz.
                         if line_text:
                             prefixes_to_strip = [
                                 r'^OPOSICIONA\s*',
@@ -263,7 +262,7 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # FILTRO DE CABECERAS DINÁMICO (Líneas sueltas)
+                            # FILTRO DE CABECERAS DINÁMICO
                             is_header = False
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
@@ -294,7 +293,8 @@ class PDFQuizParser:
         preamble = "" 
         expected_q_num = 1  
         
-        for line in lines:
+        # Iteramos con índice para poder mirar hacia adelante (lookahead)
+        for idx, line in enumerate(lines):
             text = line["text"]
             is_bold = line["bold"]
             text_lower = text.lower()
@@ -306,10 +306,12 @@ class PDFQuizParser:
                 if current_q and current_q["options"]: questions.append(current_q)
                 current_q = None 
                 preamble += text + "\n"
+                expected_q_num = 1 # Reseteamos contador por si acaso
                 continue
 
             is_new_q = False
             
+            # Reconocimiento de posibles números de pregunta
             m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[\.-]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
@@ -324,12 +326,33 @@ class PDFQuizParser:
 
             if m_num:
                 num = int(m_num.group(1))
-                if current_q is None:
-                    is_new_q = True
-                    expected_q_num = num + 1
-                elif expected_q_num - 20 <= num <= expected_q_num + 50:
-                    is_new_q = True
-                    expected_q_num = num + 1
+                
+                # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) ---
+                # Evita que las listas numeradas en las explicaciones corten el texto.
+                is_real_q_candidate = False
+                for j in range(idx + 1, min(idx + 25, len(lines))):
+                    future_text = lines[j]["text"].strip()
+                    # Si encontramos una opción clara cerca, es una pregunta de verdad
+                    if re.match(r'^[a-eA-E][\)\.]\s', future_text):
+                        is_real_q_candidate = True
+                        break
+                    # Si vemos otro número de pregunta antes de encontrar opciones, rompemos 
+                    # asumiendo que lo actual era solo una lista de la explicación anterior
+                    m_future_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', future_text) or 
+                                    re.match(r'^\s*(\d+)\s+[\.-]', future_text) or
+                                    re.match(r'^\s*(\d+)\s*¿', future_text))
+                    if m_future_num:
+                        break
+                
+                if is_real_q_candidate:
+                    if current_q is None:
+                        is_new_q = True
+                        expected_q_num = num + 1
+                    # Margen de seguridad: toleramos pequeños saltos, pero no cortes agresivos
+                    elif expected_q_num - 2 <= num <= expected_q_num + 15:
+                        is_new_q = True
+                        expected_q_num = num + 1
+                        
             elif m_rescue:
                 is_new_q = True
                 expected_q_num += 1
@@ -382,6 +405,7 @@ class PDFQuizParser:
                 else:
                     if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
                     current_q["options"][-1] += " " + text
+                    
             elif current_q["state"] == "E":
                 # Lógica para inyectar saltos de párrafo en las explicaciones
                 last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
