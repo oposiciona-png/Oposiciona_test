@@ -24,7 +24,7 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# INYECCIÓN DE CSS (Bomba nuclear contra iconos y blindaje de letras)
+# INYECCIÓN DE CSS
 st.markdown("""
 <style>
 /* --- ANIQUILAR RASTROS INTERNOS DE STREAMLIT --- */
@@ -246,11 +246,9 @@ class PDFQuizParser:
                             # 🧹 FILTRO DINÁMICO DE CABECERAS Y PIES DE PÁGINA
                             is_header = False
                             
-                            # Regla universal: Si está todo en mayúsculas y empieza por TEMA + Número, es cabecera
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+)?TEMA\s+\d+', line_text):
                                 is_header = True
                                 
-                            # Reglas por patrones comunes
                             if not is_header and len(tl_clean_spaces) < 120:
                                 header_patterns = [
                                     r'^oposiciona$',
@@ -504,7 +502,15 @@ if not st.session_state.questions:
         st.markdown("#### 1. Especialidad")
         if rol == "ACCESO TOTAL":
             lista_especialidades = list(TESTS_DISPONIBLES.keys())
-            especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, horizontal=True, label_visibility="collapsed")
+            
+            # Recuperar memoria
+            idx_esp = 0
+            if "saved_esp" in st.session_state and st.session_state.saved_esp in lista_especialidades:
+                idx_esp = lista_especialidades.index(st.session_state.saved_esp)
+                
+            especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, index=idx_esp, horizontal=True, label_visibility="collapsed")
+            st.session_state.saved_esp = especialidad
+            
         elif rol == "ADMTVOS":
             especialidad = "ADMINISTRATIVOS"
             st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
@@ -517,7 +523,14 @@ if not st.session_state.questions:
         
         st.markdown("#### 2. Categoría")
         lista_categorias = list(TESTS_DISPONIBLES[especialidad].keys())
-        categoria = st.radio("Selecciona el tipo de test:", lista_categorias, horizontal=True, label_visibility="collapsed")
+        
+        # Recuperar memoria
+        idx_cat = 0
+        if "saved_cat" in st.session_state and st.session_state.saved_cat in lista_categorias:
+            idx_cat = lista_categorias.index(st.session_state.saved_cat)
+            
+        categoria = st.radio("Selecciona el tipo de test:", lista_categorias, index=idx_cat, horizontal=True, label_visibility="collapsed")
+        st.session_state.saved_cat = categoria
         
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
