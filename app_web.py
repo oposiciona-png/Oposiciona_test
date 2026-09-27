@@ -187,7 +187,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (NUEVO CORTAFUEGOS DE GUILLOTINA)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (LIMPIEZA DE CABECERAS CON REGEX)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -218,34 +218,49 @@ class PDFQuizParser:
                         line_text = line_text.strip()
                         if line_text:
                             tl = line_text.lower()
-                            # Normalizamos el texto (quitamos tildes y signos de puntuación) para no fallar
+                            
+                            # Normalización exhaustiva de caracteres extraños y tildes
                             tl_norm = tl.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ä", "a")
+                            tl_norm = tl_norm.replace("τ", "t").replace("ε", "e").replace("μ", "m").replace("α", "a") # Conversión de grafías griegas de PDF
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
+                            tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) # Unifica espacios múltiples
                             
                             # 🛑 CORTAFUEGOS: Detener extracción en Supuestos Prácticos y Preguntas de Desarrollo
-                            if (tl_clean.startswith("supuesto practico") or 
-                                tl_clean.startswith("supuestos practicos") or 
-                                tl_clean == "supuesto" or 
-                                tl_clean == "supuestos" or 
-                                tl_clean == "pregunta" or 
-                                tl_clean == "preguntas" or 
-                                tl_clean.startswith("pregunta de desarrollo") or 
-                                tl_clean.startswith("preguntas de desarrollo") or 
-                                tl_clean.startswith("plantilla de respuesta") or
-                                tl_clean.startswith("plantillas de respuesta") or
-                                re.match(r'^pregunta\s+\d+', tl_clean) or
-                                re.match(r'^supuestos?\s+\d+', tl_clean)):
+                            if (tl_clean_spaces.startswith("supuesto practico") or 
+                                tl_clean_spaces.startswith("supuestos practicos") or 
+                                tl_clean_spaces == "supuesto" or 
+                                tl_clean_spaces == "supuestos" or 
+                                tl_clean_spaces == "pregunta" or 
+                                tl_clean_spaces == "preguntas" or 
+                                tl_clean_spaces.startswith("pregunta de desarrollo") or 
+                                tl_clean_spaces.startswith("preguntas de desarrollo") or 
+                                tl_clean_spaces.startswith("plantilla de respuesta") or
+                                tl_clean_spaces.startswith("plantillas de respuesta") or
+                                re.match(r'^pregunta\s+\d+', tl_clean_spaces) or
+                                re.match(r'^supuestos?\s+\d+', tl_clean_spaces)):
                                 stop_reading = True
                                 break
                             
+                            # 🧹 FILTRO DINÁMICO DE CABECERAS Y PIES DE PÁGINA
                             is_header = False
-                            if len(tl) < 80:
-                                if "www.oposiciona.es" in tl or re.search(r'^p[áa]gina\s+\d+\s+de\s+\d+', tl) or tl == "oposiciona":
-                                    is_header = True
-                                elif "administrativo de la seguridad social" in tl or "gestion de la seguridad social" in tl or "gestión de la seguridad social" in tl:
-                                    is_header = True
-                                elif "examen repaso" in tl or "test tema" in tl or "respuestas test" in tl or re.search(r'^tema\s+\d+', tl) or re.search(r'^examen\s+', tl) or "normas para la realización" in tl:
-                                    is_header = True
+                            if len(tl_clean_spaces) < 100:
+                                header_patterns = [
+                                    r'^oposiciona$',
+                                    r'oposicionaes',
+                                    r'^pagina\s+\d+',
+                                    r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social$',
+                                    r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social\s+tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
+                                    r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
+                                    r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
+                                    r'^examen\s+repaso',
+                                    r'^test\s+tema',
+                                    r'^respuestas\s+test',
+                                    r'^normas\s+para\s+la\s+realizacion'
+                                ]
+                                for pat in header_patterns:
+                                    if re.search(pat, tl_clean_spaces):
+                                        is_header = True
+                                        break
                             
                             if is_header: continue
                             lines.append({"text": line_text, "bold": is_bold})
