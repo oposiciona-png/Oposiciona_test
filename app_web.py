@@ -189,7 +189,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD COMPLETO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -306,29 +306,28 @@ class PDFQuizParser:
                 if current_q and current_q["options"]: questions.append(current_q)
                 current_q = None 
                 preamble += text + "\n"
-                expected_q_num = 1 # Reseteamos contador por si acaso
+                expected_q_num = 1 
                 continue
 
             is_new_q = False
             
-            # Reconocimiento de posibles números de pregunta
+            # 1. Reconocimiento de números
             m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[\.-]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
                      
             m_rescue = False
             
+            # 2. Reconocimiento de preguntas retóricas / de rescate sin número
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    if re.match(r'^\s*\d+\s*¿', text_clean) or (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')):
+                    # Detecta frases que empiezan y terminan con interrogación pura
+                    if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            if m_num:
-                num = int(m_num.group(1))
-                
-                # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) ---
-                # Evita que las listas numeradas en las explicaciones corten el texto.
+            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) MEJORADO ---
+            if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
                     future_text = lines[j]["text"].strip()
@@ -336,26 +335,29 @@ class PDFQuizParser:
                     if re.match(r'^[a-eA-E][\)\.]\s', future_text):
                         is_real_q_candidate = True
                         break
-                    # Si vemos otro número de pregunta antes de encontrar opciones, rompemos 
-                    # asumiendo que lo actual era solo una lista de la explicación anterior
+                    # Si vemos otro número o pregunta de rescate antes de encontrar opciones, rompemos 
                     m_future_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', future_text) or 
                                     re.match(r'^\s*(\d+)\s+[\.-]', future_text) or
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
-                    if m_future_num:
+                    m_future_rescue = (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', future_text, re.IGNORECASE) and future_text.endswith('?'))
+                    
+                    if m_future_num or m_future_rescue:
                         break
                 
+                # Solo si hemos confirmado que hay opciones debajo, procedemos a crear la nueva pregunta
                 if is_real_q_candidate:
-                    if current_q is None:
+                    if m_num:
+                        num = int(m_num.group(1))
+                        if current_q is None:
+                            is_new_q = True
+                            expected_q_num = num + 1
+                        # Margen de seguridad tolerante
+                        elif expected_q_num - 2 <= num <= expected_q_num + 15:
+                            is_new_q = True
+                            expected_q_num = num + 1
+                    elif m_rescue:
                         is_new_q = True
-                        expected_q_num = num + 1
-                    # Margen de seguridad: toleramos pequeños saltos, pero no cortes agresivos
-                    elif expected_q_num - 2 <= num <= expected_q_num + 15:
-                        is_new_q = True
-                        expected_q_num = num + 1
-                        
-            elif m_rescue:
-                is_new_q = True
-                expected_q_num += 1
+                        expected_q_num += 1
 
             if is_new_q:
                 if current_q and current_q["options"]: questions.append(current_q)
