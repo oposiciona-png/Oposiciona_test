@@ -143,7 +143,7 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 if 'modo_avance' not in st.session_state:
-    st.session_state.modo_avance = "Modo reflexivo (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
+    st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
 
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
@@ -245,7 +245,7 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # FILTRO DE CABECERAS DINÁMICO (GENERAL, ESPECÍFICO, EXAMEN, TEST, RESPUESTAS)
+                            # FILTRO DE CABECERAS DINÁMICO
                             is_header = False
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
@@ -364,8 +364,21 @@ class PDFQuizParser:
                 else:
                     if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
                     current_q["options"][-1] += " " + text
+                    
             elif current_q["state"] == "E":
-                current_q["explanation"] += " " + text
+                # --- NUEVA LÓGICA DE DETECCIÓN DE SALTOS DE PÁRRAFO Y VIÑETAS ---
+                last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
+                
+                # 1. ¿Empieza la línea claramente por una viñeta, guion o número de lista? (ej: "•", "-", "*", "1.", "a)")
+                is_list_item = bool(re.match(r'^([•\-\*]|\d+[\.\)]|[a-zA-Z][\)\.])\s', text))
+                
+                # 2. ¿La línea anterior terminó en puntuación fuerte y esta empieza en Mayúscula?
+                is_new_sentence = (last_char in ['.', ':', ';'] and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)))
+                
+                if is_list_item or is_new_sentence:
+                    current_q["explanation"] += "\n\n" + text
+                else:
+                    current_q["explanation"] += " " + text
 
         if current_q and current_q["options"]: questions.append(current_q)
         return questions
@@ -463,7 +476,7 @@ def handle_radio_change():
     save_answer(selected)
     
     # 2. Si el modo es Metralleta y ha seleccionado algo, avanzar
-    if st.session_state.modo_avance == "Modo metralleta (pasa a la pregunta siguiente al pulsar una opción)" and selected:
+    if "metralleta" in st.session_state.modo_avance.lower() and selected:
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
             st.session_state.checked = False
@@ -567,8 +580,8 @@ if not st.session_state.questions:
         # --- SECCIÓN MODO AVANCE ---
         st.markdown("#### 4. Modo de avance")
         opciones_avance = [
-            "Modo reflexivo (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
-            "Modo metralleta (pasa a la pregunta siguiente al pulsar una opción)"
+            "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
+            "**Modo metralleta** (pasa a la pregunta siguiente al pulsar una opción)"
         ]
         idx_avance = 0
         if "saved_avance" in st.session_state and st.session_state.saved_avance in opciones_avance:
@@ -702,6 +715,7 @@ elif not st.session_state.finished:
             st.error(f"❌ INCORRECTO. La respuesta correcta era: {correct_opt}")
             
         exp = q.get('explanation', '').strip()
+        # Aquí renderizamos la explicación inyectando los saltos de párrafo para Markdown
         st.info(f"**Explicación:**\n\n{exp if exp else 'No hay explicación disponible.'}")
 
 else:
@@ -785,7 +799,8 @@ else:
         st.markdown(f"<p style='font-size:15px;'><b>Pregunta:</b> {q['question_text']}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:15px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:15px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
-        exp_text = q.get('explanation', 'No disponible.')
+        
+        exp_text = q.get('explanation', 'No disponible.').replace('\n', '<br>')
         st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:12px; border-radius:8px;'><p style='font-size:14px; margin: 0;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
