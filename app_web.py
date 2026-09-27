@@ -218,6 +218,24 @@ class PDFQuizParser:
                                 is_bold = True
                         
                         line_text = line_text.strip()
+                        
+                        # --- CIRUGÍA DE CABECERAS FUSIONADAS CON PÁRRAFOS ---
+                        # Si el PDF pega el título a la primera línea del párrafo, lo recortamos de raíz.
+                        if line_text:
+                            prefixes_to_strip = [
+                                r'^OPOSICIONA\s*',
+                                r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*',
+                                r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
+                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ\s]+\b\.?\s*'
+                            ]
+                            for pat in prefixes_to_strip:
+                                m = re.match(pat, line_text, flags=re.IGNORECASE)
+                                if m and m.group(0).isupper():
+                                    line_text = line_text[m.end():].strip()
+                        
+                        if not line_text:
+                            continue
+                            
                         if line_text:
                             tl = line_text.lower()
                             
@@ -245,7 +263,7 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # FILTRO DE CABECERAS DINÁMICO
+                            # FILTRO DE CABECERAS DINÁMICO (Líneas sueltas)
                             is_header = False
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
@@ -364,15 +382,11 @@ class PDFQuizParser:
                 else:
                     if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
                     current_q["options"][-1] += " " + text
-                    
             elif current_q["state"] == "E":
-                # --- NUEVA LÓGICA DE DETECCIÓN DE SALTOS DE PÁRRAFO Y VIÑETAS ---
+                # Lógica para inyectar saltos de párrafo en las explicaciones
                 last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                 
-                # 1. ¿Empieza la línea claramente por una viñeta, guion o número de lista? (ej: "•", "-", "*", "1.", "a)")
                 is_list_item = bool(re.match(r'^([•\-\*]|\d+[\.\)]|[a-zA-Z][\)\.])\s', text))
-                
-                # 2. ¿La línea anterior terminó en puntuación fuerte y esta empieza en Mayúscula?
                 is_new_sentence = (last_char in ['.', ':', ';'] and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)))
                 
                 if is_list_item or is_new_sentence:
