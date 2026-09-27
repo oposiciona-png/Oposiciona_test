@@ -617,10 +617,14 @@ if not st.session_state.questions:
         
         # --- SECCIÓN: CREAR EXAMEN ALEATORIO (COCTELERA PROPORCIONAL) ---
         es_ponente = (st.session_state.get("email") == "ponentes@oposiciona.es")
-        if st.button("🎲 CREAR EXAMEN (75 preg. de toda la especialidad)", disabled=not es_ponente, use_container_width=True):
-            with st.spinner(f"Extrayendo y combinando preguntas de todos los PDFs de {especialidad} (puede tardar un minuto)..."):
+        
+        # Determinamos dinámicamente el número de preguntas según la especialidad
+        total_deseadas = 95 if especialidad == "GESTION" else 75
+        
+        if st.button(f"🎲 CREAR SIMULACRO GLOBAL ({total_deseadas} preg. de TODOS los bloques y temas)", disabled=not es_ponente, use_container_width=True):
+            with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
                 preguntas_por_pdf = []
-                # 1. Descargar todos los PDFs disponibles de la especialidad
+                # 1. Descargar todos los PDFs de TODAS las categorías
                 for cat, tests in TESTS_DISPONIBLES[especialidad].items():
                     for test_name, url in tests.items():
                         if url is None: continue
@@ -629,9 +633,9 @@ if not st.session_state.questions:
                             if resp.status_code == 200:
                                 qs = PDFQuizParser.parse(resp.content)
                                 if qs:
-                                    # Etiquetar la fuente
+                                    # Etiquetar con bloque y tema
                                     for q in qs:
-                                        fuente = f"🏷️ **Fuente: {test_name}**"
+                                        fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
                                         if q["preamble"]:
                                             q["preamble"] = fuente + "\n\n" + q["preamble"]
                                         else:
@@ -640,16 +644,13 @@ if not st.session_state.questions:
                         except Exception as e:
                             pass
                 
-                # 2. Algoritmo de Reparto Aleatorio y Proporcional
+                # 2. Algoritmo de Reparto Aleatorio Equitativo
                 if not preguntas_por_pdf:
                     st.error("No se pudo extraer ninguna pregunta.")
                 else:
                     num_pdfs = len(preguntas_por_pdf)
-                    total_deseadas = 75
                     cuotas = [0] * num_pdfs
                     
-                    # Repartimos las 75 plazas equitativamente priorizando a los que menos tienen, 
-                    # rompiendo los empates al azar.
                     for _ in range(total_deseadas):
                         disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
                         if not disponibles:
@@ -659,16 +660,16 @@ if not st.session_state.questions:
                         idx = random.choice(candidatos_min)
                         cuotas[idx] += 1
                         
-                    examen_75 = []
+                    examen_total = []
                     for i in range(num_pdfs):
                         if cuotas[i] > 0:
-                            # 3. Selección a ciegas dentro del propio PDF
+                            # 3. Selección a ciegas de las preguntas que tocan de ese PDF
                             seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
-                            examen_75.extend(seleccionadas)
+                            examen_total.extend(seleccionadas)
                     
-                    # 4. Mezclado explosivo final
-                    random.shuffle(examen_75)
-                    procesar_preguntas(examen_75)
+                    # 4. Mezcla final
+                    random.shuffle(examen_total)
+                    procesar_preguntas(examen_total)
 
         st.markdown("#### 4. Modo de avance")
         opciones_avance = [
@@ -886,6 +887,10 @@ else:
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         st.markdown(f"<h4 style='color: {color}; font-size: 18px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h4>", unsafe_allow_html=True)
+        
+        if q.get('preamble'):
+            st.markdown(q['preamble'])
+            
         st.markdown(f"<p style='font-size:15px;'><b>Pregunta:</b> {q['question_text']}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:15px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:15px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
