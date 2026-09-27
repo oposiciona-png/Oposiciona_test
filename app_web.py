@@ -156,6 +156,24 @@ with col2:
 st.markdown("---")
 
 if not st.session_state.autenticado:
+    # --- ASCENSOR AUTOMÁTICO AL INICIO DE LA PANTALLA ---
+    components.html(
+        """
+        <script>
+            try {
+                var doc = window.parent.document;
+                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
+                if (main) {
+                    main.scrollTo({top: 0, behavior: 'smooth'});
+                } else {
+                    window.parent.scrollTo(0, 0);
+                }
+            } catch(e) {}
+        </script>
+        """,
+        height=0
+    )
+    
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
         try:
@@ -568,6 +586,24 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
+    # --- ASCENSOR AUTOMÁTICO AL INICIO DE LA PANTALLA DE MENÚ ---
+    components.html(
+        """
+        <script>
+            try {
+                var doc = window.parent.document;
+                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
+                if (main) {
+                    main.scrollTo({top: 0, behavior: 'smooth'});
+                } else {
+                    window.parent.scrollTo(0, 0);
+                }
+            } catch(e) {}
+        </script>
+        """,
+        height=0
+    )
+
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
         try:
@@ -615,62 +651,62 @@ if not st.session_state.questions:
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
-        # --- SECCIÓN: CREAR EXAMEN ALEATORIO ---
+        # --- SECCIÓN: CREAR EXAMEN ALEATORIO (CAJA LLAMATIVA) ---
         es_ponente = (st.session_state.get("email") == "ponentes@oposiciona.es")
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
-        st.markdown("""
-        <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px; text-align: center; margin: 20px 0;">
-            <h4 style="color: #856404; margin-top: 0;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
-            <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
-        """, unsafe_allow_html=True)
-        
-        if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", disabled=not es_ponente, use_container_width=True, type="primary"):
-            with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
-                preguntas_por_pdf = []
-                for cat, tests in TESTS_DISPONIBLES[especialidad].items():
-                    for test_name, url in tests.items():
-                        if url is None: continue
-                        try:
-                            resp = requests.get(url)
-                            if resp.status_code == 200:
-                                qs = PDFQuizParser.parse(resp.content)
-                                if qs:
-                                    for q in qs:
-                                        fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
-                                        if q["preamble"]:
-                                            q["preamble"] = fuente + "\n\n" + q["preamble"]
-                                        else:
-                                            q["preamble"] = fuente
-                                    preguntas_por_pdf.append(qs)
-                        except Exception as e:
-                            pass
-                
-                if not preguntas_por_pdf:
-                    st.error("No se pudo extraer ninguna pregunta.")
-                else:
-                    num_pdfs = len(preguntas_por_pdf)
-                    cuotas = [0] * num_pdfs
+        with st.container(border=True):
+            st.markdown("""
+            <div style="text-align: center; padding-bottom: 5px;">
+                <h4 style="color: #856404; margin-top: 0; margin-bottom: 10px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
+                <p style="color: #856404; font-size: 14px; margin-bottom: 0;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", disabled=not es_ponente, use_container_width=True, type="primary"):
+                with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
+                    preguntas_por_pdf = []
+                    for cat, tests in TESTS_DISPONIBLES[especialidad].items():
+                        for test_name, url in tests.items():
+                            if url is None: continue
+                            try:
+                                resp = requests.get(url)
+                                if resp.status_code == 200:
+                                    qs = PDFQuizParser.parse(resp.content)
+                                    if qs:
+                                        for q in qs:
+                                            fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
+                                            if q["preamble"]:
+                                                q["preamble"] = fuente + "\n\n" + q["preamble"]
+                                            else:
+                                                q["preamble"] = fuente
+                                        preguntas_por_pdf.append(qs)
+                            except Exception as e:
+                                pass
                     
-                    for _ in range(total_deseadas):
-                        disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
-                        if not disponibles:
-                            break
-                        min_cuota = min(cuotas[i] for i in disponibles)
-                        candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
-                        idx = random.choice(candidatos_min)
-                        cuotas[idx] += 1
+                    if not preguntas_por_pdf:
+                        st.error("No se pudo extraer ninguna pregunta.")
+                    else:
+                        num_pdfs = len(preguntas_por_pdf)
+                        cuotas = [0] * num_pdfs
                         
-                    examen_total = []
-                    for i in range(num_pdfs):
-                        if cuotas[i] > 0:
-                            seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
-                            examen_total.extend(seleccionadas)
-                    
-                    random.shuffle(examen_total)
-                    procesar_preguntas(examen_total)
-
-        st.markdown("</div>", unsafe_allow_html=True)
+                        for _ in range(total_deseadas):
+                            disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
+                            if not disponibles:
+                                break
+                            min_cuota = min(cuotas[i] for i in disponibles)
+                            candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
+                            idx = random.choice(candidatos_min)
+                            cuotas[idx] += 1
+                            
+                        examen_total = []
+                        for i in range(num_pdfs):
+                            if cuotas[i] > 0:
+                                seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
+                                examen_total.extend(seleccionadas)
+                        
+                        random.shuffle(examen_total)
+                        procesar_preguntas(examen_total)
 
         st.markdown("#### 4. Modo de avance")
         opciones_avance = [
