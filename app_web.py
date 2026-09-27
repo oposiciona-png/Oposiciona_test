@@ -24,7 +24,7 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# INYECCIÓN DE CSS
+# INYECCIÓN DE CSS (Bomba nuclear contra iconos y blindaje de letras)
 st.markdown("""
 <style>
 /* --- ANIQUILAR RASTROS INTERNOS DE STREAMLIT --- */
@@ -33,14 +33,13 @@ st.markdown("""
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
 
-/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD (Barquito y Avatar) --- */
+/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD --- */
 .stDeployButton {display: none !important;}
 [data-testid="stAppDeployButton"] {display: none !important;}
 [class*="viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
 [class*="styles_viewerBadge"] {display: none !important;}
 [data-testid*="manage-app"] {display: none !important;}
 
-/* --- LA BOMBA NUCLEAR: Ocultar TODO lo que flote en la esquina inferior derecha --- */
 div[style*="position: fixed"][style*="bottom"][style*="right"],
 div[style*="position: absolute"][style*="bottom"][style*="right"] {
     display: none !important;
@@ -188,7 +187,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (NUEVA LÓGICA DE DETENCIÓN)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (NUEVO CORTAFUEGOS DE GUILLOTINA)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -206,6 +205,7 @@ class PDFQuizParser:
                 if stop_reading: break
                 if b.get("type", 0) == 0:  
                     for l in b["lines"]:
+                        if stop_reading: break
                         line_text = ""
                         is_bold = False
                         for s in l["spans"]:
@@ -218,20 +218,23 @@ class PDFQuizParser:
                         line_text = line_text.strip()
                         if line_text:
                             tl = line_text.lower()
+                            # Normalizamos el texto (quitamos tildes y signos de puntuación) para no fallar
+                            tl_norm = tl.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ä", "a")
+                            tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
                             
-                            # Normalizamos acentos para detectar variantes de las palabras prohibidas
-                            tl_norm = tl.replace("á", "a").replace("ä", "a")
-                            tl_nospace = tl_norm.replace(" ", "").replace(".", "").replace("-", "").replace(":", "")
-                            
-                            # 1. DETENER EXTRACCIÓN POR FRASES COMBINADAS
-                            if ("preguntadedesarrollo" in tl_nospace or 
-                                "supuestopractico" in tl_nospace or 
-                                "plantilladerespuesta" in tl_nospace):
-                                stop_reading = True
-                                break
-                                
-                            # 2. DETENER EXTRACCIÓN POR TÍTULOS EXACTOS (PREGUNTA, SUPUESTO, PREGUNTA 1, etc.)
-                            if re.match(r'^(supuestos?|preguntas?)\s*\d*[\.-]*$', tl_norm):
+                            # 🛑 CORTAFUEGOS: Detener extracción en Supuestos Prácticos y Preguntas de Desarrollo
+                            if (tl_clean.startswith("supuesto practico") or 
+                                tl_clean.startswith("supuestos practicos") or 
+                                tl_clean == "supuesto" or 
+                                tl_clean == "supuestos" or 
+                                tl_clean == "pregunta" or 
+                                tl_clean == "preguntas" or 
+                                tl_clean.startswith("pregunta de desarrollo") or 
+                                tl_clean.startswith("preguntas de desarrollo") or 
+                                tl_clean.startswith("plantilla de respuesta") or
+                                tl_clean.startswith("plantillas de respuesta") or
+                                re.match(r'^pregunta\s+\d+', tl_clean) or
+                                re.match(r'^supuestos?\s+\d+', tl_clean)):
                                 stop_reading = True
                                 break
                             
