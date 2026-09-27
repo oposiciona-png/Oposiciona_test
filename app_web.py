@@ -187,7 +187,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CORTAFUEGOS MEJORADO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -225,7 +225,7 @@ class PDFQuizParser:
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
                             tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) 
                             
-                            # 🛑 CORTAFUEGOS MEJORADO: Detener extracción inteligentemente
+                            # 🛑 CORTAFUEGOS: Detener extracción inteligentemente
                             is_stop_phrase = (
                                 tl_clean_spaces.startswith("supuesto practico") or 
                                 tl_clean_spaces.startswith("supuestos practicos") or 
@@ -237,9 +237,7 @@ class PDFQuizParser:
                                 re.match(r'^supuestos?\s+\d+$', tl_clean_spaces)
                             )
                             
-                            # Para evitar falsos positivos con frases cortadas (ej: "¿...en este supuesto?"), 
-                            # exigimos que la palabra suelta esté escrita originalmente en MAYÚSCULAS (como un título real)
-                            is_stop_word_upper = (tl_clean_spaces in ["supuesto", "supuestos", "pregunta", "preguntas"]) and text.strip().isupper()
+                            is_stop_word_upper = (tl_clean_spaces in ["supuesto", "supuestos", "pregunta", "preguntas"]) and line_text.isupper()
                             
                             if is_stop_phrase or is_stop_word_upper:
                                 stop_reading = True
@@ -247,19 +245,26 @@ class PDFQuizParser:
                             
                             # 🧹 FILTRO DINÁMICO DE CABECERAS Y PIES DE PÁGINA
                             is_header = False
-                            if len(tl_clean_spaces) < 100:
+                            
+                            # Regla universal: Si está todo en mayúsculas y empieza por TEMA + Número, es cabecera
+                            if line_text.isupper() and re.match(r'^(RESPUESTAS\s+)?TEMA\s+\d+', line_text):
+                                is_header = True
+                                
+                            # Reglas por patrones comunes
+                            if not is_header and len(tl_clean_spaces) < 120:
                                 header_patterns = [
                                     r'^oposiciona$',
                                     r'oposicionaes',
                                     r'^pagina\s+\d+',
-                                    r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social$',
-                                    r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social\s+tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
+                                    r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
                                     r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
                                     r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^tema\s+\d+\s+cotizacion',
+                                    r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^examen\s+repaso',
                                     r'^test\s+tema',
                                     r'^respuestas\s+test',
+                                    r'^respuestas\s+tema',
                                     r'^normas\s+para\s+la\s+realizacion'
                                 ]
                                 for pat in header_patterns:
