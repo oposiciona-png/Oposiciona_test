@@ -143,7 +143,7 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
 if 'modo_avance' not in st.session_state:
-    st.session_state.modo_avance = "Manual"
+    st.session_state.modo_avance = "Modo reflexivo (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
 
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
@@ -295,7 +295,6 @@ class PDFQuizParser:
 
             is_new_q = False
             
-            # Reconocimiento de números seguidos de guiones, puntos o signos de interrogación
             m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[\.-]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
@@ -466,8 +465,8 @@ def handle_radio_change():
     # 1. Guardar la respuesta elegida
     save_answer(selected)
     
-    # 2. Si el modo es Automático y ha seleccionado algo, avanzar
-    if st.session_state.modo_avance == "Automático (Pasar al marcar)" and selected:
+    # 2. Si el modo es Metralleta y ha seleccionado algo, avanzar
+    if st.session_state.modo_avance == "Modo metralleta (pasa a la pregunta siguiente al pulsar una opción)" and selected:
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
             st.session_state.checked = False
@@ -568,14 +567,18 @@ if not st.session_state.questions:
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
-        # --- NUEVA SECCIÓN MODO AVANCE ---
+        # --- SECCIÓN MODO AVANCE ---
         st.markdown("#### 4. Modo de avance")
-        opciones_avance = ["Manual (Comprobar cada pregunta)", "Automático (Pasar al marcar)"]
+        opciones_avance = [
+            "Modo reflexivo (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
+            "Modo metralleta (pasa a la pregunta siguiente al pulsar una opción)"
+        ]
         idx_avance = 0
         if "saved_avance" in st.session_state and st.session_state.saved_avance in opciones_avance:
             idx_avance = opciones_avance.index(st.session_state.saved_avance)
             
-        modo_avance = st.radio("Modo de avance:", opciones_avance, index=idx_avance, horizontal=True, label_visibility="collapsed")
+        # Dejamos que los botones se apilen (horizontal=False por defecto) porque el texto es muy largo y descriptivo.
+        modo_avance = st.radio("Modo de avance:", opciones_avance, index=idx_avance, label_visibility="collapsed")
         st.session_state.saved_avance = modo_avance
         st.session_state.modo_avance = modo_avance
     
@@ -602,7 +605,6 @@ if not st.session_state.questions:
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
         uploaded_file = st.file_uploader("", type="pdf")
         if uploaded_file is not None:
-            # Asegurar que si suben archivo el modo quede registrado
             st.session_state.modo_avance = modo_avance
             with st.spinner("Procesando documento local..."):
                 raw_qs = PDFQuizParser.parse(uploaded_file.read())
