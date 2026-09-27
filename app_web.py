@@ -245,9 +245,9 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # FILTRO DE CABECERAS
+                            # FILTRO DE CABECERAS DINÁMICO (GENERAL, ESPECÍFICO, EXAMEN, TEST, RESPUESTAS)
                             is_header = False
-                            if line_text.isupper() and re.match(r'^(RESPUESTAS\s+)?TEMA\s+\d+', line_text):
+                            if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
                                 
                             if not is_header and len(tl_clean_spaces) < 120:
@@ -260,11 +260,8 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^tema\s+\d+\s+cotizacion',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
+                                    r'^(general|especifico|examen|test|respuestas|respuestas\s+test|test\s+profesor)\s+temas?\s+\d+',
                                     r'^examen\s+repaso',
-                                    r'^test\s+tema',
-                                    r'^test\s+profesor',
-                                    r'^respuestas\s+test',
-                                    r'^respuestas\s+tema',
                                     r'^normas\s+para\s+la\s+realizacion'
                                 ]
                                 for pat in header_patterns:
@@ -577,7 +574,6 @@ if not st.session_state.questions:
         if "saved_avance" in st.session_state and st.session_state.saved_avance in opciones_avance:
             idx_avance = opciones_avance.index(st.session_state.saved_avance)
             
-        # Dejamos que los botones se apilen (horizontal=False por defecto) porque el texto es muy largo y descriptivo.
         modo_avance = st.radio("Modo de avance:", opciones_avance, index=idx_avance, label_visibility="collapsed")
         st.session_state.saved_avance = modo_avance
         st.session_state.modo_avance = modo_avance
