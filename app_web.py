@@ -224,7 +224,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD REFINADO PARA PREGUNTAS PARTIDAS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD COMPLETO Y REFINADO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -462,6 +462,7 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
+# --- NUEVO DICCIONARIO ACTUALIZADO CON TUS PDFs ---
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -478,6 +479,7 @@ TESTS_DISPONIBLES = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
+            "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
         },
         "GENERAL": {
