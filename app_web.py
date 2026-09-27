@@ -188,7 +188,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (ACTUALIZADO Y MEJORADO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -253,28 +253,40 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
-            if re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower):
+            # --- DETECCIÓN DE PREÁMBULOS Y CASOS PRÁCTICOS ---
+            if re.match(r'^\s*(preguntas?\s+de\s+reserva|supuestos?\s+pr[áa]cticos?)', text_lower):
                 if current_q and current_q["options"]: questions.append(current_q)
                 current_q = None 
                 preamble += text + "\n"
+                expected_q_num = 1 # Reiniciamos por si las preguntas del caso empiezan en 1
                 continue
 
+            # --- NUEVA LÓGICA DE DETECCIÓN DE PREGUNTAS MÁS INTELIGENTE ---
             is_new_q = False
+            m_pregunta = re.match(r'^\s*PREGUNTAS?\s+(\d+)[\.-]*', text, re.IGNORECASE)
             m_num = re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or re.match(r'^\s*(\d+)\s+[\.-]', text)
             m_rescue = False
             
-            if not m_num and not is_option and not is_explanation:
+            if not m_pregunta and not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
                     if re.match(r'^\s*\d+¿', text_clean) or (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?')):
                         m_rescue = True
 
-            if m_num:
+            if m_pregunta:
+                num = int(m_pregunta.group(1))
+                is_new_q = True
+                expected_q_num = num + 1
+            elif m_num:
                 num = int(m_num.group(1))
+                has_dash = bool(re.match(r'^\s*\d+[\s\.]*-', text))
                 if current_q is None:
                     is_new_q = True
                     expected_q_num = num + 1
-                elif expected_q_num - 20 <= num <= expected_q_num + 50:
+                elif num == expected_q_num:
+                    is_new_q = True
+                    expected_q_num = num + 1
+                elif has_dash and (expected_q_num - 20 <= num <= expected_q_num + 50):
                     is_new_q = True
                     expected_q_num = num + 1
             elif m_rescue:
@@ -283,7 +295,8 @@ class PDFQuizParser:
 
             if is_new_q:
                 if current_q and current_q["options"]: questions.append(current_q)
-                clean_text = re.sub(r'^\s*\d+[\.-]+\s*(-*\s*)?', '', text)
+                # Limpiamos tanto los "1.-" como los "PREGUNTA 1.-"
+                clean_text = re.sub(r'^\s*(?:PREGUNTAS?\s+)?\d+[\.-]*\s*(-*\s*)?', '', text, flags=re.IGNORECASE)
                 clean_text = re.sub(r'^\s*\d+¿', '¿', clean_text)
                 current_q = {"preamble": preamble.strip(), "question_text": clean_text, "options": [], "answer": -1, "explanation": "", "state": "Q"}
                 preamble = "" 
