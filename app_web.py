@@ -191,6 +191,7 @@ USUARIOS_AUTORIZADOS = {
         "isabelmgutierrogil@gmail.com",
         "carmenvl28@gmail.com",
         "leticiagenerelosolana@gmail.com",
+        "invitado@oposiciona.es",
         "sion.nuba@gmail.com"
     ],
     "ADMTVOS": [
