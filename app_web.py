@@ -105,11 +105,33 @@ input, textarea, [data-baseweb="input"] {
     -ms-user-select: text !important;
     user-select: text !important;
 }
+
+/* --- ESCUDO ANTI-IMPRESIÓN (Destruye el PDF si intentan imprimir) --- */
+@media print {
+    html, body * {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    html, body {
+        display: block !important;
+        background-color: white !important;
+    }
+    body::before {
+        content: "Acción no permitida.\\A Test propiedad de Oposiciona 5.0." !important;
+        white-space: pre-wrap !important;
+        display: block !important;
+        text-align: center !important;
+        font-size: 30px !important;
+        font-family: sans-serif !important;
+        margin-top: 20% !important;
+        color: #d32f2f !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- ESCUDO ACTIVO INVISIBLE (ANTI CLICK DERECHO Y MARCA DE AGUA AL COPIAR) ---
+# --- ESCUDO ACTIVO INVISIBLE (ANTI CLICK DERECHO, MARCA DE AGUA Y ANTI-IMPRESIÓN JS) ---
 components.html(
     """
     <script>
@@ -132,6 +154,14 @@ components.html(
                             var watermark = "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0";
                             e.clipboardData.setData('text/plain', selectedText + watermark);
                             e.preventDefault();
+                        }
+                    });
+
+                    // 3. Interceptar Ctrl+P / Cmd+P para bloquear impresión directa
+                    document.addEventListener('keydown', function(e) {
+                        if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+                            e.preventDefault();
+                            e.stopPropagation();
                         }
                     });
                 `;
