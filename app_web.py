@@ -90,8 +90,58 @@ div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button:hover {
     background-color: #1b5e20 !important; /* Verde más oscuro al pasar el ratón */
     border-color: #1b5e20 !important;
 }
+
+/* --- ESCUDO PASIVO ANTI-COPIA DE TEXTO --- */
+body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+}
+/* Permitimos selección y escritura únicamente en los campos de usuario y contraseña */
+input, textarea, [data-baseweb="input"] {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
+
+# --- ESCUDO ACTIVO INVISIBLE (ANTI CLICK DERECHO Y MARCA DE AGUA AL COPIAR) ---
+components.html(
+    """
+    <script>
+        try {
+            var parentDoc = window.parent.document;
+            if (!parentDoc.getElementById("escudo-oposiciona")) {
+                var script = parentDoc.createElement("script");
+                script.id = "escudo-oposiciona";
+                script.type = "text/javascript";
+                script.innerHTML = `
+                    // 1. Bloquear el menú de click derecho
+                    document.addEventListener('contextmenu', function(e) {
+                        e.preventDefault();
+                    });
+                    
+                    // 2. Interceptar Ctrl+C y forzar la marca de agua
+                    document.addEventListener('copy', function(e) {
+                        var selectedText = window.getSelection().toString();
+                        if (selectedText.length > 0) {
+                            var watermark = "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0";
+                            e.clipboardData.setData('text/plain', selectedText + watermark);
+                            e.preventDefault();
+                        }
+                    });
+                `;
+                parentDoc.head.appendChild(script);
+            }
+        } catch(e) {}
+    </script>
+    """,
+    height=0
+)
 
 
 # ==============================================================================
@@ -299,7 +349,6 @@ class PDFQuizParser:
                             # --- DETECTOR DE SUPUESTOS "IMPLÍCITOS" (Sin cabecera) ---
                             if not ignoring_mode and len(questions) > 0:
                                 current_q = questions[-1] if len(questions) > 0 else None
-                                # Si estamos dentro de la explicación de la última pregunta procesada
                                 if current_q and current_q.get("state") == "E":
                                     implicit_case_patterns = [
                                         r'^(La mercantil|La empresa)\s+["\'«][A-ZÁÉÍÓÚÑ]',
