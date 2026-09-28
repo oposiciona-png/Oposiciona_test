@@ -223,7 +223,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON RESCATADOR DE OPCIONES)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (IGNORADO INTELIGENTE DE SUPUESTOS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -254,14 +254,15 @@ class PDFQuizParser:
                         
                         line_text = line_text.strip()
                         
-                        # --- CIRUGÍA DE CABECERAS FUSIONADAS (ACTUALIZADO CON NÚMEROS) ---
+                        # --- CIRUGÍA DE CABECERAS FUSIONADAS ---
                         if line_text:
                             prefixes_to_strip = [
                                 r'^OPOSICIONA\s*',
                                 r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*',
                                 r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*',
-                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z0-9\s]+\s*'
+                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z0-9\s]+\s*',
+                                r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -284,7 +285,7 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces:
+                            if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces or tl_clean_spaces == "reserva":
                                 ignoring_mode = False
                                 
                             if (
@@ -295,6 +296,26 @@ class PDFQuizParser:
                             ):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = True
+                            
+                            # --- DETECTOR DE SUPUESTOS "IMPLÍCITOS" (Sin cabecera) ---
+                            if not ignoring_mode and len(questions) > 0:
+                                current_q = questions[-1] if len(questions) > 0 else None
+                                # Si estamos dentro de la explicación de la última pregunta procesada
+                                if current_q and current_q.get("state") == "E":
+                                    implicit_case_patterns = [
+                                        r'^(La mercantil|La empresa)\s+["\'«][A-ZÁÉÍÓÚÑ]',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?(?:,\s+|\s+)de\s+\d+\s+años',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?\s+forma\s+una\s+familia',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+cumple\s+\d+\s+años',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+nacid[ao]\b',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+trabaja\b',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+camarer[ao]\b'
+                                    ]
+                                    for pat in implicit_case_patterns:
+                                        if re.match(pat, line_text):
+                                            ignoring_mode = True
+                                            break
                             
                             if ignoring_mode:
                                 continue
@@ -316,7 +337,8 @@ class PDFQuizParser:
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+test|test\s+profesor)\s+temas?\s+\d+',
                                     r'^examen\s+repaso',
                                     r'^normas\s+para\s+la\s+realizacion',
-                                    r'^especial\s+simulacros?'
+                                    r'^especial\s+simulacros?',
+                                    r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario'
                                 ]
                                 for pat in header_patterns:
                                     if re.search(pat, tl_clean_spaces):
@@ -420,9 +442,6 @@ class PDFQuizParser:
                 preamble += text + "\n"
                 continue
             
-            # --- SALVAVIDAS: EL RESCATADOR DE OPCIONES ---
-            # Si detectamos una opción y coincide perfectamente con la secuencia lógica (a, b, c...),
-            # forzamos su inclusión como opción, incluso si nos habíamos equivocado y entrado en modo "E".
             if is_option and current_q:
                 match_opt = re.match(r'^([a-zA-Z])[\)\.]\s', text)
                 if match_opt:
