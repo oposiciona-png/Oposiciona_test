@@ -171,7 +171,6 @@ with col2:
 st.markdown("---")
 
 if not st.session_state.autenticado:
-    # --- ASCENSOR AUTOMÁTICO AL INICIO DE LA PANTALLA ---
     components.html(
         """
         <script>
@@ -224,7 +223,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON MODO IGNORAR SUPUESTOS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON RESCATADOR DE OPCIONES)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -234,7 +233,7 @@ class PDFQuizParser:
         questions = []
         lines = []
         stop_reading = False 
-        ignoring_mode = False  # NUEVO INTERRUPTOR PARA SUPUESTOS Y PREGUNTAS DE DESARROLLO
+        ignoring_mode = False  
         
         for page in doc:
             if stop_reading: break
@@ -255,14 +254,14 @@ class PDFQuizParser:
                         
                         line_text = line_text.strip()
                         
-                        # --- CIRUGÍA DE CABECERAS FUSIONADAS CON PÁRRAFOS ---
+                        # --- CIRUGÍA DE CABECERAS FUSIONADAS (ACTUALIZADO CON NÚMEROS) ---
                         if line_text:
                             prefixes_to_strip = [
                                 r'^OPOSICIONA\s*',
                                 r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*',
                                 r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
-                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ\s]+\b\.?\s*',
-                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z]+\s+\d+\s*'
+                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*',
+                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z0-9\s]+\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -275,39 +274,31 @@ class PDFQuizParser:
                         if line_text:
                             tl = line_text.lower()
                             
-                            # Normalización exhaustiva
                             tl_norm = tl.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ä", "a")
                             tl_norm = tl_norm.replace("τ", "t").replace("ε", "e").replace("μ", "m").replace("α", "a") 
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
                             tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) 
                             
-                            # --- INTERRUPTOR CORTAFUEGOS Y MODO IGNORAR ---
-                            
-                            # 1. Parada total y absoluta
+                            # --- INTERRUPTOR CORTAFUEGOS ---
                             if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                                 stop_reading = True
                                 break
                             
-                            # 2. Rescate: Volver a encender el motor si hay preguntas de reserva
                             if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces:
                                 ignoring_mode = False
                                 
-                            # 3. Apagado: Ignorar todo el desarrollo de los supuestos
                             if (
                                 "supuesto practico" in tl_clean_spaces or 
                                 "supuestos practicos" in tl_clean_spaces or 
                                 "pregunta de desarrollo" in tl_clean_spaces or 
                                 "preguntas de desarrollo" in tl_clean_spaces
                             ):
-                                # Nos aseguramos de que sea un título y no una mera mención en una frase
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = True
                             
-                            # Si el interruptor está apagado, nos saltamos esta línea completamente
                             if ignoring_mode:
                                 continue
                             
-                            # FILTRO DE CABECERAS DINÁMICO NORMAL
                             is_header = False
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
@@ -347,19 +338,33 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
-            # --- DETECTOR DE PREÁMBULOS DE RESERVA ---
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower))
-            if is_reserve and (not current_q or current_q["state"] == "E"):
-                if current_q and current_q["options"]: 
-                    questions.append(current_q)
-                current_q = None 
-                preamble += text + "\n"
-                expected_q_num = 1 
-                continue
+            is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
+            
+            is_letter_block = bool(re.match(r'^[A-ZÑ][\)\.-]+\s*[A-ZÁÉÍÓÚÑ]', text))
+            if is_letter_block and re.search(r'\b(fals[ao]|verdader[ao]|correct[ao]|incorrect[ao])\b', text_lower):
+                is_letter_block = False
+
+            if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
+                is_real_preamble = False
+                for j in range(idx + 1, min(idx + 30, len(lines))):
+                    fut = lines[j]["text"].strip()
+                    if (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', fut) or 
+                        re.match(r'^\s*(\d+)\s+[,\.\-\)]', fut) or 
+                        (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', fut, re.IGNORECASE) and fut.endswith('?'))):
+                        is_real_preamble = True
+                        break
+                
+                if is_real_preamble or is_reserve or is_case_study:
+                    if current_q and current_q["options"]: 
+                        questions.append(current_q)
+                    current_q = None 
+                    preamble += text + "\n"
+                    expected_q_num = 1 
+                    continue
 
             is_new_q = False
             
-            # --- RECONOCIMIENTO DE NÚMEROS (INCLUYE COMAS TIPO "1,-") ---
             m_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[,\.\-\)]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
@@ -372,7 +377,6 @@ class PDFQuizParser:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -415,12 +419,22 @@ class PDFQuizParser:
             if not current_q:
                 preamble += text + "\n"
                 continue
-                
-            if is_option and current_q["state"] in ["Q", "O"]:
-                current_q["options"].append(text)
-                current_q["state"] = "O"
-                if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
-                continue
+            
+            # --- SALVAVIDAS: EL RESCATADOR DE OPCIONES ---
+            # Si detectamos una opción y coincide perfectamente con la secuencia lógica (a, b, c...),
+            # forzamos su inclusión como opción, incluso si nos habíamos equivocado y entrado en modo "E".
+            if is_option and current_q:
+                match_opt = re.match(r'^([a-zA-Z])[\)\.]\s', text)
+                if match_opt:
+                    letter = match_opt.group(1).lower()
+                    expected_letter = chr(97 + len(current_q["options"]))
+                    
+                    if current_q["state"] in ["Q", "O"] or (current_q["state"] == "E" and letter == expected_letter):
+                        current_q["options"].append(text)
+                        current_q["state"] = "O"
+                        if is_bold and current_q["answer"] == -1: 
+                            current_q["answer"] = len(current_q["options"]) - 1
+                        continue
                 
             if is_explanation:
                 if current_q:
@@ -430,21 +444,27 @@ class PDFQuizParser:
                 
             if current_q["state"] == "Q":
                 current_q["question_text"] += " " + text
+                
             elif current_q["state"] == "O":
                 last_opt = current_q["options"][-1].strip()
-                is_new_paragraph = len(current_q["options"]) >= 2 and re.search(r'[\.;]$', last_opt) and re.match(r'^[A-Z0-9¿¡"\'«]', text)
-                is_legal_ref = re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|según|normativa)', text_lower)
+                ended_with_punct = bool(re.search(r'[\.;\?]$', last_opt))
+                ended_with_connector = bool(re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', last_opt, re.IGNORECASE))
+                
+                is_new_paragraph = len(current_q["options"]) >= 2 and ended_with_punct and bool(re.match(r'^[A-Z0-9¿¡"\'«]', text))
+                is_legal_ref = bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa)', text_lower))
                 
                 is_implicit_explanation = False
-                
-                if len(current_q["options"]) >= 3 and re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text):
+                if len(current_q["options"]) >= 3 and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)):
                     if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower):
                         is_implicit_explanation = True
                     elif re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower):
-                        if re.search(r'[\.;]$', last_opt):
+                        if ended_with_punct or not ended_with_connector:
                             is_implicit_explanation = True
-                        elif not re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', last_opt, re.IGNORECASE):
-                            is_implicit_explanation = True
+
+                if len(current_q["options"]) < 2 or ended_with_connector:
+                    is_new_paragraph = False
+                    is_legal_ref = False
+                    is_implicit_explanation = False
 
                 if is_new_paragraph or is_legal_ref or is_implicit_explanation:
                     current_q["state"] = "E"
@@ -454,7 +474,6 @@ class PDFQuizParser:
                     current_q["options"][-1] += " " + text
                     
             elif current_q["state"] == "E":
-                # Lógica para inyectar saltos de párrafo en las explicaciones
                 last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                 
                 is_list_item = bool(re.match(r'^([•\-\*]|\d+[\.\)]|[a-zA-Z][\)\.])\s', text))
@@ -615,7 +634,6 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
-    # --- ASCENSOR AUTOMÁTICO AL INICIO DE LA PANTALLA DE MENÚ ---
     components.html(
         """
         <script>
@@ -680,7 +698,6 @@ if not st.session_state.questions:
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
-        # --- SECCIÓN: CREAR EXAMEN ALEATORIO ---
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
         with st.container():
