@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (IGNORADO INTELIGENTE DE SUPUESTOS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON PROTECCIÓN DE ENUNCIADOS MULTILÍNEA)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -383,13 +383,14 @@ class PDFQuizParser:
                                 if current_q and current_q.get("state") == "E":
                                     implicit_case_patterns = [
                                         r'^(La mercantil|La empresa)\s+["\'«][A-ZÁÉÍÓÚÑ]',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?(?:,\s+|\s+)de\s+\d+\s+años',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?\s+forma\s+una\s+familia',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+cumple\s+\d+\s+años',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+nacid[ao]\b',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+trabaja\b',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:[\s\w]+)?,\s+camarer[ao]\b'
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+son\s+',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+y\s+\d+\s+años',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+años,\s+',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+forma\s+una\s+familia',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+nacid[ao]\s+el\s+\d+',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+camarer[ao]\s+desde',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+trabaja\s+en\s+la\s+empresa'
                                     ]
                                     for pat in implicit_case_patterns:
                                         if re.match(pat, line_text):
@@ -478,6 +479,7 @@ class PDFQuizParser:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
+            # --- ALGORITMO LOOKAHEAD MEJORADO Y BLINDADO CONTRA CORTES PREMATUROS ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -489,11 +491,10 @@ class PDFQuizParser:
                     m_future_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', future_text) or 
                                     re.match(r'^\s*(\d+)\s+[,\.\-\)]', future_text) or
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
-                    m_future_rescue = (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', future_text, re.IGNORECASE) and future_text.endswith('?'))
                     
+                    # Cortamos INMEDIATAMENTE solo si topamos con otro número claro.
+                    # Eliminamos el corte por m_future_rescue para proteger enunciados largos con interrogaciones.
                     if m_future_num:
-                        break
-                    if m_future_rescue and j > idx + 2:
                         break
                 
                 if is_real_q_candidate:
