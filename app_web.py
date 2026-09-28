@@ -102,7 +102,7 @@ USUARIOS_AUTORIZADOS = {
     "ACCESO TOTAL": [
         "ponentes@oposiciona.es",
         "gonzalogonzaleztejedor@gmail.com",
-        "ignacio.garcia.heras@gmai.com",
+        "ignacio.garcia.heras@gmail.com",
         "alvarezpugamartin@gmail.com",
         "claratoledo06@gmail.com",
         "blancazortega@gmail.com",
@@ -111,11 +111,9 @@ USUARIOS_AUTORIZADOS = {
         "isabelmgutierrogil@gmail.com",
         "carmenvl28@gmail.com",
         "leticiagenerelosolana@gmail.com",
-        "sion.nuba@gmail.com",
-        "alumno_total2@gmail.com"
+        "sion.nuba@gmail.com"
     ],
     "ADMTVOS": [
-        "alumno1@gmail.com",
         "andreitalopeamor1@gmail.com",
         "elenavegasanchez73@gmail.com",
         "josemurillomoreno.mail@gmail.com",
@@ -129,11 +127,9 @@ USUARIOS_AUTORIZADOS = {
         "rsilveiraescudero@gmail.com",
         "delfijv19@gmail.com",
         "marielipedreira@hotmail.com",
-        "raquelkmacho@gmail.com",
-        "juan_admtvo@hotmail.com"
+        "raquelkmacho@gmail.com"
     ],
     "GESTION": [
-        "alumno2@gmail.com",
         "mariafolgoso@gmail.com",
         "vsaurod@gmail.com",
         "mariaquirosmonge5@gmail.com",
@@ -147,8 +143,11 @@ USUARIOS_AUTORIZADOS = {
         "aisacarrerapexe@gmail.com",
         "csanchezssmm@gmail.com",
         "maria.concal@gmail.com",
-        "manuelsan240902@gmail.com",
-        "maria_gestion@gmail.com"
+        "mariachinchurreta@gmail.com",
+        "rocio10460@gmail.com",
+        "manuelmuriel97@gmail.com",
+        "hfdiaz99@gmail.com",
+        "manuelsan240902@gmail.com"
     ]
 }
 
