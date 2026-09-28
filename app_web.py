@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON PROTECCIÓN DE ENUNCIADOS MULTILÍNEA)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON BLOQUEO PERMANENTE DE SUPUESTOS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -314,6 +314,7 @@ class PDFQuizParser:
         lines = []
         stop_reading = False 
         ignoring_mode = False  
+        entered_supuestos = False  # NUEVO: Candado maestro para bloquear definitivamente el final del test
         
         for page in doc:
             if stop_reading: break
@@ -365,9 +366,7 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces or tl_clean_spaces == "reserva":
-                                ignoring_mode = False
-                                
+                            # DETECTOR DE SUPUESTOS EXPLÍCITOS
                             if (
                                 "supuesto practico" in tl_clean_spaces or 
                                 "supuestos practicos" in tl_clean_spaces or 
@@ -376,8 +375,14 @@ class PDFQuizParser:
                             ):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = True
+                                    entered_supuestos = True  # Echamos el candado permanente
                             
-                            # --- DETECTOR DE SUPUESTOS "IMPLÍCITOS" (Sin cabecera) ---
+                            # DESPERTADOR DE RESERVA: Solo funciona si NO hemos entrado en los supuestos
+                            if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces or tl_clean_spaces == "reserva":
+                                if not entered_supuestos:
+                                    ignoring_mode = False
+                                
+                            # DETECTOR DE SUPUESTOS "IMPLÍCITOS" (Sin cabecera)
                             if not ignoring_mode and len(questions) > 0:
                                 current_q = questions[-1] if len(questions) > 0 else None
                                 if current_q and current_q.get("state") == "E":
@@ -395,8 +400,10 @@ class PDFQuizParser:
                                     for pat in implicit_case_patterns:
                                         if re.match(pat, line_text):
                                             ignoring_mode = True
+                                            entered_supuestos = True  # Echamos el candado permanente
                                             break
                             
+                            # Si estamos en modo ignorar, nos saltamos la línea sin miramientos
                             if ignoring_mode:
                                 continue
                             
@@ -440,7 +447,8 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
-            is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower))
+            # Limpiamos visualmente el rótulo "Preguntas de reserva" para que no salga en pantalla
+            is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
             
             is_letter_block = bool(re.match(r'^[A-ZÑ][\)\.-]+\s*[A-ZÁÉÍÓÚÑ]', text))
@@ -461,7 +469,11 @@ class PDFQuizParser:
                     if current_q and current_q["options"]: 
                         questions.append(current_q)
                     current_q = None 
-                    preamble += text + "\n"
+                    
+                    # Evitamos añadir "Preguntas de reserva" al preámbulo visible
+                    if not is_reserve:
+                        preamble += text + "\n"
+                        
                     expected_q_num = 1 
                     continue
 
@@ -479,7 +491,6 @@ class PDFQuizParser:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- ALGORITMO LOOKAHEAD MEJORADO Y BLINDADO CONTRA CORTES PREMATUROS ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -492,8 +503,6 @@ class PDFQuizParser:
                                     re.match(r'^\s*(\d+)\s+[,\.\-\)]', future_text) or
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
                     
-                    # Cortamos INMEDIATAMENTE solo si topamos con otro número claro.
-                    # Eliminamos el corte por m_future_rescue para proteger enunciados largos con interrogaciones.
                     if m_future_num:
                         break
                 
@@ -519,7 +528,9 @@ class PDFQuizParser:
                 continue
                 
             if not current_q:
-                preamble += text + "\n"
+                # Doble blindaje para que no se cuele "Reserva" si venía sin pregunta delante
+                if not is_reserve:
+                    preamble += text + "\n"
                 continue
             
             if is_option and current_q:
