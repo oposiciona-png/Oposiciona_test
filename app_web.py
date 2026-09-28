@@ -224,7 +224,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON BLINDAJE AVANZADO DE PREÁMBULOS Y NÚMEROS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON MODO IGNORAR SUPUESTOS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -234,6 +234,7 @@ class PDFQuizParser:
         questions = []
         lines = []
         stop_reading = False 
+        ignoring_mode = False  # NUEVO INTERRUPTOR PARA SUPUESTOS Y PREGUNTAS DE DESARROLLO
         
         for page in doc:
             if stop_reading: break
@@ -280,21 +281,33 @@ class PDFQuizParser:
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
                             tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) 
                             
-                            # CORTAFUEGOS
-                            is_stop_phrase = (
-                                tl_clean_spaces.startswith("pregunta de desarrollo") or 
-                                tl_clean_spaces.startswith("preguntas de desarrollo") or 
-                                tl_clean_spaces.startswith("plantilla de respuesta") or
-                                tl_clean_spaces.startswith("plantillas de respuesta")
-                            )
+                            # --- INTERRUPTOR CORTAFUEGOS Y MODO IGNORAR ---
                             
-                            is_stop_word_upper = (tl_clean_spaces in ["pregunta", "preguntas"]) and line_text.isupper()
-                            
-                            if is_stop_phrase or is_stop_word_upper:
+                            # 1. Parada total y absoluta
+                            if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                                 stop_reading = True
                                 break
                             
-                            # FILTRO DE CABECERAS DINÁMICO
+                            # 2. Rescate: Volver a encender el motor si hay preguntas de reserva
+                            if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces:
+                                ignoring_mode = False
+                                
+                            # 3. Apagado: Ignorar todo el desarrollo de los supuestos
+                            if (
+                                "supuesto practico" in tl_clean_spaces or 
+                                "supuestos practicos" in tl_clean_spaces or 
+                                "pregunta de desarrollo" in tl_clean_spaces or 
+                                "preguntas de desarrollo" in tl_clean_spaces
+                            ):
+                                # Nos aseguramos de que sea un título y no una mera mención en una frase
+                                if line_text.isupper() or len(tl_clean_spaces) < 45:
+                                    ignoring_mode = True
+                            
+                            # Si el interruptor está apagado, nos saltamos esta línea completamente
+                            if ignoring_mode:
+                                continue
+                            
+                            # FILTRO DE CABECERAS DINÁMICO NORMAL
                             is_header = False
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
@@ -334,52 +347,32 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
-            # --- 1. DETECTOR DE PREÁMBULOS (Cortafuegos de Letras A.-, B.- y Supuestos) ---
+            # --- DETECTOR DE PREÁMBULOS DE RESERVA ---
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower))
-            is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
-            
-            # Detectar letras de bloque ej: A) B.- C.- (Protegido contra explicaciones de opciones)
-            is_letter_block = bool(re.match(r'^[A-ZÑ][\)\.-]+\s*[A-ZÁÉÍÓÚÑ]', text))
-            if is_letter_block and re.search(r'\b(fals[ao]|verdader[ao]|correct[ao]|incorrect[ao])\b', text_lower):
-                is_letter_block = False
-
-            # Si detectamos un nuevo bloque y no estamos en medio de opciones
-            if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
-                is_real_preamble = False
-                for j in range(idx + 1, min(idx + 30, len(lines))):
-                    fut = lines[j]["text"].strip()
-                    # Miramos hacia adelante a ver si le sigue una pregunta numérica
-                    if (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', fut) or 
-                        re.match(r'^\s*(\d+)\s+[,\.\-\)]', fut) or 
-                        (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', fut, re.IGNORECASE) and fut.endswith('?'))):
-                        is_real_preamble = True
-                        break
-                
-                if is_real_preamble or is_reserve or is_case_study:
-                    if current_q and current_q["options"]: 
-                        questions.append(current_q)
-                    current_q = None 
-                    preamble += text + "\n"
-                    expected_q_num = 1 
-                    continue
+            if is_reserve and (not current_q or current_q["state"] == "E"):
+                if current_q and current_q["options"]: 
+                    questions.append(current_q)
+                current_q = None 
+                preamble += text + "\n"
+                expected_q_num = 1 
+                continue
 
             is_new_q = False
             
-            # --- 2. RECONOCIMIENTO DE NÚMEROS (Actualizado para atrapar comas tipo "1,-") ---
+            # --- RECONOCIMIENTO DE NÚMEROS (INCLUYE COMAS TIPO "1,-") ---
             m_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', text) or 
                      re.match(r'^\s*(\d+)\s+[,\.\-\)]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
                      
             m_rescue = False
             
-            # Preguntas retóricas / de rescate sin número
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- 3. ALGORITMO LOOKAHEAD (Mirar hacia adelante para validar la pregunta) ---
+            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -497,7 +490,7 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
-            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP" # Placeholder ID for the new PDF
+            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -622,6 +615,7 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
+    # --- ASCENSOR AUTOMÁTICO AL INICIO DE LA PANTALLA DE MENÚ ---
     components.html(
         """
         <script>
@@ -873,7 +867,6 @@ elif not st.session_state.finished:
         st.rerun()
 
     if st.session_state.checked:
-        # --- MODIFICACIÓN: BLINDAJE CONTRA RESPUESTAS NO MARCADAS ---
         if q['answer'] != -1:
             correct_opt = q['options'][q['answer']]
             if selected_option == correct_opt:
@@ -883,7 +876,6 @@ elif not st.session_state.finished:
             else:
                 st.error(f"❌ INCORRECTO. La respuesta correcta era: {correct_opt}")
         else:
-            # Si el creador del PDF no puso la negrita a ninguna opción
             if not selected_option:
                 st.warning("⚪ EN BLANCO. La correcta no se detectó automáticamente en el PDF.")
             else:
@@ -927,7 +919,6 @@ else:
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         
-        # --- MODIFICACIÓN DE PUNTUACIÓN (Las no marcadas no restan) ---
         if q['answer'] != -1:
             preguntas_evaluables += 1
             correct_opt = q['options'][q['answer']]
