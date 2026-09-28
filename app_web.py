@@ -224,7 +224,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON LOOKAHEAD COMPLETO Y REFINADO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON BLINDAJE AVANZADO DE PREÁMBULOS Y NÚMEROS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -260,7 +260,8 @@ class PDFQuizParser:
                                 r'^OPOSICIONA\s*',
                                 r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*',
                                 r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
-                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ\s]+\b\.?\s*'
+                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ\s]+\b\.?\s*',
+                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z]+\s+\d+\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -281,17 +282,13 @@ class PDFQuizParser:
                             
                             # CORTAFUEGOS
                             is_stop_phrase = (
-                                tl_clean_spaces.startswith("supuesto practico") or 
-                                tl_clean_spaces.startswith("supuestos practicos") or 
                                 tl_clean_spaces.startswith("pregunta de desarrollo") or 
                                 tl_clean_spaces.startswith("preguntas de desarrollo") or 
                                 tl_clean_spaces.startswith("plantilla de respuesta") or
-                                tl_clean_spaces.startswith("plantillas de respuesta") or
-                                re.match(r'^preguntas?\s+\d+$', tl_clean_spaces) or
-                                re.match(r'^supuestos?\s+\d+$', tl_clean_spaces)
+                                tl_clean_spaces.startswith("plantillas de respuesta")
                             )
                             
-                            is_stop_word_upper = (tl_clean_spaces in ["supuesto", "supuestos", "pregunta", "preguntas"]) and line_text.isupper()
+                            is_stop_word_upper = (tl_clean_spaces in ["pregunta", "preguntas"]) and line_text.isupper()
                             
                             if is_stop_phrase or is_stop_word_upper:
                                 stop_reading = True
@@ -314,7 +311,8 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+test|test\s+profesor)\s+temas?\s+\d+',
                                     r'^examen\s+repaso',
-                                    r'^normas\s+para\s+la\s+realizacion'
+                                    r'^normas\s+para\s+la\s+realizacion',
+                                    r'^especial\s+simulacros?'
                                 ]
                                 for pat in header_patterns:
                                     if re.search(pat, tl_clean_spaces):
@@ -328,7 +326,6 @@ class PDFQuizParser:
         preamble = "" 
         expected_q_num = 1  
         
-        # Iteramos con índice para poder mirar hacia adelante (lookahead)
         for idx, line in enumerate(lines):
             text = line["text"]
             is_bold = line["bold"]
@@ -337,30 +334,52 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
-            if re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower):
-                if current_q and current_q["options"]: questions.append(current_q)
-                current_q = None 
-                preamble += text + "\n"
-                expected_q_num = 1 
-                continue
+            # --- 1. DETECTOR DE PREÁMBULOS (Cortafuegos de Letras A.-, B.- y Supuestos) ---
+            is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva)', text_lower))
+            is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
+            
+            # Detectar letras de bloque ej: A) B.- C.- (Protegido contra explicaciones de opciones)
+            is_letter_block = bool(re.match(r'^[A-ZÑ][\)\.-]+\s*[A-ZÁÉÍÓÚÑ]', text))
+            if is_letter_block and re.search(r'\b(fals[ao]|verdader[ao]|correct[ao]|incorrect[ao])\b', text_lower):
+                is_letter_block = False
+
+            # Si detectamos un nuevo bloque y no estamos en medio de opciones
+            if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
+                is_real_preamble = False
+                for j in range(idx + 1, min(idx + 30, len(lines))):
+                    fut = lines[j]["text"].strip()
+                    # Miramos hacia adelante a ver si le sigue una pregunta numérica
+                    if (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', fut) or 
+                        re.match(r'^\s*(\d+)\s+[,\.\-\)]', fut) or 
+                        (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', fut, re.IGNORECASE) and fut.endswith('?'))):
+                        is_real_preamble = True
+                        break
+                
+                if is_real_preamble or is_reserve or is_case_study:
+                    if current_q and current_q["options"]: 
+                        questions.append(current_q)
+                    current_q = None 
+                    preamble += text + "\n"
+                    expected_q_num = 1 
+                    continue
 
             is_new_q = False
             
-            # 1. Reconocimiento de números
-            m_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', text) or 
-                     re.match(r'^\s*(\d+)\s+[\.-]', text) or
+            # --- 2. RECONOCIMIENTO DE NÚMEROS (Actualizado para atrapar comas tipo "1,-") ---
+            m_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', text) or 
+                     re.match(r'^\s*(\d+)\s+[,\.\-\)]', text) or
                      re.match(r'^\s*(\d+)\s*¿', text))
                      
             m_rescue = False
             
-            # 2. Reconocimiento de preguntas retóricas / de rescate sin número
+            # Preguntas retóricas / de rescate sin número
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
                     if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
-            # --- ALGORITMO LOOKAHEAD (Mirar hacia adelante) AFINADO ---
+            # --- 3. ALGORITMO LOOKAHEAD (Mirar hacia adelante para validar la pregunta) ---
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 for j in range(idx + 1, min(idx + 25, len(lines))):
@@ -369,15 +388,13 @@ class PDFQuizParser:
                         is_real_q_candidate = True
                         break
                     
-                    m_future_num = (re.match(r'^\s*(\d+)[\.-]+(?!\d)', future_text) or 
-                                    re.match(r'^\s*(\d+)\s+[\.-]', future_text) or
+                    m_future_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', future_text) or 
+                                    re.match(r'^\s*(\d+)\s+[,\.\-\)]', future_text) or
                                     re.match(r'^\s*(\d+)\s*¿', future_text))
                     m_future_rescue = (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', future_text, re.IGNORECASE) and future_text.endswith('?'))
                     
-                    # Cortamos inmediatamente si encontramos otro NÚMERO
                     if m_future_num:
                         break
-                    # Solo cortamos por pregunta de rescate si está separada (protegemos los enunciados en 2 líneas)
                     if m_future_rescue and j > idx + 2:
                         break
                 
@@ -396,7 +413,7 @@ class PDFQuizParser:
 
             if is_new_q:
                 if current_q and current_q["options"]: questions.append(current_q)
-                clean_text = re.sub(r'^\s*\d+[\.-]+\s*(-*\s*)?', '', text)
+                clean_text = re.sub(r'^\s*\d+[,\.\-\)]+\s*(-*\s*)?', '', text)
                 clean_text = re.sub(r'^\s*\d+\s*¿', '¿', clean_text)
                 current_q = {"preamble": preamble.strip(), "question_text": clean_text, "options": [], "answer": -1, "explanation": "", "state": "Q"}
                 preamble = "" 
@@ -462,7 +479,6 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-# --- NUEVO DICCIONARIO ACTUALIZADO CON TUS PDFs ---
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -481,6 +497,7 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
+            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP" # Placeholder ID for the new PDF
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -549,10 +566,8 @@ def handle_radio_change():
     idx = st.session_state.current_index
     selected = st.session_state.get(f"radio_{idx}")
     
-    # 1. Guardar la respuesta elegida
     save_answer(selected)
     
-    # 2. Si el modo es Metralleta y ha seleccionado algo, avanzar
     if "metralleta" in st.session_state.modo_avance.lower() and selected:
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
@@ -607,7 +622,6 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
-    # --- ASCENSOR AUTOMÁTICO AL INICIO DE LA PANTALLA DE MENÚ ---
     components.html(
         """
         <script>
@@ -672,11 +686,10 @@ if not st.session_state.questions:
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
         
-        # --- SECCIÓN: CREAR EXAMEN ALEATORIO (CAJA LLAMATIVA) ---
+        # --- SECCIÓN: CREAR EXAMEN ALEATORIO ---
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
         with st.container():
-            # Inyectamos el contenedor invisible para anclar nuestro CSS verde al botón de Cargar Test normal
             st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
             
             st.markdown("""
@@ -860,13 +873,21 @@ elif not st.session_state.finished:
         st.rerun()
 
     if st.session_state.checked:
-        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
-        if selected_option == correct_opt:
-            st.success("✅ ¡CORRECTO!")
-        elif not selected_option:
-            st.warning(f"⚪ EN BLANCO. La correcta era: {correct_opt}")
+        # --- MODIFICACIÓN: BLINDAJE CONTRA RESPUESTAS NO MARCADAS ---
+        if q['answer'] != -1:
+            correct_opt = q['options'][q['answer']]
+            if selected_option == correct_opt:
+                st.success("✅ ¡CORRECTO!")
+            elif not selected_option:
+                st.warning(f"⚪ EN BLANCO. La correcta era: {correct_opt}")
+            else:
+                st.error(f"❌ INCORRECTO. La respuesta correcta era: {correct_opt}")
         else:
-            st.error(f"❌ INCORRECTO. La respuesta correcta era: {correct_opt}")
+            # Si el creador del PDF no puso la negrita a ninguna opción
+            if not selected_option:
+                st.warning("⚪ EN BLANCO. La correcta no se detectó automáticamente en el PDF.")
+            else:
+                st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             
         exp = q.get('explanation', '').strip()
         st.info(f"**Explicación:**\n\n{exp if exp else 'No hay explicación disponible.'}")
@@ -901,21 +922,32 @@ else:
     aciertos = 0
     fallos = 0
     blancos = 0
+    preguntas_evaluables = 0
     
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
-        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
-        if stat['selected'] == correct_opt:
-            aciertos += 1
-            stat['final_status'] = "✅ Correcta"
-        elif stat['selected'] is None:
-            blancos += 1
-            stat['final_status'] = "⚪ En blanco"
+        
+        # --- MODIFICACIÓN DE PUNTUACIÓN (Las no marcadas no restan) ---
+        if q['answer'] != -1:
+            preguntas_evaluables += 1
+            correct_opt = q['options'][q['answer']]
+            if stat['selected'] == correct_opt:
+                aciertos += 1
+                stat['final_status'] = "✅ Correcta"
+            elif stat['selected'] is None:
+                blancos += 1
+                stat['final_status'] = "⚪ En blanco"
+            else:
+                fallos += 1
+                stat['final_status'] = "❌ Incorrecta"
         else:
-            fallos += 1
-            stat['final_status'] = "❌ Incorrecta"
+            if stat['selected'] is None:
+                blancos += 1
+                stat['final_status'] = "⚪ En blanco"
+            else:
+                stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
             
-    nota = (aciertos / len(st.session_state.questions)) * 10 if len(st.session_state.questions) > 0 else 0
+    nota = (aciertos / preguntas_evaluables) * 10 if preguntas_evaluables > 0 else 0
     
     if nota >= 5.0:
         c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
@@ -945,7 +977,8 @@ else:
     
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
-        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "?"
+        
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         st.markdown(f"<h4 style='color: {color}; font-size: 18px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h4>", unsafe_allow_html=True)
