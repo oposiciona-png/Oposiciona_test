@@ -208,6 +208,7 @@ USUARIOS_AUTORIZADOS = {
         "rsilveiraescudero@gmail.com",
         "delfijv19@gmail.com",
         "marielipedreira@hotmail.com",
+        "luiscacid@gmail.com",
         "raquelkmacho@gmail.com"
     ],
     "GESTION": [
@@ -228,6 +229,7 @@ USUARIOS_AUTORIZADOS = {
         "rocio10460@gmail.com",
         "manuelmuriel97@gmail.com",
         "hfdiaz99@gmail.com",
+        "ireneizquierdo22@gmail.com",
         "manuelsan240902@gmail.com"
     ]
 }
@@ -303,7 +305,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN 
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -432,15 +434,13 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- BISTURÍ DE OPCIONES PEGADAS (VERSIÓN DEFINITIVA) ---
-                            # Corta separando de forma robusta las opciones que vienen en la misma línea
+                            # --- BISTURÍ DE OPCIONES PEGADAS ---
                             split_pattern = r'(?<=[.?!;])\s*(?=[a-fA-F][\)\.])|\s{2,}(?=[a-fA-F][\)\.])|(?<=[a-záéíóúñ])\s+(?=[a-fA-F][\)\.]\s*[A-ZÁÉÍÓÚÑ¿¡"\'«])'
                             parts = re.split(split_pattern, line_text)
                             for part in parts:
                                 if part is not None:
                                     part = part.strip()
                                     if part:
-                                        # Inyectamos el espacio si el redactor lo omitió (ej: c)Se -> c) Se)
                                         part = re.sub(r'^([a-fA-F][\)\.])(?=[^\s])', r'\1 ', part)
                                         lines.append({"text": part, "bold": is_bold})
                             
