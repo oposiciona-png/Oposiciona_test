@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN 
 # ==============================================================================
 
 class PDFQuizParser:
@@ -343,7 +343,8 @@ class PDFQuizParser:
                                 r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*',
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z0-9\s]+\s*',
-                                r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*'
+                                r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
+                                r'^RESPUESTAS\s+TIPO\s+TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*'  # <-- NUEVO PATRÓN BLINDADO
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -417,11 +418,12 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^tema\s+\d+\s+cotizacion',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
-                                    r'^(general|especifico|examen|test|respuestas|respuestas\s+test|test\s+profesor)\s+temas?\s+\d+',
+                                    r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', # <-- NUEVO PATRÓN INCLUIDO
                                     r'^examen\s+repaso',
                                     r'^normas\s+para\s+la\s+realizacion',
                                     r'^especial\s+simulacros?',
-                                    r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario'
+                                    r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario',
+                                    r'^respuestas\s+tipo\s+test:\s+temas?\s+\d+' # <-- POR SI ACASO
                                 ]
                                 for pat in header_patterns:
                                     if re.search(pat, tl_clean_spaces):
@@ -430,8 +432,6 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- ESCALPELO DE OPCIONES PEGADAS EN EL MISMO RENGLÓN ---
-                            # Si el redactor ha escrito "b) blabla. c) blabla" en la misma línea, lo separamos en renglones distintos
                             parts = re.split(r'(?<=\S)\s+(?=[a-eA-E][\)\.]\s+[A-ZÁÉÍÓÚÑ¿¡"\'«])', line_text)
                             for part in parts:
                                 if part.strip():
