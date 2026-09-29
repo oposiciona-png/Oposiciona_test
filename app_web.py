@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON BISTURÍ DE OPCIONES REFORZADO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN 
 # ==============================================================================
 
 class PDFQuizParser:
@@ -432,15 +432,17 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- BISTURÍ DE OPCIONES PEGADAS EN EL MISMO RENGLÓN (ROBUSTO) ---
-                            # Corta incluso si no hay espacio entre la frase anterior y la opción, o si la opción empieza por número
-                            parts = re.split(r'(?<=\S)\s*(?=[a-fA-F][\)\.]\s*[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', line_text)
+                            # --- BISTURÍ DE OPCIONES PEGADAS (VERSIÓN DEFINITIVA) ---
+                            # Corta separando de forma robusta las opciones que vienen en la misma línea
+                            split_pattern = r'(?<=[.?!;])\s*(?=[a-fA-F][\)\.])|\s{2,}(?=[a-fA-F][\)\.])|(?<=[a-záéíóúñ])\s+(?=[a-fA-F][\)\.]\s*[A-ZÁÉÍÓÚÑ¿¡"\'«])'
+                            parts = re.split(split_pattern, line_text)
                             for part in parts:
-                                part = part.strip()
-                                if part:
-                                    # Aseguramos que haya un espacio limpio tras el paréntesis si el PDF se lo comió
-                                    part = re.sub(r'^([a-fA-F][\)\.])(?=[^\s])', r'\1 ', part)
-                                    lines.append({"text": part, "bold": is_bold})
+                                if part is not None:
+                                    part = part.strip()
+                                    if part:
+                                        # Inyectamos el espacio si el redactor lo omitió (ej: c)Se -> c) Se)
+                                        part = re.sub(r'^([a-fA-F][\)\.])(?=[^\s])', r'\1 ', part)
+                                        lines.append({"text": part, "bold": is_bold})
                             
         current_q = None
         preamble = "" 
