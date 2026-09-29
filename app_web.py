@@ -305,7 +305,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ DE OPCIONES BLINDADO)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -343,10 +343,11 @@ class PDFQuizParser:
                                 r'^OPOSICIONA\s*',
                                 r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*',
                                 r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
-                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*',
-                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z0-9\s]+\s*',
+                                # Modificamos la regla para incluir guiones, comas, puntos y paréntesis en el título
+                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
+                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
                                 r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
-                                r'^RESPUESTAS\s+TIPO\s+TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*'
+                                r'^RESPUESTAS\s+(?:TIPO\s+)?TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -434,9 +435,7 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- BISTURÍ DE OPCIONES PEGADAS (TOTALMENTE REESCRITO) ---
-                            # Inyecta forzosamente un salto de línea (\n) justo delante de cualquier a), b), c)... 
-                            # que se encuentre incrustada en medio de un renglón, resolviendo el problema de las opciones pegadas.
+                            # --- BISTURÍ DE OPCIONES PEGADAS ---
                             line_text = re.sub(r'(?<=[.?!;])\s*([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                             line_text = re.sub(r'(?<=\S)\s+([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                             
@@ -444,7 +443,6 @@ class PDFQuizParser:
                             for part in parts:
                                 part = part.strip()
                                 if part:
-                                    # Garantizar que hay un espacio después del paréntesis si el PDF lo omitió (ej: c)Se -> c) Se)
                                     part = re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part)
                                     lines.append({"text": part, "bold": is_bold})
                             
@@ -457,7 +455,6 @@ class PDFQuizParser:
             is_bold = line["bold"]
             text_lower = text.lower()
             
-            # Ampliamos el radar: \s* permite que se reconozca la opción incluso si falta el espacio tras el paréntesis
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
@@ -656,6 +653,7 @@ TESTS_DISPONIBLES = {
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
             "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
             "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
+            "TEMA 10 DERECHO MERCANTIL": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
