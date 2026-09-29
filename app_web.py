@@ -305,7 +305,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ DE OPCIONES BLINDADO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -434,15 +434,19 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- BISTURÍ DE OPCIONES PEGADAS ---
-                            split_pattern = r'(?<=[.?!;])\s*(?=[a-fA-F][\)\.])|\s{2,}(?=[a-fA-F][\)\.])|(?<=[a-záéíóúñ])\s+(?=[a-fA-F][\)\.]\s*[A-ZÁÉÍÓÚÑ¿¡"\'«])'
-                            parts = re.split(split_pattern, line_text)
+                            # --- BISTURÍ DE OPCIONES PEGADAS (TOTALMENTE REESCRITO) ---
+                            # Inyecta forzosamente un salto de línea (\n) justo delante de cualquier a), b), c)... 
+                            # que se encuentre incrustada en medio de un renglón, resolviendo el problema de las opciones pegadas.
+                            line_text = re.sub(r'(?<=[.?!;])\s*([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                            line_text = re.sub(r'(?<=\S)\s+([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                            
+                            parts = line_text.split('\n')
                             for part in parts:
-                                if part is not None:
-                                    part = part.strip()
-                                    if part:
-                                        part = re.sub(r'^([a-fA-F][\)\.])(?=[^\s])', r'\1 ', part)
-                                        lines.append({"text": part, "bold": is_bold})
+                                part = part.strip()
+                                if part:
+                                    # Garantizar que hay un espacio después del paréntesis si el PDF lo omitió (ej: c)Se -> c) Se)
+                                    part = re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part)
+                                    lines.append({"text": part, "bold": is_bold})
                             
         current_q = None
         preamble = "" 
@@ -453,7 +457,8 @@ class PDFQuizParser:
             is_bold = line["bold"]
             text_lower = text.lower()
             
-            is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s+', text))
+            # Ampliamos el radar: \s* permite que se reconozca la opción incluso si falta el espacio tras el paréntesis
+            is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
@@ -540,7 +545,7 @@ class PDFQuizParser:
                 continue
             
             if is_option and current_q:
-                match_opt = re.match(r'^([a-zA-Z])[\)\.]\s+', text)
+                match_opt = re.match(r'^([a-zA-Z])[\)\.-]\s*', text)
                 if match_opt:
                     letter = match_opt.group(1).lower()
                     expected_letter = chr(97 + len(current_q["options"]))
