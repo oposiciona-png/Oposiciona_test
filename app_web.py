@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN 
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -344,7 +344,7 @@ class PDFQuizParser:
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–]\s*[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*',
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-Z0-9\s]+\s*',
                                 r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
-                                r'^RESPUESTAS\s+TIPO\s+TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*'  # <-- NUEVO PATRÓN BLINDADO
+                                r'^RESPUESTAS\s+TIPO\s+TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s]+\b\.?\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -418,12 +418,12 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^tema\s+\d+\s+cotizacion',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
-                                    r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', # <-- NUEVO PATRÓN INCLUIDO
+                                    r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', 
                                     r'^examen\s+repaso',
                                     r'^normas\s+para\s+la\s+realizacion',
                                     r'^especial\s+simulacros?',
                                     r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario',
-                                    r'^respuestas\s+tipo\s+test:\s+temas?\s+\d+' # <-- POR SI ACASO
+                                    r'^respuestas\s+tipo\s+test:\s+temas?\s+\d+' 
                                 ]
                                 for pat in header_patterns:
                                     if re.search(pat, tl_clean_spaces):
@@ -618,8 +618,7 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
-            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP",
-            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=1L8OkyG5qY80uH2_w6d-E21z7K7A5sX30" 
+            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -675,6 +674,7 @@ if 'questions' not in st.session_state:
     st.session_state.stats = {}
     st.session_state.finished = False
     st.session_state.checked = False
+    st.session_state.test_name = None
 
 def save_answer(selected):
     idx = st.session_state.current_index
@@ -730,6 +730,7 @@ def action_subir_otro():
     st.session_state.stats = {}
     st.session_state.finished = False
     st.session_state.checked = False
+    st.session_state.test_name = None
 
 def action_finalizar_sesion():
     st.session_state.clear()
@@ -821,6 +822,7 @@ if not st.session_state.questions:
             """, unsafe_allow_html=True)
             
             if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
+                st.session_state.test_name = None
                 with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
                     preguntas_por_pdf = []
                     for cat, tests in TESTS_DISPONIBLES[especialidad].items():
@@ -883,6 +885,7 @@ if not st.session_state.questions:
         with st.container():
             st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
             if st.button(f"🚀 Cargar Test Seleccionado", use_container_width=True):
+                st.session_state.test_name = opcion_seleccionada
                 url_descarga = tests_categoria[opcion_seleccionada]
                 with st.spinner(f"Extrayendo archivo de forma segura..."):
                     try:
@@ -904,6 +907,7 @@ if not st.session_state.questions:
         uploaded_file = st.file_uploader("", type="pdf")
         if uploaded_file is not None:
             st.session_state.modo_avance = modo_avance
+            st.session_state.test_name = uploaded_file.name
             with st.spinner("Procesando documento local..."):
                 raw_qs = PDFQuizParser.parse(uploaded_file.read())
                 if not raw_qs:
@@ -1083,6 +1087,8 @@ else:
                 pass
     
     st.markdown("<h3 style='text-align: center; color: #2C3E50;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
+    if st.session_state.get('test_name'):
+        st.markdown(f"<h5 style='text-align: center; color: #1f77b4; margin-top: -10px; margin-bottom: 15px;'>📄 {st.session_state.test_name}</h5>", unsafe_allow_html=True)
     st.markdown(f"<h4 style='text-align: center; font-size: 16px; color: #555;'>✅ Acertadas: {aciertos} &nbsp;|&nbsp; ❌ Falladas: {fallos} &nbsp;|&nbsp; ⚪ En blanco: {blancos}</h4>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center; font-size: 22px;'>🎓 NOTA FINAL: {nota:.2f} / 10</h3>", unsafe_allow_html=True)
     
