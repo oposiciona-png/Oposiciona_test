@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON BLOQUEO PERMANENTE DE SUPUESTOS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -314,7 +314,7 @@ class PDFQuizParser:
         lines = []
         stop_reading = False 
         ignoring_mode = False  
-        entered_supuestos = False  # NUEVO: Candado maestro para bloquear definitivamente el final del test
+        entered_supuestos = False  
         
         for page in doc:
             if stop_reading: break
@@ -366,7 +366,6 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
-                            # DETECTOR DE SUPUESTOS EXPLÍCITOS
                             if (
                                 "supuesto practico" in tl_clean_spaces or 
                                 "supuestos practicos" in tl_clean_spaces or 
@@ -375,14 +374,12 @@ class PDFQuizParser:
                             ):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = True
-                                    entered_supuestos = True  # Echamos el candado permanente
+                                    entered_supuestos = True  
                             
-                            # DESPERTADOR DE RESERVA: Solo funciona si NO hemos entrado en los supuestos
                             if "preguntas de reserva" in tl_clean_spaces or "pregunta de reserva" in tl_clean_spaces or tl_clean_spaces == "reserva":
                                 if not entered_supuestos:
                                     ignoring_mode = False
                                 
-                            # DETECTOR DE SUPUESTOS "IMPLÍCITOS" (Sin cabecera)
                             if not ignoring_mode and len(questions) > 0:
                                 current_q = questions[-1] if len(questions) > 0 else None
                                 if current_q and current_q.get("state") == "E":
@@ -400,10 +397,9 @@ class PDFQuizParser:
                                     for pat in implicit_case_patterns:
                                         if re.match(pat, line_text):
                                             ignoring_mode = True
-                                            entered_supuestos = True  # Echamos el candado permanente
+                                            entered_supuestos = True  
                                             break
                             
-                            # Si estamos en modo ignorar, nos saltamos la línea sin miramientos
                             if ignoring_mode:
                                 continue
                             
@@ -433,7 +429,13 @@ class PDFQuizParser:
                                         break
                             
                             if is_header: continue
-                            lines.append({"text": line_text, "bold": is_bold})
+                            
+                            # --- ESCALPELO DE OPCIONES PEGADAS EN EL MISMO RENGLÓN ---
+                            # Si el redactor ha escrito "b) blabla. c) blabla" en la misma línea, lo separamos en renglones distintos
+                            parts = re.split(r'(?<=\S)\s+(?=[a-eA-E][\)\.]\s+[A-ZÁÉÍÓÚÑ¿¡"\'«])', line_text)
+                            for part in parts:
+                                if part.strip():
+                                    lines.append({"text": part.strip(), "bold": is_bold})
                             
         current_q = None
         preamble = "" 
@@ -447,7 +449,6 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
-            # Limpiamos visualmente el rótulo "Preguntas de reserva" para que no salga en pantalla
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
             
@@ -470,7 +471,6 @@ class PDFQuizParser:
                         questions.append(current_q)
                     current_q = None 
                     
-                    # Evitamos añadir "Preguntas de reserva" al preámbulo visible
                     if not is_reserve:
                         preamble += text + "\n"
                         
@@ -528,7 +528,6 @@ class PDFQuizParser:
                 continue
                 
             if not current_q:
-                # Doble blindaje para que no se cuele "Reserva" si venía sin pregunta delante
                 if not is_reserve:
                     preamble += text + "\n"
                 continue
@@ -619,7 +618,8 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
-            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP" 
+            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP",
+            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=1L8OkyG5qY80uH2_w6d-E21z7K7A5sX30" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
