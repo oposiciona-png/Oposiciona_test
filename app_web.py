@@ -303,7 +303,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (CON BISTURÍ DE OPCIONES REFORZADO)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -432,10 +432,15 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            parts = re.split(r'(?<=\S)\s+(?=[a-eA-E][\)\.]\s+[A-ZÁÉÍÓÚÑ¿¡"\'«])', line_text)
+                            # --- BISTURÍ DE OPCIONES PEGADAS EN EL MISMO RENGLÓN (ROBUSTO) ---
+                            # Corta incluso si no hay espacio entre la frase anterior y la opción, o si la opción empieza por número
+                            parts = re.split(r'(?<=\S)\s*(?=[a-fA-F][\)\.]\s*[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', line_text)
                             for part in parts:
-                                if part.strip():
-                                    lines.append({"text": part.strip(), "bold": is_bold})
+                                part = part.strip()
+                                if part:
+                                    # Aseguramos que haya un espacio limpio tras el paréntesis si el PDF se lo comió
+                                    part = re.sub(r'^([a-fA-F][\)\.])(?=[^\s])', r'\1 ', part)
+                                    lines.append({"text": part, "bold": is_bold})
                             
         current_q = None
         preamble = "" 
@@ -446,7 +451,7 @@ class PDFQuizParser:
             is_bold = line["bold"]
             text_lower = text.lower()
             
-            is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s', text))
+            is_option = bool(re.match(r'^[a-zA-Z][\)\.]\s+', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
             
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
@@ -533,7 +538,7 @@ class PDFQuizParser:
                 continue
             
             if is_option and current_q:
-                match_opt = re.match(r'^([a-zA-Z])[\)\.]\s', text)
+                match_opt = re.match(r'^([a-zA-Z])[\)\.]\s+', text)
                 if match_opt:
                     letter = match_opt.group(1).lower()
                     expected_letter = chr(97 + len(current_q["options"]))
@@ -618,7 +623,8 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
-            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP" 
+            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP",
+            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=1L8OkyG5qY80uH2_w6d-E21z7K7A5sX30" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
