@@ -304,7 +304,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE OPCIONES FRACCIONADAS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -843,7 +843,7 @@ if not st.session_state.questions:
                                     qs = PDFQuizParser.parse(resp.content)
                                     if qs:
                                         for q in qs:
-                                            fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
+                                            fuente = f"🏷️️ **Fuente: {cat} - {test_name}**"
                                             if q["preamble"]:
                                                 q["preamble"] = fuente + "\n\n" + q["preamble"]
                                             else:
