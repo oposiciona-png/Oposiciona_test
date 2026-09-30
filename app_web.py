@@ -304,7 +304,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE OPCIONES FRACCIONADAS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -577,7 +577,8 @@ class PDFQuizParser:
                         if ended_with_punct or not ended_with_connector:
                             is_implicit_explanation = True
 
-                if len(current_q["options"]) < 2 or ended_with_connector:
+                # --- CANDADO ANTI-CORTES: Si la opción capturada es demasiado corta (ej. solo "c)"), bloqueamos tajantemente que sea interpretada como preámbulo de explicación ---
+                if len(current_q["options"]) < 2 or ended_with_connector or len(last_opt) <= 5:
                     is_new_paragraph = False
                     is_legal_ref = False
                     is_implicit_explanation = False
@@ -651,6 +652,7 @@ TESTS_DISPONIBLES = {
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
             "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
             "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
+            "TEMA 10 DERECHO MERCANTIL": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
@@ -1110,7 +1112,7 @@ else:
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         
-        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explanation)"
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         st.markdown(f"<h4 style='color: {color}; font-size: 18px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h4>", unsafe_allow_html=True)
