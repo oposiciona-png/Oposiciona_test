@@ -187,7 +187,6 @@ USUARIOS_AUTORIZADOS = {
         "claratoledo06@gmail.com",
         "blancazortega@gmail.com",
         "mijurista@gmail.com",
-        "silviacabello81@gmail.com",
         "isabelmgutierrogil@gmail.com",
         "carmenvl28@gmail.com",
         "leticiagenerelosolana@gmail.com",
@@ -343,7 +342,6 @@ class PDFQuizParser:
                                 r'^OPOSICIONA\s*',
                                 r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*',
                                 r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
-                                # Modificamos la regla para incluir guiones, comas, puntos y paréntesis en el título
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
                                 r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
@@ -653,7 +651,6 @@ TESTS_DISPONIBLES = {
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
             "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
             "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
-            "TEMA 10 DERECHO MERCANTIL": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
@@ -1113,7 +1110,7 @@ else:
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         
-        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explanation)"
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         st.markdown(f"<h4 style='color: {color}; font-size: 18px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h4>", unsafe_allow_html=True)
