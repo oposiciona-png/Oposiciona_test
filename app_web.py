@@ -191,6 +191,7 @@ USUARIOS_AUTORIZADOS = {
         "carmenvl28@gmail.com",
         "leticiagenerelosolana@gmail.com",
         "invitado@oposiciona.es",
+        "cguinaldobravo@gmail.com",
         "sion.nuba@gmail.com"
     ],
     "ADMTVOS": [
@@ -211,7 +212,6 @@ USUARIOS_AUTORIZADOS = {
         "raquelkmacho@gmail.com"
     ],
     "GESTION": [
-        "mariafolgoso@gmail.com",
         "vsaurod@gmail.com",
         "mariaquirosmonge5@gmail.com",
         "vanessagomeztdla@gmail.com",
@@ -577,7 +577,6 @@ class PDFQuizParser:
                         if ended_with_punct or not ended_with_connector:
                             is_implicit_explanation = True
 
-                # --- CANDADO ANTI-CORTES: Si la opción capturada es demasiado corta (ej. solo "c)"), bloqueamos tajantemente que sea interpretada como preámbulo de explicación ---
                 if len(current_q["options"]) < 2 or ended_with_connector or len(last_opt) <= 5:
                     is_new_paragraph = False
                     is_legal_ref = False
