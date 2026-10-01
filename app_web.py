@@ -304,7 +304,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE OPCIONES FRACCIONADAS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -651,7 +651,7 @@ TESTS_DISPONIBLES = {
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
             "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
             "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
-            "TEMA 10 DERECHO MERCANTIL": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
+            "Temas_59_60 IP y LESIONES PERMANENTES": "https://drive.google.com/uc?export=download&id=12_N6QFcTShR-w-yX9ptJD9pbfC_CQuUD",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
@@ -672,6 +672,7 @@ TESTS_DISPONIBLES = {
             "TEMA 45 SALARIO Y JORNADA": "https://drive.google.com/uc?export=download&id=1RRl35OdPYxOVs4f2L1GZkQO4EAgZoSWm",
             "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
             "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
+            "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
             "TEMA 48 EXTINCIÓN": "https://drive.google.com/uc?export=download&id=1Vhy345KHpLoebUVENZOLVlUzHYPWXd-g",
         },
     },
@@ -843,7 +844,7 @@ if not st.session_state.questions:
                                     qs = PDFQuizParser.parse(resp.content)
                                     if qs:
                                         for q in qs:
-                                            fuente = f"🏷️️ **Fuente: {cat} - {test_name}**"
+                                            fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
                                             if q["preamble"]:
                                                 q["preamble"] = fuente + "\n\n" + q["preamble"]
                                             else:
