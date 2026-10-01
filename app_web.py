@@ -304,7 +304,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ TOTAL: PREGUNTAS Y EXPLICACIONES PEGADAS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ ANTI-ARTÍCULOS LEGALES)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -434,15 +434,19 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea (ej. "...por año. Explicación: El art...")
+                            # 1. Separar Explicación/Respuesta pegada en la misma línea
                             line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             
-                            # 2. Separar Número de Pregunta pegado a la palabra anterior (ej. "actuar6. En el supuesto..." o "indemnización29. Si...")
+                            # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
-                            # 3. Separar Opciones pegadas (ej. "?a) A una...")
-                            line_text = re.sub(r'(?<=[.?!;])\s*([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
-                            line_text = re.sub(r'(?<=\S)\s+([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                            # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
+                            # Caso 1: Puntuación seguida de espacio y opción
+                            line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                            # Caso 2: Puntuación pegada a la opción, comprobando que NO hay un dígito antes (Salva los art. 62.f)
+                            line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                            # Caso 3: Opción pegada a una letra con espacio previo
+                            line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                             
                             parts = line_text.split('\n')
                             for part in parts:
