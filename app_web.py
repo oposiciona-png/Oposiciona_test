@@ -304,7 +304,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE OPCIONES FRACCIONADAS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ TOTAL: PREGUNTAS Y EXPLICACIONES PEGADAS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -433,7 +433,14 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- BISTURÍ DE OPCIONES PEGADAS ---
+                            # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
+                            # 1. Separar Explicación/Respuesta pegada en la misma línea (ej. "...por año. Explicación: El art...")
+                            line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            
+                            # 2. Separar Número de Pregunta pegado a la palabra anterior (ej. "actuar6. En el supuesto..." o "indemnización29. Si...")
+                            line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                            
+                            # 3. Separar Opciones pegadas (ej. "?a) A una...")
                             line_text = re.sub(r'(?<=[.?!;])\s*([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                             line_text = re.sub(r'(?<=\S)\s+([a-fA-F][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                             
@@ -454,7 +461,7 @@ class PDFQuizParser:
             text_lower = text.lower()
             
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
-            is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:")
+            is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta")
             
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
@@ -625,8 +632,6 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
-            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP",
-            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=1L8OkyG5qY80uH2_w6d-E21z7K7A5sX30" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -673,7 +678,6 @@ TESTS_DISPONIBLES = {
             "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
             "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
             "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
-            "TEMA 48 EXTINCIÓN": "https://drive.google.com/uc?export=download&id=1Vhy345KHpLoebUVENZOLVlUzHYPWXd-g",
         },
     },
 }
