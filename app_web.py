@@ -304,7 +304,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ ANTI-ARTÍCULOS LEGALES)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ TOTAL: PREGUNTAS Y EXPLICACIONES PEGADAS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -388,7 +388,7 @@ class PDFQuizParser:
                                     implicit_case_patterns = [
                                         r'^(La mercantil|La empresa)\s+["\'«][A-ZÁÉÍÓÚÑ]',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+son\s+',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+y\s+\d+\s+años',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+y\s+\d+\s+años',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+años,\s+',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+forma\s+una\s+familia',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el',
@@ -441,11 +441,8 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
                             # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
-                            # Caso 1: Puntuación seguida de espacio y opción
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                            # Caso 2: Puntuación pegada a la opción, comprobando que NO hay un dígito antes (Salva los art. 62.f)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                            # Caso 3: Opción pegada a una letra con espacio previo
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                             
                             parts = line_text.split('\n')
@@ -467,6 +464,14 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta")
             
+            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS (Ej: carenci \n a) se exige... ?) ---
+            forced_not_option = False
+            if is_option and current_q and current_q["state"] == "Q" and len(current_q["options"]) == 0:
+                # Si la opción termina en "?" y no empieza por mayúscula, es la continuación de la pregunta rota
+                if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
+                    is_option = False
+                    forced_not_option = True
+
             is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
             
@@ -570,7 +575,15 @@ class PDFQuizParser:
                 continue
                 
             if current_q["state"] == "Q":
-                current_q["question_text"] += " " + text
+                # Si el candado reconstructor se activó, reparamos la palabra partida
+                if forced_not_option and re.search(r'[a-zA-Z]$', current_q["question_text"].strip()):
+                    match = re.match(r'^([a-zA-Z])([\)\.\-])\s*(.*)', text)
+                    if match:
+                        current_q["question_text"] = current_q["question_text"].strip() + match.group(1) + match.group(2) + " " + match.group(3)
+                    else:
+                        current_q["question_text"] += " " + text
+                else:
+                    current_q["question_text"] += " " + text
                 
             elif current_q["state"] == "O":
                 last_opt = current_q["options"][-1].strip()
@@ -636,6 +649,8 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
+            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP",
+            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=1L8OkyG5qY80uH2_w6d-E21z7K7A5sX30" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
