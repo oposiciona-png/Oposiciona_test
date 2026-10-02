@@ -208,6 +208,7 @@ USUARIOS_AUTORIZADOS = {
         "rsilveiraescudero@gmail.com",
         "delfijv19@gmail.com",
         "marielipedreira@hotmail.com",
+        "vanessagarciajimenez87@gmail.com",
         "luiscacid@gmail.com",
         "raquelkmacho@gmail.com"
     ],
@@ -649,8 +650,6 @@ TESTS_DISPONIBLES = {
             "Elige un test de examenes...": None,
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
-            "PROFESOR SIMULACRO 4 DE 26 DE MAYO": "https://drive.google.com/uc?export=download&id=1c6b5V27T_U1J1k0lQ1R5D6u9H2G_j9iP",
-            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=1L8OkyG5qY80uH2_w6d-E21z7K7A5sX30" 
         },
         "GENERAL": {
             "Elige un test de general...": None,
