@@ -219,6 +219,7 @@ USUARIOS_AUTORIZADOS = {
         "zoemorcor@gmail.com",
         "julianayem@gmail.com",
         "yasminkhalili@gmail.com",
+        "miriamvazquezseoane2000@gmail.com",
         "monetcacerescc@gmail.com",
         "maariiamaji@gmail.com",
         "micastroespejo@gmail.com",
