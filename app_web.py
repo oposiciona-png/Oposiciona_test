@@ -1069,12 +1069,13 @@ elif not st.session_state.finished:
             
         exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
         
-        st.markdown(f"""
-        <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>
-            <div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div>
-            <div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
+            f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div>"
+            f"<div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>"
+            f"</div>", 
+            unsafe_allow_html=True
+        )
 
 else:
     # --- RESULTADOS FINALES ---
@@ -1158,21 +1159,20 @@ else:
         
         preamble_html = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #555;'>{q['preamble']}</div>" if q.get('preamble') else ""
         
-        final_html = f"""
-        <div style='margin-bottom: 5px;'>
-            <div style='color: {color}; font-size: 17px; font-weight: 600; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>
-            {preamble_html}
-            <div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>
-            <div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>
-            <div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {correct_opt}</div>
-            
-            <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 10px;'>
-                <div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div>
-                <div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>
-            </div>
-            <hr style='margin: 15px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>
-        </div>
-        """
+        final_html = (
+            f"<div style='margin-bottom: 5px;'>"
+            f"<div style='color: {color}; font-size: 17px; font-weight: 600; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>"
+            f"{preamble_html}"
+            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>"
+            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
+            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {correct_opt}</div>"
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 10px;'>"
+            f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div>"
+            f"<div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>"
+            f"</div>"
+            f"<hr style='margin: 15px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>"
+            f"</div>"
+        )
         st.markdown(final_html, unsafe_allow_html=True)
 
     c1_bot, c2_bot, c3_bot = st.columns(3)
