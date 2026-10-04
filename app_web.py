@@ -1091,7 +1091,7 @@ elif not st.session_state.finished:
                 st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             
         exp_text = q.get('explanation', '').strip()
-        exp_text = re.sub(r'^(?i)(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         st.info(f"**Explicación:**\n\n{exp_text if exp_text else 'No hay explicación disponible.'}")
 
 else:
@@ -1194,7 +1194,7 @@ else:
         st.markdown(f"<p style='font-size:15px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
         
         exp_text = q.get('explanation', 'No disponible.').replace('\n', '<br>')
-        exp_text = re.sub(r'^(?i)(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:12px; border-radius:8px;'><p style='font-size:14px; margin: 0;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
