@@ -71,10 +71,10 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     background-color: #000000 !important; 
 }
 
-/* Espaciado del contenedor principal super-compacto */
+/* Espaciado del contenedor principal super-compacto pero con colchón final */
 .block-container {
     padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
+    padding-bottom: 6rem !important; /* <-- COLCHÓN INVISIBLE PARA LIBRAR EL BOTÓN FLOTANTE */
     max-width: 750px !important; 
 }
 
