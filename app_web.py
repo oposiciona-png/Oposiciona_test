@@ -306,7 +306,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE OPCIONES FRACCIONADAS Y RESERVAS)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -370,11 +370,15 @@ class PDFQuizParser:
                                 stop_reading = True
                                 break
                             
+                            # --- CORTAFUEGOS CASOS PRÁCTICOS ---
+                            # Se han añadido "casos practicos" y "caso practico" para bloquear lecturas indeseadas
                             if (
                                 "supuesto practico" in tl_clean_spaces or 
                                 "supuestos practicos" in tl_clean_spaces or 
                                 "pregunta de desarrollo" in tl_clean_spaces or 
-                                "preguntas de desarrollo" in tl_clean_spaces
+                                "preguntas de desarrollo" in tl_clean_spaces or
+                                "casos practicos" in tl_clean_spaces or
+                                "caso practico" in tl_clean_spaces
                             ):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = True
@@ -436,11 +440,11 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea (sin obligar a espacio final, para evitar efectos pegamento)
-                            line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)', r'\n\1', line_text, flags=re.IGNORECASE)
+                            # 1. Separar Explicación/Respuesta pegada en la misma línea
+                            line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             
-                            # 2. Separar Número de Pregunta pegado a la palabra anterior
-                            line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                            # 2. Separar Número de Pregunta pegado a la palabra anterior (añadido \) para blindaje)
+                            line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
                             # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
@@ -466,17 +470,17 @@ class PDFQuizParser:
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             
             # --- BLINDAJE DE EXPLICACIÓN --- 
-            # Requiere obligatoriamente que la palabra "respuesta" lleve dos puntos (respuesta: o respuestas:) para no confundirse con "respuesta correcta..."
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:") or text_lower.startswith("respuestas:")
             
-            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS ---
+            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS (Ej: carenci \n a) se exige... ?) ---
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and len(current_q["options"]) == 0:
                 if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option = False
                     forced_not_option = True
 
-            is_reserve = bool(re.match(r'^\s*(preguntas?\s+de\s+reserva|reserva)\b', text_lower))
+            # --- NUEVO BLINDAJE DE PREGUNTAS DE RESERVA ---
+            is_reserve = bool(re.search(r'\bpreguntas?\s+de\s+reserva\b', text_lower)) or bool(re.match(r'^\s*reserva\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
             
             is_letter_block = bool(re.match(r'^[A-ZÑ][\)\.-]+\s*[A-ZÁÉÍÓÚÑ]', text))
@@ -498,8 +502,8 @@ class PDFQuizParser:
                         questions.append(current_q)
                     current_q = None 
                     
-                    if not is_reserve:
-                        preamble += text + "\n"
+                    # Ahora guardamos SIEMPRE el título en el preámbulo para que aparezca "PREGUNTAS DE RESERVA" visualmente.
+                    preamble += text + "\n"
                         
                     expected_q_num = 1 
                     continue
@@ -583,6 +587,7 @@ class PDFQuizParser:
                 continue
                 
             if current_q["state"] == "Q":
+                # Si el candado reconstructor se activó, reparamos la palabra partida
                 if forced_not_option and re.search(r'[a-zA-Z]$', current_q["question_text"].strip()):
                     match = re.match(r'^([a-zA-Z])([\)\.\-])\s*(.*)', text)
                     if match:
@@ -604,7 +609,7 @@ class PDFQuizParser:
                 
                 is_implicit_explanation = False
                 if len(current_q["options"]) >= 3 and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)):
-                    if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|de conformidad|conforme|en virtud)\b', text_lower):
+                    if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower):
                         is_implicit_explanation = True
                     elif re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower):
                         if ended_with_punct or not ended_with_connector:
