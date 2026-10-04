@@ -347,7 +347,8 @@ class PDFQuizParser:
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
                                 r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
-                                r'^RESPUESTAS\s+(?:TIPO\s+)?TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*'
+                                r'^RESPUESTAS\s+(?:TIPO\s+)?TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
+                                r'^EXAMEN\s+[A-ZÁÉÍÓÚÑ\s]+\s*202\d\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -426,6 +427,7 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', 
                                     r'^examen\s+repaso',
+                                    r'^examen\s+[a-záéíóúñ\s]+\s*202\d',
                                     r'^normas\s+para\s+la\s+realizacion',
                                     r'^especial\s+simulacros?',
                                     r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario',
@@ -443,17 +445,17 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             
-                            # 1.5 Separar OJO, NOTA, IMPORTANTE (Forzamos salto aunque no haya punto previo para blindarlo)
+                            # 1.5 Separar OJO, NOTA, IMPORTANTE
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             
                             # 1.6 Separar Artículos y Viñetas pegadas tras puntuación para que generen salto de párrafo
-                            line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Ley)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                            line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*([•\-\*])\s', r'\n\1 ', line_text)
+                            line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            line_text = re.sub(r'(?<=\S)\s+([•\-\*])(\s|$)', r'\n\1\2', line_text)
                             
                             # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
-                            # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
+                            # 3. Separar Opciones pegadas
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -525,6 +527,7 @@ class PDFQuizParser:
                         questions.append(current_q)
                     current_q = None 
                     
+                    # Guardamos el preámbulo
                     preamble += text + "\n"
                         
                     expected_q_num = 1 
@@ -647,15 +650,22 @@ class PDFQuizParser:
                     current_q["options"][-1] += " " + text
                     
             elif current_q["state"] == "E":
-                # Respetar saltos que ya hayan sido inyectados por el procesador
+                # Respetar saltos que ya hayan sido inyectados por el marcador de bloques
                 if current_q["explanation"].endswith("\n\n"):
                     current_q["explanation"] += text
                 else:
-                    is_bullet = bool(re.match(r'^[\s]*[•\-\*]\s', text))
-                    is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
-                    is_art = bool(re.match(r'^[\s]*(Art[íi]culo aplicable:|Art[íi]culo|Art\.|Ley)\s', text, re.IGNORECASE))
+                    last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                     
-                    if is_bullet or is_ojo or is_art:
+                    # ¿Es viñeta, OJO o nueva oración?
+                    is_bullet = bool(re.match(r'^[\s]*[•\-\*]', text))
+                    is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
+                    starts_with_upper_or_num = bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text))
+                    is_new_sentence = (last_char in ['.', ':', '?', '!', '"', '”', '»'] and starts_with_upper_or_num)
+                    
+                    # Si el texto anterior termina en viñeta suelta, lo pegamos en la misma línea
+                    if current_q["explanation"].strip().endswith(('-', '•', '*', '', '')) and not is_bullet:
+                        current_q["explanation"] += " " + text
+                    elif is_bullet or is_ojo or is_new_sentence:
                         current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text
                     else:
                         current_q["explanation"] += " " + text if current_q["explanation"] else text
@@ -1082,8 +1092,10 @@ elif not st.session_state.finished:
             else:
                 st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             
-        exp = q.get('explanation', '').strip()
-        st.info(f"**Explicación:**\n\n{exp if exp else 'No hay explicación disponible.'}")
+        exp_text = q.get('explanation', '').strip()
+        # Se elimina la palabra "Explicación:" o "Respuesta:" del propio texto para no duplicarla con la etiqueta en negrita de Streamlit
+        exp_text = re.sub(r'^(?i)(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        st.info(f"**Explicación:**\n\n{exp_text if exp_text else 'No hay explicación disponible.'}")
 
 else:
     # --- RESULTADOS FINALES ---
@@ -1185,6 +1197,7 @@ else:
         st.markdown(f"<p style='font-size:15px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
         
         exp_text = q.get('explanation', 'No disponible.').replace('\n', '<br>')
+        exp_text = re.sub(r'^(?i)(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:12px; border-radius:8px;'><p style='font-size:14px; margin: 0;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
