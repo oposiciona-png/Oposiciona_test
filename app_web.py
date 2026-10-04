@@ -306,7 +306,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE OPCIONES FRACCIONADAS Y RESERVAS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BLINDAJE DE BLOQUES Y EXPLICACIONES)
 # ==============================================================================
 
 class PDFQuizParser:
@@ -371,7 +371,6 @@ class PDFQuizParser:
                                 break
                             
                             # --- CORTAFUEGOS CASOS PRÁCTICOS ---
-                            # Se han añadido "casos practicos" y "caso practico" para bloquear lecturas indeseadas
                             if (
                                 "supuesto practico" in tl_clean_spaces or 
                                 "supuestos practicos" in tl_clean_spaces or 
@@ -440,10 +439,11 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea
-                            line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            # 1. Separar Explicación/Respuesta pegada en la misma línea. Solo si va precedido de puntuación o de 2 espacios (salva falsos positivos)
+                            line_text = re.sub(r'(?<=[.?!;\)])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             
-                            # 2. Separar Número de Pregunta pegado a la palabra anterior (añadido \) para blindaje)
+                            # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
                             # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
@@ -457,6 +457,9 @@ class PDFQuizParser:
                                 if part:
                                     part = re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part)
                                     lines.append({"text": part, "bold": is_bold})
+                                    
+                    # --- MARCADOR DE BLOQUES PARA RESPETAR LOS INTROS ORIGINALES DE LAS EXPLICACIONES ---
+                    lines.append({"text": "<NEW_BLOCK>", "bold": False})
                             
         current_q = None
         preamble = "" 
@@ -465,21 +468,31 @@ class PDFQuizParser:
         for idx, line in enumerate(lines):
             text = line["text"]
             is_bold = line["bold"]
-            text_lower = text.lower()
             
+            # --- PROCESADOR DE BLOQUES ---
+            if text == "<NEW_BLOCK>":
+                if current_q and current_q["state"] == "E":
+                    if current_q["explanation"]:
+                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n"
+                continue
+
+            text_lower = text.lower()
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             
-            # --- BLINDAJE DE EXPLICACIÓN --- 
-            is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:") or text_lower.startswith("respuestas:")
+            # --- BLINDAJE DE EXPLICACIÓN (Evita que "la respuesta:" active una nueva explicación a mitad de texto) --- 
+            if current_q and current_q["state"] == "E":
+                is_explanation = False
+            else:
+                is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:") or text_lower.startswith("respuestas:")
             
-            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS (Ej: carenci \n a) se exige... ?) ---
+            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS ---
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and len(current_q["options"]) == 0:
                 if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option = False
                     forced_not_option = True
 
-            # --- NUEVO BLINDAJE DE PREGUNTAS DE RESERVA ---
+            # --- BLINDAJE DE PREGUNTAS DE RESERVA ---
             is_reserve = bool(re.search(r'\bpreguntas?\s+de\s+reserva\b', text_lower)) or bool(re.match(r'^\s*reserva\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
             
@@ -502,7 +515,6 @@ class PDFQuizParser:
                         questions.append(current_q)
                     current_q = None 
                     
-                    # Ahora guardamos SIEMPRE el título en el preámbulo para que aparezca "PREGUNTAS DE RESERVA" visualmente.
                     preamble += text + "\n"
                         
                     expected_q_num = 1 
@@ -578,16 +590,14 @@ class PDFQuizParser:
                 
             if is_explanation:
                 if current_q:
-                    # Garantizar separación limpia si había contenido previo
                     if current_q["explanation"]:
-                        current_q["explanation"] = current_q["explanation"].strip() + "\n\n" + text
+                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text
                     else:
                         current_q["explanation"] = text
                     current_q["state"] = "E"
                 continue
                 
             if current_q["state"] == "Q":
-                # Si el candado reconstructor se activó, reparamos la palabra partida
                 if forced_not_option and re.search(r'[a-zA-Z]$', current_q["question_text"].strip()):
                     match = re.match(r'^([a-zA-Z])([\)\.\-])\s*(.*)', text)
                     if match:
@@ -604,7 +614,6 @@ class PDFQuizParser:
                 
                 is_new_paragraph = len(current_q["options"]) >= 2 and ended_with_punct and bool(re.match(r'^[A-Z0-9¿¡"\'«]', text))
                 
-                # Excluimos "normativa" para evitar falsos positivos al final de una opción
                 is_legal_ref = bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n)\b', text_lower))
                 
                 is_implicit_explanation = False
@@ -628,15 +637,18 @@ class PDFQuizParser:
                     current_q["options"][-1] += " " + text
                     
             elif current_q["state"] == "E":
-                last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
-                
-                is_list_item = bool(re.match(r'^([•\-\*]|\d+[\.\)]|[a-zA-Z][\)\.])\s', text))
-                is_new_sentence = (last_char in ['.', ':', ';'] and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)))
-                
-                if is_list_item or is_new_sentence:
-                    current_q["explanation"] += "\n\n" + text
+                if current_q["explanation"].endswith("\n\n"):
+                    current_q["explanation"] += text
                 else:
-                    current_q["explanation"] += " " + text
+                    last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
+                    starts_with_upper_or_bullet = bool(re.match(r'^[\s]*([•\-\*]|([0-9]+[\.\)])|[A-ZÁÉÍÓÚ¿¡"\'«])', text))
+                    is_new_sentence = (last_char in ['.', ':', ';', '?', '!'] and starts_with_upper_or_bullet)
+                    is_list_item = bool(re.match(r'^([•\-\*]|\d+[\.\)]|[a-zA-Z][\)\.])', text))
+
+                    if is_list_item or is_new_sentence:
+                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text
+                    else:
+                        current_q["explanation"] += " " + text if current_q["explanation"] else text
 
         if current_q and current_q["options"]: questions.append(current_q)
         return questions
