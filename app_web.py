@@ -654,6 +654,7 @@ TESTS_DISPONIBLES = {
         },
         "GENERAL": {
             "Elige un test de general...": None,
+            "Tema 08 ADM GRAL ESTADO": "https://drive.google.com/uc?export=download&id=1sjO0bi2IwPJpPcESpQkWvqROPAHJ12L6",
             "TEMA 1 a 3 CONSTITUCIONAL": "https://drive.google.com/uc?export=download&id=14z3ZzvLLVZQ0XiUKx4qmiyneMoldZIB2",
             "TEMA 4 LA JEFATURA DEL ESTADO": "https://drive.google.com/uc?export=download&id=1y-u-_wTqfIyB_fn0he0cvyKAPLjsM06A",
             "TEMA 5 y 6 PODER LEGISLATIVO Y JUDICIAL": "https://drive.google.com/uc?export=download&id=1Hog53fH7CsG1FCk6CC0X4m4tIXZ2tPYd",
@@ -680,6 +681,7 @@ TESTS_DISPONIBLES = {
         "EXAMENES": {
             "Elige un test de examenes...": None,
             "DOMINGO 6 SEP 2026": "https://drive.google.com/uc?export=download&id=1pEuW36jClxKZQjwAuSx6TpfFaxlmkcln",
+            "Examen oficial 17 de mayo de 2026": "https://drive.google.com/uc?export=download&id=1-ZFGIZGsixCwIS5Tr_4dZ5hX8mcX4yDL",
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -697,6 +699,7 @@ TESTS_DISPONIBLES = {
             "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
             "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
             "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
+            "TEMAS 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
         },
     },
 }
