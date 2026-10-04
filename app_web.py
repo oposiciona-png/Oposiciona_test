@@ -455,7 +455,7 @@ class PDFQuizParser:
                             # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
-                            # 3. Separar Opciones pegadas
+                            # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -527,7 +527,6 @@ class PDFQuizParser:
                         questions.append(current_q)
                     current_q = None 
                     
-                    # Guardamos el preámbulo
                     preamble += text + "\n"
                         
                     expected_q_num = 1 
@@ -650,7 +649,6 @@ class PDFQuizParser:
                     current_q["options"][-1] += " " + text
                     
             elif current_q["state"] == "E":
-                # Respetar saltos que ya hayan sido inyectados por el marcador de bloques
                 if current_q["explanation"].endswith("\n\n"):
                     current_q["explanation"] += text
                 else:
@@ -1093,7 +1091,6 @@ elif not st.session_state.finished:
                 st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             
         exp_text = q.get('explanation', '').strip()
-        # Se elimina la palabra "Explicación:" o "Respuesta:" del propio texto para no duplicarla con la etiqueta en negrita de Streamlit
         exp_text = re.sub(r'^(?i)(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         st.info(f"**Explicación:**\n\n{exp_text if exp_text else 'No hay explicación disponible.'}")
 
