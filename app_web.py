@@ -439,9 +439,16 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea. Solo si va precedido de puntuación o de 2 espacios (salva falsos positivos)
-                            line_text = re.sub(r'(?<=[.?!;\)])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            # 1. Separar Explicación/Respuesta pegada en la misma línea
+                            line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            
+                            # 1.5 Separar OJO, NOTA, IMPORTANTE (Forzamos salto aunque no haya punto previo para blindarlo)
+                            line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
+                            
+                            # 1.6 Separar Artículos y Viñetas pegadas tras puntuación para que generen salto de párrafo
+                            line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Ley)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*([•\-\*])\s', r'\n\1 ', line_text)
                             
                             # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
@@ -473,13 +480,16 @@ class PDFQuizParser:
             if text == "<NEW_BLOCK>":
                 if current_q and current_q["state"] == "E":
                     if current_q["explanation"]:
-                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n"
+                        # Solo añade salto de bloque si terminó en puntuación para EVITAR FRASES ROTAS
+                        if current_q["explanation"].strip()[-1:] in ['.', ':', '?', '!', '"', '”', '»']:
+                            if not current_q["explanation"].endswith("\n\n"):
+                                current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n"
                 continue
 
             text_lower = text.lower()
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             
-            # --- BLINDAJE DE EXPLICACIÓN (Evita que "la respuesta:" active una nueva explicación a mitad de texto) --- 
+            # --- BLINDAJE DE EXPLICACIÓN (Evita que "respuesta:" active una nueva explicación a mitad de texto) --- 
             if current_q and current_q["state"] == "E":
                 is_explanation = False
             else:
@@ -637,15 +647,15 @@ class PDFQuizParser:
                     current_q["options"][-1] += " " + text
                     
             elif current_q["state"] == "E":
+                # Respetar saltos que ya hayan sido inyectados por el procesador
                 if current_q["explanation"].endswith("\n\n"):
                     current_q["explanation"] += text
                 else:
-                    last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
-                    starts_with_upper_or_bullet = bool(re.match(r'^[\s]*([•\-\*]|([0-9]+[\.\)])|[A-ZÁÉÍÓÚ¿¡"\'«])', text))
-                    is_new_sentence = (last_char in ['.', ':', ';', '?', '!'] and starts_with_upper_or_bullet)
-                    is_list_item = bool(re.match(r'^([•\-\*]|\d+[\.\)]|[a-zA-Z][\)\.])', text))
-
-                    if is_list_item or is_new_sentence:
+                    is_bullet = bool(re.match(r'^[\s]*[•\-\*]\s', text))
+                    is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
+                    is_art = bool(re.match(r'^[\s]*(Art[íi]culo aplicable:|Art[íi]culo|Art\.|Ley)\s', text, re.IGNORECASE))
+                    
+                    if is_bullet or is_ojo or is_art:
                         current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text
                     else:
                         current_q["explanation"] += " " + text if current_q["explanation"] else text
