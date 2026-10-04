@@ -306,7 +306,7 @@ if not st.session_state.autenticado:
 
 
 # ==============================================================================
-# 🧠 MOTOR MAESTRO DE EXTRACCIÓN (BISTURÍ TOTAL: PREGUNTAS Y EXPLICACIONES PEGADAS)
+# 🧠 MOTOR MAESTRO DE EXTRACCIÓN
 # ==============================================================================
 
 class PDFQuizParser:
@@ -436,8 +436,8 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea
-                            line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                            # 1. Separar Explicación/Respuesta pegada en la misma línea (sin obligar a espacio final, para evitar efectos pegamento)
+                            line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)', r'\n\1', line_text, flags=re.IGNORECASE)
                             
                             # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
@@ -469,10 +469,9 @@ class PDFQuizParser:
             # Requiere obligatoriamente que la palabra "respuesta" lleve dos puntos (respuesta: o respuestas:) para no confundirse con "respuesta correcta..."
             is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:") or text_lower.startswith("respuestas:")
             
-            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS (Ej: carenci \n a) se exige... ?) ---
+            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS ---
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and len(current_q["options"]) == 0:
-                # Si la opción termina en "?" y no empieza por mayúscula, es la continuación de la pregunta rota
                 if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option = False
                     forced_not_option = True
@@ -575,12 +574,15 @@ class PDFQuizParser:
                 
             if is_explanation:
                 if current_q:
-                    current_q["explanation"] += text + " "
+                    # Garantizar separación limpia si había contenido previo
+                    if current_q["explanation"]:
+                        current_q["explanation"] = current_q["explanation"].strip() + "\n\n" + text
+                    else:
+                        current_q["explanation"] = text
                     current_q["state"] = "E"
                 continue
                 
             if current_q["state"] == "Q":
-                # Si el candado reconstructor se activó, reparamos la palabra partida
                 if forced_not_option and re.search(r'[a-zA-Z]$', current_q["question_text"].strip()):
                     match = re.match(r'^([a-zA-Z])([\)\.\-])\s*(.*)', text)
                     if match:
@@ -596,11 +598,13 @@ class PDFQuizParser:
                 ended_with_connector = bool(re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', last_opt, re.IGNORECASE))
                 
                 is_new_paragraph = len(current_q["options"]) >= 2 and ended_with_punct and bool(re.match(r'^[A-Z0-9¿¡"\'«]', text))
-                is_legal_ref = bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa)', text_lower))
+                
+                # Excluimos "normativa" para evitar falsos positivos al final de una opción
+                is_legal_ref = bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n)\b', text_lower))
                 
                 is_implicit_explanation = False
                 if len(current_q["options"]) >= 3 and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)):
-                    if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower):
+                    if re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|de conformidad|conforme|en virtud)\b', text_lower):
                         is_implicit_explanation = True
                     elif re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower):
                         if ended_with_punct or not ended_with_connector:
