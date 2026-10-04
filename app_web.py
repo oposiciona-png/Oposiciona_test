@@ -71,9 +71,10 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     background-color: #000000 !important; 
 }
 
-/* Espaciado del contenedor principal */
+/* Espaciado del contenedor principal super-compacto */
 .block-container {
-    padding-top: 1.5rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
     max-width: 750px !important; 
 }
 
@@ -245,32 +246,47 @@ if 'autenticado' not in st.session_state:
 if 'modo_avance' not in st.session_state:
     st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
 
+# --- FUNCIÓN DE AUTOSCROLL DINÁMICO ---
+def scroll_to_top():
+    components.html(
+        f"""
+        <script>
+            // Forzamos la actualización de este bloque en cada renderizado
+            // Timestamp: {datetime.now().timestamp()}
+            try {{
+                setTimeout(function() {{
+                    var doc = window.parent.document;
+                    var els = [
+                        doc.querySelector('.main'),
+                        doc.querySelector('[data-testid="stMainBlockContainer"]'),
+                        doc.querySelector('.block-container'),
+                        doc.querySelector('.stApp')
+                    ];
+                    els.forEach(el => {{
+                        if (el) el.scrollTo({{top: 0, behavior: 'smooth'}});
+                    }});
+                    window.parent.scrollTo({{top: 0, behavior: 'smooth'}});
+                }}, 150);
+            }} catch(e) {{}}
+        </script>
+        """,
+        height=0
+    )
+
+
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
     try:
         st.image("oposiciona (320 x 132 px).png", use_container_width=True)
     except:
         pass
-    st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
-st.markdown("---")
+    st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
+
+# Línea divisoria súper compacta sin el margen gigante por defecto de Streamlit
+st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
-                if (main) {
-                    main.scrollTo({top: 0, behavior: 'smooth'});
-                } else {
-                    window.parent.scrollTo(0, 0);
-                }
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
+    scroll_to_top()
     
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
@@ -279,10 +295,9 @@ if not st.session_state.autenticado:
         except:
             pass
             
-    st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: 5px;'>🔒 Acceso Restringido</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size: 14px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: -5px;'>🔒 Acceso Restringido</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 14px; margin-bottom: 20px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
     
-    st.markdown("<br>", unsafe_allow_html=True)
     email_input = st.text_input("Correo electrónico asociado a tu cuenta")
     password_input = st.text_input("Contraseña de acceso", type="password")
     
@@ -442,21 +457,16 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea
                             line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             
-                            # 1.5 Separar OJO, NOTA, IMPORTANTE
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             
-                            # 1.6 Separar Artículos y Viñetas pegadas tras puntuación para que generen salto de párrafo (SIN EL GUION)
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                             
-                            # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
-                            # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -492,20 +502,17 @@ class PDFQuizParser:
             text_lower = text.lower()
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             
-            # --- BLINDAJE DE EXPLICACIÓN (Evita que "respuesta:" active una nueva explicación a mitad de texto) --- 
             if current_q and current_q["state"] == "E":
                 is_explanation = False
             else:
                 is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:") or text_lower.startswith("respuestas:")
             
-            # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS ---
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and len(current_q["options"]) == 0:
                 if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option = False
                     forced_not_option = True
 
-            # --- BLINDAJE DE PREGUNTAS DE RESERVA ---
             is_reserve = bool(re.search(r'\bpreguntas?\s+de\s+reserva\b', text_lower)) or bool(re.match(r'^\s*reserva\b', text_lower))
             is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)', text_lower))
             
@@ -655,13 +662,11 @@ class PDFQuizParser:
                 else:
                     last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                     
-                    # ¿Es viñeta, OJO o nueva oración? (SIN EL GUION)
                     is_bullet = bool(re.match(r'^[\s]*[•\*]', text))
                     is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
                     starts_with_upper_or_num = bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text))
                     is_new_sentence = (last_char in ['.', ':', '?', '!', '"', '”', '»'] and starts_with_upper_or_num)
                     
-                    # Si el texto anterior termina en viñeta suelta, lo pegamos en la misma línea
                     if current_q["explanation"].strip().endswith(('-', '•', '*', '', '')) and not is_bullet:
                         current_q["explanation"] += " " + text
                     elif is_bullet or is_ojo or is_new_sentence:
@@ -824,22 +829,7 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
-                if (main) {
-                    main.scrollTo({top: 0, behavior: 'smooth'});
-                } else {
-                    window.parent.scrollTo(0, 0);
-                }
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
+    scroll_to_top()
 
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -849,7 +839,7 @@ if not st.session_state.questions:
             pass
             
     with col_texto:
-        st.markdown("<h3 style='color:#2C3E50; margin-top: 10px;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color:#2C3E50; margin-top: -10px; margin-bottom: 10px;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
         
         rol = st.session_state.rol
         
@@ -894,7 +884,7 @@ if not st.session_state.questions:
             st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
             
             st.markdown("""
-            <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 20px 0 10px 0;">
+            <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;">
                 <h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
                 <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
             </div>
@@ -959,7 +949,6 @@ if not st.session_state.questions:
         st.session_state.saved_avance = modo_avance
         st.session_state.modo_avance = modo_avance
     
-    st.markdown("<br>", unsafe_allow_html=True)
     if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
         with st.container():
             st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
@@ -979,8 +968,6 @@ if not st.session_state.questions:
                             st.error("Error de descarga. Comprueba que el archivo en Drive tiene permisos de lectura ('Cualquier persona con el enlace').")
                     except Exception as e:
                         st.error(f"Error de conexión: {e}")
-    
-    st.markdown("<br><br>", unsafe_allow_html=True)
     
     with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
         uploaded_file = st.file_uploader("", type="pdf")
@@ -1013,39 +1000,23 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
-                if (main) {
-                    main.scrollTo({top: 0, behavior: 'smooth'});
-                } else {
-                    window.parent.scrollTo(0, 0);
-                }
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
+    scroll_to_top()
     
     idx = st.session_state.current_index
     q = st.session_state.questions[idx]
     stat = st.session_state.stats[idx]
     
-    st.markdown(f"<p style='color: #7f8c8d; font-size: 14px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     
     if q['preamble']:
         st.write(q['preamble'])
         
-    st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 20px; line-height: 1.3; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 15px; line-height: 1.3; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
     
     default_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     
     selected_option = st.radio("Elige tu respuesta:", q['options'], index=default_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
     
-    st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     
     if col1.button("🡄 Anterior", use_container_width=True) and idx > 0:
@@ -1099,7 +1070,7 @@ elif not st.session_state.finished:
         exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
         
         st.markdown(f"""
-        <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 15px;'>
+        <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>
             <div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div>
             <div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>
         </div>
@@ -1115,22 +1086,7 @@ else:
     </style>
     """, unsafe_allow_html=True)
     
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                var main = doc.querySelector('.main') || doc.querySelector('[data-testid="stMainBlockContainer"]');
-                if (main) {
-                    main.scrollTo({top: 0, behavior: 'smooth'});
-                } else {
-                    window.parent.scrollTo(0, 0);
-                }
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
+    scroll_to_top()
 
     aciertos = 0
     fallos = 0
@@ -1176,18 +1132,17 @@ else:
             except:
                 pass
     
-    st.markdown("<h3 style='text-align: center; color: #2C3E50;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: -10px;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
     if st.session_state.get('test_name'):
         st.markdown(f"<h5 style='text-align: center; color: #1f77b4; margin-top: -10px; margin-bottom: 15px;'>📄 {st.session_state.test_name}</h5>", unsafe_allow_html=True)
     st.markdown(f"<h4 style='text-align: center; font-size: 16px; color: #555;'>✅ Acertadas: {aciertos} &nbsp;|&nbsp; ❌ Falladas: {fallos} &nbsp;|&nbsp; ⚪ En blanco: {blancos}</h4>", unsafe_allow_html=True)
-    st.markdown(f"<h3 style='text-align: center; font-size: 22px;'>🎓 NOTA FINAL: {nota:.2f} / 10</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align: center; font-size: 22px; margin-bottom: 20px;'>🎓 NOTA FINAL: {nota:.2f} / 10</h3>", unsafe_allow_html=True)
     
-    st.markdown("<br>", unsafe_allow_html=True)
     c1_top, c2_top, c3_top = st.columns(3)
     c1_top.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
     c2_top.button("📁 Cambiar de Test", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
     c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
-    st.markdown("---")
+    st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
     
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
@@ -1195,31 +1150,31 @@ else:
         correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
-        st.markdown(f"<h4 style='color: {color}; font-size: 18px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</h4>", unsafe_allow_html=True)
-        
-        if q.get('preamble'):
-            st.markdown(f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 10px;'>{q['preamble']}</div>", unsafe_allow_html=True)
-            
-        st.markdown(f"<p style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 5px;'><b>Pregunta:</b> {q['question_text']}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 5px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 10px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
-        
         exp_text = q.get('explanation', '').strip()
         exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         if not exp_text:
             exp_text = "No hay explicación disponible."
-            
         exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
         
-        st.markdown(f"""
-        <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px; margin-bottom: 15px;'>
-            <div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div>
-            <div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>
+        preamble_html = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #555;'>{q['preamble']}</div>" if q.get('preamble') else ""
+        
+        final_html = f"""
+        <div style='margin-bottom: 5px;'>
+            <div style='color: {color}; font-size: 17px; font-weight: 600; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>
+            {preamble_html}
+            <div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>
+            <div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>
+            <div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {correct_opt}</div>
+            
+            <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 10px;'>
+                <div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div>
+                <div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>
+            </div>
+            <hr style='margin: 15px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>
         </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<hr>", unsafe_allow_html=True)
+        """
+        st.markdown(final_html, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
     c1_bot, c2_bot, c3_bot = st.columns(3)
     c1_bot.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
     c2_bot.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
