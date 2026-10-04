@@ -697,6 +697,7 @@ TESTS_DISPONIBLES = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
+            "EXAMEN B ROJO ADMINISTRATIVO 2026": "https://drive.google.com/uc?export=download&id=1fmh5zACnL7mPA29bxdAhhJqqm5cagv5L",
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
         },
