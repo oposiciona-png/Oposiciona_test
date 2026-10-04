@@ -464,7 +464,10 @@ class PDFQuizParser:
             text_lower = text.lower()
             
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
-            is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta")
+            
+            # --- BLINDAJE DE EXPLICACIÓN --- 
+            # Requiere obligatoriamente que la palabra "respuesta" lleve dos puntos (respuesta: o respuestas:) para no confundirse con "respuesta correcta..."
+            is_explanation = text_lower.startswith("explicaci") or text_lower.startswith("resp:") or text_lower.startswith("respuesta:") or text_lower.startswith("respuestas:")
             
             # --- CANDADO RECONSTRUCTOR PARA PALABRAS PARTIDAS (Ej: carenci \n a) se exige... ?) ---
             forced_not_option = False
