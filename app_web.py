@@ -441,21 +441,16 @@ class PDFQuizParser:
                             if is_header: continue
                             
                             # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
-                            # 1. Separar Explicación/Respuesta pegada en la misma línea
                             line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             
-                            # 1.5 Separar OJO, NOTA, IMPORTANTE
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             
-                            # 1.6 Separar Artículos y Viñetas pegadas tras puntuación para que generen salto de párrafo
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                            line_text = re.sub(r'(?<=\S)\s+([•\-\*])(\s|$)', r'\n\1\2', line_text)
+                            line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                             
-                            # 2. Separar Número de Pregunta pegado a la palabra anterior
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
-                            # 3. Separar Opciones pegadas (Blindado contra artículos legales como 62.f o 49.1.b)
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -491,7 +486,7 @@ class PDFQuizParser:
             text_lower = text.lower()
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             
-            # --- BLINDAJE DE EXPLICACIÓN (Evita que "respuesta:" active una nueva explicación a mitad de texto) --- 
+            # --- BLINDAJE DE EXPLICACIÓN --- 
             if current_q and current_q["state"] == "E":
                 is_explanation = False
             else:
@@ -654,13 +649,11 @@ class PDFQuizParser:
                 else:
                     last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                     
-                    # ¿Es viñeta, OJO o nueva oración?
-                    is_bullet = bool(re.match(r'^[\s]*[•\-\*]', text))
+                    is_bullet = bool(re.match(r'^[\s]*[•\*]', text))
                     is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
                     starts_with_upper_or_num = bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text))
                     is_new_sentence = (last_char in ['.', ':', '?', '!', '"', '”', '»'] and starts_with_upper_or_num)
                     
-                    # Si el texto anterior termina en viñeta suelta, lo pegamos en la misma línea
                     if current_q["explanation"].strip().endswith(('-', '•', '*', '', '')) and not is_bullet:
                         current_q["explanation"] += " " + text
                     elif is_bullet or is_ojo or is_new_sentence:
@@ -1092,7 +1085,17 @@ elif not st.session_state.finished:
             
         exp_text = q.get('explanation', '').strip()
         exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
-        st.info(f"**Explicación:**\n\n{exp_text if exp_text else 'No hay explicación disponible.'}")
+        if not exp_text:
+            exp_text = "No hay explicación disponible."
+            
+        exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
+        
+        st.markdown(f"""
+        <div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 15px;'>
+            <div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div>
+            <div style='font-size: 14px; color: #0c5460;'>{exp_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 else:
     # --- RESULTADOS FINALES ---
@@ -1193,9 +1196,19 @@ else:
         st.markdown(f"<p style='font-size:15px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:15px;'><b>Respuesta correcta:</b> {correct_opt}</p>", unsafe_allow_html=True)
         
-        exp_text = q.get('explanation', 'No disponible.').replace('\n', '<br>')
+        exp_text = q.get('explanation', '').strip()
         exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
-        st.markdown(f"<div style='background-color:#ffffff; border: 1px solid #e0e0e0; padding:12px; border-radius:8px;'><p style='font-size:14px; margin: 0;'><b>Explicación:</b><br>{exp_text}</p></div>", unsafe_allow_html=True)
+        if not exp_text:
+            exp_text = "No hay explicación disponible."
+            
+        exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
+        
+        st.markdown(f"""
+        <div style='background-color: #ffffff; border: 1px solid #e0e0e0; padding: 12px; border-radius: 8px; margin-top: 10px;'>
+            <div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #333333;'>Explicación:</div>
+            <div style='font-size: 14px; color: #333333;'>{exp_html}</div>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
