@@ -1059,7 +1059,7 @@ elif not st.session_state.finished:
                 st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             
         exp_text = q.get('explanation', '').strip()
-        exp_text = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text, flags=re.IGNORECASE).strip()
+        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         if not exp_text:
             exp_text = "No hay explicación disponible."
             
