@@ -5,18 +5,8 @@ import re
 import random
 import requests
 import os
-from datetime import datetime
 
-# --- AUTO-CONFIGURADOR DE RESPALDO ---
-try:
-    os.makedirs(".streamlit", exist_ok=True)
-    if not os.path.exists(".streamlit/config.toml"):
-        with open(".streamlit/config.toml", "w") as f:
-            f.write('[client]\ntoolbarMode = "minimal"\n')
-except:
-    pass
-
-# --- CONFIGURACIÓN VISUAL DE LA PÁGINA ---
+# --- CONFIGURACIÓN VISUAL DE LA PÁGINA (SIEMPRE LO PRIMERO) ---
 icono_ruta = "ICONO OPOSICIONA.png"
 if os.path.exists(icono_ruta):
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta, layout="centered")
@@ -24,7 +14,7 @@ else:
     st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon="📚", layout="centered")
 
 
-# INYECCIÓN DE CSS (Bomba nuclear contra iconos y blindaje de letras)
+# INYECCIÓN DE CSS (Bomba nuclear contra iconos, blindaje de letras y diseño compacto)
 st.markdown("""
 <style>
 /* --- ANIQUILAR RASTROS INTERNOS DE STREAMLIT --- */
@@ -33,7 +23,7 @@ st.markdown("""
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
 
-/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD (Método seguro) --- */
+/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD --- */
 .stDeployButton {display: none !important;}
 [data-testid="stAppDeployButton"] {display: none !important;}
 [class*="viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
@@ -123,7 +113,7 @@ input, textarea, [data-baseweb="input"] {
 """, unsafe_allow_html=True)
 
 
-# --- ESCUDO ACTIVO INVISIBLE (ANTI CLICK DERECHO, MARCA DE AGUA Y ANTI-IMPRESIÓN JS) ---
+# --- ESCUDO ACTIVO INVISIBLE (ANTI CLICK DERECHO Y ANTI-IMPRESIÓN JS) ---
 components.html(
     """
     <script>
@@ -172,6 +162,36 @@ if 'autenticado' not in st.session_state:
     st.session_state.email = None
 if 'modo_avance' not in st.session_state:
     st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
+if 'do_scroll' not in st.session_state:
+    st.session_state.do_scroll = False
+
+# --- GATILLO DE AUTOSCROLL SEGURO Y CONTROLADO ---
+if st.session_state.do_scroll:
+    st.session_state.do_scroll = False  # Apagamos el interruptor instantáneamente para evitar bucles
+    components.html(
+        """
+        <script>
+            try {
+                var parent = window.parent;
+                var doc = parent.document;
+                var els = [
+                    doc.querySelector('.main'),
+                    doc.querySelector('[data-testid="stMainBlockContainer"]'),
+                    doc.querySelector('.block-container'),
+                    doc.documentElement,
+                    doc.body
+                ];
+                els.forEach(el => {
+                    if (el) {
+                        el.scrollTop = 0;
+                    }
+                });
+                parent.scrollTo(0, 0);
+            } catch(e) {}
+        </script>
+        """,
+        height=0
+    )
 
 
 # ==============================================================================
@@ -276,6 +296,7 @@ if not st.session_state.autenticado:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
             st.session_state.email = correo_limpio
+            st.session_state.do_scroll = True
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -742,8 +763,10 @@ def handle_radio_change():
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
             st.session_state.checked = False
+            st.session_state.do_scroll = True
         else:
             st.session_state.finished = True
+            st.session_state.do_scroll = True
 
 def procesar_preguntas(raw_qs):
     for q in raw_qs:
@@ -764,6 +787,7 @@ def procesar_preguntas(raw_qs):
     random.shuffle(raw_qs)
     st.session_state.questions = raw_qs
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
+    st.session_state.do_scroll = True
     st.rerun()
 
 def action_repetir_test():
@@ -771,6 +795,7 @@ def action_repetir_test():
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))}
     st.session_state.finished = False
     st.session_state.checked = False
+    st.session_state.do_scroll = True
 
 def action_subir_otro():
     st.session_state.questions = []
@@ -779,9 +804,11 @@ def action_subir_otro():
     st.session_state.finished = False
     st.session_state.checked = False
     st.session_state.test_name = None
+    st.session_state.do_scroll = True
 
 def action_finalizar_sesion():
     st.session_state.clear()
+    st.session_state.do_scroll = True
 
 
 if not st.session_state.questions:
@@ -983,11 +1010,13 @@ elif not st.session_state.finished:
         save_answer(selected_option)
         st.session_state.checked = False
         st.session_state.current_index -= 1
+        st.session_state.do_scroll = True
         st.rerun()
         
     if col2.button("Comprobar", use_container_width=True):
         save_answer(selected_option)
         st.session_state.checked = True
+        st.session_state.do_scroll = True
         st.rerun()
         
     if idx < len(st.session_state.questions) - 1:
@@ -995,16 +1024,19 @@ elif not st.session_state.finished:
             save_answer(selected_option)
             st.session_state.checked = False
             st.session_state.current_index += 1
+            st.session_state.do_scroll = True
             st.rerun()
     else:
         if col3.button("Terminar ➔", use_container_width=True):
             save_answer(selected_option)
             st.session_state.finished = True
+            st.session_state.do_scroll = True
             st.rerun()
             
     if col4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(selected_option)
         st.session_state.finished = True
+        st.session_state.do_scroll = True
         st.rerun()
 
     if st.session_state.checked:
@@ -1025,7 +1057,7 @@ elif not st.session_state.finished:
         exp_text = q.get('explanation', '').strip()
         exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
         if not exp_text:
-            exp_text = "No hay explanation disponible."
+            exp_text = "No hay explicación disponible."
             
         exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
         
