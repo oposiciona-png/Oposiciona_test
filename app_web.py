@@ -33,21 +33,11 @@ st.markdown("""
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
 
-/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD --- */
+/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD (Método seguro) --- */
 .stDeployButton {display: none !important;}
 [data-testid="stAppDeployButton"] {display: none !important;}
 [class*="viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
 [class*="styles_viewerBadge"] {display: none !important;}
-[data-testid*="manage-app"] {display: none !important;}
-
-div[style*="position: fixed"][style*="bottom"][style*="right"],
-div[style*="position: absolute"][style*="bottom"][style*="right"] {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    z-index: -9999 !important;
-}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {margin-bottom: 12px !important;}
@@ -247,14 +237,12 @@ if 'modo_avance' not in st.session_state:
     st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
 
 # --- FUNCIÓN DE AUTOSCROLL DINÁMICO MEJORADO ---
-# Usamos un trigger estático basado en la fase de la app para no colapsar el navegador
-def scroll_to_top(trigger_id=""):
+def scroll_to_top():
     components.html(
-        f"""
+        """
         <script>
-            // ID Trigger: {trigger_id}
-            try {{
-                setTimeout(function() {{
+            try {
+                setTimeout(function() {
                     var doc = window.parent.document;
                     var els = [
                         doc.querySelector('.main'),
@@ -262,12 +250,12 @@ def scroll_to_top(trigger_id=""):
                         doc.querySelector('.block-container'),
                         doc.querySelector('.stApp')
                     ];
-                    els.forEach(el => {{
-                        if (el) el.scrollTo({{top: 0, behavior: 'smooth'}});
-                    }});
-                    window.parent.scrollTo({{top: 0, behavior: 'smooth'}});
-                }}, 150);
-            }} catch(e) {{}}
+                    els.forEach(el => {
+                        if (el) el.scrollTo({top: 0, behavior: 'smooth'});
+                    });
+                    window.parent.scrollTo({top: 0, behavior: 'smooth'});
+                }, 150);
+            } catch(e) {}
         </script>
         """,
         height=0
@@ -286,7 +274,7 @@ with col2:
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
-    scroll_to_top("login")
+    scroll_to_top()
     
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
@@ -364,7 +352,7 @@ class PDFQuizParser:
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
                                 r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
                                 r'^RESPUESTAS\s+(?:TIPO\s+)?TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
-                                r'^EXAMEN\s+[A-ZÁÉÍÓÚÑ\s]+\s*202\d\s*'
+                                r'^EXAMEN\s+[A-ZÁÉÍÓÚÑ0-9\s]+\s*202\d\s*'
                             ]
                             for pat in prefixes_to_strip:
                                 m = re.match(pat, line_text, flags=re.IGNORECASE)
@@ -443,7 +431,7 @@ class PDFQuizParser:
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', 
                                     r'^examen\s+repaso',
-                                    r'^examen\s+[a-záéíóúñ\s]+\s*202\d',
+                                    r'^examen\s+[a-záéíóúñ0-9\s]+\s*202\d',
                                     r'^normas\s+para\s+la\s+realizacion',
                                     r'^especial\s+simulacros?',
                                     r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario',
@@ -463,7 +451,7 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                            line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
+                            line_text = re.sub(r'(?<=\S)\s+([•*])(\s|$)', r'\n\1\2', line_text)
                             
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
@@ -662,7 +650,7 @@ class PDFQuizParser:
                 else:
                     last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                     
-                    is_bullet = bool(re.match(r'^[\s]*[•\*]', text))
+                    is_bullet = bool(re.match(r'^[\s]*[•*]', text))
                     is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
                     starts_with_upper_or_num = bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text))
                     is_new_sentence = (last_char in ['.', ':', '?', '!', '"', '”', '»'] and starts_with_upper_or_num)
@@ -831,7 +819,7 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
-    scroll_to_top("selector")
+    scroll_to_top()
 
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -1002,11 +990,11 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
+    scroll_to_top()
+    
     idx = st.session_state.current_index
     q = st.session_state.questions[idx]
     stat = st.session_state.stats[idx]
-    
-    scroll_to_top(f"pregunta_{idx}")
     
     st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     
@@ -1089,7 +1077,7 @@ else:
     </style>
     """, unsafe_allow_html=True)
     
-    scroll_to_top("resultados")
+    scroll_to_top()
 
     aciertos = 0
     fallos = 0
