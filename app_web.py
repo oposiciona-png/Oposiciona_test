@@ -246,13 +246,13 @@ if 'autenticado' not in st.session_state:
 if 'modo_avance' not in st.session_state:
     st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
 
-# --- FUNCIÓN DE AUTOSCROLL DINÁMICO ---
-def scroll_to_top():
+# --- FUNCIÓN DE AUTOSCROLL DINÁMICO MEJORADO ---
+# Usamos un trigger estático basado en la fase de la app para no colapsar el navegador
+def scroll_to_top(trigger_id=""):
     components.html(
         f"""
         <script>
-            // Forzamos la actualización de este bloque en cada renderizado
-            // Timestamp: {datetime.now().timestamp()}
+            // ID Trigger: {trigger_id}
             try {{
                 setTimeout(function() {{
                     var doc = window.parent.document;
@@ -286,7 +286,7 @@ with col2:
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
-    scroll_to_top()
+    scroll_to_top("login")
     
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
@@ -831,7 +831,7 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
-    scroll_to_top()
+    scroll_to_top("selector")
 
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -1002,11 +1002,11 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
-    scroll_to_top()
-    
     idx = st.session_state.current_index
     q = st.session_state.questions[idx]
     stat = st.session_state.stats[idx]
+    
+    scroll_to_top(f"pregunta_{idx}")
     
     st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     
@@ -1089,7 +1089,7 @@ else:
     </style>
     """, unsafe_allow_html=True)
     
-    scroll_to_top()
+    scroll_to_top("resultados")
 
     aciertos = 0
     fallos = 0
