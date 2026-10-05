@@ -33,11 +33,21 @@ st.markdown("""
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
 
-/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD (Método seguro) --- */
+/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD --- */
 .stDeployButton {display: none !important;}
 [data-testid="stAppDeployButton"] {display: none !important;}
 [class*="viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
 [class*="styles_viewerBadge"] {display: none !important;}
+[data-testid*="manage-app"] {display: none !important;}
+
+div[style*="position: fixed"][style*="bottom"][style*="right"],
+div[style*="position: absolute"][style*="bottom"][style*="right"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    z-index: -9999 !important;
+}
 
 /* --- TEXTO DE LAS OPCIONES DE RESPUESTA BLINDADO CONTRA EL MODO OSCURO --- */
 div[role="radiogroup"] label {margin-bottom: 12px !important;}
@@ -229,37 +239,36 @@ USUARIOS_AUTORIZADOS = {
 
 PASSWORD_ACCESO = "plaza2026" 
 
+# --- INICIALIZACIÓN DE VARIABLES DE SESIÓN ---
 if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.rol = None
     st.session_state.email = None
 if 'modo_avance' not in st.session_state:
     st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
+if 'scroll_refresh' not in st.session_state:
+    st.session_state.scroll_refresh = False
 
-# --- FUNCIÓN DE AUTOSCROLL DINÁMICO MEJORADO ---
-def scroll_to_top():
+# --- GATILLO DE AUTOSCROLL SEGURO (SE EJECUTA SOLO 1 VEZ TRAS PULSAR UN BOTÓN) ---
+if st.session_state.scroll_refresh:
     components.html(
         """
         <script>
             try {
-                setTimeout(function() {
-                    var doc = window.parent.document;
-                    var els = [
-                        doc.querySelector('.main'),
-                        doc.querySelector('[data-testid="stMainBlockContainer"]'),
-                        doc.querySelector('.block-container'),
-                        doc.querySelector('.stApp')
-                    ];
-                    els.forEach(el => {
-                        if (el) el.scrollTo({top: 0, behavior: 'smooth'});
-                    });
+                var doc = window.parent.document;
+                if (doc) {
+                    var main = doc.querySelector('.main');
+                    var block = doc.querySelector('[data-testid="stMainBlockContainer"]');
+                    if (main) main.scrollTo({top: 0, behavior: 'smooth'});
+                    if (block) block.scrollTo({top: 0, behavior: 'smooth'});
                     window.parent.scrollTo({top: 0, behavior: 'smooth'});
-                }, 150);
+                }
             } catch(e) {}
         </script>
         """,
         height=0
     )
+    st.session_state.scroll_refresh = False
 
 
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
@@ -270,11 +279,10 @@ with col2:
         pass
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 
-# Línea divisoria súper compacta sin el margen gigante por defecto de Streamlit
+# Línea divisoria súper compacta
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
-    scroll_to_top()
     
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
@@ -302,6 +310,7 @@ if not st.session_state.autenticado:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
             st.session_state.email = correo_limpio
+            st.session_state.scroll_refresh = True
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -451,7 +460,7 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                            line_text = re.sub(r'(?<=\S)\s+([•*])(\s|$)', r'\n\1\2', line_text)
+                            line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                             
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             
@@ -650,7 +659,7 @@ class PDFQuizParser:
                 else:
                     last_char = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
                     
-                    is_bullet = bool(re.match(r'^[\s]*[•*]', text))
+                    is_bullet = bool(re.match(r'^[\s]*[•\*]', text))
                     is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
                     starts_with_upper_or_num = bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text))
                     is_new_sentence = (last_char in ['.', ':', '?', '!', '"', '”', '»'] and starts_with_upper_or_num)
@@ -768,8 +777,10 @@ def handle_radio_change():
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
             st.session_state.checked = False
+            st.session_state.scroll_refresh = True
         else:
             st.session_state.finished = True
+            st.session_state.scroll_refresh = True
 
 def procesar_preguntas(raw_qs):
     for q in raw_qs:
@@ -790,6 +801,7 @@ def procesar_preguntas(raw_qs):
     random.shuffle(raw_qs)
     st.session_state.questions = raw_qs
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
+    st.session_state.scroll_refresh = True
     st.rerun()
 
 def action_repetir_test():
@@ -797,6 +809,7 @@ def action_repetir_test():
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))}
     st.session_state.finished = False
     st.session_state.checked = False
+    st.session_state.scroll_refresh = True
 
 def action_subir_otro():
     st.session_state.questions = []
@@ -805,9 +818,11 @@ def action_subir_otro():
     st.session_state.finished = False
     st.session_state.checked = False
     st.session_state.test_name = None
+    st.session_state.scroll_refresh = True
 
 def action_finalizar_sesion():
     st.session_state.clear()
+    st.session_state.scroll_refresh = True
 
 
 if not st.session_state.questions:
@@ -818,8 +833,6 @@ if not st.session_state.questions:
     html, body, .stApp, .main, [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
     </style>
     """, unsafe_allow_html=True)
-
-    scroll_to_top()
 
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -990,8 +1003,6 @@ elif not st.session_state.finished:
     </style>
     """, unsafe_allow_html=True)
     
-    scroll_to_top()
-    
     idx = st.session_state.current_index
     q = st.session_state.questions[idx]
     stat = st.session_state.stats[idx]
@@ -1013,11 +1024,13 @@ elif not st.session_state.finished:
         save_answer(selected_option)
         st.session_state.checked = False
         st.session_state.current_index -= 1
+        st.session_state.scroll_refresh = True
         st.rerun()
         
     if col2.button("Comprobar", use_container_width=True):
         save_answer(selected_option)
         st.session_state.checked = True
+        st.session_state.scroll_refresh = True
         st.rerun()
         
     if idx < len(st.session_state.questions) - 1:
@@ -1025,16 +1038,19 @@ elif not st.session_state.finished:
             save_answer(selected_option)
             st.session_state.checked = False
             st.session_state.current_index += 1
+            st.session_state.scroll_refresh = True
             st.rerun()
     else:
         if col3.button("Terminar ➔", use_container_width=True):
             save_answer(selected_option)
             st.session_state.finished = True
+            st.session_state.scroll_refresh = True
             st.rerun()
             
     if col4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(selected_option)
         st.session_state.finished = True
+        st.session_state.scroll_refresh = True
         st.rerun()
 
     if st.session_state.checked:
@@ -1076,8 +1092,6 @@ else:
     html, body, .stApp, .main, [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
     </style>
     """, unsafe_allow_html=True)
-    
-    scroll_to_top()
 
     aciertos = 0
     fallos = 0
