@@ -175,6 +175,44 @@ components.html(
     height=0
 )
 
+# --- INICIALIZACIÓN DE VARIABLES DE SESIÓN ---
+if 'autenticado' not in st.session_state:
+    st.session_state.autenticado = False
+    st.session_state.rol = None
+    st.session_state.email = None
+if 'modo_avance' not in st.session_state:
+    st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
+if 'do_scroll' not in st.session_state:
+    st.session_state.do_scroll = False
+
+# --- GATILLO DE AUTOSCROLL 100% BLINDADO (SIN BUCLES) ---
+if st.session_state.do_scroll:
+    st.session_state.do_scroll = False  # Apagamos el interruptor instantáneamente
+    components.html(
+        """
+        <script>
+            try {
+                var parent = window.parent;
+                var doc = parent.document;
+                var els = [
+                    doc.querySelector('.main'),
+                    doc.querySelector('[data-testid="stMainBlockContainer"]'),
+                    doc.querySelector('.block-container'),
+                    doc.documentElement,
+                    doc.body
+                ];
+                els.forEach(el => {
+                    if (el) {
+                        el.scrollTop = 0;
+                    }
+                });
+                parent.scrollTo(0, 0);
+            } catch(e) {}
+        </script>
+        """,
+        height=0
+    )
+
 
 # ==============================================================================
 # 🔒 SISTEMA DE SEGURIDAD Y ACCESO POR ROLES
@@ -239,38 +277,6 @@ USUARIOS_AUTORIZADOS = {
 
 PASSWORD_ACCESO = "plaza2026" 
 
-# --- INICIALIZACIÓN DE VARIABLES DE SESIÓN ---
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
-    st.session_state.rol = None
-    st.session_state.email = None
-if 'modo_avance' not in st.session_state:
-    st.session_state.modo_avance = "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)"
-if 'scroll_refresh' not in st.session_state:
-    st.session_state.scroll_refresh = False
-
-# --- GATILLO DE AUTOSCROLL SEGURO (SE EJECUTA SOLO 1 VEZ TRAS PULSAR UN BOTÓN) ---
-if st.session_state.scroll_refresh:
-    components.html(
-        """
-        <script>
-            try {
-                var doc = window.parent.document;
-                if (doc) {
-                    var main = doc.querySelector('.main');
-                    var block = doc.querySelector('[data-testid="stMainBlockContainer"]');
-                    if (main) main.scrollTo({top: 0, behavior: 'smooth'});
-                    if (block) block.scrollTo({top: 0, behavior: 'smooth'});
-                    window.parent.scrollTo({top: 0, behavior: 'smooth'});
-                }
-            } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
-    st.session_state.scroll_refresh = False
-
-
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
     try:
@@ -279,7 +285,7 @@ with col2:
         pass
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 
-# Línea divisoria súper compacta
+# Línea divisoria súper compacta sin el margen gigante por defecto de Streamlit
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
@@ -310,7 +316,7 @@ if not st.session_state.autenticado:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
             st.session_state.email = correo_limpio
-            st.session_state.scroll_refresh = True
+            st.session_state.do_scroll = True
             st.rerun()
         else:
             st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -777,10 +783,10 @@ def handle_radio_change():
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
             st.session_state.checked = False
-            st.session_state.scroll_refresh = True
+            st.session_state.do_scroll = True
         else:
             st.session_state.finished = True
-            st.session_state.scroll_refresh = True
+            st.session_state.do_scroll = True
 
 def procesar_preguntas(raw_qs):
     for q in raw_qs:
@@ -801,7 +807,7 @@ def procesar_preguntas(raw_qs):
     random.shuffle(raw_qs)
     st.session_state.questions = raw_qs
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
-    st.session_state.scroll_refresh = True
+    st.session_state.do_scroll = True
     st.rerun()
 
 def action_repetir_test():
@@ -809,7 +815,7 @@ def action_repetir_test():
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))}
     st.session_state.finished = False
     st.session_state.checked = False
-    st.session_state.scroll_refresh = True
+    st.session_state.do_scroll = True
 
 def action_subir_otro():
     st.session_state.questions = []
@@ -818,11 +824,11 @@ def action_subir_otro():
     st.session_state.finished = False
     st.session_state.checked = False
     st.session_state.test_name = None
-    st.session_state.scroll_refresh = True
+    st.session_state.do_scroll = True
 
 def action_finalizar_sesion():
     st.session_state.clear()
-    st.session_state.scroll_refresh = True
+    st.session_state.do_scroll = True
 
 
 if not st.session_state.questions:
@@ -1024,13 +1030,13 @@ elif not st.session_state.finished:
         save_answer(selected_option)
         st.session_state.checked = False
         st.session_state.current_index -= 1
-        st.session_state.scroll_refresh = True
+        st.session_state.do_scroll = True
         st.rerun()
         
     if col2.button("Comprobar", use_container_width=True):
         save_answer(selected_option)
         st.session_state.checked = True
-        st.session_state.scroll_refresh = True
+        st.session_state.do_scroll = True
         st.rerun()
         
     if idx < len(st.session_state.questions) - 1:
@@ -1038,19 +1044,19 @@ elif not st.session_state.finished:
             save_answer(selected_option)
             st.session_state.checked = False
             st.session_state.current_index += 1
-            st.session_state.scroll_refresh = True
+            st.session_state.do_scroll = True
             st.rerun()
     else:
         if col3.button("Terminar ➔", use_container_width=True):
             save_answer(selected_option)
             st.session_state.finished = True
-            st.session_state.scroll_refresh = True
+            st.session_state.do_scroll = True
             st.rerun()
             
     if col4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(selected_option)
         st.session_state.finished = True
-        st.session_state.scroll_refresh = True
+        st.session_state.do_scroll = True
         st.rerun()
 
     if st.session_state.checked:
