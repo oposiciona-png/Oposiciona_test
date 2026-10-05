@@ -23,7 +23,7 @@ st.markdown("""
 [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
 
-/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD --- */
+/* --- ANIQUILAR BOTONES FLOTANTES DE STREAMLIT CLOUD (Método seguro) --- */
 .stDeployButton {display: none !important;}
 [data-testid="stAppDeployButton"] {display: none !important;}
 [class*="viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
@@ -118,37 +118,39 @@ components.html(
     """
     <script>
         try {
-            var parentDoc = window.parent.document;
-            if (!parentDoc.getElementById("escudo-oposiciona")) {
-                var script = parentDoc.createElement("script");
-                script.id = "escudo-oposiciona";
-                script.type = "text/javascript";
-                script.innerHTML = `
-                    // 1. Bloquear el menú de click derecho
-                    document.addEventListener('contextmenu', function(e) {
-                        e.preventDefault();
-                    });
-                    
-                    // 2. Interceptar Ctrl+C y forzar la marca de agua
-                    document.addEventListener('copy', function(e) {
-                        var selectedText = window.getSelection().toString();
-                        if (selectedText.length > 0) {
-                            var watermark = "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0";
-                            e.clipboardData.setData('text/plain', selectedText + watermark);
+            setTimeout(function() {
+                var parentDoc = window.parent.document;
+                if (!parentDoc.getElementById("escudo-oposiciona")) {
+                    var script = parentDoc.createElement("script");
+                    script.id = "escudo-oposiciona";
+                    script.type = "text/javascript";
+                    script.innerHTML = `
+                        // 1. Bloquear el menú de click derecho
+                        document.addEventListener('contextmenu', function(e) {
                             e.preventDefault();
-                        }
-                    });
+                        });
+                        
+                        // 2. Interceptar Ctrl+C y forzar la marca de agua
+                        document.addEventListener('copy', function(e) {
+                            var selectedText = window.getSelection().toString();
+                            if (selectedText.length > 0) {
+                                var watermark = "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0";
+                                e.clipboardData.setData('text/plain', selectedText + watermark);
+                                e.preventDefault();
+                            }
+                        });
 
-                    // 3. Interceptar Ctrl+P / Cmd+P para bloquear impresión directa
-                    document.addEventListener('keydown', function(e) {
-                        if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }
-                    });
-                `;
-                parentDoc.head.appendChild(script);
-            }
+                        // 3. Interceptar Ctrl+P / Cmd+P para bloquear impresión directa
+                        document.addEventListener('keydown', function(e) {
+                            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }
+                        });
+                    `;
+                    parentDoc.head.appendChild(script);
+                }
+            }, 1000); // Retraso de 1 segundo para asegurar que la app carga fluida primero
         } catch(e) {}
     </script>
     """,
@@ -172,21 +174,23 @@ if st.session_state.do_scroll:
         """
         <script>
             try {
-                var parent = window.parent;
-                var doc = parent.document;
-                var els = [
-                    doc.querySelector('.main'),
-                    doc.querySelector('[data-testid="stMainBlockContainer"]'),
-                    doc.querySelector('.block-container'),
-                    doc.documentElement,
-                    doc.body
-                ];
-                els.forEach(el => {
-                    if (el) {
-                        el.scrollTop = 0;
-                    }
-                });
-                parent.scrollTo(0, 0);
+                setTimeout(function() {
+                    var parent = window.parent;
+                    var doc = parent.document;
+                    var els = [
+                        doc.querySelector('.main'),
+                        doc.querySelector('[data-testid="stMainBlockContainer"]'),
+                        doc.querySelector('.block-container'),
+                        doc.documentElement,
+                        doc.body
+                    ];
+                    els.forEach(el => {
+                        if (el) {
+                            el.scrollTop = 0;
+                        }
+                    });
+                    parent.scrollTo(0, 0);
+                }, 150);
             } catch(e) {}
         </script>
         """,
@@ -265,7 +269,7 @@ with col2:
         pass
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 
-# Línea divisoria súper compacta
+# Línea divisoria súper compacta sin el margen gigante por defecto de Streamlit
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
@@ -1055,7 +1059,7 @@ elif not st.session_state.finished:
                 st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             
         exp_text = q.get('explanation', '').strip()
-        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        exp_text = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text, flags=re.IGNORECASE).strip()
         if not exp_text:
             exp_text = "No hay explicación disponible."
             
@@ -1142,7 +1146,7 @@ else:
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         exp_text = q.get('explanation', '').strip()
-        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        exp_text = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text, flags=re.IGNORECASE).strip()
         if not exp_text:
             exp_text = "No hay explicación disponible."
         exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
