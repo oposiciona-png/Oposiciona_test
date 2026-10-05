@@ -150,7 +150,7 @@ components.html(
                     `;
                     parentDoc.head.appendChild(script);
                 }
-            }, 1000); // Retraso de 1 segundo para asegurar que la app carga fluida primero
+            }, 1000); 
         } catch(e) {}
     </script>
     """,
@@ -169,7 +169,7 @@ if 'do_scroll' not in st.session_state:
 
 # --- GATILLO DE AUTOSCROLL SEGURO Y CONTROLADO ---
 if st.session_state.do_scroll:
-    st.session_state.do_scroll = False  # Apagamos el interruptor instantáneamente para evitar bucles
+    st.session_state.do_scroll = False  
     components.html(
         """
         <script>
@@ -337,6 +337,9 @@ class PDFQuizParser:
                             if not text: continue
                             line_text += text + " "
                             if "bold" in s["font"].lower() or (s["flags"] & 2 != 0):
+                                # Blindaje contra falsos positivos: ignorar negritas en la pura letra de la opción
+                                if re.match(r'^[a-eA-E][\)\.-]?$', text):
+                                    continue
                                 is_bold = True
                         
                         line_text = line_text.strip()
