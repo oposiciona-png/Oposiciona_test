@@ -216,6 +216,7 @@ USUARIOS_AUTORIZADOS = {
         "leticiagenerelosolana@gmail.com",
         "invitado@oposiciona.es",
         "cguinaldobravo@gmail.com",
+        "alvaro20011996@gmail.com",
         "sion.nuba@gmail.com"
     ],
     "ADMTVOS": [
@@ -676,7 +677,8 @@ TESTS_DISPONIBLES = {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
             "TEMA 1 ESPECIFICO": "https://drive.google.com/uc?export=download&id=1HXIJvogWzKXVg0lt5TqlnsGk3KtTR4oI",
-            "TEMA 2A": "https://drive.google.com/uc?export=download&id=1Wt-_iiVjHVeII_11jCU4CF8SBZ0nYrjl",
+            "TEMA 10": "https://drive.google.com/uc?export=download&id=1iLabrwSF9Phm2Qvcazdds4F6nTAHajjo",
+            "TEMA 2A": "https://drive.google.com/uc?export=download&id=1W_f3M0AytaH9K4tI5Puuwn3zDCGTpGEm",
             "TEMA 2B": "https://drive.google.com/uc?export=download&id=1OGW-V2qE21Uu6CYWb6pklaGzjbpAgssO",
             "TEMA 2C": "https://drive.google.com/uc?export=download&id=1LmGkZ6VNbLOK42XK784je_ePwZI1cUZm",
             "TEMA 2D": "https://drive.google.com/uc?export=download&id=1QelSvHbUrl6WGXEwxmcaBsO5oTAhma2d",
@@ -699,6 +701,8 @@ TESTS_DISPONIBLES = {
             "TEMA 4 LA JEFATURA DEL ESTADO": "https://drive.google.com/uc?export=download&id=1y-u-_wTqfIyB_fn0he0cvyKAPLjsM06A",
             "TEMA 5 y 6 PODER LEGISLATIVO Y JUDICIAL": "https://drive.google.com/uc?export=download&id=1Hog53fH7CsG1FCk6CC0X4m4tIXZ2tPYd",
             "TEMA 7 PODER EJECUTIVO": "https://drive.google.com/uc?export=download&id=1BXKLo950u1GSODuag-lds2SCbBTYF2UD",
+            "TEMA 8 AGE": "https://drive.google.com/uc?export=download&id=1ePiNyJ97TS68SUHDbHQVMmNdycyk6Olo",
+            "TEMA 9 CCAA Y MUNICIPIOS": "https://drive.google.com/uc?export=download&id=1Po-Aw8DKSWwBEypwNCk6PfkPe19ZJb2i",
         },
     },
     "GESTION": {
@@ -712,11 +716,11 @@ TESTS_DISPONIBLES = {
             "TEMA 57 INCAPACIDAD TEMPORAL": "https://drive.google.com/uc?export=download&id=1lrSFSMDbecfW_aGYId5QChIhgVyYFKC5",
             "TEMA 58 - NYCM": "https://drive.google.com/uc?export=download&id=1iw4NDqaC1gMGiMgd-VZTbtaoWyWKLE8L",
             "TEMA 59 y 60 IP": "https://drive.google.com/uc?export=download&id=16ahUMTSgXAcjTVH700BoL6eZgwQo2_7E",
+            "TEMA 59 y 60 IP y LESIONES PERMANENTES": "https://drive.google.com/uc?export=download&id=12_N6QFcTShR-w-yX9ptJD9pbfC_CQuUD",
             "Tema 67 COTIZACION": "https://drive.google.com/uc?export=download&id=1kErdym1yxTP-Qd0Frx-5XIwOkI3aq5aL",
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
             "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
             "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
-            "Temas_59_60 IP y LESIONES PERMANENTES": "https://drive.google.com/uc?export=download&id=12_N6QFcTShR-w-yX9ptJD9pbfC_CQuUD",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
@@ -1140,39 +1144,3 @@ else:
     c1_top.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
     c2_top.button("📁 Cambiar de Test", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
     c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
-    st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
-    
-    for i, q in enumerate(st.session_state.questions):
-        stat = st.session_state.stats[i]
-        
-        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
-        color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
-        
-        exp_text = q.get('explanation', '').strip()
-        exp_text = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text, flags=re.IGNORECASE).strip()
-        if not exp_text:
-            exp_text = "No hay explicación disponible."
-        exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
-        
-        preamble_html = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #555;'>{q['preamble']}</div>" if q.get('preamble') else ""
-        
-        final_html = (
-            f"<div style='margin-bottom: 5px;'>"
-            f"<div style='color: {color}; font-size: 17px; font-weight: 600; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>"
-            f"{preamble_html}"
-            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>"
-            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
-            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {correct_opt}</div>"
-            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 10px;'>"
-            f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div>"
-            f"<div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>"
-            f"</div>"
-            f"<hr style='margin: 15px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>"
-            f"</div>"
-        )
-        st.markdown(final_html, unsafe_allow_html=True)
-
-    c1_bot, c2_bot, c3_bot = st.columns(3)
-    c1_bot.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
-    c2_bot.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
-    c3_bot.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
