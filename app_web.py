@@ -429,7 +429,6 @@ class PDFQuizParser:
                                     r'^pagina\s+\d+',
                                     r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
                                     r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
-                                    r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^tema\s+\d+\s+cotizacion',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', 
@@ -471,6 +470,19 @@ class PDFQuizParser:
                                     
                     # --- MARCADOR DE BLOQUES PARA RESPETAR LOS INTROS ORIGINALES DE LAS EXPLICACIONES ---
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
+
+        # --- PARCHE QUIRÚRGICO DE EXCEPCIONES DE FORMATO PARA TESTS ESPECÍFICOS ---
+        for i in range(len(lines)):
+            txt = lines[i]["text"].strip()
+            
+            # Arreglo para el test TEMA 59 y 60 (carencia cortada y viñeta fantasma)
+            if txt.endswith("carenci") and i+1 < len(lines) and lines[i+1]["text"].strip().startswith("a) se exige"):
+                lines[i]["text"] = lines[i]["text"].replace("carenci", "carencia)")
+                lines[i+1]["text"] = lines[i+1]["text"].replace("a) se exige", "se exige", 1)
+            
+            # Arreglo para el test TEMA 2A (D. Carlos confundido con opción D)
+            if txt.startswith("D. Carlos"):
+                lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
                             
         current_q = None
         preamble = "" 
@@ -515,8 +527,8 @@ class PDFQuizParser:
                 is_real_preamble = False
                 for j in range(idx + 1, min(idx + 30, len(lines))):
                     fut = lines[j]["text"].strip()
-                    if (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', fut) or 
-                        re.match(r'^\s*(\d+)\s+[,\.\-\)]', fut) or 
+                    if (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', fut, re.IGNORECASE) or 
+                        re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', fut, re.IGNORECASE) or 
                         (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', fut, re.IGNORECASE) and fut.endswith('?'))):
                         is_real_preamble = True
                         break
@@ -533,9 +545,10 @@ class PDFQuizParser:
 
             is_new_q = False
             
-            m_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', text) or 
-                     re.match(r'^\s*(\d+)\s+[,\.\-\)]', text) or
-                     re.match(r'^\s*(\d+)\s*¿', text))
+            # BLINDAJE PARA TESTS QUE USAN "Pregunta X." EN LUGAR DE "X."
+            m_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', text, re.IGNORECASE) or 
+                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', text, re.IGNORECASE) or
+                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
                      
             m_rescue = False
             
@@ -553,9 +566,9 @@ class PDFQuizParser:
                         is_real_q_candidate = True
                         break
                     
-                    m_future_num = (re.match(r'^\s*(\d+)[,\.\-\)]+(?!\d)', future_text) or 
-                                    re.match(r'^\s*(\d+)\s+[,\.\-\)]', future_text) or
-                                    re.match(r'^\s*(\d+)\s*¿', future_text))
+                    m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', future_text, re.IGNORECASE) or 
+                                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', future_text, re.IGNORECASE) or
+                                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
                     
                     if m_future_num:
                         break
@@ -575,8 +588,8 @@ class PDFQuizParser:
 
             if is_new_q:
                 if current_q and current_q["options"]: questions.append(current_q)
-                clean_text = re.sub(r'^\s*\d+[,\.\-\)]+\s*(-*\s*)?', '', text)
-                clean_text = re.sub(r'^\s*\d+\s*¿', '¿', clean_text)
+                clean_text = re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\)]+\s*(-*\s*)?', '', text, flags=re.IGNORECASE)
+                clean_text = re.sub(r'^\s*(?:Pregunta\s+)?\d+\s*¿', '¿', clean_text, flags=re.IGNORECASE)
                 current_q = {"preamble": preamble.strip(), "question_text": clean_text, "options": [], "answer": -1, "explanation": "", "state": "Q"}
                 preamble = "" 
                 continue
@@ -1168,7 +1181,7 @@ else:
         color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
         
         exp_text = q.get('explanation', '').strip()
-        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        exp_text = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text, flags=re.IGNORECASE).strip()
         if not exp_text:
             exp_text = "No hay explicación disponible."
         exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
