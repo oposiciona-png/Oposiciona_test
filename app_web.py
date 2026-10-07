@@ -189,8 +189,8 @@ if st.session_state.do_scroll:
                             el.scrollTop = 0;
                         }
                     });
-                    parent.scrollTo(0, 0);
-                }, 150);
+                    parent.scrollTo({top: 0, behavior: 'smooth'});
+                }, 200);
             } catch(e) {}
         </script>
         """,
@@ -1089,6 +1089,21 @@ else:
     html, body, .stApp, .main, [data-testid="stAppViewContainer"] { background-color: #FFFFFF !important; }
     </style>
     """, unsafe_allow_html=True)
+    
+    # GATILLO DE SCROLL ESPECÍFICO PARA LA PANTALLA FINAL
+    components.html(
+        """
+        <script>
+            setTimeout(function() {
+                var parent = window.parent;
+                if(parent) {
+                    parent.scrollTo({top: 0, behavior: 'smooth'});
+                }
+            }, 500);
+        </script>
+        """,
+        height=0
+    )
 
     aciertos = 0
     fallos = 0
@@ -1144,3 +1159,39 @@ else:
     c1_top.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
     c2_top.button("📁 Cambiar de Test", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
     c3_top.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
+    st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
+    
+    for i, q in enumerate(st.session_state.questions):
+        stat = st.session_state.stats[i]
+        
+        correct_opt = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
+        color = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
+        
+        exp_text = q.get('explanation', '').strip()
+        exp_text = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', exp_text).strip()
+        if not exp_text:
+            exp_text = "No hay explicación disponible."
+        exp_html = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in exp_text.split('\n') if p.strip()])
+        
+        preamble_html = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #555;'>{q['preamble']}</div>" if q.get('preamble') else ""
+        
+        final_html = (
+            f"<div style='margin-bottom: 5px;'>"
+            f"<div style='color: {color}; font-size: 17px; font-weight: 600; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>"
+            f"{preamble_html}"
+            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>"
+            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
+            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {correct_opt}</div>"
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 10px;'>"
+            f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div>"
+            f"<div style='font-size: 14px; color: #0c5460; text-align: justify;'>{exp_html}</div>"
+            f"</div>"
+            f"<hr style='margin: 15px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>"
+            f"</div>"
+        )
+        st.markdown(final_html, unsafe_allow_html=True)
+
+    c1_bot, c2_bot, c3_bot = st.columns(3)
+    c1_bot.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
+    c2_bot.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
+    c3_bot.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
