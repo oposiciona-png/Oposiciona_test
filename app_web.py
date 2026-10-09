@@ -256,6 +256,7 @@ USUARIOS_AUTORIZADOS = {
         "manuelmuriel97@gmail.com",
         "hfdiaz99@gmail.com",
         "ireneizquierdo22@gmail.com",
+        "mfangela23@gmail.com",
         "manuelsan240902@gmail.com"
     ]
 }
@@ -429,6 +430,7 @@ class PDFQuizParser:
                                     r'^pagina\s+\d+',
                                     r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
                                     r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
+                                    r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d',
                                     r'^tema\s+\d+\s+cotizacion',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', 
