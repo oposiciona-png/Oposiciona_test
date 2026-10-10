@@ -707,6 +707,7 @@ TESTS_DISPONIBLES = {
             "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026": "https://drive.google.com/uc?export=download&id=1zWrxEUexvs5IVFa3WSM96ezQ12-6NegN",
             "EXAMEN OFICIAL 2026 B ROJO": "https://drive.google.com/uc?export=download&id=1fmh5zACnL7mPA29bxdAhhJqqm5cagv5L",
             "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
+            "SABADO 10 OCT 2026": "https://drive.google.com/uc?export=download&id=14rEqmgmwUPjcoAzA3H5EAux7aIWrFgsq",
             "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
         },
         "GENERAL": {
