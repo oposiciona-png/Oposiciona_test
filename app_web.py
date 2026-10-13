@@ -235,6 +235,7 @@ USUARIOS_AUTORIZADOS = {
         "marielipedreira@hotmail.com",
         "vanessagarciajimenez87@gmail.com",
         "luiscacid@gmail.com",
+        "miguelromanrmm@gmail.com",
         "raquelkmacho@gmail.com"
     ],
     "GESTION": [
