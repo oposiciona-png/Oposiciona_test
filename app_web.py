@@ -406,8 +406,8 @@ class PDFQuizParser:
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+años,\s+',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+forma\s+una\s+familia',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+nacid[ao]\s+el\s+\d+',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+camarer[ao]\s+desde',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_nacid[ao]\s+el\s+\d+',
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_camarer[ao]\s+desde',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+trabaja\s+en\s+la\s+empresa'
                                     ]
                                     for pat in implicit_case_patterns:
@@ -423,14 +423,16 @@ class PDFQuizParser:
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
                                 
-                            if not is_header and len(tl_clean_spaces) < 120:
+                            # NO descartar la referencia de la página/tema entre paréntesis
+                            is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+.*?\)$', tl_clean_spaces, re.IGNORECASE))
+                            
+                            if not is_header and not is_page_ref and len(tl_clean_spaces) < 120:
                                 header_patterns = [
                                     r'^oposiciona$',
                                     r'oposicionaes',
-                                    r'^pagina\s+\d+',
+                                    r'^pagina\s+\d+\s+de\s+\d+$', # Solo borra "Página X de Y" sueltos
                                     r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
                                     r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
-                                    r'^tema\s+\d+\s+cotizacion',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                     r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+', 
                                     r'^examen\s+repaso',
@@ -498,7 +500,7 @@ class PDFQuizParser:
                 if current_q and current_q["state"] == "E":
                     if current_q["explanation"]:
                         # Solo añade salto de bloque si terminó en puntuación para EVITAR FRASES ROTAS
-                        if current_q["explanation"].strip()[-1:] in ['.', ':', '?', '!', '"', '”', '»']:
+                        if current_q["explanation"].strip()[-1:] in ['.', ':', '?', '!', '"', '”', '»', ')']:
                             if not current_q["explanation"].endswith("\n\n"):
                                 current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n"
                 continue
@@ -580,7 +582,7 @@ class PDFQuizParser:
                         if current_q is None:
                             is_new_q = True
                             expected_q_num = num + 1
-                        # MARGEN DE TOLERANCIA AMPLIADO A 50 PARA SALTAR HUECOS DE NUMERACIÓN BRUSCOS (EJ: DE 15 A 31)
+                        # MARGEN DE TOLERANCIA AMPLIADO A 50 PARA SALTAR HUECOS DE NUMERACIÓN BRUSCOS
                         elif expected_q_num - 5 <= num <= expected_q_num + 50:
                             is_new_q = True
                             expected_q_num = num + 1
@@ -671,9 +673,13 @@ class PDFQuizParser:
                     is_bullet = bool(re.match(r'^[\s]*[•\*]', text))
                     is_ojo = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA)[\s:]', text, re.IGNORECASE))
                     starts_with_upper_or_num = bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text))
+                    is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+.*?\)$', text, re.IGNORECASE))
+                    
                     is_new_sentence = (last_char in ['.', ':', '?', '!', '"', '”', '»'] and starts_with_upper_or_num)
                     
-                    if current_q["explanation"].strip().endswith(('-', '•', '*', '', '')) and not is_bullet:
+                    if is_page_ref:
+                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text
+                    elif current_q["explanation"].strip().endswith(('-', '•', '*', '', '')) and not is_bullet:
                         current_q["explanation"] += " " + text
                     elif is_bullet or is_ojo or is_new_sentence:
                         current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text
