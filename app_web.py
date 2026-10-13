@@ -796,16 +796,37 @@ def handle_radio_change():
             st.session_state.do_scroll = True
 
 def procesar_preguntas(raw_qs):
+    # Patrones para detectar opciones tipo "Todas son correctas", "Ninguna es correcta", etc.
+    patrones_fijos = [
+        r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
+        r'todas\s+las\s+respuestas?\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
+        r'ninguna\s+es\s+correcta',
+        r'ninguna\s+de\s+las\s+(anteriores|respuestas?)\s+es\s+correcta',
+        r'las\s+opciones?\s+[a-d]\s*y\s*[a-d]\s+son\s+correctas'
+    ]
+    
     for q in raw_qs:
         cleaned_options = []
+        tiene_opcion_fija = False
+        
         for opt in q["options"]:
-            cleaned_options.append(re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip())
+            text_opt = re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip()
+            cleaned_options.append(text_opt)
+            
+            text_lower = text_opt.lower()
+            for pat in patrones_fijos:
+                if re.search(pat, text_lower):
+                    tiene_opcion_fija = True
+                    break
         
         correct_opt_text = None
         if q["answer"] != -1 and q["answer"] < len(cleaned_options):
             correct_opt_text = cleaned_options[q["answer"]]
             
-        random.shuffle(cleaned_options)
+        # Si tiene frase tipo "Todas son incorrectas", NO se baraja para que quede al final
+        if not tiene_opcion_fija:
+            random.shuffle(cleaned_options)
+            
         if correct_opt_text:
             q["answer"] = cleaned_options.index(correct_opt_text)
         
