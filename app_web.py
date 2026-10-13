@@ -550,46 +550,4 @@ class PDFQuizParser:
             
             # BLINDAJE PARA TESTS QUE USAN "Pregunta X." EN LUGAR DE "X."
             m_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', text, re.IGNORECASE) or 
-                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', text, re.IGNORECASE) or
-                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
-                     
-            m_rescue = False
-            
-            if not m_num and not is_option and not is_explanation:
-                text_clean = text.strip()
-                if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
-                        m_rescue = True
-
-            if m_num or m_rescue:
-                is_real_q_candidate = False
-                for j in range(idx + 1, min(idx + 25, len(lines))):
-                    future_text = lines[j]["text"].strip()
-                    if re.match(r'^[a-eA-E][\)\.]\s', future_text):
-                        is_real_q_candidate = True
-                        break
-                    
-                    m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', future_text, re.IGNORECASE) or 
-                                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', future_text, re.IGNORECASE) or
-                                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
-                    
-                    if m_future_num:
-                        break
-                
-                if is_real_q_candidate:
-                    if m_num:
-                        num = int(m_num.group(1))
-                        if current_q is None:
-                            is_new_q = True
-                            expected_q_num = num + 1
-                        # MARGEN DE TOLERANCIA AMPLIADO A 50 PARA SALTAR HUECOS DE NUMERACIÓN BRUSCOS
-                        elif expected_q_num - 5 <= num <= expected_q_num + 50:
-                            is_new_q = True
-                            expected_q_num = num + 1
-                    elif m_rescue:
-                        is_new_q = True
-                        expected_q_num += 1
-
-            if is_new_q:
-                if current_q and current_q["options"]: questions.append(current_q)
-                clean_text = re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\)]+\s*(-*\
+                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', text
