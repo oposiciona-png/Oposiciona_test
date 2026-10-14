@@ -744,6 +744,35 @@ def cambio_categoria_o_especialidad():
     opciones = list(tests_dic[esp][cat].keys())
     st.session_state[key_dinamica] = opciones[0]
 
+def obtener_grupo_tema(nombre_test, categoria):
+    if categoria == "EXAMENES":
+        return "🏆 Exámenes y Simulacros Oficiales"
+    m = re.match(r'^TEMAS?\s+(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
+    if m:
+        bloque_num = m.group(1).upper().strip()
+        nums = re.findall(r'\d+', bloque_num)
+        if len(nums) == 1:
+            return f"📁 TEMA {int(nums[0]):02d}"
+        else:
+            return f"📁 TEMAS {bloque_num}"
+    return "📁 Otros Tests"
+
+def cargar_test_desde_url(nombre_test, url_descarga):
+    st.session_state.test_name = nombre_test
+    with st.spinner(f"Extrayendo '{nombre_test}' de forma segura..."):
+        try:
+            respuesta = requests.get(url_descarga)
+            if respuesta.status_code == 200:
+                raw_qs = PDFQuizParser.parse(respuesta.content)
+                if not raw_qs:
+                    st.error("No se encontraron preguntas válidas en este PDF.")
+                else:
+                    procesar_preguntas(raw_qs)
+            else:
+                st.error("Error de descarga. Comprueba que el archivo en Drive tiene permisos de lectura.")
+        except Exception as e:
+            st.error(f"Error de conexión: {e}")
+
 if 'questions' not in st.session_state:
     st.session_state.questions = []
     st.session_state.current_index = 0
@@ -842,6 +871,8 @@ if not st.session_state.questions:
     </style>
     """, unsafe_allow_html=True)
 
+    es_admin = st.session_state.get('email') in USUARIOS_ADMIN
+
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
         try:
@@ -884,10 +915,120 @@ if not st.session_state.questions:
             key="radio_categoria", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad
         )
         st.session_state.saved_cat = categoria
-        
-        st.markdown("#### 3. Selección de Test")
-        tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
-        
+
+    # --- MODO DE AVANCE (Visible antes de lanzar cualquier test) ---
+    st.markdown("#### 3. Modo de avance")
+    opciones_avance = [
+        "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
+        "**Modo metralleta** (pasa a la pregunta siguiente al pulsar una opción)"
+    ]
+    idx_avance = opciones_avance.index(st.session_state.saved_avance) if "saved_avance" in st.session_state and st.session_state.saved_avance in opciones_avance else 0
+    modo_avance = st.radio("Modo de avance:", opciones_avance, index=idx_avance, label_visibility="collapsed")
+    st.session_state.saved_avance = modo_avance
+    st.session_state.modo_avance = modo_avance
+
+    # --- SELECCIÓN DE TEST (NUEVO DISEÑO EN PRUEBAS SOLO PARA ADMIN vs CLÁSICO PARA ALUMNOS) ---
+    st.markdown("#### 4. Selección de Test")
+    tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
+    tests_reales = {k: v for k, v in tests_categoria.items() if v is not None}
+
+    if es_admin:
+        st.markdown(
+            "<div style='background-color: #eef6ff; border-left: 4px solid #1f77b4; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;'>"
+            "<b style='color: #1f77b4;'>🛠️ MODO PRUEBA ADMIN (Solo visible para ponentes@oposiciona.es):</b><br>"
+            "<span style='font-size: 13px; color: #333;'>Los alumnos siguen viendo el desplegable clásico. Prueba aquí qué diseño te gusta más:</span>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+        modo_vista_admin = st.radio(
+            "Estilo de selector:",
+            [
+                "🗂️ Carpetas por Tema + Filtro (Recomendado)",
+                "🎴 Tarjetas Visuales (2 Columnas)",
+                "📋 Desplegable Clásico (Vista actual de alumnos)"
+            ],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+    else:
+        modo_vista_admin = "📋 Desplegable Clásico (Vista actual de alumnos)"
+
+    # --- OPCIÓN A y B (NUEVAS VISTAS EN PRUEBA PARA EL ADMIN) ---
+    if modo_vista_admin != "📋 Desplegable Clásico (Vista actual de alumnos)":
+        col_f1, col_f2 = st.columns([1.4, 1])
+        with col_f1:
+            filtro_tipo = st.radio(
+                "Filtrar por tipo:",
+                ["📚 Todos", "📖 Temario Base", "🔄 Repasos"],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+        with col_f2:
+            busqueda = st.text_input("🔍 Buscar tema...", placeholder="🔍 Buscar (ej: Tema 08, IP, Cotización...)", label_visibility="collapsed")
+
+        tests_filtrados = {}
+        for nombre, url in tests_reales.items():
+            es_repaso = "repaso" in nombre.lower()
+            if filtro_tipo == "📖 Temario Base" and es_repaso:
+                continue
+            if filtro_tipo == "🔄 Repasos" and not es_repaso:
+                continue
+            if busqueda and busqueda.strip().lower() not in nombre.lower():
+                continue
+            tests_filtrados[nombre] = url
+
+        st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests en {categoria}")
+
+        if not tests_filtrados:
+            st.warning("No hay ningún test que coincida con ese filtro o búsqueda.")
+        elif modo_vista_admin == "🗂️ Carpetas por Tema + Filtro (Recomendado)":
+            grupos = {}
+            for nombre, url in tests_filtrados.items():
+                g = obtener_grupo_tema(nombre, categoria)
+                grupos.setdefault(g, []).append((nombre, url))
+
+            expandir_todo = len(grupos) <= 3 or bool(busqueda.strip())
+            for idx_g, (nombre_grupo, lista_t) in enumerate(grupos.items()):
+                with st.expander(f"{nombre_grupo}  —  ({len(lista_t)} {'test' if len(lista_t)==1 else 'tests'})", expanded=expandir_todo):
+                    for idx_t, (t_nombre, t_url) in enumerate(lista_t):
+                        es_rep = "repaso" in t_nombre.lower()
+                        icono_t = "🔄" if es_rep else ("🏆" if categoria == "EXAMENES" else "📘")
+                        etiqueta = "<span style='background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:6px;'>REPASO</span>" if es_rep else ""
+                        
+                        c_nom, c_btn = st.columns([3.2, 1])
+                        with c_nom:
+                            st.markdown(f"<div style='padding-top:6px; font-size:15px;'>{icono_t} <b>{t_nombre}</b> {etiqueta}</div>", unsafe_allow_html=True)
+                        with c_btn:
+                            if st.button("🚀 Iniciar", key=f"btn_grp_{idx_g}_{idx_t}", use_container_width=True, type="primary"):
+                                cargar_test_desde_url(t_nombre, t_url)
+
+        elif modo_vista_admin == "🎴 Tarjetas Visuales (2 Columnas)":
+            items_lista = list(tests_filtrados.items())
+            for i in range(0, len(items_lista), 2):
+                cols_card = st.columns(2)
+                for j in range(2):
+                    if i + j < len(items_lista):
+                        t_nombre, t_url = items_lista[i + j]
+                        es_rep = "repaso" in t_nombre.lower()
+                        icono_t = "🔄" if es_rep else ("🏆" if categoria == "EXAMENES" else "📘")
+                        borde_color = "#ffc107" if es_rep else "#1f77b4"
+                        fondo_color = "#fffdf5" if es_rep else "#f8fbff"
+                        subtitulo = "Test de Repaso" if es_rep else ("Examen / Simulacro" if categoria == "EXAMENES" else "Temario Oficial")
+                        
+                        with cols_card[j]:
+                            st.markdown(
+                                f"<div style='background-color:{fondo_color}; border:1px solid #e0e0e0; border-left:5px solid {borde_color}; "
+                                f"border-radius:8px; padding:12px; margin-bottom:6px; min-height:85px;'>"
+                                f"<div style='font-size:11px; color:#666; text-transform:uppercase; font-weight:600;'>{icono_t} {subtitulo}</div>"
+                                f"<div style='font-size:14px; font-weight:700; color:#2C3E50; margin-top:4px; line-height:1.25;'>{t_nombre}</div>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+                            if st.button("🚀 Hacer este Test", key=f"btn_card_{i}_{j}", use_container_width=True):
+                                cargar_test_desde_url(t_nombre, t_url)
+
+    # --- OPCIÓN C: DESPLEGABLE CLÁSICO (EL QUE VEN LOS ALUMNOS ACTUALMENTE) ---
+    else:
         if rol == "INVITADO":
             if len(tests_categoria) <= 1:
                 st.warning("⚠️ NO DISPONIBLE PARA INVITADOS")
@@ -900,87 +1041,63 @@ if not st.session_state.questions:
             key=key_dinamica_selectbox, label_visibility="collapsed"
         )
         
-        total_deseadas = 95 if especialidad == "GESTION" else 75
-        
-        with st.container():
-            st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
-            st.markdown("""
-            <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;">
-                <h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
-                <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
-                if rol == "INVITADO":
-                    st.error("🔒 Función no disponible para usuarios invitados. Matricúlate para acceder al Simulacro Global Experto.")
-                else:
-                    st.session_state.test_name = None
-                    with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
-                        preguntas_por_pdf = []
-                        for cat, tests in TESTS_DISPONIBLES[especialidad].items():
-                            for test_name, url in tests.items():
-                                if url is None: continue
-                                try:
-                                    resp = requests.get(url)
-                                    if resp.status_code == 200:
-                                        qs = PDFQuizParser.parse(resp.content)
-                                        if qs:
-                                            for q in qs:
-                                                fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
-                                                q["preamble"] = fuente + "\n\n" + q["preamble"] if q["preamble"] else fuente
-                                            preguntas_por_pdf.append(qs)
-                                except Exception:
-                                    pass
-                        
-                        if not preguntas_por_pdf:
-                            st.error("No se pudo extraer ninguna pregunta.")
-                        else:
-                            num_pdfs = len(preguntas_por_pdf)
-                            cuotas = [0] * num_pdfs
-                            for _ in range(total_deseadas):
-                                disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
-                                if not disponibles: break
-                                min_cuota = min(cuotas[i] for i in disponibles)
-                                candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
-                                cuotas[random.choice(candidatos_min)] += 1
-                                
-                            examen_total = []
-                            for i in range(num_pdfs):
-                                if cuotas[i] > 0:
-                                    examen_total.extend(random.sample(preguntas_por_pdf[i], cuotas[i]))
-                            random.shuffle(examen_total)
-                            procesar_preguntas(examen_total)
+        if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
+            with st.container():
+                st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
+                if st.button("🚀 Cargar Test Seleccionado", use_container_width=True):
+                    cargar_test_desde_url(opcion_seleccionada, tests_categoria[opcion_seleccionada])
 
-        st.markdown("#### 4. Modo de avance")
-        opciones_avance = [
-            "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
-            "**Modo metralleta** (pasa a la pregunta siguiente al pulsar una opción)"
-        ]
-        idx_avance = opciones_avance.index(st.session_state.saved_avance) if "saved_avance" in st.session_state and st.session_state.saved_avance in opciones_avance else 0
-        modo_avance = st.radio("Modo de avance:", opciones_avance, index=idx_avance, label_visibility="collapsed")
-        st.session_state.saved_avance = modo_avance
-        st.session_state.modo_avance = modo_avance
-    
-    if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-        with st.container():
-            st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
-            if st.button("🚀 Cargar Test Seleccionado", use_container_width=True):
-                st.session_state.test_name = opcion_seleccionada
-                url_descarga = tests_categoria[opcion_seleccionada]
-                with st.spinner("Extrayendo archivo de forma segura..."):
-                    try:
-                        respuesta = requests.get(url_descarga)
-                        if respuesta.status_code == 200:
-                            raw_qs = PDFQuizParser.parse(respuesta.content)
-                            if not raw_qs:
-                                st.error("No se encontraron preguntas válidas en este PDF.")
-                            else:
-                                procesar_preguntas(raw_qs)
-                        else:
-                            st.error("Error de descarga. Comprueba que el archivo en Drive tiene permisos de lectura.")
-                    except Exception as e:
-                        st.error(f"Error de conexión: {e}")
+    # --- SIMULACRO GLOBAL EXPERTO ---
+    total_deseadas = 95 if especialidad == "GESTION" else 75
+    with st.container():
+        st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;">
+            <h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
+            <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
+            if rol == "INVITADO":
+                st.error("🔒 Función no disponible para usuarios invitados. Matricúlate para acceder al Simulacro Global Experto.")
+            else:
+                st.session_state.test_name = None
+                with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
+                    preguntas_por_pdf = []
+                    for cat, tests in TESTS_DISPONIBLES[especialidad].items():
+                        for test_name, url in tests.items():
+                            if url is None: continue
+                            try:
+                                resp = requests.get(url)
+                                if resp.status_code == 200:
+                                    qs = PDFQuizParser.parse(resp.content)
+                                    if qs:
+                                        for q in qs:
+                                            fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
+                                            q["preamble"] = fuente + "\n\n" + q["preamble"] if q["preamble"] else fuente
+                                        preguntas_por_pdf.append(qs)
+                            except Exception:
+                                pass
+                    
+                    if not preguntas_por_pdf:
+                        st.error("No se pudo extraer ninguna pregunta.")
+                    else:
+                        num_pdfs = len(preguntas_por_pdf)
+                        cuotas = [0] * num_pdfs
+                        for _ in range(total_deseadas):
+                            disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
+                            if not disponibles: break
+                            min_cuota = min(cuotas[i] for i in disponibles)
+                            candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
+                            cuotas[random.choice(candidatos_min)] += 1
+                            
+                        examen_total = []
+                        for i in range(num_pdfs):
+                            if cuotas[i] > 0:
+                                examen_total.extend(random.sample(preguntas_por_pdf[i], cuotas[i]))
+                        random.shuffle(examen_total)
+                        procesar_preguntas(examen_total)
     
     if rol != "INVITADO":
         with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
@@ -996,7 +1113,7 @@ if not st.session_state.questions:
                         procesar_preguntas(raw_qs)
 
     # --- HERRAMIENTA EXCLUSIVA PARA ADMINISTRADOR (ponentes@oposiciona.es) ---
-    if st.session_state.get('email') in USUARIOS_ADMIN:
+    if es_admin:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
             st.info("Esta herramienta es visible únicamente para el administrador (ponentes@oposiciona.es).")
             if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
