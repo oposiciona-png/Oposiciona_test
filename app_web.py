@@ -214,7 +214,6 @@ USUARIOS_AUTORIZADOS = {
         "isabelmgutierrogil@gmail.com",
         "carmenvl28@gmail.com",
         "leticiagenerelosolana@gmail.com",
-        "invitado@oposiciona.es",
         "cguinaldobravo@gmail.com",
         "alvaro20011996@gmail.com",
         "sion.nuba@gmail.com"
@@ -259,10 +258,15 @@ USUARIOS_AUTORIZADOS = {
         "ireneizquierdo22@gmail.com",
         "mfangela23@gmail.com",
         "manuelsan240902@gmail.com"
+    ],
+    "INVITADO": [
+        "invitado@oposiciona.es",
+        "invitado"
     ]
 }
 
 PASSWORD_ACCESO = "plaza2026" 
+PASSWORD_INVITADO = "oposiciona"
 
 col1, col2, col3 = st.columns([1, 0.8, 1]) 
 with col2:
@@ -287,7 +291,7 @@ if not st.session_state.autenticado:
     st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: -5px;'>🔒 Acceso Restringido</h3>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 14px; margin-bottom: 20px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
     
-    email_input = st.text_input("Correo electrónico asociado a tu cuenta")
+    email_input = st.text_input("Usuario o correo electrónico asociado")
     password_input = st.text_input("Contraseña de acceso", type="password")
     
     if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
@@ -299,7 +303,13 @@ if not st.session_state.autenticado:
                 rol_usuario = rol
                 break
                 
-        if rol_usuario and password_input == PASSWORD_ACCESO:
+        if rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
+            st.session_state.autenticado = True
+            st.session_state.rol = "INVITADO"
+            st.session_state.email = correo_limpio
+            st.session_state.do_scroll = True
+            st.rerun()
+        elif rol_usuario and password_input == PASSWORD_ACCESO:
             st.session_state.autenticado = True
             st.session_state.rol = rol_usuario
             st.session_state.email = correo_limpio
@@ -694,7 +704,7 @@ class PDFQuizParser:
 # 💻 APLICACIÓN WEB INTERFAZ
 # ==============================================================================
 
-TESTS_DISPONIBLES = {
+TESTS_DISPONIBLES_COMPLETO = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
@@ -774,16 +784,48 @@ TESTS_DISPONIBLES = {
     },
 }
 
+TESTS_DISPONIBLES_INVITADO = {
+    "ADMINISTRATIVOS": {
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 04 - TEST Y SUPUESTOS COTIZACION": "https://drive.google.com/uc?export=download&id=1MQX-qeTgsqPliBN9lngLXL62YeSU1NCf",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None
+        },
+        "GENERAL": {
+            "Elige un test de general...": None
+        },
+    },
+    "GESTION": {
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 53 - AFILIACION": "https://drive.google.com/uc?export=download&id=1CUhqhupF7_aiL5vjvP6aZlLjPay9xTOs",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None
+        },
+        "GENERAL": {
+            "Elige un test de general...": None
+        },
+    },
+}
+
+def obtener_tests_segun_rol():
+    if st.session_state.get('rol') == 'INVITADO':
+        return TESTS_DISPONIBLES_INVITADO
+    return TESTS_DISPONIBLES_COMPLETO
+
 def cambio_categoria_o_especialidad():
-    """Reinicia dinámicamente la clave del selector de test para evitar rebotes."""
+    """Reinicia dinámicamente la clave del selector de test para evitar mezclas al cambiar de categoría."""
+    tests_dic = obtener_tests_segun_rol()
     esp = st.session_state.get('radio_especialidad', 'ADMINISTRATIVOS')
     cat = st.session_state.get('radio_categoria', 'ESPECIFICO')
     st.session_state.saved_esp = esp
     st.session_state.saved_cat = cat
     
-    # Asignar la primera opción ("Elige un test...") a la clave dinámica del selectbox
     key_dinamica = f"selector_{esp}_{cat}"
-    opciones = list(TESTS_DISPONIBLES[esp][cat].keys())
+    opciones = list(tests_dic[esp][cat].keys())
     st.session_state[key_dinamica] = opciones[0]
 
 if 'questions' not in st.session_state:
@@ -901,9 +943,10 @@ if not st.session_state.questions:
         st.markdown("<h3 style='color:#2C3E50; margin-top: -10px; margin-bottom: 10px;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
         
         rol = st.session_state.rol
+        TESTS_DISPONIBLES = obtener_tests_segun_rol()
         
         st.markdown("#### 1. Especialidad")
-        if rol == "ACCESO TOTAL":
+        if rol in ["ACCESO TOTAL", "INVITADO"]:
             lista_especialidades = list(TESTS_DISPONIBLES.keys())
             
             idx_esp = 0
@@ -954,7 +997,13 @@ if not st.session_state.questions:
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         
-        # Clave única basada en especialidad y categoría para evitar conflictos de estado
+        # Mensajes de control y avisos según el rol INVITADO
+        if rol == "INVITADO":
+            if len(tests_categoria) <= 1:
+                st.warning("⚠️ NO DISPONIBLE PARA INVITADOS")
+            else:
+                st.info("ℹ️ ÚNICO TEST DISPONIBLE PARA USUARIO INVITADO")
+                
         key_dinamica_selectbox = f"selector_{especialidad}_{categoria}"
         opcion_seleccionada = st.selectbox(
             f"Tests de {categoria}:", 
@@ -976,50 +1025,53 @@ if not st.session_state.questions:
             """, unsafe_allow_html=True)
             
             if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
-                st.session_state.test_name = None
-                with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
-                    preguntas_por_pdf = []
-                    for cat, tests in TESTS_DISPONIBLES[especialidad].items():
-                        for test_name, url in tests.items():
-                            if url is None: continue
-                            try:
-                                resp = requests.get(url)
-                                if resp.status_code == 200:
-                                    qs = PDFQuizParser.parse(resp.content)
-                                    if qs:
-                                        for q in qs:
-                                            fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
-                                            if q["preamble"]:
-                                                q["preamble"] = fuente + "\n\n" + q["preamble"]
-                                            else:
-                                                q["preamble"] = fuente
-                                        preguntas_por_pdf.append(qs)
-                            except Exception as e:
-                                pass
-                    
-                    if not preguntas_por_pdf:
-                        st.error("No se pudo extraer ninguna pregunta.")
-                    else:
-                        num_pdfs = len(preguntas_por_pdf)
-                        cuotas = [0] * num_pdfs
+                if rol == "INVITADO":
+                    st.error("🔒 Función no disponible para usuarios invitados. Matricúlate para acceder al Simulacro Global Experto.")
+                else:
+                    st.session_state.test_name = None
+                    with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
+                        preguntas_por_pdf = []
+                        for cat, tests in TESTS_DISPONIBLES[especialidad].items():
+                            for test_name, url in tests.items():
+                                if url is None: continue
+                                try:
+                                    resp = requests.get(url)
+                                    if resp.status_code == 200:
+                                        qs = PDFQuizParser.parse(resp.content)
+                                        if qs:
+                                            for q in qs:
+                                                fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
+                                                if q["preamble"]:
+                                                    q["preamble"] = fuente + "\n\n" + q["preamble"]
+                                                else:
+                                                    q["preamble"] = fuente
+                                            preguntas_por_pdf.append(qs)
+                                except Exception as e:
+                                    pass
                         
-                        for _ in range(total_deseadas):
-                            disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
-                            if not disponibles:
-                                break
-                            min_cuota = min(cuotas[i] for i in disponibles)
-                            candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
-                            idx = random.choice(candidatos_min)
-                            cuotas[idx] += 1
+                        if not preguntas_por_pdf:
+                            st.error("No se pudo extraer ninguna pregunta.")
+                        else:
+                            num_pdfs = len(preguntas_por_pdf)
+                            cuotas = [0] * num_pdfs
                             
-                        examen_total = []
-                        for i in range(num_pdfs):
-                            if cuotas[i] > 0:
-                                seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
-                                examen_total.extend(seleccionadas)
-                        
-                        random.shuffle(examen_total)
-                        procesar_preguntas(examen_total)
+                            for _ in range(total_deseadas):
+                                disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
+                                if not disponibles:
+                                    break
+                                min_cuota = min(cuotas[i] for i in disponibles)
+                                candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
+                                idx = random.choice(candidatos_min)
+                                cuotas[idx] += 1
+                                
+                            examen_total = []
+                            for i in range(num_pdfs):
+                                if cuotas[i] > 0:
+                                    seleccionadas = random.sample(preguntas_por_pdf[i], cuotas[i])
+                                    examen_total.extend(seleccionadas)
+                            
+                            random.shuffle(examen_total)
+                            procesar_preguntas(examen_total)
 
         st.markdown("#### 4. Modo de avance")
         opciones_avance = [
@@ -1054,17 +1106,19 @@ if not st.session_state.questions:
                     except Exception as e:
                         st.error(f"Error de conexión: {e}")
     
-    with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
-        uploaded_file = st.file_uploader("", type="pdf")
-        if uploaded_file is not None:
-            st.session_state.modo_avance = modo_avance
-            st.session_state.test_name = uploaded_file.name
-            with st.spinner("Procesando documento local..."):
-                raw_qs = PDFQuizParser.parse(uploaded_file.read())
-                if not raw_qs:
-                    st.error("No se encontraron preguntas válidas en este PDF.")
-                else:
-                    procesar_preguntas(raw_qs)
+    # Oculto completamente para usuarios invitados
+    if rol != "INVITADO":
+        with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
+            uploaded_file = st.file_uploader("", type="pdf")
+            if uploaded_file is not None:
+                st.session_state.modo_avance = modo_avance
+                st.session_state.test_name = uploaded_file.name
+                with st.spinner("Procesando documento local..."):
+                    raw_qs = PDFQuizParser.parse(uploaded_file.read())
+                    if not raw_qs:
+                        st.error("No se encontraron preguntas válidas en este PDF.")
+                    else:
+                        procesar_preguntas(raw_qs)
 
 elif not st.session_state.finished:
     
