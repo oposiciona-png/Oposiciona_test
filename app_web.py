@@ -769,10 +769,14 @@ TESTS_DISPONIBLES = {
             "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
             "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
             "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
-            "TEMAS 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
+            "TEMA 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
         },
     },
 }
+
+def reset_test_selection():
+    """Limpia el test seleccionado en la sesión para evitar mezclas al cambiar de categoría."""
+    st.session_state.selector_test = list(TESTS_DISPONIBLES[st.session_state.get('saved_esp', 'ADMINISTRATIVOS')][st.session_state.get('saved_cat', 'ESPECIFICO')].keys())[0]
 
 if 'questions' not in st.session_state:
     st.session_state.questions = []
@@ -898,7 +902,7 @@ if not st.session_state.questions:
             if "saved_esp" in st.session_state and st.session_state.saved_esp in lista_especialidades:
                 idx_esp = lista_especialidades.index(st.session_state.saved_esp)
                 
-            especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, index=idx_esp, horizontal=True, label_visibility="collapsed")
+            especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, index=idx_esp, horizontal=True, label_visibility="collapsed", on_change=reset_test_selection)
             st.session_state.saved_esp = especialidad
             
         elif rol == "ADMTVOS":
@@ -918,12 +922,12 @@ if not st.session_state.questions:
         if "saved_cat" in st.session_state and st.session_state.saved_cat in lista_categorias:
             idx_cat = lista_categorias.index(st.session_state.saved_cat)
             
-        categoria = st.radio("Selecciona el tipo de test:", lista_categorias, index=idx_cat, horizontal=True, label_visibility="collapsed")
+        categoria = st.radio("Selecciona el tipo de test:", lista_categorias, index=idx_cat, horizontal=True, label_visibility="collapsed", on_change=reset_test_selection)
         st.session_state.saved_cat = categoria
         
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
-        opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), label_visibility="collapsed")
+        opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), key="selector_test", label_visibility="collapsed")
         
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
