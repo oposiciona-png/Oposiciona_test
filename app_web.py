@@ -350,14 +350,12 @@ class PDFQuizParser:
                             if not text: continue
                             line_text += text + " "
                             if "bold" in s["font"].lower() or (s["flags"] & 2 != 0):
-                                # Blindaje contra falsos positivos: ignorar negritas en la pura letra de la opción
                                 if re.match(r'^[a-eA-E][\)\.-]?$', text):
                                     continue
                                 is_bold = True
                         
                         line_text = line_text.strip()
                         
-                        # --- CIRUGÍA DE CABECERAS FUSIONADAS ---
                         if line_text:
                             prefixes_to_strip = [
                                 r'^OPOSICIONA\s*',
@@ -385,12 +383,10 @@ class PDFQuizParser:
                             tl_clean = re.sub(r'[^a-z0-9\s]', '', tl_norm).strip()
                             tl_clean_spaces = re.sub(r'\s+', ' ', tl_clean) 
                             
-                            # --- INTERRUPTOR CORTAFUEGOS ---
                             if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                                 stop_reading = True
                                 break
                             
-                            # --- CORTAFUEGOS CASOS PRÁCTICOS ---
                             if (
                                 "supuesto practico" in tl_clean_spaces or 
                                 "supuestos practicos" in tl_clean_spaces or 
@@ -419,7 +415,7 @@ class PDFQuizParser:
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_nacid[ao]\s+el\s+\d+',
                                         r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_camarer[ao]\s+desde',
-                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+trabaja\s+en\s+la\s+empresa'
+                                        r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_trabaja\s+en\s+la\s+empresa'
                                     ]
                                     for pat in implicit_case_patterns:
                                         if re.match(pat, line_text):
@@ -434,14 +430,13 @@ class PDFQuizParser:
                             if line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text):
                                 is_header = True
                                 
-                            # NO descartar la referencia de la página/tema entre paréntesis
                             is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+.*?\)$', tl_clean_spaces, re.IGNORECASE))
                             
                             if not is_header and not is_page_ref and len(tl_clean_spaces) < 120:
                                 header_patterns = [
                                     r'^oposiciona$',
                                     r'oposicionaes',
-                                    r'^pagina\s+\d+\s+de\s+\d+$', # Solo borra "Página X de Y" sueltos
+                                    r'^pagina\s+\d+\s+de\s+\d+$',
                                     r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
                                     r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?',
                                     r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
@@ -460,17 +455,12 @@ class PDFQuizParser:
                             
                             if is_header: continue
                             
-                            # --- BISTURÍ TOTAL (PREGUNTAS, OPCIONES Y EXPLICACIONES PEGADAS) ---
                             line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                            
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
-                            
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                            
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                            
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -482,19 +472,13 @@ class PDFQuizParser:
                                     part = re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part)
                                     lines.append({"text": part, "bold": is_bold})
                                     
-                    # --- MARCADOR DE BLOQUES PARA RESPETAR LOS INTROS ORIGINALES DE LAS EXPLICACIONES ---
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # --- PARCHE QUIRÚRGICO DE EXCEPCIONES DE FORMATO PARA TESTS ESPECÍFICOS ---
         for i in range(len(lines)):
             txt = lines[i]["text"].strip()
-            
-            # Arreglo para el test TEMA 59 y 60 (carencia cortada y viñeta fantasma)
             if txt.endswith("carenci") and i+1 < len(lines) and lines[i+1]["text"].strip().startswith("a) se exige"):
                 lines[i]["text"] = lines[i]["text"].replace("carenci", "carencia)")
                 lines[i+1]["text"] = lines[i+1]["text"].replace("a) se exige", "se exige", 1)
-            
-            # Arreglo para el test TEMA 2A (D. Carlos confundido con opción D)
             if txt.startswith("D. Carlos"):
                 lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
                             
@@ -506,11 +490,9 @@ class PDFQuizParser:
             text = line["text"]
             is_bold = line["bold"]
             
-            # --- PROCESADOR DE BLOQUES ---
             if text == "<NEW_BLOCK>":
                 if current_q and current_q["state"] == "E":
                     if current_q["explanation"]:
-                        # Solo añade salto de bloque si terminó en puntuación para EVITAR FRASES ROTAS
                         if current_q["explanation"].strip()[-1:] in ['.', ':', '?', '!', '"', '”', '»', ')']:
                             if not current_q["explanation"].endswith("\n\n"):
                                 current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n"
@@ -551,21 +533,16 @@ class PDFQuizParser:
                     if current_q and current_q["options"]: 
                         questions.append(current_q)
                     current_q = None 
-                    
                     preamble += text + "\n"
-                        
                     expected_q_num = 1 
                     continue
 
             is_new_q = False
-            
-            # BLINDAJE PARA TESTS QUE USAN "Pregunta X." EN LUGAR DE "X."
             m_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', text, re.IGNORECASE) or 
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', text, re.IGNORECASE) or
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
                      
             m_rescue = False
-            
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
@@ -583,7 +560,6 @@ class PDFQuizParser:
                     m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d)', future_text, re.IGNORECASE) or 
                                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]', future_text, re.IGNORECASE) or
                                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
-                    
                     if m_future_num:
                         break
                 
@@ -593,7 +569,6 @@ class PDFQuizParser:
                         if current_q is None:
                             is_new_q = True
                             expected_q_num = num + 1
-                        # MARGEN DE TOLERANCIA AMPLIADO A 50 PARA SALTAR HUECOS DE NUMERACIÓN BRUSCOS
                         elif expected_q_num - 5 <= num <= expected_q_num + 50:
                             is_new_q = True
                             expected_q_num = num + 1
@@ -652,7 +627,6 @@ class PDFQuizParser:
                 ended_with_connector = bool(re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', last_opt, re.IGNORECASE))
                 
                 is_new_paragraph = len(current_q["options"]) >= 2 and ended_with_punct and bool(re.match(r'^[A-Z0-9¿¡"\'«]', text))
-                
                 is_legal_ref = bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n)\b', text_lower))
                 
                 is_implicit_explanation = False
@@ -716,9 +690,19 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 03 AFILIACION": "https://drive.google.com/uc?export=download&id=1No5X4Yjoj2FwWw_jIGRvMuX27m7SXeIL",
             "TEMA 04 - TEST Y SUPUESTOS COTIZACION": "https://drive.google.com/uc?export=download&id=1MQX-qeTgsqPliBN9lngLXL62YeSU1NCf",
             "Tema 04 COTIZACION": "https://drive.google.com/uc?export=download&id=1V1vabkEbxPi_P8nnXtEjiLfHiYEkURDF",
-            "TEMA 08B IP": "https://drive.google.com/uc?export=download&id=1e_ZHpayJ6jm4mIOvQN4joteVAWIIZyPB",
+            "TEMA 08 IP": "https://drive.google.com/uc?export=download&id=1e_ZHpayJ6jm4mIOvQN4joteVAWIIZyPB",
+            "TEMA 08 REPASO 1 IT E IP ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1MSNhFX96UrMQRFHdMgsg-t5b_TxdjD-l",
+            "TEMA 08 REPASO 2 IT E IP ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1dumhT6HC4Hx_Pt8JdAKIFWQOPx9nA2RA",
             "TEMA 09 NYCM": "https://drive.google.com/uc?export=download&id=17mH-VzUYRycZcsujzG2zJ77Dpm10DfEJ",
+            "TEMA 09 REPASO 1 NYCM ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1GS2QAO6LF8AssgnEEGlEBcLnuZCb5i70",
+            "TEMA 09 REPASO 2 NYCM ESPECÍFICO": "https://drive.google.com/uc?export=download&id=16AgKFfosMJIx0mmrgBv3Rad5tNkKNSH5",
             "TEMA 10 JUBILACION": "https://drive.google.com/uc?export=download&id=1LQSV7oG52ZNAmwR_Z46iQxZUN7VMtfEj",
+            "TEMA 10 REPASO 1 JUBILACIÓN ESPECÍFICO": "https://drive.google.com/uc?export=download&id=19EE33UzOmjga9OARfG_Ui_LEpHb4BtYl",
+            "TEMA 10 REPASO 2 JUBILACIÓN ESPECÏFICO": "https://drive.google.com/uc?export=download&id=1aXOPe7-idPVRRRGEjRmMryYMFzXSDbkZ",
+            "TEMA 11 REPASO 1 MUERTE Y SUPERVIVENCIA ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1_y2UgAkXvCZzmHNDLrCWjqiwUtE2PvdQ",
+            "TEMA 11 REPASO 2 MUERTE Y SUPERVIVENCIA ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1f5RPEipUNgF8HvYMGOChC0Hbw9tDFN7p",
+            "TEMA 12 IREPASO 1 MV ESPECÍFICO": "https://drive.google.com/uc?export=download&id=18eb8lGYuHF2zvI4hU9YN0X91SFBhlKGW",
+            "TEMA 12 REPASO 2 IMV ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1jWPfnprPvL9uyCrfw4k3fkH816wEqE_C",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
@@ -731,12 +715,23 @@ TESTS_DISPONIBLES_COMPLETO = {
         "GENERAL": {
             "Elige un test de general...": None,
             "TEMA 01 a 03 CONSTITUCIONAL": "https://drive.google.com/uc?export=download&id=14z3ZzvLLVZQ0XiUKx4qmiyneMoldZIB2",
+            "TEMA 01 a 03 REPASO CONSTITUCION GENERAL": "https://drive.google.com/uc?export=download&id=153p-VAMdsxaXu47tqkkNOIjhO9mWhxVX",
             "TEMA 04 LA JEFATURA DEL ESTADO": "https://drive.google.com/uc?export=download&id=1y-u-_wTqfIyB_fn0he0cvyKAPLjsM06A",
+            "TEMA 04 REPASO LA CORONA GENERAL": "https://drive.google.com/uc?export=download&id=1yeSHcMWRBtuotYSqUXUMgLQ-9KLXKbmG",
+            "TEMA 05 REPASO CORTES GENERALES GENERAL": "https://drive.google.com/uc?export=download&id=1gGNUiRh7Ia1rS-sCEr8B1et94OXOOc2k",
             "TEMA 05 y 06 PODER LEGISLATIVO Y JUDICIAL": "https://drive.google.com/uc?export=download&id=1Hog53fH7CsG1FCk6CC0X4m4tIXZ2tPYd",
+            "TEMA 06 REPASO PODER JUDICIAL GENERAL": "https://drive.google.com/uc?export=download&id=1SQoWQlO1Cnoc_WpP0VTmUlPSumT5FgkG",
             "TEMA 07 PODER EJECUTIVO": "https://drive.google.com/uc?export=download&id=1BXKLo950u1GSODuag-lds2SCbBTYF2UD",
+            "TEMA 07 REPASO PODER EJECUTIVO GENERAL": "https://drive.google.com/uc?export=download&id=1v9ms7CaSFNyZAPM2qQoC_3_TO9gQ8wC7",
             "Tema 08 ADM GRAL ESTADO": "https://drive.google.com/uc?export=download&id=1sjO0bi2IwPJpPcESpQkWvqROPAHJ12L6",
+            "TEMA 08 REPASO AGE GENRAL": "https://drive.google.com/uc?export=download&id=1PnGmAEZwJkVOwfzG4YMgs3LRNZa19KIz",
             "TEMA 09 CCAA Y MUNICIPIOS general": "https://drive.google.com/uc?export=download&id=1zk4mZRrMPIb8AnOD_8pFAPL-utUeFGKZ",
+            "TEMA 09 REPASO CCAA GENERAL": "https://drive.google.com/uc?export=download&id=198XcxyyIPDFTJe22rsqYkXmfE1CTsjDH",
             "TEMA 10 INSTITUCIONES DE LA UE general": "https://drive.google.com/uc?export=download&id=1IGcXDNtMwW7MuhPon95EycFwOHrVQbW7",
+            "TEMA 10 REPASO INSTITUCIONES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1Hw1l1-2_zsGfX4tbjUuw1DDokmE682e9",
+            "TEMA 11 REPASO FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1YLmKCK14-W0TfRwndlhUSkeWoOMtWxY-",
+            "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
+            "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
         },
     },
     "GESTION": {
@@ -779,7 +774,7 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
             "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
             "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
-            "TEMAS 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
+            "TEMA 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
         },
     },
 }
@@ -844,7 +839,6 @@ def save_answer(selected):
         stat['attempts'] += 1
 
 def handle_radio_change():
-    """Función que se activa al pinchar una opción de respuesta."""
     idx = st.session_state.current_index
     selected = st.session_state.get(f"radio_{idx}")
     
@@ -860,7 +854,6 @@ def handle_radio_change():
             st.session_state.do_scroll = True
 
 def procesar_preguntas(raw_qs):
-    # Patrones para detectar opciones tipo "Todas son correctas", "Ninguna es correcta", etc.
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
         r'todas\s+las\s+respuestas?\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -887,7 +880,6 @@ def procesar_preguntas(raw_qs):
         if q["answer"] != -1 and q["answer"] < len(cleaned_options):
             correct_opt_text = cleaned_options[q["answer"]]
             
-        # Si tiene frase tipo "Todas son incorrectas", NO se baraja para que quede al final
         if not tiene_opcion_fija:
             random.shuffle(cleaned_options)
             
@@ -997,7 +989,6 @@ if not st.session_state.questions:
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
         
-        # Mensajes de control y avisos según el rol INVITADO
         if rol == "INVITADO":
             if len(tests_categoria) <= 1:
                 st.warning("⚠️ NO DISPONIBLE PARA INVITADOS")
@@ -1106,7 +1097,6 @@ if not st.session_state.questions:
                     except Exception as e:
                         st.error(f"Error de conexión: {e}")
     
-    # Oculto completamente para usuarios invitados
     if rol != "INVITADO":
         with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
             uploaded_file = st.file_uploader("", type="pdf")
@@ -1220,8 +1210,6 @@ elif not st.session_state.finished:
         )
 
 else:
-    # --- RESULTADOS FINALES ---
-    
     st.markdown("""
     <style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; }
@@ -1229,7 +1217,6 @@ else:
     </style>
     """, unsafe_allow_html=True)
     
-    # GATILLO DE SCROLL ESPECÍFICO PARA LA PANTALLA FINAL
     components.html(
         """
         <script>
