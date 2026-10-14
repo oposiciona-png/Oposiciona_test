@@ -769,14 +769,22 @@ TESTS_DISPONIBLES = {
             "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
             "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
             "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
-            "TEMA 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
+            "TEMAS 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
         },
     },
 }
 
-def reset_test_selection():
-    """Limpia el test seleccionado en la sesión para evitar mezclas al cambiar de categoría."""
-    st.session_state.selector_test = list(TESTS_DISPONIBLES[st.session_state.get('saved_esp', 'ADMINISTRATIVOS')][st.session_state.get('saved_cat', 'ESPECIFICO')].keys())[0]
+def cambio_categoria_o_especialidad():
+    """Reinicia dinámicamente la clave del selector de test para evitar rebotes."""
+    esp = st.session_state.get('radio_especialidad', 'ADMINISTRATIVOS')
+    cat = st.session_state.get('radio_categoria', 'ESPECIFICO')
+    st.session_state.saved_esp = esp
+    st.session_state.saved_cat = cat
+    
+    # Asignar la primera opción ("Elige un test...") a la clave dinámica del selectbox
+    key_dinamica = f"selector_{esp}_{cat}"
+    opciones = list(TESTS_DISPONIBLES[esp][cat].keys())
+    st.session_state[key_dinamica] = opciones[0]
 
 if 'questions' not in st.session_state:
     st.session_state.questions = []
@@ -902,14 +910,24 @@ if not st.session_state.questions:
             if "saved_esp" in st.session_state and st.session_state.saved_esp in lista_especialidades:
                 idx_esp = lista_especialidades.index(st.session_state.saved_esp)
                 
-            especialidad = st.radio("Selecciona tu especialidad:", lista_especialidades, index=idx_esp, horizontal=True, label_visibility="collapsed", on_change=reset_test_selection)
+            especialidad = st.radio(
+                "Selecciona tu especialidad:", 
+                lista_especialidades, 
+                index=idx_esp, 
+                horizontal=True, 
+                key="radio_especialidad",
+                label_visibility="collapsed", 
+                on_change=cambio_categoria_o_especialidad
+            )
             st.session_state.saved_esp = especialidad
             
         elif rol == "ADMTVOS":
             especialidad = "ADMINISTRATIVOS"
+            st.session_state.saved_esp = especialidad
             st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
         elif rol == "GESTION":
             especialidad = "GESTION"
+            st.session_state.saved_esp = especialidad
             st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
         else:
             st.error("Error en los permisos de usuario.")
@@ -922,12 +940,28 @@ if not st.session_state.questions:
         if "saved_cat" in st.session_state and st.session_state.saved_cat in lista_categorias:
             idx_cat = lista_categorias.index(st.session_state.saved_cat)
             
-        categoria = st.radio("Selecciona el tipo de test:", lista_categorias, index=idx_cat, horizontal=True, label_visibility="collapsed", on_change=reset_test_selection)
+        categoria = st.radio(
+            "Selecciona el tipo de test:", 
+            lista_categorias, 
+            index=idx_cat, 
+            horizontal=True, 
+            key="radio_categoria",
+            label_visibility="collapsed", 
+            on_change=cambio_categoria_o_especialidad
+        )
         st.session_state.saved_cat = categoria
         
         st.markdown("#### 3. Selección de Test")
         tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
-        opcion_seleccionada = st.selectbox(f"Tests de {categoria}:", list(tests_categoria.keys()), key="selector_test", label_visibility="collapsed")
+        
+        # Clave única basada en especialidad y categoría para evitar conflictos de estado
+        key_dinamica_selectbox = f"selector_{especialidad}_{categoria}"
+        opcion_seleccionada = st.selectbox(
+            f"Tests de {categoria}:", 
+            list(tests_categoria.keys()), 
+            key=key_dinamica_selectbox, 
+            label_visibility="collapsed"
+        )
         
         total_deseadas = 95 if especialidad == "GESTION" else 75
         
