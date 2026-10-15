@@ -738,12 +738,23 @@ def obtener_tests_segun_rol():
         return TESTS_DISPONIBLES_INVITADO
     return TESTS_DISPONIBLES_COMPLETO
 
+def limpiar_todas_las_busquedas():
+    """Vacía cualquier texto residual en las cajas de búsqueda."""
+    for k in list(st.session_state.keys()):
+        if k.startswith("busqueda_"):
+            st.session_state[k] = ""
+
+def limpiar_busqueda_al_filtrar(key_busqueda):
+    """Al pulsar sobre TODOS, TEMARIO BASE o REPASOS borra automáticamente la búsqueda activa."""
+    st.session_state[key_busqueda] = ""
+
 def cambio_categoria_o_especialidad():
     esp = st.session_state.get('radio_especialidad', 'ADMINISTRATIVOS')
     cat = st.session_state.get('radio_categoria', 'ESPECIFICO')
     st.session_state.saved_esp = esp
     st.session_state.saved_cat = cat
     st.session_state.mostrar_opciones_simulacro = False
+    limpiar_todas_las_busquedas()
 
 def normalizar_para_busqueda(texto):
     """Pasa a minúsculas, elimina tildes y quita ceros a la izquierda en números (ej: 02 -> 2)."""
@@ -1113,7 +1124,7 @@ if not st.session_state.questions:
     st.session_state.saved_avance = modo_avance
     st.session_state.modo_avance = modo_avance
 
-    # --- SELECCIÓN DE TEST (CARPETAS + FILTRO INTELIGENTE PARA TODOS LOS USUARIOS) ---
+    # --- SELECCIÓN DE TEST (CARPETAS + FILTRO INTELIGENTE CON AUTO-REFRESCO DE BÚSQUEDA) ---
     st.markdown("#### 4. Selección de Test")
     tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
     tests_reales = {k: v for k, v in tests_categoria.items() if v is not None}
@@ -1129,31 +1140,62 @@ if not st.session_state.questions:
         mostrar_filtro_tipo = (categoria != "EXAMENES") and hay_repasos
         mostrar_buscador = len(tests_reales) > 1
 
+        key_busq = f"busqueda_{especialidad}_{categoria}"
+        key_filt = f"filtro_tipo_{especialidad}_{categoria}"
+        if key_busq not in st.session_state:
+            st.session_state[key_busq] = ""
+
         if mostrar_filtro_tipo and mostrar_buscador:
-            col_f1, col_f2 = st.columns([1.4, 1])
+            col_f1, col_f2 = st.columns([1.35, 1.05])
             with col_f1:
                 filtro_tipo = st.radio(
                     "Filtrar por tipo:",
                     ["📚 Todos", "📖 Temario Base", "🔄 Repasos"],
                     horizontal=True,
                     label_visibility="collapsed",
-                    key=f"filtro_tipo_{especialidad}_{categoria}"
+                    key=key_filt,
+                    on_change=limpiar_busqueda_al_filtrar,
+                    args=(key_busq,)
                 )
             with col_f2:
+                if st.session_state.get(key_busq, "").strip():
+                    c_in, c_clr = st.columns([5, 1])
+                    with c_in:
+                        busqueda = st.text_input(
+                            "🔍 Buscar tema...", 
+                            placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
+                            label_visibility="collapsed",
+                            key=key_busq
+                        )
+                    with c_clr:
+                        st.button("✖", key=f"clr_{key_busq}", help="Borrar búsqueda", on_click=limpiar_busqueda_al_filtrar, args=(key_busq,), use_container_width=True)
+                else:
+                    busqueda = st.text_input(
+                        "🔍 Buscar tema...", 
+                        placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
+                        label_visibility="collapsed",
+                        key=key_busq
+                    )
+        elif mostrar_buscador:
+            filtro_tipo = "📚 Todos"
+            if st.session_state.get(key_busq, "").strip():
+                c_in, c_clr = st.columns([7, 1])
+                with c_in:
+                    busqueda = st.text_input(
+                        "🔍 Buscar tema...", 
+                        placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
+                        label_visibility="collapsed",
+                        key=key_busq
+                    )
+                with c_clr:
+                    st.button("✖", key=f"clr_{key_busq}", help="Borrar búsqueda", on_click=limpiar_busqueda_al_filtrar, args=(key_busq,), use_container_width=True)
+            else:
                 busqueda = st.text_input(
                     "🔍 Buscar tema...", 
                     placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
                     label_visibility="collapsed",
-                    key=f"busqueda_{especialidad}_{categoria}"
+                    key=key_busq
                 )
-        elif mostrar_buscador:
-            filtro_tipo = "📚 Todos"
-            busqueda = st.text_input(
-                "🔍 Buscar tema...", 
-                placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
-                label_visibility="collapsed",
-                key=f"busqueda_{especialidad}_{categoria}"
-            )
         else:
             filtro_tipo = "📚 Todos"
             busqueda = ""
