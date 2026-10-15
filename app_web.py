@@ -735,21 +735,15 @@ def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_COMPLETO
 
 def cambio_categoria_o_especialidad():
-    tests_dic = obtener_tests_segun_rol()
     esp = st.session_state.get('radio_especialidad', 'ADMINISTRATIVOS')
     cat = st.session_state.get('radio_categoria', 'ESPECIFICO')
     st.session_state.saved_esp = esp
     st.session_state.saved_cat = cat
-    
-    key_dinamica = f"selector_{esp}_{cat}"
-    opciones = list(tests_dic[esp][cat].keys())
-    st.session_state[key_dinamica] = opciones[0]
 
 def normalizar_para_busqueda(texto):
     """Pasa a minúsculas, elimina tildes y quita ceros a la izquierda en números (ej: 02 -> 2)."""
     texto = texto.lower().strip()
     texto = ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
-    # Quita ceros a la izquierda de cualquier número (02 -> 2, 02a -> 2a)
     texto = re.sub(r'\b0+(\d+)', r'\1', texto)
     texto = re.sub(r'\s+', ' ', texto)
     return texto
@@ -761,8 +755,6 @@ def coincide_busqueda(nombre_test, consulta):
     n_norm = normalizar_para_busqueda(nombre_test)
     q_norm = normalizar_para_busqueda(consulta)
     
-    # Si la consulta normalizada termina en un número (ej: "tema 1" o "1"),
-    # evitamos que coincida con números mayores como "tema 10", "tema 11", etc.
     if re.search(r'\d+$', q_norm):
         patron = re.escape(q_norm) + r'(?!\d)'
         return bool(re.search(patron, n_norm))
@@ -951,17 +943,24 @@ if not st.session_state.questions:
     st.session_state.saved_avance = modo_avance
     st.session_state.modo_avance = modo_avance
 
-    # --- SELECCIÓN DE TEST (CARPETAS + FILTRO PARA ADMIN vs CLÁSICO PARA ALUMNOS) ---
+    # --- SELECCIÓN DE TEST (CARPETAS + FILTRO INTELIGENTE PARA TODOS LOS USUARIOS) ---
     st.markdown("#### 4. Selección de Test")
     tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
     tests_reales = {k: v for k, v in tests_categoria.items() if v is not None}
 
-    if es_admin:
+    if rol == "INVITADO":
+        if not tests_reales:
+            st.warning("⚠️ CATEGORÍA NO DISPONIBLE PARA USUARIOS INVITADOS")
+        else:
+            st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
+
+    if tests_reales:
         # Comprobamos si no estamos en EXAMENES y si existe al menos un test de REPASO en esta categoría
         hay_repasos = any("repaso" in nombre.lower() for nombre in tests_reales.keys())
         mostrar_filtro_tipo = (categoria != "EXAMENES") and hay_repasos
+        mostrar_buscador = len(tests_reales) > 1
 
-        if mostrar_filtro_tipo:
+        if mostrar_filtro_tipo and mostrar_buscador:
             col_f1, col_f2 = st.columns([1.4, 1])
             with col_f1:
                 filtro_tipo = st.radio(
@@ -978,7 +977,7 @@ if not st.session_state.questions:
                     label_visibility="collapsed",
                     key=f"busqueda_{especialidad}_{categoria}"
                 )
-        else:
+        elif mostrar_buscador:
             filtro_tipo = "📚 Todos"
             busqueda = st.text_input(
                 "🔍 Buscar tema...", 
@@ -986,6 +985,9 @@ if not st.session_state.questions:
                 label_visibility="collapsed",
                 key=f"busqueda_{especialidad}_{categoria}"
             )
+        else:
+            filtro_tipo = "📚 Todos"
+            busqueda = ""
 
         hay_busqueda_activa = bool(busqueda and busqueda.strip())
 
@@ -1003,10 +1005,11 @@ if not st.session_state.questions:
                     continue
                 tests_filtrados[nombre] = url
 
-        if hay_busqueda_activa:
-            st.caption(f"🔎 Búsqueda en **Todos los tests de {categoria}**: encontrados **{len(tests_filtrados)}** de **{len(tests_reales)}**")
-        else:
-            st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests disponibles en {categoria}")
+        if mostrar_buscador:
+            if hay_busqueda_activa:
+                st.caption(f"🔎 Búsqueda en **Todos los tests de {categoria}**: encontrados **{len(tests_filtrados)}** de **{len(tests_reales)}**")
+            else:
+                st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests disponibles en {categoria}")
 
         if not tests_filtrados:
             st.warning("No hay ningún test que coincida con esa búsqueda.")
@@ -1030,26 +1033,6 @@ if not st.session_state.questions:
                         with c_btn:
                             if st.button("🚀 Iniciar", key=f"btn_grp_{especialidad}_{categoria}_{idx_g}_{idx_t}", use_container_width=True, type="primary"):
                                 cargar_test_desde_url(t_nombre, t_url)
-
-    # --- VISTA CLÁSICA (LA QUE VEN LOS ALUMNOS POR AHORA) ---
-    else:
-        if rol == "INVITADO":
-            if len(tests_categoria) <= 1:
-                st.warning("⚠️ NO DISPONIBLE PARA INVITADOS")
-            else:
-                st.info("ℹ️ ÚNICO TEST DISPONIBLE PARA USUARIO INVITADO")
-                
-        key_dinamica_selectbox = f"selector_{especialidad}_{categoria}"
-        opcion_seleccionada = st.selectbox(
-            f"Tests de {categoria}:", list(tests_categoria.keys()), 
-            key=key_dinamica_selectbox, label_visibility="collapsed"
-        )
-        
-        if opcion_seleccionada and not opcion_seleccionada.startswith("Elige"):
-            with st.container():
-                st.markdown('<div class="cargar-test-container"></div>', unsafe_allow_html=True)
-                if st.button("🚀 Cargar Test Seleccionado", use_container_width=True):
-                    cargar_test_desde_url(opcion_seleccionada, tests_categoria[opcion_seleccionada])
 
     # --- SIMULACRO GLOBAL EXPERTO ---
     total_deseadas = 95 if especialidad == "GESTION" else 75
