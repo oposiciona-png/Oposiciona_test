@@ -789,6 +789,146 @@ def cargar_test_desde_url(nombre_test, url_descarga):
         except Exception as e:
             st.error(f"Error de conexión: {e}")
 
+def asignar_cuotas_aleatorias_variables(num_pdfs, total_preguntas, limites_por_pdf=None):
+    """
+    Motor de aleatorización pura con pesos variables:
+    Permite que en cada generación algunos PDFs tengan 0 preguntas, otros 1, otros 2, 3 o más,
+    garantizando que nunca se repita el mismo patrón de temas aunque existan cientos de PDFs.
+    """
+    if num_pdfs == 0 or total_preguntas <= 0:
+        return []
+    
+    # 1. Asignamos un peso aleatorio a cada PDF en este sorteo:
+    # Un 25% de probabilidad de peso 0 (descansa inicialmente), y el resto pesos entre 1 y 4
+    pesos = [random.choice([0, 1, 1, 2, 2, 3, 4]) for _ in range(num_pdfs)]
+    if sum(pesos) == 0:
+        pesos = [random.randint(1, 3) for _ in range(num_pdfs)]
+        
+    cuotas = [0] * num_pdfs
+    for _ in range(total_preguntas):
+        if limites_por_pdf is not None:
+            disponibles = [i for i in range(num_pdfs) if cuotas[i] < limites_por_pdf[i]]
+        else:
+            disponibles = list(range(num_pdfs))
+            
+        if not disponibles:
+            break
+            
+        pesos_disp = [pesos[i] for i in disponibles]
+        # Si los disponibles tenían peso 0 pero aún faltan preguntas por cubrir, les damos peso dinámico
+        if sum(pesos_disp) == 0:
+            pesos_disp = [1 for _ in disponibles]
+            
+        elegido = random.choices(disponibles, weights=pesos_disp, k=1)[0]
+        cuotas[elegido] += 1
+        
+    return cuotas
+
+def generar_simulacro_aleatorio(especialidad, ambito_seleccionado, total_deseadas, diccionario_tests):
+    """
+    Construye el examen seleccionando primero qué PDFs entran según el ámbito (TODO, GENERAL, ESPECIFICO)
+    y aplicando una distribución aleatoria ponderada (con 0, 1, 2... preguntas por PDF).
+    """
+    if ambito_seleccionado == "GENERAL":
+        categorias_objetivo = ["GENERAL"]
+    elif ambito_seleccionado == "ESPECIFICO":
+        categorias_objetivo = ["ESPECIFICO"]
+    else:
+        categorias_objetivo = list(diccionario_tests[especialidad].keys())
+
+    # Recopilamos todos los PDFs candidatos y los barajamos al azar antes de empezar
+    pdfs_candidatos = []
+    for cat in categorias_objetivo:
+        if cat in diccionario_tests[especialidad]:
+            for test_name, url in diccionario_tests[especialidad][cat].items():
+                if url is not None:
+                    pdfs_candidatos.append((cat, test_name, url))
+
+    if not pdfs_candidatos:
+        return []
+
+    random.shuffle(pdfs_candidatos)
+    num_total_pdfs = len(pdfs_candidatos)
+
+    # Planificamos cuotas iniciales al azar (algunos PDFs tendrán 0, otros 1, otros 2, 3...)
+    cuotas_iniciales = asignar_cuotas_aleatorias_variables(num_total_pdfs, total_deseadas)
+
+    # Descargamos primero los PDFs a los que les ha tocado > 0 preguntas (ahorra tiempo si hay muchos PDFs)
+    cache_preguntas = {}
+    barra = st.progress(0, text="🎲 Sorteando temas y extrayendo preguntas al azar...")
+    indices_a_descargar = [i for i, c in enumerate(cuotas_iniciales) if c > 0]
+    
+    for paso, idx_pdf in enumerate(indices_a_descargar):
+        cat, test_name, url = pdfs_candidatos[idx_pdf]
+        barra.progress((paso + 1) / max(1, len(indices_a_descargar)), text=f"🎲 Extrayendo al azar: {test_name}...")
+        try:
+            resp = requests.get(url)
+            if resp.status_code == 200:
+                qs = PDFQuizParser.parse(resp.content)
+                if qs:
+                    for q in qs:
+                        fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
+                        q["preamble"] = fuente + "\n\n" + q["preamble"] if q["preamble"] else fuente
+                    cache_preguntas[idx_pdf] = qs
+        except Exception:
+            pass
+
+    # Si algún PDF descargado tenía menos preguntas de las que le asignó el sorteo (o falló),
+    # completamos las preguntas restantes tirando de los demás PDFs disponibles al azar
+    preguntas_disponibles_actuales = sum(len(qs) for qs in cache_preguntas.values())
+    indices_reserva = [i for i in range(num_total_pdfs) if i not in cache_preguntas]
+    random.shuffle(indices_reserva)
+
+    for idx_res in indices_reserva:
+        if preguntas_disponibles_actuales >= total_deseadas:
+            break
+        cat, test_name, url = pdfs_candidatos[idx_res]
+        try:
+            resp = requests.get(url)
+            if resp.status_code == 200:
+                qs = PDFQuizParser.parse(resp.content)
+                if qs:
+                    for q in qs:
+                        fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
+                        q["preamble"] = fuente + "\n\n" + q["preamble"] if q["preamble"] else fuente
+                    cache_preguntas[idx_res] = qs
+                    preguntas_disponibles_actuales += len(qs)
+        except Exception:
+            pass
+
+    barra.empty()
+
+    if not cache_preguntas:
+        return []
+
+    # Ajustamos las cuotas finales respetando el límite real de preguntas de cada PDF cargado
+    claves_cargadas = list(cache_preguntas.keys())
+    limites_reales = [len(cache_preguntas[k]) for k in claves_cargadas]
+    cuotas_finales = [0] * len(claves_cargadas)
+
+    for pos, k_idx in enumerate(claves_cargadas):
+        cuotas_finales[pos] = min(cuotas_iniciales[k_idx], limites_reales[pos])
+
+    faltantes = min(total_deseadas, sum(limites_reales)) - sum(cuotas_finales)
+    if faltantes > 0:
+        pesos_extra = [random.randint(1, 3) for _ in claves_cargadas]
+        for _ in range(faltantes):
+            disp = [i for i in range(len(claves_cargadas)) if cuotas_finales[i] < limites_reales[i]]
+            if not disp:
+                break
+            p_disp = [pesos_extra[i] for i in disp]
+            elegido = random.choices(disp, weights=p_disp, k=1)[0]
+            cuotas_finales[elegido] += 1
+
+    examen_total = []
+    for pos, k_idx in enumerate(claves_cargadas):
+        c = cuotas_finales[pos]
+        if c > 0:
+            examen_total.extend(random.sample(cache_preguntas[k_idx], c))
+
+    random.shuffle(examen_total)
+    return examen_total
+
 if 'questions' not in st.session_state:
     st.session_state.questions = []
     st.session_state.current_index = 0
@@ -955,7 +1095,6 @@ if not st.session_state.questions:
             st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
 
     if tests_reales:
-        # Comprobamos si no estamos en EXAMENES y si existe al menos un test de REPASO en esta categoría
         hay_repasos = any("repaso" in nombre.lower() for nombre in tests_reales.keys())
         mostrar_filtro_tipo = (categoria != "EXAMENES") and hay_repasos
         mostrar_buscador = len(tests_reales) > 1
@@ -993,7 +1132,6 @@ if not st.session_state.questions:
 
         tests_filtrados = {}
         for nombre, url in tests_reales.items():
-            # Si el usuario está buscando algo en el cuadro de texto, buscamos en TODOS ignorando el filtro de tipo
             if hay_busqueda_activa:
                 if coincide_busqueda(nombre, busqueda):
                     tests_filtrados[nombre] = url
@@ -1041,49 +1179,50 @@ if not st.session_state.questions:
         st.markdown("""
         <div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;">
             <h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4>
-            <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio y equilibrado cruzando preguntas de <b>todos los bloques y temas</b> disponibles en esta especialidad.</p>
+            <p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio cruzando preguntas de distintos temas al azar en esta especialidad.</p>
         </div>
         """, unsafe_allow_html=True)
+
+        # Selector de ámbito de simulacro (En pruebas solo para el Administrador ponentes@oposiciona.es)
+        if es_admin:
+            st.markdown("<p style='font-size: 14px; font-weight: 600; color: #856404; margin-bottom: 4px;'>🛠️ [Modo Admin] Elige sobre qué bloques quieres generar el Simulacro:</p>", unsafe_allow_html=True)
+            opcion_ambito_sim = st.radio(
+                "Ámbito del simulacro:",
+                [
+                    "🌐 TODO (Todos los PDFs de la especialidad)",
+                    "📘 GENERAL (Solo temas de General)",
+                    "🎯 ESPECÍFICO (Solo temas de Específico)"
+                ],
+                horizontal=True,
+                label_visibility="collapsed",
+                key=f"ambito_sim_{especialidad}"
+            )
+            if "GENERAL" in opcion_ambito_sim:
+                ambito_elegido = "GENERAL"
+            elif "ESPECÍFICO" in opcion_ambito_sim:
+                ambito_elegido = "ESPECIFICO"
+            else:
+                ambito_elegido = "TODO"
+        else:
+            ambito_elegido = "TODO"
         
-        if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
+        etiqueta_boton_sim = f"🚨 INICIAR SIMULACRO {ambito_elegido} ({total_deseadas} PREGUNTAS) 🚨" if es_admin else f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨"
+
+        if st.button(etiqueta_boton_sim, use_container_width=True, type="primary"):
             if rol == "INVITADO":
                 st.error("🔒 Función no disponible para usuarios invitados. Matricúlate para acceder al Simulacro Global Experto.")
             else:
-                st.session_state.test_name = None
-                with st.spinner(f"Extrayendo y mezclando preguntas de TODOS los PDFs de {especialidad} (puede tardar un minuto)..."):
-                    preguntas_por_pdf = []
-                    for cat, tests in TESTS_DISPONIBLES[especialidad].items():
-                        for test_name, url in tests.items():
-                            if url is None: continue
-                            try:
-                                resp = requests.get(url)
-                                if resp.status_code == 200:
-                                    qs = PDFQuizParser.parse(resp.content)
-                                    if qs:
-                                        for q in qs:
-                                            fuente = f"🏷️ **Fuente: {cat} - {test_name}**"
-                                            q["preamble"] = fuente + "\n\n" + q["preamble"] if q["preamble"] else fuente
-                                        preguntas_por_pdf.append(qs)
-                            except Exception:
-                                pass
-                    
-                    if not preguntas_por_pdf:
-                        st.error("No se pudo extraer ninguna pregunta.")
+                st.session_state.test_name = f"SIMULACRO ALEATORIO ({especialidad} - {ambito_elegido})"
+                with st.spinner(f"Generando simulacro de {ambito_elegido} con distribución aleatoria de temas..."):
+                    examen_total = generar_simulacro_aleatorio(
+                        especialidad=especialidad,
+                        ambito_seleccionado=ambito_elegido,
+                        total_deseadas=total_deseadas,
+                        diccionario_tests=TESTS_DISPONIBLES
+                    )
+                    if not examen_total:
+                        st.error("No se pudo extraer ninguna pregunta para el simulacro.")
                     else:
-                        num_pdfs = len(preguntas_por_pdf)
-                        cuotas = [0] * num_pdfs
-                        for _ in range(total_deseadas):
-                            disponibles = [i for i in range(num_pdfs) if len(preguntas_por_pdf[i]) > cuotas[i]]
-                            if not disponibles: break
-                            min_cuota = min(cuotas[i] for i in disponibles)
-                            candidatos_min = [i for i in disponibles if cuotas[i] == min_cuota]
-                            cuotas[random.choice(candidatos_min)] += 1
-                            
-                        examen_total = []
-                        for i in range(num_pdfs):
-                            if cuotas[i] > 0:
-                                examen_total.extend(random.sample(preguntas_por_pdf[i], cuotas[i]))
-                        random.shuffle(examen_total)
                         procesar_preguntas(examen_total)
     
     if rol != "INVITADO":
