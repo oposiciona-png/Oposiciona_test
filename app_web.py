@@ -916,7 +916,7 @@ if not st.session_state.questions:
         )
         st.session_state.saved_cat = categoria
 
-    # --- MODO DE AVANCE (Visible antes de lanzar cualquier test) ---
+    # --- MODO DE AVANCE ---
     st.markdown("#### 3. Modo de avance")
     opciones_avance = [
         "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)", 
@@ -927,44 +927,41 @@ if not st.session_state.questions:
     st.session_state.saved_avance = modo_avance
     st.session_state.modo_avance = modo_avance
 
-    # --- SELECCIÓN DE TEST (NUEVO DISEÑO EN PRUEBAS SOLO PARA ADMIN vs CLÁSICO PARA ALUMNOS) ---
+    # --- SELECCIÓN DE TEST (CARPETAS + FILTRO PARA ADMIN vs CLÁSICO PARA ALUMNOS) ---
     st.markdown("#### 4. Selección de Test")
     tests_categoria = TESTS_DISPONIBLES[especialidad][categoria]
     tests_reales = {k: v for k, v in tests_categoria.items() if v is not None}
 
     if es_admin:
-        st.markdown(
-            "<div style='background-color: #eef6ff; border-left: 4px solid #1f77b4; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;'>"
-            "<b style='color: #1f77b4;'>🛠️ MODO PRUEBA ADMIN (Solo visible para ponentes@oposiciona.es):</b><br>"
-            "<span style='font-size: 13px; color: #333;'>Los alumnos siguen viendo el desplegable clásico. Prueba aquí qué diseño te gusta más:</span>"
-            "</div>",
-            unsafe_allow_html=True
-        )
-        modo_vista_admin = st.radio(
-            "Estilo de selector:",
-            [
-                "🗂️ Carpetas por Tema + Filtro (Recomendado)",
-                "🎴 Tarjetas Visuales (2 Columnas)",
-                "📋 Desplegable Clásico (Vista actual de alumnos)"
-            ],
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-    else:
-        modo_vista_admin = "📋 Desplegable Clásico (Vista actual de alumnos)"
+        # Comprobamos si no estamos en EXAMENES y si existe al menos un test de REPASO en esta categoría
+        hay_repasos = any("repaso" in nombre.lower() for nombre in tests_reales.keys())
+        mostrar_filtro_tipo = (categoria != "EXAMENES") and hay_repasos
 
-    # --- OPCIÓN A y B (NUEVAS VISTAS EN PRUEBA PARA EL ADMIN) ---
-    if modo_vista_admin != "📋 Desplegable Clásico (Vista actual de alumnos)":
-        col_f1, col_f2 = st.columns([1.4, 1])
-        with col_f1:
-            filtro_tipo = st.radio(
-                "Filtrar por tipo:",
-                ["📚 Todos", "📖 Temario Base", "🔄 Repasos"],
-                horizontal=True,
-                label_visibility="collapsed"
+        if mostrar_filtro_tipo:
+            col_f1, col_f2 = st.columns([1.4, 1])
+            with col_f1:
+                filtro_tipo = st.radio(
+                    "Filtrar por tipo:",
+                    ["📚 Todos", "📖 Temario Base", "🔄 Repasos"],
+                    horizontal=True,
+                    label_visibility="collapsed",
+                    key=f"filtro_tipo_{especialidad}_{categoria}"
+                )
+            with col_f2:
+                busqueda = st.text_input(
+                    "🔍 Buscar tema...", 
+                    placeholder="🔍 Buscar test o tema...", 
+                    label_visibility="collapsed",
+                    key=f"busqueda_{especialidad}_{categoria}"
+                )
+        else:
+            filtro_tipo = "📚 Todos"
+            busqueda = st.text_input(
+                "🔍 Buscar tema...", 
+                placeholder="🔍 Buscar test o tema...", 
+                label_visibility="collapsed",
+                key=f"busqueda_{especialidad}_{categoria}"
             )
-        with col_f2:
-            busqueda = st.text_input("🔍 Buscar tema...", placeholder="🔍 Buscar (ej: Tema 08, IP, Cotización...)", label_visibility="collapsed")
 
         tests_filtrados = {}
         for nombre, url in tests_reales.items():
@@ -977,21 +974,21 @@ if not st.session_state.questions:
                 continue
             tests_filtrados[nombre] = url
 
-        st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests en {categoria}")
+        st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests disponibles en {categoria}")
 
         if not tests_filtrados:
-            st.warning("No hay ningún test que coincida con ese filtro o búsqueda.")
-        elif modo_vista_admin == "🗂️ Carpetas por Tema + Filtro (Recomendado)":
+            st.warning("No hay ningún test que coincida con esa búsqueda.")
+        else:
             grupos = {}
             for nombre, url in tests_filtrados.items():
                 g = obtener_grupo_tema(nombre, categoria)
                 grupos.setdefault(g, []).append((nombre, url))
 
-            expandir_todo = len(grupos) <= 3 or bool(busqueda.strip())
+            expandir_todo = (categoria == "EXAMENES") or (len(grupos) <= 3) or bool(busqueda.strip())
             for idx_g, (nombre_grupo, lista_t) in enumerate(grupos.items()):
                 with st.expander(f"{nombre_grupo}  —  ({len(lista_t)} {'test' if len(lista_t)==1 else 'tests'})", expanded=expandir_todo):
                     for idx_t, (t_nombre, t_url) in enumerate(lista_t):
-                        es_rep = "repaso" in t_nombre.lower()
+                        es_rep = ("repaso" in t_nombre.lower()) and (categoria != "EXAMENES")
                         icono_t = "🔄" if es_rep else ("🏆" if categoria == "EXAMENES" else "📘")
                         etiqueta = "<span style='background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:6px;'>REPASO</span>" if es_rep else ""
                         
@@ -999,35 +996,10 @@ if not st.session_state.questions:
                         with c_nom:
                             st.markdown(f"<div style='padding-top:6px; font-size:15px;'>{icono_t} <b>{t_nombre}</b> {etiqueta}</div>", unsafe_allow_html=True)
                         with c_btn:
-                            if st.button("🚀 Iniciar", key=f"btn_grp_{idx_g}_{idx_t}", use_container_width=True, type="primary"):
+                            if st.button("🚀 Iniciar", key=f"btn_grp_{especialidad}_{categoria}_{idx_g}_{idx_t}", use_container_width=True, type="primary"):
                                 cargar_test_desde_url(t_nombre, t_url)
 
-        elif modo_vista_admin == "🎴 Tarjetas Visuales (2 Columnas)":
-            items_lista = list(tests_filtrados.items())
-            for i in range(0, len(items_lista), 2):
-                cols_card = st.columns(2)
-                for j in range(2):
-                    if i + j < len(items_lista):
-                        t_nombre, t_url = items_lista[i + j]
-                        es_rep = "repaso" in t_nombre.lower()
-                        icono_t = "🔄" if es_rep else ("🏆" if categoria == "EXAMENES" else "📘")
-                        borde_color = "#ffc107" if es_rep else "#1f77b4"
-                        fondo_color = "#fffdf5" if es_rep else "#f8fbff"
-                        subtitulo = "Test de Repaso" if es_rep else ("Examen / Simulacro" if categoria == "EXAMENES" else "Temario Oficial")
-                        
-                        with cols_card[j]:
-                            st.markdown(
-                                f"<div style='background-color:{fondo_color}; border:1px solid #e0e0e0; border-left:5px solid {borde_color}; "
-                                f"border-radius:8px; padding:12px; margin-bottom:6px; min-height:85px;'>"
-                                f"<div style='font-size:11px; color:#666; text-transform:uppercase; font-weight:600;'>{icono_t} {subtitulo}</div>"
-                                f"<div style='font-size:14px; font-weight:700; color:#2C3E50; margin-top:4px; line-height:1.25;'>{t_nombre}</div>"
-                                f"</div>",
-                                unsafe_allow_html=True
-                            )
-                            if st.button("🚀 Hacer este Test", key=f"btn_card_{i}_{j}", use_container_width=True):
-                                cargar_test_desde_url(t_nombre, t_url)
-
-    # --- OPCIÓN C: DESPLEGABLE CLÁSICO (EL QUE VEN LOS ALUMNOS ACTUALMENTE) ---
+    # --- VISTA CLÁSICA (LA QUE VEN LOS ALUMNOS POR AHORA) ---
     else:
         if rol == "INVITADO":
             if len(tests_categoria) <= 1:
