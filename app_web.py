@@ -104,6 +104,8 @@ if 'do_scroll' not in st.session_state:
     st.session_state.do_scroll = False
 if 'mostrar_opciones_simulacro' not in st.session_state:
     st.session_state.mostrar_opciones_simulacro = False
+if 'celebracion_mostrada' not in st.session_state:
+    st.session_state.celebracion_mostrada = False
 
 if st.session_state.do_scroll:
     st.session_state.do_scroll = False  
@@ -977,6 +979,7 @@ def handle_radio_change():
             st.session_state.do_scroll = True
         else:
             st.session_state.finished = True
+            st.session_state.celebracion_mostrada = False
             st.session_state.do_scroll = True
 
 def procesar_preguntas(raw_qs):
@@ -1017,6 +1020,7 @@ def procesar_preguntas(raw_qs):
     st.session_state.questions = raw_qs
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))}
     st.session_state.mostrar_opciones_simulacro = False
+    st.session_state.celebracion_mostrada = False
     st.session_state.do_scroll = True
     st.rerun()
 
@@ -1025,6 +1029,7 @@ def action_repetir_test():
     st.session_state.stats = {i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))}
     st.session_state.finished = False
     st.session_state.checked = False
+    st.session_state.celebracion_mostrada = False
     st.session_state.do_scroll = True
 
 def action_subir_otro():
@@ -1035,6 +1040,7 @@ def action_subir_otro():
     st.session_state.checked = False
     st.session_state.test_name = None
     st.session_state.mostrar_opciones_simulacro = False
+    st.session_state.celebracion_mostrada = False
     st.session_state.do_scroll = True
 
 def action_finalizar_sesion():
@@ -1370,12 +1376,14 @@ elif not st.session_state.finished:
         if col3.button("Terminar ➔", use_container_width=True):
             save_answer(selected_option)
             st.session_state.finished = True
+            st.session_state.celebracion_mostrada = False
             st.session_state.do_scroll = True
             st.rerun()
             
     if col4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(selected_option)
         st.session_state.finished = True
+        st.session_state.celebracion_mostrada = False
         st.session_state.do_scroll = True
         st.rerun()
 
@@ -1456,8 +1464,62 @@ else:
                 stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
             
     nota = (aciertos / preguntas_evaluables) * 10 if preguntas_evaluables > 0 else 0
+    es_admin = st.session_state.get('email') in USUARIOS_ADMIN
     
     if nota >= 5.0:
+        # --- EFECTO DE CELEBRACIÓN DIRECTO SOBRE RESULTADOS (SOLO ADMIN EN PRUEBAS) ---
+        if es_admin:
+            if not st.session_state.get('celebracion_mostrada', False):
+                st.session_state.celebracion_mostrada = True
+                components.html(
+                    """
+                    <script>
+                    (function() {
+                        var parentWin = window.parent;
+                        var parentDoc = parentWin.document;
+                        function dispararGuirnaldas() {
+                            var duration = 3200;
+                            var end = Date.now() + duration;
+                            (function frame() {
+                                parentWin.confetti({
+                                    particleCount: 6,
+                                    angle: 60,
+                                    spread: 55,
+                                    origin: { x: 0, y: 0.6 }
+                                });
+                                parentWin.confetti({
+                                    particleCount: 6,
+                                    angle: 120,
+                                    spread: 55,
+                                    origin: { x: 1, y: 0.6 }
+                                });
+                                if (Date.now() < end) {
+                                    requestAnimationFrame(frame);
+                                }
+                            }());
+                        }
+                        if (!parentWin.confetti) {
+                            var script = parentDoc.createElement('script');
+                            script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
+                            script.onload = dispararGuirnaldas;
+                            parentDoc.head.appendChild(script);
+                        } else {
+                            dispararGuirnaldas();
+                        }
+                    })();
+                    </script>
+                    """,
+                    height=0
+                )
+            st.markdown(
+                "<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; "
+                "border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'>"
+                "<h3 style='color: #1b5e20; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉</h3>"
+                "<p style='color: #2e7d32; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+
         c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
         with c_res2:
             try:
