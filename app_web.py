@@ -1464,61 +1464,59 @@ else:
                 stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
             
     nota = (aciertos / preguntas_evaluables) * 10 if preguntas_evaluables > 0 else 0
-    es_admin = st.session_state.get('email') in USUARIOS_ADMIN
     
     if nota >= 5.0:
-        # --- EFECTO DE CELEBRACIÓN DIRECTO SOBRE RESULTADOS (SOLO ADMIN EN PRUEBAS) ---
-        if es_admin:
-            if not st.session_state.get('celebracion_mostrada', False):
-                st.session_state.celebracion_mostrada = True
-                components.html(
-                    """
-                    <script>
-                    (function() {
-                        var parentWin = window.parent;
-                        var parentDoc = parentWin.document;
-                        function dispararGuirnaldas() {
-                            var duration = 3200;
-                            var end = Date.now() + duration;
-                            (function frame() {
-                                parentWin.confetti({
-                                    particleCount: 6,
-                                    angle: 60,
-                                    spread: 55,
-                                    origin: { x: 0, y: 0.6 }
-                                });
-                                parentWin.confetti({
-                                    particleCount: 6,
-                                    angle: 120,
-                                    spread: 55,
-                                    origin: { x: 1, y: 0.6 }
-                                });
-                                if (Date.now() < end) {
-                                    requestAnimationFrame(frame);
-                                }
-                            }());
-                        }
-                        if (!parentWin.confetti) {
-                            var script = parentDoc.createElement('script');
-                            script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
-                            script.onload = dispararGuirnaldas;
-                            parentDoc.head.appendChild(script);
-                        } else {
-                            dispararGuirnaldas();
-                        }
-                    })();
-                    </script>
-                    """,
-                    height=0
-                )
-            st.markdown(
-                "<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; "
-                "border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'>"
-                "<h3 style='color: #1b5e20; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉</h3>"
-                "<p style='color: #2e7d32; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p>"
-                "</div>",
-                unsafe_allow_html=True
+        # --- EFECTO DE CELEBRACIÓN DIRECTO SOBRE RESULTADOS (PARA TODOS LOS USUARIOS SI APRUEBAN) ---
+        if not st.session_state.get('celebracion_mostrada', False):
+            st.session_state.celebracion_mostrada = True
+            components.html(
+                """
+                <script>
+                (function() {
+                    var parentWin = window.parent;
+                    var parentDoc = parentWin.document;
+                    function dispararGuirnaldas() {
+                        var duration = 3200;
+                        var end = Date.now() + duration;
+                        (function frame() {
+                            parentWin.confetti({
+                                particleCount: 6,
+                                angle: 60,
+                                spread: 55,
+                                origin: { x: 0, y: 0.6 }
+                            });
+                            parentWin.confetti({
+                                particleCount: 6,
+                                angle: 120,
+                                spread: 55,
+                                origin: { x: 1, y: 0.6 }
+                            });
+                            if (Date.now() < end) {
+                                requestAnimationFrame(frame);
+                            }
+                        }());
+                    }
+                    if (!parentWin.confetti) {
+                        var script = parentDoc.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
+                        script.onload = dispararGuirnaldas;
+                        parentDoc.head.appendChild(script);
+                    } else {
+                        dispararGuirnaldas();
+                    }
+                })();
+                </script>
+                """,
+                height=0
             )
+        st.markdown(
+            "<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; "
+            "border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'>"
+            "<h3 style='color: #1b5e20; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉</h3>"
+            "<p style='color: #2e7d32; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p>"
+            "</div>",
+            unsafe_allow_html=True
+        )
 
         c_res1, c_res2, c_res3 = st.columns([1, 0.4, 1])
         with c_res2:
