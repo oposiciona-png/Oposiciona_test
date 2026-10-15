@@ -5,6 +5,7 @@ import re
 import random
 import requests
 import os
+import unicodedata
 
 # --- CONFIGURACIÓN VISUAL DE LA PÁGINA (SIEMPRE LO PRIMERO) ---
 icono_ruta = "ICONO OPOSICIONA.png"
@@ -744,6 +745,29 @@ def cambio_categoria_o_especialidad():
     opciones = list(tests_dic[esp][cat].keys())
     st.session_state[key_dinamica] = opciones[0]
 
+def normalizar_para_busqueda(texto):
+    """Pasa a minúsculas, elimina tildes y quita ceros a la izquierda en números (ej: 02 -> 2)."""
+    texto = texto.lower().strip()
+    texto = ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+    # Quita ceros a la izquierda de cualquier número (02 -> 2, 02a -> 2a)
+    texto = re.sub(r'\b0+(\d+)', r'\1', texto)
+    texto = re.sub(r'\s+', ' ', texto)
+    return texto
+
+def coincide_busqueda(nombre_test, consulta):
+    """Comprueba si la consulta coincide con el nombre del test ignorando mayúsculas, tildes y ceros (02 vs 2)."""
+    if not consulta or not consulta.strip():
+        return True
+    n_norm = normalizar_para_busqueda(nombre_test)
+    q_norm = normalizar_para_busqueda(consulta)
+    
+    # Si la consulta normalizada termina en un número (ej: "tema 1" o "1"),
+    # evitamos que coincida con números mayores como "tema 10", "tema 11", etc.
+    if re.search(r'\d+$', q_norm):
+        patron = re.escape(q_norm) + r'(?!\d)'
+        return bool(re.search(patron, n_norm))
+    return q_norm in n_norm
+
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES":
         return "🏆 Exámenes y Simulacros Oficiales"
@@ -950,7 +974,7 @@ if not st.session_state.questions:
             with col_f2:
                 busqueda = st.text_input(
                     "🔍 Buscar tema...", 
-                    placeholder="🔍 Buscar test o tema...", 
+                    placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
                     label_visibility="collapsed",
                     key=f"busqueda_{especialidad}_{categoria}"
                 )
@@ -958,23 +982,31 @@ if not st.session_state.questions:
             filtro_tipo = "📚 Todos"
             busqueda = st.text_input(
                 "🔍 Buscar tema...", 
-                placeholder="🔍 Buscar test o tema...", 
+                placeholder="🔍 Buscar (ej: tema 2, IP, cotizacion...)", 
                 label_visibility="collapsed",
                 key=f"busqueda_{especialidad}_{categoria}"
             )
 
+        hay_busqueda_activa = bool(busqueda and busqueda.strip())
+
         tests_filtrados = {}
         for nombre, url in tests_reales.items():
-            es_repaso = "repaso" in nombre.lower()
-            if filtro_tipo == "📖 Temario Base" and es_repaso:
-                continue
-            if filtro_tipo == "🔄 Repasos" and not es_repaso:
-                continue
-            if busqueda and busqueda.strip().lower() not in nombre.lower():
-                continue
-            tests_filtrados[nombre] = url
+            # Si el usuario está buscando algo en el cuadro de texto, buscamos en TODOS ignorando el filtro de tipo
+            if hay_busqueda_activa:
+                if coincide_busqueda(nombre, busqueda):
+                    tests_filtrados[nombre] = url
+            else:
+                es_repaso = "repaso" in nombre.lower()
+                if filtro_tipo == "📖 Temario Base" and es_repaso:
+                    continue
+                if filtro_tipo == "🔄 Repasos" and not es_repaso:
+                    continue
+                tests_filtrados[nombre] = url
 
-        st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests disponibles en {categoria}")
+        if hay_busqueda_activa:
+            st.caption(f"🔎 Búsqueda en **Todos los tests de {categoria}**: encontrados **{len(tests_filtrados)}** de **{len(tests_reales)}**")
+        else:
+            st.caption(f"Mostrando **{len(tests_filtrados)}** de **{len(tests_reales)}** tests disponibles en {categoria}")
 
         if not tests_filtrados:
             st.warning("No hay ningún test que coincida con esa búsqueda.")
@@ -984,7 +1016,7 @@ if not st.session_state.questions:
                 g = obtener_grupo_tema(nombre, categoria)
                 grupos.setdefault(g, []).append((nombre, url))
 
-            expandir_todo = (categoria == "EXAMENES") or (len(grupos) <= 3) or bool(busqueda.strip())
+            expandir_todo = (categoria == "EXAMENES") or (len(grupos) <= 3) or hay_busqueda_activa
             for idx_g, (nombre_grupo, lista_t) in enumerate(grupos.items()):
                 with st.expander(f"{nombre_grupo}  —  ({len(lista_t)} {'test' if len(lista_t)==1 else 'tests'})", expanded=expandir_todo):
                     for idx_t, (t_nombre, t_url) in enumerate(lista_t):
