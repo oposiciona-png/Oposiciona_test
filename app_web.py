@@ -643,6 +643,8 @@ TESTS_DISPONIBLES_COMPLETO = {
             "Elige un test de examenes...": None,
             "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026": _D + "1zWrxEUexvs5IVFa3WSM96ezQ12-6NegN",
             "EXAMEN OFICIAL 2026 B ROJO": _D + "1fmh5zACnL7mPA29bxdAhhJqqm5cagv5L",
+            "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL": _D + "1k0eOdHU9ZYuXP2HXw172joKzi9P25l-m",
+            "EXAMEN REPASO 1 TEMA 08 a 12 ESPECÍFICO": _D + "1Qau_6V0CjEoRAtxHigSqMjglkeCjfEB2",
             "EXAMEN REPASO TEMA 2 COMPLETO": _D + "1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
             "SABADO 10 OCT 2026": _D + "14rEqmgmwUPjcoAzA3H5EAux7aIWrFgsq",
             "SABADO 5 SEP 2026": _D + "1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
@@ -704,6 +706,9 @@ TESTS_DISPONIBLES_COMPLETO = {
             "Elige un test de examenes...": None,
             "DOMINGO 6 SEP 2026": _D + "1pEuW36jClxKZQjwAuSx6TpfFaxlmkcln",
             "Examen oficial 17 de mayo de 2026": _D + "1-ZFGIZGsixCwIS5Tr_4dZ5hX8mcX4yDL",
+            "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL": _D + "1WXCXKhlCSgPzm4TrWIvrrV1ffzUGYog3",
+            "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO": _D + "1ZpHomgomojh3AsKBton7A7OloVLfoKTk",
+            "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL": _D + "16vMfq7ToTQBXr1-f8nB89FVO_Y2yGG1A",
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -1342,13 +1347,18 @@ if not st.session_state.questions:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
             st.info("Esta herramienta es visible únicamente para el administrador (ponentes@oposiciona.es).")
             if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
-                # Solo figuran como nuevos los 5 tests incorporados en esta última actualización
+                # Figuran como nuevos hoy los 5 de antes + los 5 exámenes nuevos de este último prompt
                 nuevos_hoy = [
+                    "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL",
+                    "EXAMEN REPASO 1 TEMA 08 a 12 ESPECÍFICO",
                     "TEMA 52 - REPASO 1 - CAMPO APLICACION",
                     "TEMA 53 - REPASO 1 - AFILIACION",
                     "TEMA 67 - REPASO 1 - COTIZACION",
                     "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG",
-                    "TEMA 74.- REPASO 1 - RETA SETA Y MAR"
+                    "TEMA 74.- REPASO 1 - RETA SETA Y MAR",
+                    "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL",
+                    "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO",
+                    "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL"
                 ]
                 
                 total_pdfs = sum(
