@@ -674,7 +674,9 @@ TESTS_DISPONIBLES_COMPLETO = {
             "Elige un test de especifico...": None,
             "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS": _D + "1LlQvfrYuVXx2mJETTpfDGdhE2hyAWUZn",
             "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA": _D + "1ZcpNzh3IIu40K8eDcQCKpmWKrhvBUE_v",
+            "TEMA 52 - REPASO 1 - CAMPO APLICACION": _D + "1oqziTFYRP3C4TQNqlAoiY1YohyrwRZTm",
             "TEMA 53 - AFILIACION": _D + "1CUhqhupF7_aiL5vjvP6aZlLjPay9xTOs",
+            "TEMA 53 - REPASO 1 - AFILIACION": _D + "1DuFQD1pFPMXVFDdR9NWS9pmVGfv0JYR7",
             "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES": _D + "1OmVgiP6fGsGAYZ71v-vIKahly4V06-6o",
             "TEMA 55 REPASO PRESTACIONES ESPECÍFICO": _D + "1sZoz0-f-oMafO1pRuCnhpF835lt_-FgW",
             "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO": _D + "1d0Q3K5dB3dT9rVjuXXCy-RX_37xIDKbO",
@@ -690,9 +692,12 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 61 REPASO  JUBILACIÓN ESPECÍFICO": _D + "1csf7oIdntqrXRhA2CLSMJqn7J1AMog0T",
             "TEMA 62 REPASO MUERTE SUPERVIVENCIA ESPECÍFICO": _D + "1j8MmXwrdpeLR7VEfzkEPixUZbn83KjNE",
             "TEMA 64 IMV REPASO ESPECÍFICO": _D + "1n6hNSEgl5w2sSqN2dNcVGe_pqKKQi36x",
+            "TEMA 67 - REPASO 1 - COTIZACION": _D + "1uUEBkcwMwsOtS6LmQ2Q_PhxAzbO7TCyp",
             "Tema 67 COTIZACION": _D + "1kErdym1yxTP-Qd0Frx-5XIwOkI3aq5aL",
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": _D + "16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
+            "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG": _D + "1A2tEioQS4Xfd7OAcOWsCOnDWfSMla1dW",
             "TEMA 74 - RETA, SETA  Y MAR": _D + "1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
+            "TEMA 74.- REPASO 1 - RETA SETA Y MAR": _D + "1VFu51nTOGd5fknYDmd5mUkc_Z_Ma0pwr",
             "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": _D + "1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
         },
         "EXAMENES": {
@@ -799,7 +804,7 @@ def coincide_busqueda(nombre_test, consulta):
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES":
         return "🏆 Exámenes y Simulacros Oficiales"
-    m = re.match(r'^TEMAS?\s+(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
+    m = re.match(r'^TEMAS?\s*[\.\-]?\s*(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
     if m:
         bloque_num = m.group(1).upper().strip()
         nums = re.findall(r'\d+', bloque_num)
@@ -1337,28 +1342,13 @@ if not st.session_state.questions:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
             st.info("Esta herramienta es visible únicamente para el administrador (ponentes@oposiciona.es).")
             if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
+                # Solo figuran como nuevos los 5 tests incorporados en esta última actualización
                 nuevos_hoy = [
-                    "TEMA 08 REPASO 1 IT E IP ESPECÍFICO", "TEMA 08 REPASO 2 IT E IP ESPECÍFICO",
-                    "TEMA 09 REPASO 1 NYCM ESPECÍFICO", "TEMA 09 REPASO 2 NYCM ESPECÍFICO",
-                    "TEMA 10 REPASO 1 JUBILACIÓN ESPECÍFICO", "TEMA 10 REPASO 2 JUBILACIÓN ESPECÏFICO",
-                    "TEMA 11 REPASO 1 MUERTE Y SUPERVIVENCIA ESPECÍFICO", "TEMA 11 REPASO 2 MUERTE Y SUPERVIVENCIA ESPECÍFICO",
-                    "TEMA 12 IREPASO 1 MV ESPECÍFICO", "TEMA 12 REPASO 2 IMV ESPECÍFICO",
-                    "TEMA 01 a 03 REPASO CONSTITUCION GENERAL", "TEMA 04 REPASO LA CORONA GENERAL",
-                    "TEMA 05 REPASO CORTES GENERALES GENERAL", "TEMA 06 REPASO PODER JUDICIAL GENERAL",
-                    "TEMA 07 REPASO PODER EJECUTIVO GENERAL", "TEMA 08 REPASO AGE GENRAL",
-                    "TEMA 09 REPASO CCAA GENERAL", "TEMA 10 REPASO INSTITUCIONES DE LA UE GENERAL",
-                    "TEMA 11 REPASO FUENTES DE LA UE GENERAL", "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL",
-                    "TEMA 14 REPASO LA LEY GENERAL",
-                    "TEMA 55 REPASO PRESTACIONES ESPECÍFICO", "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO",
-                    "TEMA 57 REPASO INCAPACIDAD TEMPORAL ESPECÍFICO", "TEMA 58 REPASO NACIMIENTO Y CUIDADO DEL MENOR ESPECÍFICO",
-                    "TEMA 59 y 60 REPASO INCAPACIDAD PERMANETE ESPECÍFICO", "TEMA 61 REPASO  JUBILACIÓN ESPECÍFICO",
-                    "TEMA 62 REPASO MUERTE SUPERVIVENCIA ESPECÍFICO", "TEMA 64 IMV REPASO ESPECÍFICO",
-                    "TEMA 42 a 50 REPASO LABORAL GENERAL", "TEMA 42 REPASO DERECHO DEL TRABAJO GENERAL",
-                    "TEMA 43 REPASO CONVENIOS COLECTIVOS GENERAL", "TEMA 44 REPASO CONTRATOS GENERAL",
-                    "TEMA 45 REPASO SALARIO Y JORNADA 2 GENERAL", "TEMA 45 REPASO SALARIO Y JORNADA GENERAL",
-                    "TEMA 46 REPASO PODER DE DIRECCIÓN 2 GENERAL", "TEMA 46 REPASO PODER DE DIRECCIÓN GENERAL",
-                    "TEMA 47 REPASO SUSPENSIÓN DEL CONTRATO GENERAL", "TEMA 48 REPASO DESPIDO COLECTIVO GENERAL",
-                    "TEMA 49 REPASO DESPIDO GENERAL", "TEMA 50 REPASO CONFLICTOS COLECTIVOS GENERAL"
+                    "TEMA 52 - REPASO 1 - CAMPO APLICACION",
+                    "TEMA 53 - REPASO 1 - AFILIACION",
+                    "TEMA 67 - REPASO 1 - COTIZACION",
+                    "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG",
+                    "TEMA 74.- REPASO 1 - RETA SETA Y MAR"
                 ]
                 
                 total_pdfs = sum(
