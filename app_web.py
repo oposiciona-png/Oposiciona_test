@@ -129,6 +129,9 @@ class PDFQuizParser:
                             line_text = re.sub(r'>{2,}', '»', line_text)
                             line_text = re.sub(r'<(?=[A-ZÁÉÍÓÚÑa-záéíóúñ0-9"«])', '«', line_text)
                             line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z0-9])>', '»', line_text)
+                            # Eliminamos pies de página ("www.oposiciona.es" y "Página X de Y") incluso si vienen pegados a otra línea
+                            line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
+                            line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
                             for pat in [
                                 r'^OPOSICIONA\s*', r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*', r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
@@ -161,7 +164,7 @@ class PDFQuizParser:
                         if ignoring_mode: continue
 
                         is_header = bool(line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+)?TEMAS?\s+\d+', line_text))
-                        is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+', tl_clean_spaces, re.IGNORECASE))
+                        is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+', line_text.strip(), re.IGNORECASE))
                         if not is_header and not is_page_ref and len(tl_clean_spaces) < 120:
                             for pat in [
                                 r'^oposiciona\$', r'oposicionaes', r'^pagina\s+\d+\s+de\s+\d+\$', r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
@@ -182,6 +185,8 @@ class PDFQuizParser:
                         line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                        # Separa en línea propia cualquier referencia "(página X, tema Y)" que venga pegada al final de una frase
+                        line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
                             part = part.strip()
@@ -298,8 +303,6 @@ class PDFQuizParser:
                         elif num == 1 and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
                             is_new_q, expected_q_num = True, 2
                         elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 25:
-                            # Permite saltos de numeración en el temario (como pasar de la 15 a la 31 en Cotización)
-                            # solo cuando la pregunta anterior ya ha cerrado su explicación con (página X, tema Y)
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
