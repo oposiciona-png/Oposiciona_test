@@ -443,6 +443,12 @@ class PDFQuizParser:
             if txt.startswith("D. Carlos"):
                 lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
 
+        # Detectamos si este PDF utiliza referencias "(página X, tema Y)" al final de las explicaciones
+        total_page_refs = sum(
+            1 for l in lines if re.search(r'\(p[aá]gina\s+\d+', l["text"], re.IGNORECASE)
+        )
+        pdf_uses_page_refs = total_page_refs >= 10
+
         current_q = None
         preamble = "" 
         expected_q_num = 1  
@@ -481,6 +487,12 @@ class PDFQuizParser:
                 is_letter_block = False
 
             if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
+                # En PDFs con referencias de página, un bloque con letra (ej: "A) ...") dentro de una explicación no cerrada es parte de la ley citada
+                if current_q and current_q["state"] == "E" and pdf_uses_page_refs:
+                    if not re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE):
+                        is_letter_block = False
+
+            if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
                 is_real_preamble = False
                 for j in range(idx + 1, min(idx + 30, len(lines))):
                     fut = lines[j]["text"].strip()
@@ -503,20 +515,32 @@ class PDFQuizParser:
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', text, re.IGNORECASE) or
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
                      
-            # BLINDAJE ANTI-CORTE DE EXPLICACIONES Y ANTI-FALSAS PREGUNTAS
+            # REGLA DE ORO DEFINITIVA:
+            # Si el PDF usa cierres "(página X, tema Y)" al final de las explicaciones, y estamos en estado "E" (leyendo una explicación),
+            # JAMÁS permitimos que un número (ej: "1.", "2.", "3." o "61." de un artículo citado) corte la explicación
+            # mientras la explicación actual no haya llegado todavía a su "(página X, tema Y)".
             if m_num and current_q and current_q["state"] == "E":
-                exp_tail = current_q["explanation"].strip()[-90:]
-                if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\b[^.?!»]*$', exp_tail, re.IGNORECASE):
+                exp_text_now = current_q["explanation"].strip()
+                has_closed_with_pageref = bool(re.search(r'\(p[aá]gina\s+\d+', exp_text_now, re.IGNORECASE))
+                if pdf_uses_page_refs and not has_closed_with_pageref:
                     m_num = None
-                elif '«' in current_q["explanation"] and '»' not in current_q["explanation"].split('«')[-1]:
-                    if not re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE):
+                else:
+                    exp_tail = exp_text_now[-90:]
+                    if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\b[^.?!»]*$', exp_tail, re.IGNORECASE):
+                        m_num = None
+                    elif '«' in exp_text_now and '»' not in exp_text_now.split('«')[-1] and not has_closed_with_pageref:
                         m_num = None
 
             m_rescue = False
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
+                    # En PDFs con referencias de página, tampoco permitimos rescates en mitad de una explicación abierta
+                    can_rescue = True
+                    if current_q and current_q["state"] == "E" and pdf_uses_page_refs:
+                        if not re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE):
+                            can_rescue = False
+                    if can_rescue and re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
             if m_num or m_rescue:
