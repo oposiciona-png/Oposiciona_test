@@ -394,8 +394,8 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                            # Evita partir ordinales como 1.º o 1.ª dentro de explicaciones
-                            line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                            # Evita partir números de varios dígitos (como "Artículo 376)") o números ordinales ("1.º")
+                            line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -473,7 +473,6 @@ class PDFQuizParser:
                     continue
 
             is_new_q = False
-            # Excluimos ordinales como "1.º" o "1.°" para que nunca se confundan con números de pregunta
             m_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', text, re.IGNORECASE) or 
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', text, re.IGNORECASE) or
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
@@ -487,16 +486,21 @@ class PDFQuizParser:
 
             if m_num or m_rescue:
                 is_real_q_candidate = False
-                for j in range(idx + 1, min(idx + 25, len(lines))):
+                found_a = False
+                for j in range(idx + 1, min(idx + 35, len(lines))):
                     future_text = lines[j]["text"].strip()
-                    if re.match(r'^[a-eA-E][\)\.](\s|$)', future_text):
+                    if future_text == "<NEW_BLOCK>":
+                        continue
+                    if re.match(r'^a[\)\.\-](\s|$)', future_text, re.IGNORECASE):
+                        found_a = True
+                    elif found_a and re.match(r'^b[\)\.\-](\s|$)', future_text, re.IGNORECASE):
                         is_real_q_candidate = True
                         break
                     
                     m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', future_text, re.IGNORECASE) or 
                                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', future_text, re.IGNORECASE) or
                                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
-                    if m_future_num:
+                    if m_future_num and not found_a:
                         break
                 
                 if is_real_q_candidate:
@@ -505,8 +509,8 @@ class PDFQuizParser:
                         if current_q is None:
                             is_new_q = True
                             expected_q_num = num + 1
-                        elif (expected_q_num - 5 <= num <= expected_q_num + 50) or (num == 1 and current_q["state"] in ["O", "E"]):
-                            # Permite tanto la secuencia normal como el reinicio a "1." cuando hay varios bloques de test en el mismo PDF
+                        elif (expected_q_num - 2 <= num <= expected_q_num + 15) or (num == 1 and current_q["state"] in ["O", "E"]):
+                            # Acepta la secuencia natural de preguntas o el reinicio a "1." en PDFs con varios tests unidos
                             is_new_q = True
                             expected_q_num = num + 1
                     elif m_rescue:
