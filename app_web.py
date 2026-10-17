@@ -394,7 +394,6 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                             line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                            # Evita partir números de varios dígitos (como "Artículo 376)") o números ordinales ("1.º")
                             line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                             line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                             line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
@@ -408,6 +407,26 @@ class PDFQuizParser:
                                     lines.append({"text": part, "bold": is_bold})
                                     
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
+
+        # --- PRE-PROCESADO: Unir líneas partidas por justificación en citas legales (ej: "«Artículo" + "61. Los Ministros...") ---
+        merged_lines = []
+        i = 0
+        while i < len(lines):
+            curr_line = lines[i]
+            txt = curr_line["text"].strip()
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|<|"|“|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto|Apartados?|ep[íi]grafes?|cap[íi]tulos?|t[íi]tulos?)\s*$', txt, re.IGNORECASE):
+                j = i + 1
+                while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>":
+                    j += 1
+                if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
+                    curr_line["text"] = txt + " " + lines[j]["text"].strip()
+                    curr_line["bold"] = curr_line["bold"] or lines[j]["bold"]
+                    merged_lines.append(curr_line)
+                    i = j + 1
+                    continue
+            merged_lines.append(curr_line)
+            i += 1
+        lines = merged_lines
 
         for i in range(len(lines)):
             txt = lines[i]["text"].strip()
@@ -477,6 +496,17 @@ class PDFQuizParser:
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', text, re.IGNORECASE) or
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
                      
+            # Si estamos dentro de una explicación y el texto de la explicación termina en comillas abiertas («) o palabra "Artículo" sin cerrar,
+            # jamás permitimos que un número suelto (ej: "61. Los Ministros...") se confunda con una pregunta nueva.
+            if m_num and current_q and current_q["state"] == "E":
+                exp_so_far = current_q["explanation"].strip()
+                if re.search(r'(?:«|<<|<)\s*(?:Art[íi]culos?|Art\.)?\s*$', exp_so_far, re.IGNORECASE):
+                    m_num = None
+                elif exp_so_far.count('«') > exp_so_far.count('»') and not re.search(r'\(p[aá]gina\s+\d+', exp_so_far, re.IGNORECASE):
+                    # Si hay una cita con « abierta que aún no se ha cerrado con » y el número no es exactamente el esperado tras cerrar cita
+                    if int(m_num.group(1)) != expected_q_num and int(m_num.group(1)) != 1:
+                        m_num = None
+
             m_rescue = False
             if not m_num and not is_option and not is_explanation:
                 text_clean = text.strip()
@@ -491,6 +521,9 @@ class PDFQuizParser:
                     future_text = lines[j]["text"].strip()
                     if future_text == "<NEW_BLOCK>":
                         continue
+                    # Si antes de encontrar a) y b) nos topamos con "EXPLICACIÓN:", entonces este número NO era una pregunta (era parte del enunciado o cita)
+                    if re.match(r'^(explicaci[óo]n|respuesta|resp):', future_text, re.IGNORECASE) and not found_a:
+                        break
                     if re.match(r'^a[\)\.\-](\s|$)', future_text, re.IGNORECASE):
                         found_a = True
                     elif found_a and re.match(r'^b[\)\.\-](\s|$)', future_text, re.IGNORECASE):
@@ -509,8 +542,7 @@ class PDFQuizParser:
                         if current_q is None:
                             is_new_q = True
                             expected_q_num = num + 1
-                        elif (expected_q_num - 2 <= num <= expected_q_num + 15) or (num == 1 and current_q["state"] in ["O", "E"]):
-                            # Acepta la secuencia natural de preguntas o el reinicio a "1." en PDFs con varios tests unidos
+                        elif (expected_q_num - 2 <= num <= expected_q_num + 5) or (num == 1 and current_q["state"] in ["O", "E"]):
                             is_new_q = True
                             expected_q_num = num + 1
                     elif m_rescue:
@@ -530,18 +562,16 @@ class PDFQuizParser:
                     preamble += text + "\n"
                 continue
             
-            if is_option and current_q:
-                match_opt = re.match(r'^([a-zA-Z])[\)\.-]\s*', text)
+            # Solo aceptamos opciones (a, b, c, d, e) cuando estamos en estado Q o O,
+            # evitando que apartados a), b), c) de una ley citada dentro de la Explicación (estado E) rompan la explicación.
+            if is_option and current_q and current_q["state"] in ["Q", "O"]:
+                match_opt = re.match(r'^([a-eA-E])[\)\.-]\s*', text)
                 if match_opt:
-                    letter = match_opt.group(1).lower()
-                    expected_letter = chr(97 + len(current_q["options"]))
-                    
-                    if current_q["state"] in ["Q", "O"] or (current_q["state"] == "E" and letter == expected_letter):
-                        current_q["options"].append(text)
-                        current_q["state"] = "O"
-                        if is_bold and current_q["answer"] == -1: 
-                            current_q["answer"] = len(current_q["options"]) - 1
-                        continue
+                    current_q["options"].append(text)
+                    current_q["state"] = "O"
+                    if is_bold and current_q["answer"] == -1: 
+                        current_q["answer"] = len(current_q["options"]) - 1
+                    continue
                 
             if is_explanation:
                 if current_q:
