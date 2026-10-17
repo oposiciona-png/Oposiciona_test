@@ -299,7 +299,6 @@ class PDFQuizParser:
                         
                         line_text = line_text.strip()
                         
-                        # Normalizamos comillas angulares múltiples a « y » para evitar borrados por HTML
                         if line_text:
                             line_text = re.sub(r'<{2,}', '«', line_text)
                             line_text = re.sub(r'>{2,}', '»', line_text)
@@ -443,11 +442,10 @@ class PDFQuizParser:
             if txt.startswith("D. Carlos"):
                 lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
 
-        # Detectamos si este PDF utiliza referencias "(página X, tema Y)" al final de las explicaciones
-        total_page_refs = sum(
-            1 for l in lines if re.search(r'\(p[aá]gina\s+\d+', l["text"], re.IGNORECASE)
+        total_exp_headers = sum(
+            1 for l in lines if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', l["text"].strip(), re.IGNORECASE)
         )
-        pdf_uses_page_refs = total_page_refs >= 10
+        pdf_uses_explicit_exp = total_exp_headers >= 10
 
         current_q = None
         preamble = "" 
@@ -486,11 +484,8 @@ class PDFQuizParser:
             if is_letter_block and re.search(r'\b(fals[ao]|verdader[ao]|correct[ao]|incorrect[ao])\b', text_lower):
                 is_letter_block = False
 
-            if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
-                # En PDFs con referencias de página, un bloque con letra (ej: "A) ...") dentro de una explicación no cerrada es parte de la ley citada
-                if current_q and current_q["state"] == "E" and pdf_uses_page_refs:
-                    if not re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE):
-                        is_letter_block = False
+            if is_letter_block and current_q and current_q["state"] == "E" and pdf_uses_explicit_exp:
+                is_letter_block = False
 
             if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
                 is_real_preamble = False
@@ -515,77 +510,69 @@ class PDFQuizParser:
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', text, re.IGNORECASE) or
                      re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
                      
-            # REGLA DE ORO DEFINITIVA:
-            # Si el PDF usa cierres "(página X, tema Y)" al final de las explicaciones, y estamos en estado "E" (leyendo una explicación),
-            # JAMÁS permitimos que un número (ej: "1.", "2.", "3." o "61." de un artículo citado) corte la explicación
-            # mientras la explicación actual no haya llegado todavía a su "(página X, tema Y)".
             if m_num and current_q and current_q["state"] == "E":
-                exp_text_now = current_q["explanation"].strip()
-                has_closed_with_pageref = bool(re.search(r'\(p[aá]gina\s+\d+', exp_text_now, re.IGNORECASE))
-                if pdf_uses_page_refs and not has_closed_with_pageref:
+                exp_tail = current_q["explanation"].strip()[-60:]
+                if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*$', exp_tail, re.IGNORECASE):
                     m_num = None
-                else:
-                    exp_tail = exp_text_now[-90:]
-                    if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\b[^.?!»]*$', exp_tail, re.IGNORECASE):
-                        m_num = None
-                    elif '«' in exp_text_now and '»' not in exp_text_now.split('«')[-1] and not has_closed_with_pageref:
-                        m_num = None
 
             m_rescue = False
-            if not m_num and not is_option and not is_explanation:
+            if not m_num and not is_option and not is_explanation and not pdf_uses_explicit_exp:
                 text_clean = text.strip()
                 if (current_q and current_q["state"] in ["E", "O"]) or not current_q:
-                    # En PDFs con referencias de página, tampoco permitimos rescates en mitad de una explicación abierta
-                    can_rescue = True
-                    if current_q and current_q["state"] == "E" and pdf_uses_page_refs:
-                        if not re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE):
-                            can_rescue = False
-                    if can_rescue and re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
+                    if re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', text_clean, re.IGNORECASE) and text_clean.endswith('?'):
                         m_rescue = True
 
             if m_num or m_rescue:
                 is_real_q_candidate = False
                 found_a = False
-                aborted_by_exp_or_pageref = False
+                found_b = False
+                aborted_before_options = False
 
-                for j in range(idx + 1, min(idx + 30, len(lines))):
+                for j in range(idx + 1, min(idx + 45, len(lines))):
                     future_text = lines[j]["text"].strip()
                     if future_text == "<NEW_BLOCK>":
                         continue
+                    
                     if not found_a:
                         if (re.match(r'^\(p[aá]gina\s+\d+.*?\)$', future_text, re.IGNORECASE) or 
-                            re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', future_text, re.IGNORECASE) or
-                            '»' in future_text):
-                            aborted_by_exp_or_pageref = True
+                            re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', future_text, re.IGNORECASE)):
+                            aborted_before_options = True
                             break
-                    if re.match(r'^a[\)\.\-](\s|$)', future_text, re.IGNORECASE):
-                        found_a = True
-                    elif found_a:
+                        if re.match(r'^a[\)\.\-](\s|$)', future_text, re.IGNORECASE):
+                            found_a = True
+                            continue
+                        m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', future_text, re.IGNORECASE) or 
+                                        re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', future_text, re.IGNORECASE) or
+                                        re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
+                        if m_future_num:
+                            aborted_before_options = True
+                            break
+                    elif not found_b:
                         if (re.match(r'^\(p[aá]gina\s+\d+.*?\)$', future_text, re.IGNORECASE) or 
                             re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', future_text, re.IGNORECASE)):
-                            aborted_by_exp_or_pageref = True
+                            aborted_before_options = True
                             break
                         if re.match(r'^b[\)\.\-](\s|$)', future_text, re.IGNORECASE):
-                            is_law_sublist = False
-                            if current_q and current_q["state"] == "E":
-                                for k in range(j + 1, min(j + 20, len(lines))):
-                                    ft2 = lines[k]["text"].strip()
-                                    if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft2, re.IGNORECASE):
-                                        break
-                                    if re.match(r'^\(p[aá]gina\s+\d+.*?\)$', ft2, re.IGNORECASE) or '»' in ft2:
-                                        is_law_sublist = True
-                                        break
-                            if not is_law_sublist:
+                            found_b = True
+                            if not pdf_uses_explicit_exp:
                                 is_real_q_candidate = True
+                                break
+                            continue
+                    else:
+                        if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', future_text, re.IGNORECASE):
+                            is_real_q_candidate = True
                             break
-                    
-                    m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', future_text, re.IGNORECASE) or 
-                                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', future_text, re.IGNORECASE) or
-                                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
-                    if m_future_num and not found_a:
-                        break
+                        if re.match(r'^\(p[aá]gina\s+\d+.*?\)$', future_text, re.IGNORECASE) or '»' in future_text:
+                            aborted_before_options = True
+                            break
+                        m_future_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', future_text, re.IGNORECASE) or 
+                                        re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', future_text, re.IGNORECASE) or
+                                        re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', future_text, re.IGNORECASE))
+                        if m_future_num:
+                            aborted_before_options = True
+                            break
                 
-                if is_real_q_candidate and not aborted_by_exp_or_pageref:
+                if is_real_q_candidate and not aborted_before_options:
                     if m_num:
                         num = int(m_num.group(1))
                         if current_q is None:
