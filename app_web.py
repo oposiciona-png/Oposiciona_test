@@ -290,7 +290,16 @@ class PDFQuizParser:
                 if is_real_q_candidate and not aborted:
                     if m_num:
                         num = int(m_num.group(1))
-                        if current_q is None or pdf_uses_explicit_exp or (expected_q_num - 2 <= num <= expected_q_num + 25) or (num == 1 and current_q["state"] in ["O", "E"]):
+                        prev_closed_with_pageref = bool(current_q and current_q["state"] == "E" and re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE))
+                        if current_q is None:
+                            is_new_q, expected_q_num = True, num + 1
+                        elif expected_q_num - 1 <= num <= expected_q_num + 5:
+                            is_new_q, expected_q_num = True, num + 1
+                        elif num == 1 and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
+                            is_new_q, expected_q_num = True, 2
+                        elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 25:
+                            # Permite saltos de numeración en el temario (como pasar de la 15 a la 31 en Cotización)
+                            # solo cuando la pregunta anterior ya ha cerrado su explicación con (página X, tema Y)
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
