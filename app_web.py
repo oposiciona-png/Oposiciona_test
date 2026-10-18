@@ -154,7 +154,6 @@ class PDFQuizParser:
 
                         if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                             stop_reading = True; break
-                        # Solo activar modo supuesto práctico si NO empieza por número de pregunta (ej. evitar '54. Supuesto práctico:')
                         if not re.match(r'^\d+\s*[\.\-\)]', line_text):
                             if any(x in tl_clean_spaces for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "casos practicos", "caso practico"]):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
@@ -202,7 +201,6 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # Unir referencias legales partidas al final de línea (ej. "art." + "136.2.o)" o "(Art." + "56 a 59...")
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
@@ -235,7 +233,6 @@ class PDFQuizParser:
         current_q, preamble, expected_q_num = None, "", 1
 
         def match_question_number(s):
-            """Reconoce números de pregunta reales (ej. '36.- Texto', '1. Texto', '1 ¿Texto') e ignora '136.2.o)' o '3.°' o '5°)'."""
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d|[ºª°]|[a-zA-Z]\))\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?!\d|[ºª°])\s*\S', s, re.IGNORECASE) or
@@ -540,25 +537,18 @@ def usuario_es_admin():
     return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
 
 def usuario_puede_reportar():
-    """Permite reportar errores a todos los usuarios registrados excepto al rol INVITADO."""
     return st.session_state.get('rol') != 'INVITADO'
 
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
 
 def descargar_pdf_fresco(url):
-    """Descarga el PDF desde Google Drive evitando cualquier caché intermedia de red o servidor."""
     sep = "&" if "?" in url else "?"
     url_nocache = f"{url}{sep}_cb={int(time.time() * 1000)}"
-    headers = {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
-    }
+    headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
     return requests.get(url_nocache, headers=headers)
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
-    """Muestra un único botón válido para enviar el reporte de error directamente a info@oposiciona.es."""
     if not usuario_puede_reportar():
         return
 
