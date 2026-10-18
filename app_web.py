@@ -184,15 +184,14 @@ class PDFQuizParser:
                                 if re.search(pat, tl_clean_spaces): is_header = True; break
                         if is_header: continue
 
-                        line_text = re.sub(r'(?<=\S)\s+(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s*', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-eA-E][\)\.\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
@@ -288,10 +287,15 @@ class PDFQuizParser:
 
             if m_num or m_rescue:
                 is_real_q_candidate = found_a = found_b = aborted = False
+                cand_num = int(m_num.group(1)) if m_num else expected_q_num
                 for j in range(idx + 1, min(idx + 60, len(lines))):
                     ft = lines[j]["text"].strip()
                     if ft == "<NEW_BLOCK>": continue
                     m_fnum = match_question_number(ft)
+                    if m_fnum:
+                        fn = int(m_fnum.group(1))
+                        if not (fn == 1 or cand_num <= fn <= cand_num + 5):
+                            m_fnum = None
                     if not found_a:
                         if is_exp_marker(ft) or m_fnum:
                             aborted = True; break
@@ -299,7 +303,7 @@ class PDFQuizParser:
                     elif not found_b:
                         if is_exp_marker(ft):
                             aborted = True; break
-                        if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE):
+                        if re.match(r'^[ab][\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_b = True
                             if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
                     else:
@@ -353,9 +357,11 @@ class PDFQuizParser:
                 else:
                     current_q["question_text"] += " " + text
             elif current_q["state"] == "O":
+                if re.search(r'\(Art\.\s*\$', text.strip()):
+                    continue
                 lo = current_q["options"][-1].strip()
-                ep = bool(re.search(r'[\.;\?]$', lo))
-                ec = bool(re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', lo, re.IGNORECASE))
+                ep = bool(re.search(r'[\.;\?]\$', lo))
+                ec = bool(re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)\$', lo, re.IGNORECASE))
                 inp = len(current_q["options"]) >= 2 and ep and bool(re.match(r'^[A-Z0-9¿¡"\'«]', text))
                 ilr = bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n)\b', text_lower))
                 iie = len(current_q["options"]) >= 3 and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)) and (
