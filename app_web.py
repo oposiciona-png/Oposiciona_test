@@ -101,7 +101,7 @@ if not st.session_state.autenticado:
             st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, do_scroll=True)
             st.rerun()
         elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
-            es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
+            es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN) or (rol_usuario == "ACCESO TOTAL")
             st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, do_scroll=True)
             st.rerun()
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -520,7 +520,12 @@ TESTS_DISPONIBLES_INVITADO = {
 
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
-    return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
+    rol_act = st.session_state.get('rol')
+    return bool(
+        st.session_state.get('es_admin', False)
+        or correo_act in USUARIOS_ADMIN
+        or rol_act == "ACCESO TOTAL"
+    )
 
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
@@ -536,116 +541,104 @@ def descargar_pdf_fresco(url):
     }
     return requests.get(url_nocache, headers=headers)
 
-def render_bloque_reporte_error(q, num_pregunta, ubicacion_key):
-    """Muestra un botón especial de reporte de errores (actualmente visible solo para administradores)."""
-    if not usuario_es_admin():
-        return
+def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
+    """Muestra el formulario desplegado para enviar el reporte de error a info@oposiciona.es."""
+    nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
+    usuario_rep = st.session_state.get('email') or "ponentes@oposiciona.es"
+    preamble_txt = q.get('preamble', '').strip()
+    pregunta_txt = q.get('question_text', '').strip()
+    opciones_txt = "\n".join(q.get('options', []))
+    correcta_txt = q['options'][q['answer']] if q.get('answer', -1) != -1 and q['answer'] < len(q.get('options', [])) else "No detectada en el PDF"
+    exp_limpia = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación."
 
-    state_key_abierto = f"rep_open_{ubicacion_key}_{num_pregunta}"
-    if state_key_abierto not in st.session_state:
-        st.session_state[state_key_abierto] = False
+    st.markdown(
+        "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
+        f"<b style='color:#bf360c; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
+        "<span style='font-size:13px; color:#5d4037;'>Se adjuntan automáticamente el nombre del PDF, la pregunta, las respuestas y la explicación.</span>"
+        "</div>",
+        unsafe_allow_html=True
+    )
 
-    st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
-    if st.button(f"⚠️ Reportar error en la Pregunta {num_pregunta} (Solo Admin)", key=f"btn_toggle_rep_{ubicacion_key}_{num_pregunta}", use_container_width=True):
-        st.session_state[state_key_abierto] = not st.session_state[state_key_abierto]
+    motivo = st.text_area(
+        "Explica el error encontrado:",
+        key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
+        placeholder="Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta está mal marcada, o se ha cortado el texto..."
+    )
 
-    if st.session_state[state_key_abierto]:
-        nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
-        usuario_rep = st.session_state.get('email') or "ponentes@oposiciona.es"
-        preamble_txt = q.get('preamble', '').strip()
-        pregunta_txt = q.get('question_text', '').strip()
-        opciones_txt = "\n".join(q.get('options', []))
-        correcta_txt = q['options'][q['answer']] if q.get('answer', -1) != -1 and q['answer'] < len(q.get('options', [])) else "No detectada en el PDF"
-        exp_limpia = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación."
+    cuerpo_completo = (
+        f"REPORTE DE ERROR EN PLATAFORMA OPOSICIONA\n"
+        f"==================================================\n"
+        f"• Usuario que reporta: {usuario_rep}\n"
+        f"• Nombre del Test / PDF: {nombre_pdf}\n"
+        f"• Nº de pregunta en pantalla: {num_pregunta}\n"
+        + (f"• Preámbulo / Fuente: {preamble_txt}\n" if preamble_txt else "") +
+        f"\n⚠️ DESCRIPCIÓN DEL ERROR INDICADA POR EL USUARIO:\n"
+        f"{motivo.strip() if motivo.strip() else '(Sin descripción adicional)'}\n\n"
+        f"--------------------------------------------------\n"
+        f"DATOS COMPLETOS EXTRAÍDOS DE LA PREGUNTA:\n"
+        f"--------------------------------------------------\n"
+        f"PREGUNTA:\n{pregunta_txt}\n\n"
+        f"OPCIONES:\n{opciones_txt}\n\n"
+        f"RESPUESTA MARCADA COMO CORRECTA:\n{correcta_txt}\n\n"
+        f"EXPLICACIÓN EXTRAÍDA:\n{exp_limpia}\n"
+        f"==================================================\n"
+    )
 
+    col_env1, col_env2, col_env3 = st.columns([1.4, 1, 1])
+
+    with col_env1:
+        if st.button("📨 Enviar directo a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
+            if not motivo.strip():
+                st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
+            else:
+                with st.spinner("Enviando reporte a info@oposiciona.es..."):
+                    enviado_ok = False
+                    try:
+                        resp_mail = requests.post(
+                            "https://formsubmit.co/ajax/info@oposiciona.es",
+                            headers={"Accept": "application/json", "Content-Type": "application/json"},
+                            json={
+                                "_subject": f"⚠️ Error en Test: {nombre_pdf} (Pregunta {num_pregunta})",
+                                "Usuario": usuario_rep,
+                                "Test_PDF": nombre_pdf,
+                                "Pregunta_Num": str(num_pregunta),
+                                "Error_Reportado": motivo.strip(),
+                                "Pregunta": pregunta_txt,
+                                "Opciones": opciones_txt,
+                                "Respuesta_Correcta_Sistema": correcta_txt,
+                                "Explicacion": exp_limpia,
+                                "_template": "table"
+                            },
+                            timeout=10
+                        )
+                        if resp_mail.status_code == 200:
+                            enviado_ok = True
+                    except Exception:
+                        enviado_ok = False
+
+                    if enviado_ok:
+                        st.success("✅ ¡Reporte enviado a **info@oposiciona.es**! *(Nota: Si es el primer envío, revisa la bandeja de entrada o spam de info@oposiciona.es para pulsar 'Activate Form' una única vez).*")
+                    else:
+                        st.info("ℹ️ Usa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
+
+    asunto_url = urllib.parse.quote(f"Error en Test: {nombre_pdf} (Pregunta {num_pregunta})")
+    cuerpo_url = urllib.parse.quote(cuerpo_completo)
+    mailto_link = f"mailto:info@oposiciona.es?subject={asunto_url}&body={cuerpo_url}"
+    gmail_link = f"https://mail.google.com/mail/?view=cm&fs=1&to=info@oposiciona.es&su={asunto_url}&body={cuerpo_url}"
+
+    with col_env2:
         st.markdown(
-            "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:6px; margin-bottom:8px;'>"
-            "<b style='color:#bf360c; font-size:15px;'>🛠️ Envío de reporte de error a info@oposiciona.es</b><br>"
-            "<span style='font-size:13px; color:#5d4037;'>Se adjuntarán automáticamente el nombre del PDF, la pregunta, las opciones y la explicación.</span>"
-            "</div>",
+            f"<a href='{gmail_link}' target='_blank' style='display:block; text-align:center; background-color:#d93025; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>📧 Abrir en Gmail</a>",
+            unsafe_allow_html=True
+        )
+    with col_env3:
+        st.markdown(
+            f"<a href='{mailto_link}' target='_blank' style='display:block; text-align:center; background-color:#1f77b4; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>✉️ App de Correo</a>",
             unsafe_allow_html=True
         )
 
-        motivo = st.text_area(
-            "Explica brevemente el error encontrado:",
-            key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
-            placeholder="Ejemplo: Falta un 'NO' en el enunciado, la opción correcta debería ser la b), o la explicación está cortada..."
-        )
-
-        cuerpo_completo = (
-            f"REPORTE DE ERROR EN PLATAFORMA OPOSICIONA\n"
-            f"==================================================\n"
-            f"• Usuario que reporta: {usuario_rep}\n"
-            f"• Nombre del Test / PDF: {nombre_pdf}\n"
-            f"• Nº de pregunta en pantalla: {num_pregunta}\n"
-            + (f"• Preámbulo / Fuente: {preamble_txt}\n" if preamble_txt else "") +
-            f"\n⚠️ DESCRIPCIÓN DEL ERROR INDICADA POR EL USUARIO:\n"
-            f"{motivo.strip() if motivo.strip() else '(Sin descripción adicional)'}\n\n"
-            f"--------------------------------------------------\n"
-            f"DATOS COMPLETOS EXTRAÍDOS DE LA PREGUNTA:\n"
-            f"--------------------------------------------------\n"
-            f"PREGUNTA:\n{pregunta_txt}\n\n"
-            f"OPCIONES:\n{opciones_txt}\n\n"
-            f"RESPUESTA MARCADA COMO CORRECTA:\n{correcta_txt}\n\n"
-            f"EXPLICACIÓN EXTRAÍDA:\n{exp_limpia}\n"
-            f"==================================================\n"
-        )
-
-        col_env1, col_env2, col_env3 = st.columns([1.4, 1, 1])
-
-        with col_env1:
-            if st.button("📨 Enviar directo a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
-                if not motivo.strip():
-                    st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
-                else:
-                    with st.spinner("Enviando reporte a info@oposiciona.es..."):
-                        enviado_ok = False
-                        try:
-                            resp_mail = requests.post(
-                                "https://formsubmit.co/ajax/info@oposiciona.es",
-                                headers={"Accept": "application/json", "Content-Type": "application/json"},
-                                json={
-                                    "_subject": f"⚠️ Error en Test: {nombre_pdf} (Pregunta {num_pregunta})",
-                                    "Usuario": usuario_rep,
-                                    "Test_PDF": nombre_pdf,
-                                    "Pregunta_Num": str(num_pregunta),
-                                    "Error_Reportado": motivo.strip(),
-                                    "Pregunta": pregunta_txt,
-                                    "Opciones": opciones_txt,
-                                    "Respuesta_Correcta_Sistema": correcta_txt,
-                                    "Explicacion": exp_limpia,
-                                    "_template": "table"
-                                },
-                                timeout=10
-                            )
-                            if resp_mail.status_code == 200:
-                                enviado_ok = True
-                        except Exception:
-                            enviado_ok = False
-
-                        if enviado_ok:
-                            st.success("✅ ¡Reporte enviado a **info@oposiciona.es**! *(Nota: Si es el primer envío, revisa la bandeja de entrada o spam de info@oposiciona.es para pulsar 'Activate Form' una única vez).*")
-                        else:
-                            st.info("ℹ️ Usa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
-
-        asunto_url = urllib.parse.quote(f"Error en Test: {nombre_pdf} (Pregunta {num_pregunta})")
-        cuerpo_url = urllib.parse.quote(cuerpo_completo)
-        mailto_link = f"mailto:info@oposiciona.es?subject={asunto_url}&body={cuerpo_url}"
-        gmail_link = f"https://mail.google.com/mail/?view=cm&fs=1&to=info@oposiciona.es&su={asunto_url}&body={cuerpo_url}"
-
-        with col_env2:
-            st.markdown(
-                f"<a href='{gmail_link}' target='_blank' style='display:block; text-align:center; background-color:#d93025; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>📧 Abrir en Gmail</a>",
-                unsafe_allow_html=True
-            )
-        with col_env3:
-            st.markdown(
-                f"<a href='{mailto_link}' target='_blank' style='display:block; text-align:center; background-color:#1f77b4; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>✉️ App de Correo</a>",
-                unsafe_allow_html=True
-            )
-
-        with st.expander("📋 Ver texto completo que se envía"):
-            st.code(cuerpo_completo, language="text")
+    with st.expander("📋 Ver texto completo que se envía"):
+        st.code(cuerpo_completo, language="text")
 
 def limpiar_todas_las_busquedas():
     for k in list(st.session_state.keys()):
@@ -983,7 +976,7 @@ if not st.session_state.questions:
 
     if es_admin:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
-            st.info("Esta herramienta es visible únicamente para el administrador (ponentes@oposiciona.es).")
+            st.info("Esta herramienta es visible únicamente para el administrador.")
             if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
                 nuevos_hoy = [
                     "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL", "EXAMEN REPASO 1 TEMA 08 a 12 ESPECÍFICO",
@@ -1017,6 +1010,7 @@ elif not st.session_state.finished:
     st.markdown("<style>:root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; } .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }</style>", unsafe_allow_html=True)
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
+    es_admin = usuario_es_admin()
 
     st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     if q['preamble']: st.write(q['preamble'])
@@ -1025,7 +1019,12 @@ elif not st.session_state.finished:
     def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
 
-    c1, c2, c3, c4 = st.columns(4)
+    if es_admin:
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.15])
+    else:
+        c1, c2, c3, c4 = st.columns(4)
+        c5 = None
+
     if c1.button("🡄 Anterior", use_container_width=True) and idx > 0:
         save_answer(sel_opt)
         st.session_state.update(checked=False, current_index=idx - 1, do_scroll=True); st.rerun()
@@ -1040,9 +1039,16 @@ elif not st.session_state.finished:
         if c3.button("Terminar ➔", use_container_width=True):
             save_answer(sel_opt)
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
-    if c4.button("⏹ Finalizar Test", use_container_width=True):
+    if c4.button("⏹ Finalizar", use_container_width=True):
         save_answer(sel_opt)
         st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
+
+    key_rep_test = f"rep_open_test_{idx + 1}"
+    if key_rep_test not in st.session_state:
+        st.session_state[key_rep_test] = False
+    if es_admin and c5 is not None:
+        if c5.button("⚠️ Error", key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
+            st.session_state[key_rep_test] = not st.session_state[key_rep_test]
 
     if st.session_state.checked:
         if q['answer'] != -1:
@@ -1056,13 +1062,14 @@ elif not st.session_state.finished:
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
-    # --- BOTÓN ESPECIAL DE REPORTE DE ERROR DURANTE EL TEST (SOLO ADMIN) ---
-    render_bloque_reporte_error(q, idx + 1, "test_activo")
+    if es_admin and st.session_state.get(key_rep_test, False):
+        render_cuadro_reporte_error(q, idx + 1, "test_activo")
 
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
 
+    es_admin = usuario_es_admin()
     aciertos = fallos = blancos = preg_eval = 0
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
@@ -1137,8 +1144,15 @@ else:
             f"</div>",
             unsafe_allow_html=True
         )
-        # --- BOTÓN ESPECIAL DE REPORTE DE ERROR EN EL RESUMEN FINAL (SOLO ADMIN) ---
-        render_bloque_reporte_error(q, i + 1, "resumen_final")
+        if es_admin:
+            key_rep_res = f"rep_open_res_{i + 1}"
+            if key_rep_res not in st.session_state:
+                st.session_state[key_rep_res] = False
+            if st.button(f"⚠️ Reportar error en Pregunta {i + 1}", key=f"btn_err_res_{i + 1}"):
+                st.session_state[key_rep_res] = not st.session_state[key_rep_res]
+            if st.session_state[key_rep_res]:
+                render_cuadro_reporte_error(q, i + 1, "resumen_final")
+
         st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
     c1_b, c2_b, c3_b = st.columns(3)
