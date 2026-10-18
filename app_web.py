@@ -1,8 +1,9 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata, time
-import urllib.parse
+import re, random, requests, os, unicodedata, time, json, smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
@@ -537,7 +538,7 @@ def descargar_pdf_fresco(url):
     return requests.get(url_nocache, headers=headers)
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
-    """Muestra el formulario desplegado para que cualquier alumno o administrador envíe un reporte de error a info@oposiciona.es."""
+    """Muestra un único botón válido para enviar el reporte de error directamente a info@oposiciona.es."""
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
     usuario_rep = st.session_state.get('email') or "Alumno Oposiciona"
     preamble_txt = q.get('preamble', '').strip()
@@ -549,7 +550,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
         f"<b style='color:#bf360c; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
-        "<span style='font-size:13px; color:#5d4037;'>Se enviarán automáticamente el nombre del PDF, la pregunta, las respuestas y la explicación junto con tu comentario.</span>"
+        "<span style='font-size:13px; color:#5d4037;'>Se adjuntarán automáticamente el nombre del PDF, la pregunta, las respuestas y la explicación junto con tu comentario.</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -560,80 +561,74 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         placeholder="Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta está mal marcada, o se ha cortado el texto..."
     )
 
-    cuerpo_completo = (
-        f"REPORTE DE ERROR EN PLATAFORMA OPOSICIONA\n"
-        f"==================================================\n"
-        f"• Usuario que reporta: {usuario_rep}\n"
-        f"• Nombre del Test / PDF: {nombre_pdf}\n"
-        f"• Nº de pregunta en pantalla: {num_pregunta}\n"
-        + (f"• Preámbulo / Fuente: {preamble_txt}\n" if preamble_txt else "") +
-        f"\n⚠️ DESCRIPCIÓN DEL ERROR INDICADA POR EL USUARIO:\n"
-        f"{motivo.strip() if motivo.strip() else '(Sin descripción adicional)'}\n\n"
-        f"--------------------------------------------------\n"
-        f"DATOS COMPLETOS EXTRAÍDOS DE LA PREGUNTA:\n"
-        f"--------------------------------------------------\n"
-        f"PREGUNTA:\n{pregunta_txt}\n\n"
-        f"OPCIONES:\n{opciones_txt}\n\n"
-        f"RESPUESTA MARCADA COMO CORRECTA:\n{correcta_txt}\n\n"
-        f"EXPLICACIÓN EXTRAÍDA:\n{exp_limpia}\n"
-        f"==================================================\n"
-    )
+    if st.button("📨 Enviar a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
+        if not motivo.strip():
+            st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
+        else:
+            payload = {
+                "_subject": f"⚠️ Error en Test: {nombre_pdf} (Pregunta {num_pregunta})",
+                "Usuario_que_reporta": usuario_rep,
+                "Nombre_del_PDF": nombre_pdf,
+                "Numero_de_Pregunta": str(num_pregunta),
+                "Preambulo_Fuente": preamble_txt if preamble_txt else "N/A",
+                "Explicacion_del_Error": motivo.strip(),
+                "Pregunta": pregunta_txt,
+                "Opciones": opciones_txt,
+                "Respuesta_Correcta_Detectada": correcta_txt,
+                "Explicacion_Extraida": exp_limpia,
+                "_template": "table",
+                "_captcha": "false"
+            }
 
-    col_env1, col_env2, col_env3 = st.columns([1.4, 1, 1])
-
-    with col_env1:
-        if st.button("📨 Enviar a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
-            if not motivo.strip():
-                st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
-            else:
-                with st.spinner("Enviando reporte a info@oposiciona.es..."):
-                    enviado_ok = False
-                    try:
-                        resp_mail = requests.post(
-                            "https://formsubmit.co/ajax/info@oposiciona.es",
-                            headers={"Accept": "application/json", "Content-Type": "application/json"},
-                            json={
-                                "_subject": f"⚠️ Error en Test: {nombre_pdf} (Pregunta {num_pregunta})",
-                                "Usuario": usuario_rep,
-                                "Test_PDF": nombre_pdf,
-                                "Pregunta_Num": str(num_pregunta),
-                                "Error_Reportado": motivo.strip(),
-                                "Pregunta": pregunta_txt,
-                                "Opciones": opciones_txt,
-                                "Respuesta_Correcta_Sistema": correcta_txt,
-                                "Explicacion": exp_limpia,
-                                "_template": "table"
-                            },
-                            timeout=10
-                        )
-                        if resp_mail.status_code == 200:
-                            enviado_ok = True
-                    except Exception:
-                        enviado_ok = False
-
-                    if enviado_ok:
-                        st.success("✅ ¡Reporte enviado correctamente a **info@oposiciona.es**! Muchas gracias por ayudarnos a mejorar.")
-                    else:
-                        st.info("ℹ️ Pulsa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
-
-    asunto_url = urllib.parse.quote(f"Error en Test: {nombre_pdf} (Pregunta {num_pregunta})")
-    cuerpo_url = urllib.parse.quote(cuerpo_completo)
-    mailto_link = f"mailto:info@oposiciona.es?subject={asunto_url}&body={cuerpo_url}"
-    gmail_link = f"https://mail.google.com/mail/?view=cm&fs=1&to=info@oposiciona.es&su={asunto_url}&body={cuerpo_url}"
-
-    with col_env2:
-        st.markdown(
-            f"<a href='{gmail_link}' target='_blank' style='display:block; text-align:center; background-color:#d93025; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>📧 Abrir en Gmail</a>",
-            unsafe_allow_html=True
-        )
-    with col_env3:
-        st.markdown(
-            f"<a href='{mailto_link}' target='_blank' style='display:block; text-align:center; background-color:#1f77b4; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>✉️ App de Correo</a>",
-            unsafe_allow_html=True
-        )
-
-    with st.expander("📋 Ver texto completo del reporte"):
-        st.code(cuerpo_completo, language="text")
+            # Disparo desde el propio navegador del usuario (evita bloqueo de Cloudflare a servidores)
+            payload_json = json.dumps(payload)
+            components.html(f"""
+            <div id="status_envio" style="font-family:sans-serif; padding:10px; border-radius:6px; background:#e8f5e9; border:1px solid #2e7d32; color:#1b5e20; font-size:14px; font-weight:600; text-align:center;">
+                ⏳ Conectando y enviando reporte a info@oposiciona.es...
+            </div>
+            <script>
+            (function() {{
+                var data = {payload_json};
+                var box = document.getElementById("status_envio");
+                fetch("https://formsubmit.co/ajax/info@oposiciona.es", {{
+                    method: "POST",
+                    headers: {{
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    }},
+                    body: JSON.stringify(data)
+                }})
+                .then(function(r) {{ return r.json(); }})
+                .then(function(res) {{
+                    if (res.success === "true" || res.success === true) {{
+                        box.style.background = "#e8f5e9";
+                        box.style.borderColor = "#2e7d32";
+                        box.style.color = "#1b5e20";
+                        box.innerHTML = "✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.";
+                    }} else {{
+                        var msg = res.message || "";
+                        if (msg.toLowerCase().indexOf("activate") !== -1 || msg.toLowerCase().indexOf("confirm") !== -1 || msg.toLowerCase().indexOf("form") !== -1) {{
+                            box.style.background = "#fff3cd";
+                            box.style.borderColor = "#ffc107";
+                            box.style.color = "#856404";
+                            box.innerHTML = "🔔 <b>Activación única necesaria:</b> Revisa ahora la bandeja de entrada o SPAM de <b>info@oposiciona.es</b> y pulsa el botón <b>'Activate Form'</b> del correo que acaba de llegar. (" + msg + ")";
+                        }} else {{
+                            box.style.background = "#fff3cd";
+                            box.style.borderColor = "#ffc107";
+                            box.style.color = "#856404";
+                            box.innerHTML = "ℹ️ Aviso del servidor de correo: " + (msg || JSON.stringify(res));
+                        }}
+                    }}
+                }})
+                .catch(function(err) {{
+                    box.style.background = "#ffebee";
+                    box.style.borderColor = "#c62828";
+                    box.style.color = "#b71c1c";
+                    box.innerHTML = "❌ No se pudo conectar con el servidor de correo desde este navegador.";
+                }});
+            }})();
+            </script>
+            """, height=75)
 
 def limpiar_todas_las_busquedas():
     for k in list(st.session_state.keys()):
