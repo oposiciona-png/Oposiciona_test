@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
 import re, random, requests, os, unicodedata, time
+import urllib.parse
 
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
@@ -526,6 +527,102 @@ def descargar_pdf_fresco(url):
     }
     return requests.get(url_nocache, headers=headers)
 
+def render_bloque_reporte_error(q, num_pregunta, ubicacion_key):
+    """Muestra el panel de reporte de errores (actualmente visible solo para administradores)."""
+    if st.session_state.get('email') not in USUARIOS_ADMIN:
+        return
+
+    nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
+    usuario_rep = st.session_state.get('email') or "Desconocido"
+    preamble_txt = q.get('preamble', '').strip()
+    pregunta_txt = q.get('question_text', '').strip()
+    opciones_txt = "\n".join(q.get('options', []))
+    correcta_txt = q['options'][q['answer']] if q.get('answer', -1) != -1 and q['answer'] < len(q.get('options', [])) else "No detectada en el PDF"
+    exp_limpia = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación."
+
+    with st.expander(f"🛠️ Reportar error en la Pregunta {num_pregunta} (Modo Pruebas Admin)"):
+        st.caption("Esta herramienta captura automáticamente todos los datos de la pregunta y envía tu aviso a **info@oposiciona.es**.")
+        motivo = st.text_area(
+            "Describe el error detectado (enunciado, respuesta mal marcada, fallo de lectura del PDF, explicación...):",
+            key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
+            placeholder="Ejemplo: En la pregunta falta un 'NO' en el enunciado, o la explicación se ha cortado al final..."
+        )
+
+        cuerpo_completo = (
+            f"REPORTE DE ERROR EN PLATAFORMA OPOSICIONA\n"
+            f"==================================================\n"
+            f"• Usuario que reporta: {usuario_rep}\n"
+            f"• Nombre del Test / PDF: {nombre_pdf}\n"
+            f"• Nº de pregunta en pantalla: {num_pregunta}\n"
+            + (f"• Preámbulo / Fuente: {preamble_txt}\n" if preamble_txt else "") +
+            f"\n⚠️ DESCRIPCIÓN DEL ERROR INDICADA POR EL USUARIO:\n"
+            f"{motivo.strip() if motivo.strip() else '(Sin descripción adicional)'}\n\n"
+            f"--------------------------------------------------\n"
+            f"DATOS COMPLETOS EXTRAÍDOS DE LA PREGUNTA:\n"
+            f"--------------------------------------------------\n"
+            f"PREGUNTA:\n{pregunta_txt}\n\n"
+            f"OPCIONES:\n{opciones_txt}\n\n"
+            f"RESPUESTA MARCADA COMO CORRECTA:\n{correcta_txt}\n\n"
+            f"EXPLICACIÓN EXTRAÍDA:\n{exp_limpia}\n"
+            f"==================================================\n"
+        )
+
+        col_env1, col_env2, col_env3 = st.columns([1.4, 1, 1])
+
+        with col_env1:
+            if st.button("📨 Enviar directo a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
+                if not motivo.strip():
+                    st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
+                else:
+                    with st.spinner("Enviando reporte a info@oposiciona.es..."):
+                        enviado_ok = False
+                        try:
+                            resp_mail = requests.post(
+                                "https://formsubmit.co/ajax/info@oposiciona.es",
+                                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                                json={
+                                    "_subject": f"⚠️ Error en Test: {nombre_pdf} (Pregunta {num_pregunta})",
+                                    "Usuario": usuario_rep,
+                                    "Test_PDF": nombre_pdf,
+                                    "Pregunta_Num": str(num_pregunta),
+                                    "Error_Reportado": motivo.strip(),
+                                    "Pregunta": pregunta_txt,
+                                    "Opciones": opciones_txt,
+                                    "Respuesta_Correcta_Sistema": correcta_txt,
+                                    "Explicacion": exp_limpia,
+                                    "_template": "table"
+                                },
+                                timeout=10
+                            )
+                            if resp_mail.status_code == 200:
+                                enviado_ok = True
+                        except Exception:
+                            enviado_ok = False
+
+                        if enviado_ok:
+                            st.success("✅ ¡Reporte enviado a **info@oposiciona.es**! *(Nota: Si es el primer envío de la historia de la web, revisa la bandeja de entrada o spam de info@oposiciona.es para pulsar 'Activate Form' una única vez).*")
+                        else:
+                            st.info("ℹ️ Usa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
+
+        asunto_url = urllib.parse.quote(f"Error en Test: {nombre_pdf} (Pregunta {num_pregunta})")
+        cuerpo_url = urllib.parse.quote(cuerpo_completo)
+        mailto_link = f"mailto:info@oposiciona.es?subject={asunto_url}&body={cuerpo_url}"
+        gmail_link = f"https://mail.google.com/mail/?view=cm&fs=1&to=info@oposiciona.es&su={asunto_url}&body={cuerpo_url}"
+
+        with col_env2:
+            st.markdown(
+                f"<a href='{gmail_link}' target='_blank' style='display:block; text-align:center; background-color:#d93025; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>📧 Abrir en Gmail</a>",
+                unsafe_allow_html=True
+            )
+        with col_env3:
+            st.markdown(
+                f"<a href='{mailto_link}' target='_blank' style='display:block; text-align:center; background-color:#1f77b4; color:white; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; margin-top:2px;'>✉️ App de Correo</a>",
+                unsafe_allow_html=True
+            )
+
+        with st.expander("📋 Ver / Copiar datos completos capturados"):
+            st.code(cuerpo_completo, language="text")
+
 def limpiar_todas_las_busquedas():
     for k in list(st.session_state.keys()):
         if k.startswith("busqueda_"): st.session_state[k] = ""
@@ -935,6 +1032,9 @@ elif not st.session_state.finished:
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
+    # --- BLOQUE DE REPORTE DE ERROR DURANTE EL TEST (SOLO VISIBLE PARA ADMIN) ---
+    render_bloque_reporte_error(q, idx + 1, "test_activo")
+
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
@@ -1009,10 +1109,13 @@ else:
             f"{ph}<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>"
             f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {co}</div>"
-            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>"
-            f"<hr style='margin: 15px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'></div>",
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 6px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>"
+            f"</div>",
             unsafe_allow_html=True
         )
+        # --- BLOQUE DE REPORTE DE ERROR EN EL RESUMEN FINAL (SOLO VISIBLE PARA ADMIN) ---
+        render_bloque_reporte_error(q, i + 1, "resumen_final")
+        st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
     c1_b, c2_b, c3_b = st.columns(3)
     c1_b.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
