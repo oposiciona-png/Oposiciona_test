@@ -49,8 +49,7 @@ try {
 } catch(e) {}
 </script>""", height=0)
 
-# PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT (terminada en /exec)
-GOOGLE_SHEETS_WEBHOOK_URL = st.secrets.get("GOOGLE_SHEETS_WEBHOOK_URL", "PEGA_AQUI_TU_URL_DE_APPS_SCRIPT")
+GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw_B-g4pwxuZX4HzH99cobW6jQoValvLXI2ogeJgMuekjwlyS766KS4ujm3CFYdJ7DPlA/exec"
 
 def formatear_duracion(segundos):
     segundos = max(0, int(segundos))
