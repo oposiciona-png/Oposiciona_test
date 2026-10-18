@@ -297,7 +297,6 @@ class PDFQuizParser:
                     ft = lines[j]["text"].strip()
                     if ft == "<NEW_BLOCK>": continue
                     m_fnum = match_q_num(ft)
-                    # Ignorar falsos números de artículo dentro de enunciado (como "136.2.o)" o "56 a 59 del RD")
                     if m_fnum and (re.match(r'^\d+\.\d+', ft) or re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE)):
                         m_fnum = None
                     if not found_a:
@@ -307,7 +306,6 @@ class PDFQuizParser:
                     elif not found_b:
                         if is_exp_marker(ft):
                             aborted = True; break
-                        # Soportar errata de doble opción "a)" seguida de "b)" (ej. Pregunta 3 de Examen Repaso Tema 2)
                         if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_b = True
                             if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
@@ -317,7 +315,6 @@ class PDFQuizParser:
                         if is_exp_marker(ft):
                             is_real_q_candidate = True; break
                         if m_fnum:
-                            # Si la pregunta tenía opciones a), b) y c) pero en el PDF se omitió la explicación (ej. SABADO 5 SEP)
                             if found_c and (int(m_fnum.group(1)) == cand_num + 1):
                                 is_real_q_candidate = True; break
                             aborted = True; break
@@ -572,16 +569,25 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
 
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
     usuario_rep = st.session_state.get('email') or "Alumno Oposiciona"
-    preamble_txt = q.get('preamble', '').strip()
+    preamble_txt = re.sub(r'\*\*|\🏷️', '', q.get('preamble', '')).strip()
     pregunta_txt = q.get('question_text', '').strip()
-    opciones_txt = "\n".join(q.get('options', []))
-    correcta_txt = q['options'][q['answer']] if q.get('answer', -1) != -1 and q['answer'] < len(q.get('options', [])) else "No detectada en el PDF"
-    exp_limpia = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación."
+    lista_opciones = q.get('options', [])
+    idx_correcta = q.get('answer', -1)
+    correcta_txt = lista_opciones[idx_correcta] if (0 <= idx_correcta < len(lista_opciones)) else "⚠️ No detectada automáticamente en el PDF"
+    exp_limpia = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación disponible."
+
+    opciones_visuales_email = []
+    for idx_opt, texto_opt in enumerate(lista_opciones):
+        if idx_opt == idx_correcta:
+            opciones_visuales_email.append(f"✅ [MARCADA CORRECTA] ➔ {texto_opt}")
+        else:
+            opciones_visuales_email.append(f"⚪ {texto_opt}")
+    bloque_opciones_email = "\n\n".join(opciones_visuales_email)
 
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
         f"<b style='color:#bf360c; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
-        "<span style='font-size:13px; color:#5d4037;'>Se adjuntarán automáticamente el nombre del PDF, la pregunta, las respuestas y la explicación junto con tu comentario.</span>"
+        "<span style='font-size:13px; color:#5d4037;'>Se enviará una ficha visual con tu comentario, el enunciado, las opciones y la explicación para revisarlo al instante.</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -589,25 +595,45 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     motivo = st.text_area(
         "Explica brevemente el error encontrado:",
         key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
-        placeholder="Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta está mal marcada, o se ha cortado el texto..."
+        placeholder="Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta debería ser la b), o se ha cortado una frase..."
     )
 
     if st.button("📨 Enviar a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
         if not motivo.strip():
             st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
         else:
+            ficha_resumen = (
+                f"══════════════════════════════════════════════════\n"
+                f"🚨 LO QUE DICE EL ALUMNO ({usuario_rep}):\n"
+                f"« {motivo.strip()} »\n"
+                f"══════════════════════════════════════════════════\n\n"
+                f"📄 TEST / PDF: {nombre_pdf}  (Pregunta Nº {num_pregunta})\n"
+                + (f"🏷️ ORIGEN / SUPUESTO: {preamble_txt}\n" if preamble_txt else "") +
+                f"\n──────────────────────────────────────────────────\n"
+                f"❓ ENUNCIADO DE LA PREGUNTA:\n"
+                f"──────────────────────────────────────────────────\n"
+                f"{pregunta_txt}\n\n"
+                f"──────────────────────────────────────────────────\n"
+                f"📋 OPCIONES DE RESPUESTA:\n"
+                f"──────────────────────────────────────────────────\n"
+                f"{bloque_opciones_email}\n\n"
+                f"──────────────────────────────────────────────────\n"
+                f"💡 EXPLICACIÓN ACTUAL EN EL TEST:\n"
+                f"──────────────────────────────────────────────────\n"
+                f"{exp_limpia}\n"
+                f"══════════════════════════════════════════════════"
+            )
+
             payload = {
-                "_subject": f"⚠️ Error en Test: {nombre_pdf} (Pregunta {num_pregunta})",
-                "Usuario_que_reporta": usuario_rep,
-                "Nombre_del_PDF": nombre_pdf,
-                "Numero_de_Pregunta": str(num_pregunta),
-                "Preambulo_Fuente": preamble_txt if preamble_txt else "N/A",
-                "Explicacion_del_Error": motivo.strip(),
-                "Pregunta": pregunta_txt,
-                "Opciones": opciones_txt,
-                "Respuesta_Correcta_Detectada": correcta_txt,
-                "Explicacion_Extraida": exp_limpia,
-                "_template": "table",
+                "_subject": f"⚠️ Revisar Pregunta {num_pregunta} | {nombre_pdf}",
+                "1_🚨_COMENTARIO_DEL_ALUMNO": f"« {motivo.strip()} »  —  (Enviado por: {usuario_rep})",
+                "2_📄_TEST_Y_NUMERO_PREGUNTA": f"{nombre_pdf}  |  Pregunta Nº {num_pregunta}" + (f"  |  {preamble_txt}" if preamble_txt else ""),
+                "3_❓_ENUNCIADO_PREGUNTA": pregunta_txt,
+                "4_📋_OPCIONES_(CON_LA_CORRECTA_MARCADA)": bloque_opciones_email,
+                "5_🎯_RESPUESTA_QUE_DA_POR_BUENA_EL_TEST": correcta_txt,
+                "6_💡_EXPLICACION_ACTUAL": exp_limpia,
+                "7_🗂️_FICHA_COMPLETA_DE_UN_VISTAZO": ficha_resumen,
+                "_template": "box",
                 "_captcha": "false"
             }
 
@@ -680,7 +706,7 @@ def normalizar_para_busqueda(texto):
 def coincide_busqueda(nombre_test, consulta):
     if not consulta or not consulta.strip(): return True
     n_norm, q_norm = normalizar_para_busqueda(nombre_test), normalizar_para_busqueda(consulta)
-    return bool(re.search(re.escape(q_norm) + r'(?!\d)', n_norm)) if re.search(r'\d+\$', q_norm) else (q_norm in n_norm)
+    return bool(re.search(re.escape(q_norm) + r'(?!\d)', n_norm)) if re.search(r'\d+$', q_norm) else (q_norm in n_norm)
 
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES": return "🏆 Exámenes y Simulacros Oficiales"
