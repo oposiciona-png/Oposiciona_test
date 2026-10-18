@@ -1,9 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata, time, json, smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import re, random, requests, os, unicodedata, time, json
 
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
@@ -275,6 +273,9 @@ class PDFQuizParser:
 
             if m_num or m_rescue:
                 is_real_q_candidate = found_a = found_b = aborted = False
+                prev_exp_txt = current_q["explanation"] if (current_q and current_q["state"] == "E") else ""
+                inside_unclosed_guillemet = prev_exp_txt.count('«') > prev_exp_txt.count('»')
+
                 for j in range(idx + 1, min(idx + 60, len(lines))):
                     ft = lines[j]["text"].strip()
                     if ft == "<NEW_BLOCK>": continue
@@ -294,7 +295,7 @@ class PDFQuizParser:
                     else:
                         if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft, re.IGNORECASE):
                             is_real_q_candidate = True; break
-                        if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE) or '»' in ft or m_fnum:
+                        if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE) or (inside_unclosed_guillemet and '»' in ft) or m_fnum:
                             aborted = True; break
 
                 if is_real_q_candidate and not aborted:
@@ -523,6 +524,10 @@ def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
     return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
 
+def usuario_puede_reportar():
+    """Permite reportar errores a todos los usuarios registrados excepto al rol INVITADO."""
+    return st.session_state.get('rol') != 'INVITADO'
+
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
 
@@ -539,6 +544,9 @@ def descargar_pdf_fresco(url):
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     """Muestra un único botón válido para enviar el reporte de error directamente a info@oposiciona.es."""
+    if not usuario_puede_reportar():
+        return
+
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
     usuario_rep = st.session_state.get('email') or "Alumno Oposiciona"
     preamble_txt = q.get('preamble', '').strip()
@@ -580,23 +588,25 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                 "_captcha": "false"
             }
 
-            # Disparo desde el propio navegador del usuario (evita bloqueo de Cloudflare a servidores)
             payload_json = json.dumps(payload)
             components.html(f"""
             <div id="status_envio" style="font-family:sans-serif; padding:10px; border-radius:6px; background:#e8f5e9; border:1px solid #2e7d32; color:#1b5e20; font-size:14px; font-weight:600; text-align:center;">
-                ⏳ Conectando y enviando reporte a info@oposiciona.es...
+                ⏳ Enviando reporte a info@oposiciona.es...
             </div>
             <script>
             (function() {{
-                var data = {payload_json};
+                var rawData = {payload_json};
+                var formData = new FormData();
+                for (var k in rawData) {{
+                    if (Object.prototype.hasOwnProperty.call(rawData, k)) {{
+                        formData.append(k, rawData[k]);
+                    }}
+                }}
                 var box = document.getElementById("status_envio");
                 fetch("https://formsubmit.co/ajax/info@oposiciona.es", {{
                     method: "POST",
-                    headers: {{
-                        "Content-Type": "application/json",
-                        "Accept": "application/json"
-                    }},
-                    body: JSON.stringify(data)
+                    headers: {{ "Accept": "application/json" }},
+                    body: formData
                 }})
                 .then(function(r) {{ return r.json(); }})
                 .then(function(res) {{
@@ -607,16 +617,13 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                         box.innerHTML = "✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.";
                     }} else {{
                         var msg = res.message || "";
-                        if (msg.toLowerCase().indexOf("activate") !== -1 || msg.toLowerCase().indexOf("confirm") !== -1 || msg.toLowerCase().indexOf("form") !== -1) {{
-                            box.style.background = "#fff3cd";
-                            box.style.borderColor = "#ffc107";
-                            box.style.color = "#856404";
-                            box.innerHTML = "🔔 <b>Activación única necesaria:</b> Revisa ahora la bandeja de entrada o SPAM de <b>info@oposiciona.es</b> y pulsa el botón <b>'Activate Form'</b> del correo que acaba de llegar. (" + msg + ")";
+                        box.style.background = "#fff3cd";
+                        box.style.borderColor = "#ffc107";
+                        box.style.color = "#856404";
+                        if (msg.toLowerCase().indexOf("activate") !== -1 || msg.toLowerCase().indexOf("confirm") !== -1) {{
+                            box.innerHTML = "🔔 <b>Activación única necesaria:</b> Revisa el correo (y carpeta SPAM) de <b>info@oposiciona.es</b> y pulsa <b>'Activate Form'</b>.";
                         }} else {{
-                            box.style.background = "#fff3cd";
-                            box.style.borderColor = "#ffc107";
-                            box.style.color = "#856404";
-                            box.innerHTML = "ℹ️ Aviso del servidor de correo: " + (msg || JSON.stringify(res));
+                            box.innerHTML = "ℹ️ Respuesta del servidor: " + (msg || JSON.stringify(res));
                         }}
                     }}
                 }})
@@ -624,7 +631,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                     box.style.background = "#ffebee";
                     box.style.borderColor = "#c62828";
                     box.style.color = "#b71c1c";
-                    box.innerHTML = "❌ No se pudo conectar con el servidor de correo desde este navegador.";
+                    box.innerHTML = "❌ No se pudo completar el envío desde el navegador.";
                 }});
             }})();
             </script>
@@ -1000,6 +1007,7 @@ elif not st.session_state.finished:
     st.markdown("<style>:root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; } .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }</style>", unsafe_allow_html=True)
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
+    puede_rep = usuario_puede_reportar()
 
     st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     if q['preamble']: st.write(q['preamble'])
@@ -1008,7 +1016,11 @@ elif not st.session_state.finished:
     def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
 
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.25])
+    if puede_rep:
+        c1, c2, c3, c4, c5 = st.columns([0.95, 1, 1, 1.15, 1.25])
+    else:
+        c1, c2, c3, c4 = st.columns(4)
+        c5 = None
 
     if c1.button("🡄 Anterior", use_container_width=True) and idx > 0:
         save_answer(sel_opt)
@@ -1024,15 +1036,16 @@ elif not st.session_state.finished:
         if c3.button("Terminar ➔", use_container_width=True):
             save_answer(sel_opt)
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
-    if c4.button("⏹ Finalizar", use_container_width=True):
+    if c4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(sel_opt)
         st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
 
     key_rep_test = f"rep_open_test_{idx + 1}"
     if key_rep_test not in st.session_state:
         st.session_state[key_rep_test] = False
-    if c5.button("⚠️ Reportar Error", key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
-        st.session_state[key_rep_test] = not st.session_state[key_rep_test]
+    if puede_rep and c5 is not None:
+        if c5.button("⚠️ Reportar Error", key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
+            st.session_state[key_rep_test] = not st.session_state[key_rep_test]
 
     if st.session_state.checked:
         if q['answer'] != -1:
@@ -1046,13 +1059,14 @@ elif not st.session_state.finished:
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
-    if st.session_state.get(key_rep_test, False):
+    if puede_rep and st.session_state.get(key_rep_test, False):
         render_cuadro_reporte_error(q, idx + 1, "test_activo")
 
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
 
+    puede_rep = usuario_puede_reportar()
     aciertos = fallos = blancos = preg_eval = 0
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
@@ -1127,13 +1141,14 @@ else:
             f"</div>",
             unsafe_allow_html=True
         )
-        key_rep_res = f"rep_open_res_{i + 1}"
-        if key_rep_res not in st.session_state:
-            st.session_state[key_rep_res] = False
-        if st.button(f"⚠️ Reportar error en Pregunta {i + 1}", key=f"btn_err_res_{i + 1}"):
-            st.session_state[key_rep_res] = not st.session_state[key_rep_res]
-        if st.session_state[key_rep_res]:
-            render_cuadro_reporte_error(q, i + 1, "resumen_final")
+        if puede_rep:
+            key_rep_res = f"rep_open_res_{i + 1}"
+            if key_rep_res not in st.session_state:
+                st.session_state[key_rep_res] = False
+            if st.button(f"⚠️ Reportar error en Pregunta {i + 1}", key=f"btn_err_res_{i + 1}"):
+                st.session_state[key_rep_res] = not st.session_state[key_rep_res]
+            if st.session_state[key_rep_res]:
+                render_cuadro_reporte_error(q, i + 1, "resumen_final")
 
         st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
