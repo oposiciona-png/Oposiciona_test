@@ -1,10 +1,51 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata, time, json
+import re, random, requests, os, unicodedata, time, json, threading
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
+
+URL_REGISTRO_SHEETS = "https://script.google.com/macros/s/AKfycbwaNqWlmzc7B1izc9nJb41UCs2YdH1FSSxp1tlULZzELcISaNd6jMKdcL7hxNyQtg3GMA/exec"
+
+def registrar_evento_sheets(evento, test="", aciertos="", fallos="", blancos="", nota="", email_override=None, rol_override=None):
+    """Envía en segundo plano la actividad del usuario a Google Sheets sin ralentizar la interfaz."""
+    if not URL_REGISTRO_SHEETS:
+        return
+    try:
+        ahora = datetime.now(ZoneInfo("Europe/Madrid"))
+        fecha_str = ahora.strftime("%d/%m/%Y")
+        hora_str = ahora.strftime("%H:%M:%S")
+    except Exception:
+        ahora = datetime.now()
+        fecha_str = ahora.strftime("%d/%m/%Y")
+        hora_str = ahora.strftime("%H:%M:%S")
+
+    email_usr = email_override if email_override is not None else (st.session_state.get("email") or "Desconocido")
+    rol_usr = rol_override if rol_override is not None else (st.session_state.get("rol") or "Sin rol")
+
+    datos = {
+        "fecha": fecha_str,
+        "hora": hora_str,
+        "email": email_usr,
+        "rol": rol_usr,
+        "evento": evento,
+        "test": test,
+        "aciertos": aciertos,
+        "fallos": fallos,
+        "blancos": blancos,
+        "nota": nota
+    }
+
+    def _enviar():
+        try:
+            requests.post(URL_REGISTRO_SHEETS, data=json.dumps(datos), headers={"Content-Type": "application/json"}, timeout=8)
+        except Exception:
+            pass
+
+    threading.Thread(target=_enviar, daemon=True).start()
 
 st.markdown("""<style>
 #MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"] {visibility: hidden !important; display: none !important;}
@@ -50,6 +91,7 @@ try {
 for k, v in [
     ('autenticado', False), ('rol', None), ('email', None), ('es_admin', False),
     ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
+    ('resultado_registrado', False),
     ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
 ]:
     if k not in st.session_state: st.session_state[k] = v
@@ -94,14 +136,17 @@ if not st.session_state.autenticado:
         if correo_limpio in USUARIOS_ADMIN:
             if password_input == PASSWORD_ADMIN:
                 st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, do_scroll=True)
+                registrar_evento_sheets("🔑 Acceso Plataforma", email_override=correo_limpio, rol_override="ACCESO TOTAL")
                 st.rerun()
             else: st.error("❌ Contraseña de administrador incorrecta.")
         elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
             st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, do_scroll=True)
+            registrar_evento_sheets("🔑 Acceso Plataforma", email_override=correo_limpio, rol_override="INVITADO")
             st.rerun()
         elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
             es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
             st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, do_scroll=True)
+            registrar_evento_sheets("🔑 Acceso Plataforma", email_override=correo_limpio, rol_override=rol_usuario)
             st.rerun()
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
     st.stop()
@@ -202,7 +247,6 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-f][\)\.-]|[A-F][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # Unir números de pregunta que vienen solos en una línea ("1.", "2.") con su enunciado o descartar números huérfanos vacíos ("13." antes de "14. Texto")
         cleaned_num_lines, k = [], 0
         while k < len(lines):
             curr = lines[k]
@@ -213,7 +257,6 @@ class PDFQuizParser:
                     m += 1
                 if m < len(lines):
                     next_txt = lines[m]["text"].strip()
-                    # Si la siguiente línea ya empieza por otro número de pregunta (ej. "13." vacío seguido de "14. Cuando..."), descartar el número huérfano vacío
                     if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\)]+(\s|$)', next_txt, re.IGNORECASE):
                         k = m
                         continue
@@ -847,7 +890,7 @@ def handle_radio_change():
             st.session_state.checked = False
             st.session_state.do_scroll = True
         else:
-            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
+            st.session_state.update(finished=True, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True)
 
 def procesar_preguntas(raw_qs):
     patrones_fijos = [
@@ -873,21 +916,24 @@ def procesar_preguntas(raw_qs):
         stats={i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
+        resultado_registrado=False,
         do_scroll=True
     )
+    registrar_evento_sheets("🚀 Inicio Test", test=st.session_state.get("test_name") or "Test")
     st.rerun()
 
 def action_repetir_test():
     st.session_state.update(
         current_index=0,
         stats={i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))},
-        finished=False, checked=False, celebracion_mostrada=False, do_scroll=True
+        finished=False, checked=False, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True
     )
+    registrar_evento_sheets("🔄 Repetición Test", test=st.session_state.get("test_name") or "Test")
 
 def action_subir_otro():
     st.session_state.update(
         questions=[], current_index=0, stats={}, finished=False, checked=False,
-        test_name=None, mostrar_opciones_simulacro=False, celebracion_mostrada=False, do_scroll=True
+        test_name=None, mostrar_opciones_simulacro=False, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True
     )
 
 def action_finalizar_sesion():
@@ -1093,10 +1139,10 @@ elif not st.session_state.finished:
     else:
         if c3.button("Terminar ➔", use_container_width=True):
             save_answer(sel_opt)
-            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
+            st.session_state.update(finished=True, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True); st.rerun()
     if c4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(sel_opt)
-        st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
+        st.session_state.update(finished=True, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True); st.rerun()
 
     key_rep_test = f"rep_open_test_{idx + 1}"
     if key_rep_test not in st.session_state:
@@ -1139,6 +1185,17 @@ else:
             else: stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
     nota = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0
+
+    if not st.session_state.get('resultado_registrado', False):
+        st.session_state.resultado_registrado = True
+        registrar_evento_sheets(
+            evento="🏁 Fin Test",
+            test=st.session_state.get('test_name') or "Test",
+            aciertos=aciertos,
+            fallos=fallos,
+            blancos=blancos,
+            nota=f"{nota:.2f}"
+        )
 
     if nota >= 5.0:
         if not st.session_state.get('celebracion_mostrada', False):
