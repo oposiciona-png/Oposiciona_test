@@ -202,6 +202,30 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-f][\)\.-]|[A-F][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
+        # Unir números de pregunta que vienen solos en una línea ("1.", "2.") con su enunciado o descartar números huérfanos vacíos ("13." antes de "14. Texto")
+        cleaned_num_lines, k = [], 0
+        while k < len(lines):
+            curr = lines[k]
+            txt = curr["text"].strip()
+            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\)]+$', txt, re.IGNORECASE):
+                m = k + 1
+                while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
+                    m += 1
+                if m < len(lines):
+                    next_txt = lines[m]["text"].strip()
+                    # Si la siguiente línea ya empieza por otro número de pregunta (ej. "13." vacío seguido de "14. Cuando..."), descartar el número huérfano vacío
+                    if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\)]+(\s|$)', next_txt, re.IGNORECASE):
+                        k = m
+                        continue
+                    else:
+                        lines[m]["text"] = txt + " " + next_txt
+                        lines[m]["bold"] = curr["bold"] or lines[m]["bold"]
+                        k = m
+                        continue
+            cleaned_num_lines.append(curr)
+            k += 1
+        lines = cleaned_num_lines
+
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
@@ -329,8 +353,8 @@ class PDFQuizParser:
                             is_new_q, expected_q_num = True, num + 1
                         elif expected_q_num - 1 <= num <= expected_q_num + 7:
                             is_new_q, expected_q_num = True, num + 1
-                        elif num == 1 and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
-                            is_new_q, expected_q_num = True, 2
+                        elif num in [1, 2] and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
+                            is_new_q, expected_q_num = True, num + 1
                         elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 35:
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
@@ -347,7 +371,6 @@ class PDFQuizParser:
                 continue
 
             if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-e][\)\.-]|[A-E][\)\-])(\s|$)', text):
-                # Si la opción viene sola (ej. "b)" en una línea tras haberse pegado su frase a la opción anterior en Pregunta 21 de Tema 09 Repaso)
                 only_marker = bool(re.match(r'^([a-e][\)\.-]|[A-E][\)\-])\s*$', text.strip()))
                 if only_marker and current_q["options"]:
                     prev_opt = current_q["options"][-1]
