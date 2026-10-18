@@ -136,7 +136,6 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z0-9])>', '»', line_text)
                             line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
-                            line_text = re.sub(r'\bD\.\s+(?=[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)', 'Don ', line_text)
                             for pat in [
                                 r'^OPOSICIONA\s*', r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*', r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
                                 r'^EXAMEN\s+REPASO\s+ADMINISTRATIVO\s+\d+\s+[A-ZÁÉÍÓÚÑ]+\s+202\d\s*',
@@ -186,27 +185,28 @@ class PDFQuizParser:
                                 if re.search(pat, tl_clean_spaces): is_header = True; break
                         if is_header: continue
 
-                        line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:)\s*', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\.!\?»"”])(?<!\bArt\.)(?<!\bart\.)(?<!\[\.\.\.\])(?<!\d)\s*(\d{1,3}[\.\-]+)(?!\s*[ºª°\d])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<!\d)([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
                             part = part.strip()
                             if part:
-                                lines.append({"text": re.sub(r'^([a-f][\)\.-]|[A-F][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
+                                lines.append({"text": re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto|n[º°\.]?)\s*\$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*\$', txt, re.IGNORECASE):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -221,6 +221,8 @@ class PDFQuizParser:
             if txt.endswith("carenci") and i + 1 < len(lines) and lines[i + 1]["text"].strip().startswith("a) se exige"):
                 lines[i]["text"] = lines[i]["text"].replace("carenci", "carencia)")
                 lines[i + 1]["text"] = lines[i + 1]["text"].replace("a) se exige", "se exige", 1)
+            if txt.startswith("D. Carlos"):
+                lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
 
         def is_exp_marker(s):
             return bool(
@@ -228,32 +230,15 @@ class PDFQuizParser:
                 re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?\s*$', s, re.IGNORECASE)
             )
 
-        def is_opt_line(s):
-            return bool(re.match(r'^([a-e][\)\.\-]|[A-E][\)\-])\s*', s))
+        def match_q_num(s):
+            return (
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', s, re.IGNORECASE)
+            )
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
         current_q, preamble, expected_q_num = None, "", 1
-
-        def match_question_number(s):
-            return (
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d|[ºª°]|[a-zA-Z]\))\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?!\d|[ºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*¿', s, re.IGNORECASE)
-            )
-
-        def line_starts_real_question(line_idx):
-            """Verifica que la línea en line_idx sea realmente el inicio de una pregunta con sus opciones a) y b)."""
-            fa = False
-            for k in range(line_idx + 1, min(line_idx + 45, len(lines))):
-                kt = lines[k]["text"].strip()
-                if kt == "<NEW_BLOCK>": continue
-                if not fa:
-                    if is_exp_marker(kt): return False
-                    if re.match(r'^a[\)\.\-](\s|$)', kt, re.IGNORECASE): fa = True
-                else:
-                    if is_exp_marker(kt): return False
-                    if re.match(r'^[ab][\)\.\-](\s|$)', kt, re.IGNORECASE): return True
-            return False
 
         for idx, line in enumerate(lines):
             text, is_bold = line["text"], line["bold"]
@@ -264,12 +249,12 @@ class PDFQuizParser:
                 continue
 
             text_lower = text.lower()
-            is_option = is_opt_line(text)
+            is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
             is_explanation = False if (current_q and current_q["state"] == "E") else is_exp_marker(text.strip())
 
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and not current_q["options"]:
-                if text.strip().endswith('?') and not re.match(r'^([a-e][\)\.\-]|[A-E][\)\-])\s*[¿A-ZÁÉÍÓÚÑ]', text):
+                if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option, forced_not_option = False, True
 
             is_reserve = bool(re.search(r'\bpreguntas?\s+de\s+reserva\b', text_lower) or re.match(r'^\s*reserva\b', text_lower))
@@ -280,17 +265,24 @@ class PDFQuizParser:
 
             if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
                 is_real_preamble = any(
-                    (match_question_number(lines[j]["text"].strip()) and line_starts_real_question(j)) or
+                    match_q_num(lines[j]["text"].strip()) or
                     (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', lines[j]["text"].strip(), re.IGNORECASE) and lines[j]["text"].strip().endswith('?'))
                     for j in range(idx + 1, min(idx + 30, len(lines)))
                 )
                 if is_real_preamble or is_reserve or is_case_study:
                     if current_q and current_q["options"]: questions.append(current_q)
-                    current_q, preamble, expected_q_num = None, "" if is_reserve else (preamble + text + "\n"), expected_q_num if is_reserve else 1
+                    current_q = None
+                    if not is_reserve:
+                        preamble += text + "\n"
+                        expected_q_num = 1
                     continue
 
             is_new_q = False
-            m_num = match_question_number(text)
+            m_num = match_q_num(text)
+
+            if m_num and current_q and current_q["state"] == "E":
+                if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
+                    m_num = None
 
             m_rescue = False
             if not m_num and not is_option and not is_explanation and not pdf_uses_explicit_exp:
@@ -299,12 +291,50 @@ class PDFQuizParser:
                     m_rescue = True
 
             if m_num or m_rescue:
-                if line_starts_real_question(idx):
+                is_real_q_candidate = found_a = found_b = found_c = aborted = False
+                cand_num = int(m_num.group(1)) if m_num else expected_q_num
+                for j in range(idx + 1, min(idx + 60, len(lines))):
+                    ft = lines[j]["text"].strip()
+                    if ft == "<NEW_BLOCK>": continue
+                    m_fnum = match_q_num(ft)
+                    # Ignorar falsos números de artículo dentro de enunciado (como "136.2.o)" o "56 a 59 del RD")
+                    if m_fnum and (re.match(r'^\d+\.\d+', ft) or re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE)):
+                        m_fnum = None
+                    if not found_a:
+                        if is_exp_marker(ft) or m_fnum:
+                            aborted = True; break
+                        if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE): found_a = True
+                    elif not found_b:
+                        if is_exp_marker(ft):
+                            aborted = True; break
+                        # Soportar errata de doble opción "a)" seguida de "b)" (ej. Pregunta 3 de Examen Repaso Tema 2)
+                        if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE):
+                            found_b = True
+                            if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
+                    else:
+                        if re.match(r'^c[\)\.\-](\s|$)', ft, re.IGNORECASE):
+                            found_c = True
+                        if is_exp_marker(ft):
+                            is_real_q_candidate = True; break
+                        if m_fnum:
+                            # Si la pregunta tenía opciones a), b) y c) pero en el PDF se omitió la explicación (ej. SABADO 5 SEP)
+                            if found_c and (int(m_fnum.group(1)) == cand_num + 1):
+                                is_real_q_candidate = True; break
+                            aborted = True; break
+                        if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE):
+                            aborted = True; break
+
+                if is_real_q_candidate and not aborted:
                     if m_num:
                         num = int(m_num.group(1))
+                        prev_closed_with_pageref = bool(current_q and current_q["state"] == "E" and re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE))
                         if current_q is None:
                             is_new_q, expected_q_num = True, num + 1
-                        elif current_q["state"] in ["O", "E"] and (expected_q_num - 1 <= num <= expected_q_num + 15 or (num == 1 and expected_q_num >= 5)):
+                        elif expected_q_num - 1 <= num <= expected_q_num + 7:
+                            is_new_q, expected_q_num = True, num + 1
+                        elif num == 1 and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
+                            is_new_q, expected_q_num = True, 2
+                        elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 35:
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
@@ -319,7 +349,7 @@ class PDFQuizParser:
                 if not is_reserve: preamble += text + "\n"
                 continue
 
-            if is_option and current_q["state"] in ["Q", "O"]:
+            if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-eA-E])[\)\.-]\s*', text):
                 current_q["options"].append(text)
                 current_q["state"] = "O"
                 if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
