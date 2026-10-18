@@ -136,10 +136,10 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z0-9])>', '»', line_text)
                             line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
-                            # Proteger "D. Nombre" para que nunca se confunda con una opción "d."
                             line_text = re.sub(r'\bD\.\s+(?=[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)', 'Don ', line_text)
                             for pat in [
                                 r'^OPOSICIONA\s*', r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*', r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
+                                r'^EXAMEN\s+REPASO\s+ADMINISTRATIVO\s+\d+\s+[A-ZÁÉÍÓÚÑ]+\s+202\d\s*',
                                 r'^EXAMEN\s+REPASO\s+TEMA\s+\d+\s+COMPLETO\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*(?:ADMINISTRATIVO|GESTI[OÓ]N)\s+202\d\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
@@ -186,11 +186,11 @@ class PDFQuizParser:
                                 if re.search(pat, tl_clean_spaces): is_header = True; break
                         if is_header: continue
 
-                        line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s*', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=\S)\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:)\s*', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\.!\?»"”])(?<!\bArt\.)(?<!\bart\.)(?<!\d)\s*(\d{1,3}[\.\-])(?!\s*[ºª°\d])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\.!\?»"”])(?<!\bArt\.)(?<!\bart\.)(?<!\d)\s*(\d{1,3}[\.\-]+)(?!\s*[ºª°\d])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -224,8 +224,8 @@ class PDFQuizParser:
 
         def is_exp_marker(s):
             return bool(
-                re.match(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?|respuestas?|resp)\s*:', s, re.IGNORECASE) or
-                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?\s*\$', s, re.IGNORECASE)
+                re.match(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?|respuestas?|resp)\s*:', s, re.IGNORECASE) or
+                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?\s*$', s, re.IGNORECASE)
             )
 
         def is_opt_line(s):
@@ -278,10 +278,6 @@ class PDFQuizParser:
             is_new_q = False
             m_num = match_question_number(text)
 
-            if m_num and current_q and current_q["state"] == "E":
-                if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
-                    m_num = None
-
             m_rescue = False
             if not m_num and not is_option and not is_explanation and not pdf_uses_explicit_exp:
                 tc = text.strip()
@@ -297,7 +293,7 @@ class PDFQuizParser:
                     m_fnum = match_question_number(ft)
                     if m_fnum:
                         fn = int(m_fnum.group(1))
-                        if not (fn == 1 or cand_num < fn <= cand_num + 5):
+                        if not (fn == 1 or cand_num < fn <= cand_num + 10):
                             m_fnum = None
                     if not found_a:
                         if is_exp_marker(ft) or m_fnum:
@@ -313,14 +309,11 @@ class PDFQuizParser:
                 if is_real_q_candidate and not aborted:
                     if m_num:
                         num = int(m_num.group(1))
-                        prev_closed_with_pageref = bool(current_q and current_q["state"] == "E" and re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE))
                         if current_q is None:
                             is_new_q, expected_q_num = True, num + 1
-                        elif expected_q_num - 1 <= num <= expected_q_num + 5:
+                        elif current_q["state"] in ["O", "E"] and (expected_q_num - 1 <= num <= expected_q_num + 15 or (num == 1 and expected_q_num >= 5)):
                             is_new_q, expected_q_num = True, num + 1
-                        elif num == 1 and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
-                            is_new_q, expected_q_num = True, 2
-                        elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 35:
+                        elif current_q["state"] == "Q" and expected_q_num == num:
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
@@ -342,7 +335,7 @@ class PDFQuizParser:
                 continue
 
             if is_explanation:
-                exp_clean_line = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?|respuestas?|resp)\s*:?\s*', '', text.strip(), flags=re.IGNORECASE).strip()
+                exp_clean_line = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?|respuestas?|resp)\s*:?\s*', '', text.strip(), flags=re.IGNORECASE).strip()
                 if exp_clean_line:
                     current_q["explanation"] = (current_q["explanation"].rstrip() + "\n\n" + exp_clean_line) if current_q["explanation"] else exp_clean_line
                 current_q["state"] = "E"
@@ -1064,7 +1057,7 @@ elif not st.session_state.finished:
             else: st.error(f"❌ INCORRECTO. La respuesta correcta era: {co}")
         else:
             st.warning("⚪ EN BLANCO. La correcta no se detectó automáticamente en el PDF.") if not sel_opt else st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
-        et = re.sub(r'(?i)^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
+        et = re.sub(r'(?i)^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
@@ -1138,7 +1131,7 @@ else:
         stat = st.session_state.stats[i]
         co = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
         col = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
-        et = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
+        et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #555;'>{q['preamble']}</div>" if q.get('preamble') else ""
         st.markdown(
