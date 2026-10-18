@@ -138,6 +138,7 @@ class PDFQuizParser:
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
                             for pat in [
                                 r'^OPOSICIONA\s*', r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*', r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
+                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*(?:ADMINISTRATIVO|GESTI[OÓ]N)\s+202\d\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
                                 r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
@@ -172,7 +173,8 @@ class PDFQuizParser:
                         if not is_header and not is_page_ref and len(tl_clean_spaces) < 120:
                             for pat in [
                                 r'^oposiciona\$', r'oposicionaes', r'^pagina\s+\d+\s+de\s+\d+\$', r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
-                                r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?', r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
+                                r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?', r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d\$',
+                                r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                 r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+',
                                 r'^examen\s+repaso', r'^examen\s+[a-záéíóúñ0-9\s]+\s*202\d', r'^normas\s+para\s+la\s+realizacion', r'^especial\s+simulacros?',
                                 r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario', r'^respuestas\s+tipo\s+test:\s+temas?\s+\d+'
@@ -197,11 +199,12 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
+        # Unir referencias legales partidas al final de línea (ej. "art." + "136.2.o)")
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto|n[º°\.]?)\s*$', txt, re.IGNORECASE):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -221,6 +224,14 @@ class PDFQuizParser:
 
         pdf_uses_explicit_exp = sum(1 for l in lines if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', l["text"].strip(), re.IGNORECASE)) >= 10
         current_q, preamble, expected_q_num = None, "", 1
+
+        def match_question_number(s):
+            """Reconoce números de pregunta reales (ej. '36.- Texto', '1. Texto', '1 ¿Texto') e ignora '136.2.o)' o '2º'."""
+            return (
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d|[ºª°]|[a-zA-Z]\))\s+\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?!\d|[ºª°])\s*\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*¿', s, re.IGNORECASE)
+            )
 
         for idx, line in enumerate(lines):
             text, is_bold = line["text"], line["bold"]
@@ -247,7 +258,7 @@ class PDFQuizParser:
 
             if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
                 is_real_preamble = any(
-                    re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*[,\.\-\)]+(?![\dºª°])', lines[j]["text"].strip(), re.IGNORECASE) or
+                    match_question_number(lines[j]["text"].strip()) or
                     (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', lines[j]["text"].strip(), re.IGNORECASE) and lines[j]["text"].strip().endswith('?'))
                     for j in range(idx + 1, min(idx + 30, len(lines)))
                 )
@@ -257,9 +268,7 @@ class PDFQuizParser:
                     continue
 
             is_new_q = False
-            m_num = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', text, re.IGNORECASE) or
-                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', text, re.IGNORECASE) or
-                     re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', text, re.IGNORECASE))
+            m_num = match_question_number(text)
 
             if m_num and current_q and current_q["state"] == "E":
                 if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
@@ -273,15 +282,10 @@ class PDFQuizParser:
 
             if m_num or m_rescue:
                 is_real_q_candidate = found_a = found_b = aborted = False
-                prev_exp_txt = current_q["explanation"] if (current_q and current_q["state"] == "E") else ""
-                inside_unclosed_guillemet = prev_exp_txt.count('«') > prev_exp_txt.count('»')
-
                 for j in range(idx + 1, min(idx + 60, len(lines))):
                     ft = lines[j]["text"].strip()
                     if ft == "<NEW_BLOCK>": continue
-                    m_fnum = (re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', ft, re.IGNORECASE) or
-                              re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', ft, re.IGNORECASE) or
-                              re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', ft, re.IGNORECASE))
+                    m_fnum = match_question_number(ft)
                     if not found_a:
                         if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft, re.IGNORECASE) or m_fnum:
                             aborted = True; break
@@ -295,7 +299,7 @@ class PDFQuizParser:
                     else:
                         if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft, re.IGNORECASE):
                             is_real_q_candidate = True; break
-                        if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE) or (inside_unclosed_guillemet and '»' in ft) or m_fnum:
+                        if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE) or m_fnum:
                             aborted = True; break
 
                 if is_real_q_candidate and not aborted:
