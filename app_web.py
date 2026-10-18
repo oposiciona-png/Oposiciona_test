@@ -101,7 +101,7 @@ if not st.session_state.autenticado:
             st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, do_scroll=True)
             st.rerun()
         elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
-            es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN) or (rol_usuario == "ACCESO TOTAL")
+            es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
             st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, do_scroll=True)
             st.rerun()
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
@@ -520,12 +520,7 @@ TESTS_DISPONIBLES_INVITADO = {
 
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
-    rol_act = st.session_state.get('rol')
-    return bool(
-        st.session_state.get('es_admin', False)
-        or correo_act in USUARIOS_ADMIN
-        or rol_act == "ACCESO TOTAL"
-    )
+    return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
 
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
@@ -542,9 +537,9 @@ def descargar_pdf_fresco(url):
     return requests.get(url_nocache, headers=headers)
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
-    """Muestra el formulario desplegado para enviar el reporte de error a info@oposiciona.es."""
+    """Muestra el formulario desplegado para que cualquier alumno o administrador envíe un reporte de error a info@oposiciona.es."""
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
-    usuario_rep = st.session_state.get('email') or "ponentes@oposiciona.es"
+    usuario_rep = st.session_state.get('email') or "Alumno Oposiciona"
     preamble_txt = q.get('preamble', '').strip()
     pregunta_txt = q.get('question_text', '').strip()
     opciones_txt = "\n".join(q.get('options', []))
@@ -554,13 +549,13 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
         f"<b style='color:#bf360c; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
-        "<span style='font-size:13px; color:#5d4037;'>Se adjuntan automáticamente el nombre del PDF, la pregunta, las respuestas y la explicación.</span>"
+        "<span style='font-size:13px; color:#5d4037;'>Se enviarán automáticamente el nombre del PDF, la pregunta, las respuestas y la explicación junto con tu comentario.</span>"
         "</div>",
         unsafe_allow_html=True
     )
 
     motivo = st.text_area(
-        "Explica el error encontrado:",
+        "Explica brevemente el error encontrado:",
         key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
         placeholder="Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta está mal marcada, o se ha cortado el texto..."
     )
@@ -587,7 +582,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     col_env1, col_env2, col_env3 = st.columns([1.4, 1, 1])
 
     with col_env1:
-        if st.button("📨 Enviar directo a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
+        if st.button("📨 Enviar a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
             if not motivo.strip():
                 st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
             else:
@@ -617,9 +612,9 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                         enviado_ok = False
 
                     if enviado_ok:
-                        st.success("✅ ¡Reporte enviado a **info@oposiciona.es**! *(Nota: Si es el primer envío, revisa la bandeja de entrada o spam de info@oposiciona.es para pulsar 'Activate Form' una única vez).*")
+                        st.success("✅ ¡Reporte enviado correctamente a **info@oposiciona.es**! Muchas gracias por ayudarnos a mejorar.")
                     else:
-                        st.info("ℹ️ Usa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
+                        st.info("ℹ️ Pulsa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
 
     asunto_url = urllib.parse.quote(f"Error en Test: {nombre_pdf} (Pregunta {num_pregunta})")
     cuerpo_url = urllib.parse.quote(cuerpo_completo)
@@ -637,7 +632,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
             unsafe_allow_html=True
         )
 
-    with st.expander("📋 Ver texto completo que se envía"):
+    with st.expander("📋 Ver texto completo del reporte"):
         st.code(cuerpo_completo, language="text")
 
 def limpiar_todas_las_busquedas():
@@ -1010,7 +1005,6 @@ elif not st.session_state.finished:
     st.markdown("<style>:root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; } .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }</style>", unsafe_allow_html=True)
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
-    es_admin = usuario_es_admin()
 
     st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     if q['preamble']: st.write(q['preamble'])
@@ -1019,11 +1013,7 @@ elif not st.session_state.finished:
     def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
 
-    if es_admin:
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.15])
-    else:
-        c1, c2, c3, c4 = st.columns(4)
-        c5 = None
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 1.25])
 
     if c1.button("🡄 Anterior", use_container_width=True) and idx > 0:
         save_answer(sel_opt)
@@ -1046,9 +1036,8 @@ elif not st.session_state.finished:
     key_rep_test = f"rep_open_test_{idx + 1}"
     if key_rep_test not in st.session_state:
         st.session_state[key_rep_test] = False
-    if es_admin and c5 is not None:
-        if c5.button("⚠️ Error", key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
-            st.session_state[key_rep_test] = not st.session_state[key_rep_test]
+    if c5.button("⚠️ Reportar Error", key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
+        st.session_state[key_rep_test] = not st.session_state[key_rep_test]
 
     if st.session_state.checked:
         if q['answer'] != -1:
@@ -1062,14 +1051,13 @@ elif not st.session_state.finished:
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
-    if es_admin and st.session_state.get(key_rep_test, False):
+    if st.session_state.get(key_rep_test, False):
         render_cuadro_reporte_error(q, idx + 1, "test_activo")
 
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
 
-    es_admin = usuario_es_admin()
     aciertos = fallos = blancos = preg_eval = 0
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
@@ -1144,14 +1132,13 @@ else:
             f"</div>",
             unsafe_allow_html=True
         )
-        if es_admin:
-            key_rep_res = f"rep_open_res_{i + 1}"
-            if key_rep_res not in st.session_state:
-                st.session_state[key_rep_res] = False
-            if st.button(f"⚠️ Reportar error en Pregunta {i + 1}", key=f"btn_err_res_{i + 1}"):
-                st.session_state[key_rep_res] = not st.session_state[key_rep_res]
-            if st.session_state[key_rep_res]:
-                render_cuadro_reporte_error(q, i + 1, "resumen_final")
+        key_rep_res = f"rep_open_res_{i + 1}"
+        if key_rep_res not in st.session_state:
+            st.session_state[key_rep_res] = False
+        if st.button(f"⚠️ Reportar error en Pregunta {i + 1}", key=f"btn_err_res_{i + 1}"):
+            st.session_state[key_rep_res] = not st.session_state[key_rep_res]
+        if st.session_state[key_rep_res]:
+            render_cuadro_reporte_error(q, i + 1, "resumen_final")
 
         st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
