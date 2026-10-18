@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata, time, json
+import re, random, requests, os, unicodedata, time, json, threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -96,8 +96,15 @@ def formatear_duracion(segundos):
         return f"{horas}h {minutos:02d}m {segs:02d}s"
     return f"{minutos}m {segs:02d}s"
 
+def _enviar_post_background(url, payload):
+    """Función auxiliar que se ejecuta en segundo plano sin bloquear la interfaz del usuario."""
+    try:
+        requests.post(url, json=payload, timeout=8)
+    except Exception:
+        pass
+
 def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", blancos="", nota="", accion="nueva_fila"):
-    """Envía el registro a Google Sheets salvo que sea el administrador (ponentes@oposiciona.es)."""
+    """Prepara los datos y los envía en segundo plano (threading) a Google Sheets salvo que sea el administrador."""
     email_actual = (st.session_state.get("email") or "").lower().strip()
     if email_actual in USUARIOS_ADMIN or st.session_state.get("es_admin", False):
         return
@@ -136,7 +143,7 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
             "nota": nota,
             "dispositivo": detectar_dispositivo_usuario()
         }
-        requests.post(url, json=payload, timeout=4)
+        threading.Thread(target=_enviar_post_background, args=(url, payload), daemon=True).start()
     except Exception:
         pass
 
