@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata
+import re, random, requests, os, unicodedata, time
 
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
@@ -129,7 +129,6 @@ class PDFQuizParser:
                             line_text = re.sub(r'>{2,}', '»', line_text)
                             line_text = re.sub(r'<(?=[A-ZÁÉÍÓÚÑa-záéíóúñ0-9"«])', '«', line_text)
                             line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z0-9])>', '»', line_text)
-                            # Eliminamos pies de página ("www.oposiciona.es" y "Página X de Y") incluso si vienen pegados a otra línea
                             line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
                             for pat in [
@@ -185,7 +184,6 @@ class PDFQuizParser:
                         line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
-                        # Separa en línea propia cualquier referencia "(página X, tema Y)" que venga pegada al final de una frase
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
@@ -302,7 +300,7 @@ class PDFQuizParser:
                             is_new_q, expected_q_num = True, num + 1
                         elif num == 1 and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
                             is_new_q, expected_q_num = True, 2
-                        elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 25:
+                        elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 35:
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
@@ -517,6 +515,17 @@ TESTS_DISPONIBLES_INVITADO = {
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
 
+def descargar_pdf_fresco(url):
+    """Descarga el PDF desde Google Drive evitando cualquier caché intermedia de red o servidor."""
+    sep = "&" if "?" in url else "?"
+    url_nocache = f"{url}{sep}_cb={int(time.time() * 1000)}"
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return requests.get(url_nocache, headers=headers)
+
 def limpiar_todas_las_busquedas():
     for k in list(st.session_state.keys()):
         if k.startswith("busqueda_"): st.session_state[k] = ""
@@ -553,7 +562,7 @@ def cargar_test_desde_url(nombre_test, url_descarga):
     st.session_state.mostrar_opciones_simulacro = False
     with st.spinner(f"Extrayendo '{nombre_test}' de forma segura..."):
         try:
-            r = requests.get(url_descarga)
+            r = descargar_pdf_fresco(url_descarga)
             if r.status_code == 200:
                 raw_qs = PDFQuizParser.parse(r.content)
                 if not raw_qs: st.error("No se encontraron preguntas válidas en este PDF.")
@@ -588,7 +597,7 @@ def extraer_preguntas_aleatorias_de_lista(pdfs_candidatos, cantidad_deseada, bar
         if barra_progreso is not None:
             barra_progreso.progress((paso + 1) / max(1, len(idx_desc)), text="🎲 Sorteando temas y extrayendo preguntas al azar...")
         try:
-            r = requests.get(url)
+            r = descargar_pdf_fresco(url)
             if r.status_code == 200:
                 qs = PDFQuizParser.parse(r.content)
                 if qs:
@@ -606,7 +615,7 @@ def extraer_preguntas_aleatorias_de_lista(pdfs_candidatos, cantidad_deseada, bar
         if qs_disp >= cantidad_deseada: break
         cat, t_name, url = pdfs_copia[ir]
         try:
-            r = requests.get(url)
+            r = descargar_pdf_fresco(url)
             if r.status_code == 200:
                 qs = PDFQuizParser.parse(r.content)
                 if qs:
@@ -873,7 +882,7 @@ if not st.session_state.questions:
                             proc += 1
                             bp.progress(proc / tot_pdfs, text=f"Analizando ({proc}/{tot_pdfs}): {nom}...")
                             try:
-                                r = requests.get(url)
+                                r = descargar_pdf_fresco(url)
                                 nq = len(PDFQuizParser.parse(r.content)) if r.status_code == 200 else "Error"
                             except Exception: nq = "-"
                             t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** |\n" if nom in nuevos_hoy else f"| {cat} | {nom} | {nq} preguntas |\n"
