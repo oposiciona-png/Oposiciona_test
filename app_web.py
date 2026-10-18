@@ -51,6 +51,15 @@ try {
 
 GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw_B-g4pwxuZX4HzH99cobW6jQoValvLXI2ogeJgMuekjwlyS766KS4ujm3CFYdJ7DPlA/exec"
 
+USUARIOS_ADMIN = ["ponentes@oposiciona.es", "ponentes@oposicona.es"]
+USUARIOS_AUTORIZADOS = {
+    "ACCESO TOTAL": ["ponentes@oposiciona.es", "ponentes@oposicona.es", "gonzalogonzaleztejedor@gmail.com", "ignacio.garcia.heras@gmail.com", "alvarezpugamartin@gmail.com", "claratoledo06@gmail.com", "blancazortega@gmail.com", "mijurista@gmail.com", "isabelmgutierrogil@gmail.com", "carmenvl28@gmail.com", "leticiagenerelosolana@gmail.com", "cguinaldobravo@gmail.com", "alvaro20011996@gmail.com", "sion.nuba@gmail.com"],
+    "ADMTVOS": ["andreitalopeamor1@gmail.com", "elenavegasanchez73@gmail.com", "josemurillomoreno.mail@gmail.com", "raulff1997.rfg@gmail.com", "sandradcastanares@gmail.com", "joycewayland@gmail.com", "celia.pks@gmail.com", "cynthiaflafla14@gmail.com", "fragosotorbellinocarmen@gmail.com", "pherrerojulian@gmail.com", "rsilveiraescudero@gmail.com", "delfijv19@gmail.com", "marielipedreira@hotmail.com", "vanessagarciajimenez87@gmail.com", "luiscacid@gmail.com", "miguelromanrmm@gmail.com", "raquelkmacho@gmail.com"],
+    "GESTION": ["vsaurod@gmail.com", "mariaquirosmonge5@gmail.com", "vanessagomeztdla@gmail.com", "zoemorcor@gmail.com", "julianayem@gmail.com", "yasminkhalili@gmail.com", "miriamvazquezseoane2000@gmail.com", "monetcacerescc@gmail.com", "maariiamaji@gmail.com", "micastroespejo@gmail.com", "aisacarrerapexe@gmail.com", "csanchezssmm@gmail.com", "maria.concal@gmail.com", "mariachinchurreta@gmail.com", "rocio10460@gmail.com", "manuelmuriel97@gmail.com", "hfdiaz99@gmail.com", "ireneizquierdo22@gmail.com", "mfangela23@gmail.com", "manuelsan240902@gmail.com"],
+    "INVITADO": ["invitado@oposiciona.es", "invitado"]
+}
+PASSWORD_ADMIN, PASSWORD_ACCESO, PASSWORD_INVITADO = "Gonz4loN4cho23", "plaza2026", "oposiciona"
+
 def formatear_duracion(segundos):
     segundos = max(0, int(segundos))
     horas, resto = divmod(segundos, 3600)
@@ -60,7 +69,11 @@ def formatear_duracion(segundos):
     return f"{minutos}m {segs:02d}s"
 
 def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", blancos="", nota="", accion="nueva_fila"):
-    """Envía el registro a Google Sheets creando 1 sola fila al iniciar un test y actualizándola con Hora Fin y Duración al terminar."""
+    """Envía el registro a Google Sheets salvo que sea el administrador (ponentes@oposiciona.es)."""
+    email_actual = (st.session_state.get("email") or "").lower().strip()
+    if email_actual in USUARIOS_ADMIN or st.session_state.get("es_admin", False):
+        return
+
     url = (GOOGLE_SHEETS_WEBHOOK_URL or "").strip()
     if not url or not url.startswith("https://script.google.com/"):
         return
@@ -83,7 +96,7 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
             "hora_inicio": hora_ini,
             "hora_fin": hora_fin,
             "duracion": duracion_str,
-            "email": st.session_state.get("email") or "desconocido",
+            "email": email_actual or "desconocido",
             "rol": st.session_state.get("rol") or "",
             "especialidad": st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "",
             "categoria": st.session_state.get("test_cat") or st.session_state.get("saved_cat") or "",
@@ -116,15 +129,6 @@ if st.session_state.do_scroll:
         p.scrollTo({top: 0, behavior: 'smooth'});
     }, 200); } catch(e) {}
     </script>""", height=0)
-
-USUARIOS_ADMIN = ["ponentes@oposiciona.es", "ponentes@oposicona.es"]
-USUARIOS_AUTORIZADOS = {
-    "ACCESO TOTAL": ["ponentes@oposiciona.es", "ponentes@oposicona.es", "gonzalogonzaleztejedor@gmail.com", "ignacio.garcia.heras@gmail.com", "alvarezpugamartin@gmail.com", "claratoledo06@gmail.com", "blancazortega@gmail.com", "mijurista@gmail.com", "isabelmgutierrogil@gmail.com", "carmenvl28@gmail.com", "leticiagenerelosolana@gmail.com", "cguinaldobravo@gmail.com", "alvaro20011996@gmail.com", "sion.nuba@gmail.com"],
-    "ADMTVOS": ["andreitalopeamor1@gmail.com", "elenavegasanchez73@gmail.com", "josemurillomoreno.mail@gmail.com", "raulff1997.rfg@gmail.com", "sandradcastanares@gmail.com", "joycewayland@gmail.com", "celia.pks@gmail.com", "cynthiaflafla14@gmail.com", "fragosotorbellinocarmen@gmail.com", "pherrerojulian@gmail.com", "rsilveiraescudero@gmail.com", "delfijv19@gmail.com", "marielipedreira@hotmail.com", "vanessagarciajimenez87@gmail.com", "luiscacid@gmail.com", "miguelromanrmm@gmail.com", "raquelkmacho@gmail.com"],
-    "GESTION": ["vsaurod@gmail.com", "mariaquirosmonge5@gmail.com", "vanessagomeztdla@gmail.com", "zoemorcor@gmail.com", "julianayem@gmail.com", "yasminkhalili@gmail.com", "miriamvazquezseoane2000@gmail.com", "monetcacerescc@gmail.com", "maariiamaji@gmail.com", "micastroespejo@gmail.com", "aisacarrerapexe@gmail.com", "csanchezssmm@gmail.com", "maria.concal@gmail.com", "mariachinchurreta@gmail.com", "rocio10460@gmail.com", "manuelmuriel97@gmail.com", "hfdiaz99@gmail.com", "ireneizquierdo22@gmail.com", "mfangela23@gmail.com", "manuelsan240902@gmail.com"],
-    "INVITADO": ["invitado@oposiciona.es", "invitado"]
-}
-PASSWORD_ADMIN, PASSWORD_ACCESO, PASSWORD_INVITADO = "Gonz4loN4cho23", "plaza2026", "oposiciona"
 
 col1, col2, col3 = st.columns([1, 0.8, 1])
 with col2:
