@@ -191,15 +191,16 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                        # En mitad de línea, evitar cortar siglas con puntos como "C.A.", "S.A.", "S.L." o "D."
+                        line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
                             part = part.strip()
                             if part:
-                                lines.append({"text": re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
+                                lines.append({"text": re.sub(r'^([a-f][\)\.-]|[A-F][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
         merged_lines, i = [], 0
@@ -249,12 +250,12 @@ class PDFQuizParser:
                 continue
 
             text_lower = text.lower()
-            is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
+            is_option = bool(re.match(r'^([a-z][\)\.\-]|[A-Z][\)\-])\s*', text))
             is_explanation = False if (current_q and current_q["state"] == "E") else is_exp_marker(text.strip())
 
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and not current_q["options"]:
-                if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
+                if text.strip().endswith('?') and not re.match(r'^([a-z][\)\.\-]|[A-Z][\)\-])\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option, forced_not_option = False, True
 
             is_reserve = bool(re.search(r'\bpreguntas?\s+de\s+reserva\b', text_lower) or re.match(r'^\s*reserva\b', text_lower))
@@ -346,7 +347,7 @@ class PDFQuizParser:
                 if not is_reserve: preamble += text + "\n"
                 continue
 
-            if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-eA-E])[\)\.-]\s*', text):
+            if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-e][\)\.-]|[A-E][\)\-])\s*', text):
                 current_q["options"].append(text)
                 current_q["state"] = "O"
                 if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
@@ -377,8 +378,10 @@ class PDFQuizParser:
                     bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower)) or
                     (bool(re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower)) and (ep or not ec))
                 )
+                # Si la pregunta ya tiene sus 4 opciones (a, b, c, d), la 4ª opción termina en punto y empieza una frase por "Artículo X...", es una explicación sin el título "Explicación:" (ej. Preguntas 7 y 20 de Tema 09)
+                implicit_after_4_opts = len(current_q["options"]) >= 4 and ep and ilr
                 if len(current_q["options"]) < 2 or ec or len(lo) <= 5: inp = ilr = iie = False
-                if (inp or ilr or iie) and not pdf_uses_explicit_exp:
+                if ((inp or ilr or iie) and not pdf_uses_explicit_exp) or implicit_after_4_opts:
                     current_q["state"], current_q["explanation"] = "E", text
                 else:
                     if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
@@ -576,18 +579,10 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     correcta_txt = lista_opciones[idx_correcta] if (0 <= idx_correcta < len(lista_opciones)) else "⚠️ No detectada automáticamente en el PDF"
     exp_limpia = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación disponible."
 
-    opciones_visuales_email = []
-    for idx_opt, texto_opt in enumerate(lista_opciones):
-        if idx_opt == idx_correcta:
-            opciones_visuales_email.append(f"✅ [MARCADA CORRECTA] ➔ {texto_opt}")
-        else:
-            opciones_visuales_email.append(f"⚪ {texto_opt}")
-    bloque_opciones_email = "\n\n".join(opciones_visuales_email)
-
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
         f"<b style='color:#bf360c; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
-        "<span style='font-size:13px; color:#5d4037;'>Se enviará una ficha visual con tu comentario, el enunciado, las opciones y la explicación para revisarlo al instante.</span>"
+        "<span style='font-size:13px; color:#5d4037;'>Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -602,40 +597,25 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         if not motivo.strip():
             st.warning("⚠️ Escribe brevemente en qué consiste el error antes de enviarlo.")
         else:
-            ficha_resumen = (
-                f"══════════════════════════════════════════════════\n"
-                f"🚨 LO QUE DICE EL ALUMNO ({usuario_rep}):\n"
-                f"« {motivo.strip()} »\n"
-                f"══════════════════════════════════════════════════\n\n"
-                f"📄 TEST / PDF: {nombre_pdf}  (Pregunta Nº {num_pregunta})\n"
-                + (f"🏷️ ORIGEN / SUPUESTO: {preamble_txt}\n" if preamble_txt else "") +
-                f"\n──────────────────────────────────────────────────\n"
-                f"❓ ENUNCIADO DE LA PREGUNTA:\n"
-                f"──────────────────────────────────────────────────\n"
-                f"{pregunta_txt}\n\n"
-                f"──────────────────────────────────────────────────\n"
-                f"📋 OPCIONES DE RESPUESTA:\n"
-                f"──────────────────────────────────────────────────\n"
-                f"{bloque_opciones_email}\n\n"
-                f"──────────────────────────────────────────────────\n"
-                f"💡 EXPLICACIÓN ACTUAL EN EL TEST:\n"
-                f"──────────────────────────────────────────────────\n"
-                f"{exp_limpia}\n"
-                f"══════════════════════════════════════════════════"
-            )
-
             payload = {
                 "_subject": f"⚠️ Revisar Pregunta {num_pregunta} | {nombre_pdf}",
-                "1_🚨_COMENTARIO_DEL_ALUMNO": f"« {motivo.strip()} »  —  (Enviado por: {usuario_rep})",
-                "2_📄_TEST_Y_NUMERO_PREGUNTA": f"{nombre_pdf}  |  Pregunta Nº {num_pregunta}" + (f"  |  {preamble_txt}" if preamble_txt else ""),
-                "3_❓_ENUNCIADO_PREGUNTA": pregunta_txt,
-                "4_📋_OPCIONES_(CON_LA_CORRECTA_MARCADA)": bloque_opciones_email,
-                "5_🎯_RESPUESTA_QUE_DA_POR_BUENA_EL_TEST": correcta_txt,
-                "6_💡_EXPLICACION_ACTUAL": exp_limpia,
-                "7_🗂️_FICHA_COMPLETA_DE_UN_VISTAZO": ficha_resumen,
-                "_template": "box",
-                "_captcha": "false"
+                "01_🚨_QUE_REPORTA_EL_ALUMNO": f"« {motivo.strip()} »",
+                "02_👤_ALUMNO_Y_TEST": f"Alumno: {usuario_rep}   |   Test: {nombre_pdf} (Pregunta Nº {num_pregunta})" + (f"   |   {preamble_txt}" if preamble_txt else ""),
+                "03_❓_ENUNCIADO_DE_LA_PREGUNTA": pregunta_txt,
             }
+
+            for i_opt, texto_opt in enumerate(lista_opciones):
+                letra_mayus = chr(65 + i_opt)
+                num_campo = 4 + i_opt
+                if i_opt == idx_correcta:
+                    payload[f"{num_campo:02d}_✅_OPCION_{letra_mayus}_(MARCADA_CORRECTA)"] = f"✅ [CORRECTA] ➡️ {texto_opt}"
+                else:
+                    payload[f"{num_campo:02d}_⚪_OPCION_{letra_mayus}"] = f"⚪ {texto_opt}"
+
+            payload["09_🎯_RESPUESTA_QUE_DA_POR_BUENA_EL_SISTEMA"] = correcta_txt
+            payload["10_💡_EXPLICACION_EXTRAIDA_DEL_PDF"] = exp_limpia
+            payload["_template"] = "box"
+            payload["_captcha"] = "false"
 
             payload_json = json.dumps(payload)
             components.html(f"""
