@@ -136,6 +136,8 @@ class PDFQuizParser:
                             line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z0-9])>', '»', line_text)
                             line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
+                            # Proteger "D. Nombre" para que nunca se confunda con una opción "d."
+                            line_text = re.sub(r'\bD\.\s+(?=[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)', 'Don ', line_text)
                             for pat in [
                                 r'^OPOSICIONA\s*', r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*', r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
                                 r'^EXAMEN\s+REPASO\s+TEMA\s+\d+\s+COMPLETO\s*',
@@ -188,16 +190,16 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\.!\?»"”])(?<!\bArt\.)(?<!\bart\.)(?<!\d)\s*(\d{1,3}[\.\-])(?!\s*[ºª°\d])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<!\d)([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
                             part = part.strip()
                             if part:
-                                lines.append({"text": re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
+                                lines.append({"text": re.sub(r'^([a-f][\)\.-]|[A-F][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
         merged_lines, i = [], 0
@@ -219,14 +221,15 @@ class PDFQuizParser:
             if txt.endswith("carenci") and i + 1 < len(lines) and lines[i + 1]["text"].strip().startswith("a) se exige"):
                 lines[i]["text"] = lines[i]["text"].replace("carenci", "carencia)")
                 lines[i + 1]["text"] = lines[i + 1]["text"].replace("a) se exige", "se exige", 1)
-            if txt.startswith("D. Carlos"):
-                lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
 
         def is_exp_marker(s):
             return bool(
                 re.match(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?|respuestas?|resp)\s*:', s, re.IGNORECASE) or
                 re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?\s*\$', s, re.IGNORECASE)
             )
+
+        def is_opt_line(s):
+            return bool(re.match(r'^([a-e][\)\.\-]|[A-E][\)\-])\s*', s))
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
         current_q, preamble, expected_q_num = None, "", 1
@@ -247,12 +250,12 @@ class PDFQuizParser:
                 continue
 
             text_lower = text.lower()
-            is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
+            is_option = is_opt_line(text)
             is_explanation = False if (current_q and current_q["state"] == "E") else is_exp_marker(text.strip())
 
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and not current_q["options"]:
-                if text.strip().endswith('?') and not re.match(r'^[a-zA-Z][\)\.\-]\s*[¿A-ZÁÉÍÓÚÑ]', text):
+                if text.strip().endswith('?') and not re.match(r'^([a-e][\)\.\-]|[A-E][\)\-])\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option, forced_not_option = False, True
 
             is_reserve = bool(re.search(r'\bpreguntas?\s+de\s+reserva\b', text_lower) or re.match(r'^\s*reserva\b', text_lower))
@@ -332,7 +335,7 @@ class PDFQuizParser:
                 if not is_reserve: preamble += text + "\n"
                 continue
 
-            if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-eA-E])[\)\.-]\s*', text):
+            if is_option and current_q["state"] in ["Q", "O"]:
                 current_q["options"].append(text)
                 current_q["state"] = "O"
                 if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
