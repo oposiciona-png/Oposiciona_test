@@ -48,7 +48,11 @@ try {
 } catch(e) {}
 </script>""", height=0)
 
-for k, v in [('autenticado', False), ('rol', None), ('email', None), ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False), ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")]:
+for k, v in [
+    ('autenticado', False), ('rol', None), ('email', None), ('es_admin', False),
+    ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
+    ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
+]:
     if k not in st.session_state: st.session_state[k] = v
 
 if st.session_state.do_scroll:
@@ -90,14 +94,15 @@ if not st.session_state.autenticado:
         rol_usuario = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_limpio in lc), None)
         if correo_limpio in USUARIOS_ADMIN:
             if password_input == PASSWORD_ADMIN:
-                st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, do_scroll=True)
+                st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, do_scroll=True)
                 st.rerun()
             else: st.error("❌ Contraseña de administrador incorrecta.")
         elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
-            st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, do_scroll=True)
+            st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, do_scroll=True)
             st.rerun()
-        elif rol_usuario and password_input == PASSWORD_ACCESO:
-            st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, do_scroll=True)
+        elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
+            es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
+            st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, do_scroll=True)
             st.rerun()
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
     st.stop()
@@ -513,6 +518,10 @@ TESTS_DISPONIBLES_INVITADO = {
     },
 }
 
+def usuario_es_admin():
+    correo_act = (st.session_state.get('email') or "").lower().strip()
+    return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
+
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
 
@@ -528,24 +537,39 @@ def descargar_pdf_fresco(url):
     return requests.get(url_nocache, headers=headers)
 
 def render_bloque_reporte_error(q, num_pregunta, ubicacion_key):
-    """Muestra el panel de reporte de errores (actualmente visible solo para administradores)."""
-    if st.session_state.get('email') not in USUARIOS_ADMIN:
+    """Muestra un botón especial de reporte de errores (actualmente visible solo para administradores)."""
+    if not usuario_es_admin():
         return
 
-    nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
-    usuario_rep = st.session_state.get('email') or "Desconocido"
-    preamble_txt = q.get('preamble', '').strip()
-    pregunta_txt = q.get('question_text', '').strip()
-    opciones_txt = "\n".join(q.get('options', []))
-    correcta_txt = q['options'][q['answer']] if q.get('answer', -1) != -1 and q['answer'] < len(q.get('options', [])) else "No detectada en el PDF"
-    exp_limpia = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación."
+    state_key_abierto = f"rep_open_{ubicacion_key}_{num_pregunta}"
+    if state_key_abierto not in st.session_state:
+        st.session_state[state_key_abierto] = False
 
-    with st.expander(f"🛠️ Reportar error en la Pregunta {num_pregunta} (Modo Pruebas Admin)"):
-        st.caption("Esta herramienta captura automáticamente todos los datos de la pregunta y envía tu aviso a **info@oposiciona.es**.")
+    st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+    if st.button(f"⚠️ Reportar error en la Pregunta {num_pregunta} (Solo Admin)", key=f"btn_toggle_rep_{ubicacion_key}_{num_pregunta}", use_container_width=True):
+        st.session_state[state_key_abierto] = not st.session_state[state_key_abierto]
+
+    if st.session_state[state_key_abierto]:
+        nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
+        usuario_rep = st.session_state.get('email') or "ponentes@oposiciona.es"
+        preamble_txt = q.get('preamble', '').strip()
+        pregunta_txt = q.get('question_text', '').strip()
+        opciones_txt = "\n".join(q.get('options', []))
+        correcta_txt = q['options'][q['answer']] if q.get('answer', -1) != -1 and q['answer'] < len(q.get('options', [])) else "No detectada en el PDF"
+        exp_limpia = re.sub(r'^(explicaci[óo]n:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "Sin explicación."
+
+        st.markdown(
+            "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:6px; margin-bottom:8px;'>"
+            "<b style='color:#bf360c; font-size:15px;'>🛠️ Envío de reporte de error a info@oposiciona.es</b><br>"
+            "<span style='font-size:13px; color:#5d4037;'>Se adjuntarán automáticamente el nombre del PDF, la pregunta, las opciones y la explicación.</span>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
         motivo = st.text_area(
-            "Describe el error detectado (enunciado, respuesta mal marcada, fallo de lectura del PDF, explicación...):",
+            "Explica brevemente el error encontrado:",
             key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
-            placeholder="Ejemplo: En la pregunta falta un 'NO' en el enunciado, o la explicación se ha cortado al final..."
+            placeholder="Ejemplo: Falta un 'NO' en el enunciado, la opción correcta debería ser la b), o la explicación está cortada..."
         )
 
         cuerpo_completo = (
@@ -600,7 +624,7 @@ def render_bloque_reporte_error(q, num_pregunta, ubicacion_key):
                             enviado_ok = False
 
                         if enviado_ok:
-                            st.success("✅ ¡Reporte enviado a **info@oposiciona.es**! *(Nota: Si es el primer envío de la historia de la web, revisa la bandeja de entrada o spam de info@oposiciona.es para pulsar 'Activate Form' una única vez).*")
+                            st.success("✅ ¡Reporte enviado a **info@oposiciona.es**! *(Nota: Si es el primer envío, revisa la bandeja de entrada o spam de info@oposiciona.es para pulsar 'Activate Form' una única vez).*")
                         else:
                             st.info("ℹ️ Usa uno de los botones de la derecha para enviarlo directamente desde tu correo.")
 
@@ -620,7 +644,7 @@ def render_bloque_reporte_error(q, num_pregunta, ubicacion_key):
                 unsafe_allow_html=True
             )
 
-        with st.expander("📋 Ver / Copiar datos completos capturados"):
+        with st.expander("📋 Ver texto completo que se envía"):
             st.code(cuerpo_completo, language="text")
 
 def limpiar_todas_las_busquedas():
@@ -825,7 +849,7 @@ def action_finalizar_sesion():
 
 if not st.session_state.questions:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
-    es_admin = st.session_state.get('email') in USUARIOS_ADMIN
+    es_admin = usuario_es_admin()
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
@@ -1032,7 +1056,7 @@ elif not st.session_state.finished:
         eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
         st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
-    # --- BLOQUE DE REPORTE DE ERROR DURANTE EL TEST (SOLO VISIBLE PARA ADMIN) ---
+    # --- BOTÓN ESPECIAL DE REPORTE DE ERROR DURANTE EL TEST (SOLO ADMIN) ---
     render_bloque_reporte_error(q, idx + 1, "test_activo")
 
 else:
@@ -1113,7 +1137,7 @@ else:
             f"</div>",
             unsafe_allow_html=True
         )
-        # --- BLOQUE DE REPORTE DE ERROR EN EL RESUMEN FINAL (SOLO VISIBLE PARA ADMIN) ---
+        # --- BOTÓN ESPECIAL DE REPORTE DE ERROR EN EL RESUMEN FINAL (SOLO ADMIN) ---
         render_bloque_reporte_error(q, i + 1, "resumen_final")
         st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
