@@ -60,6 +60,34 @@ USUARIOS_AUTORIZADOS = {
 }
 PASSWORD_ADMIN, PASSWORD_ACCESO, PASSWORD_INVITADO = "Gonz4loN4cho23", "plaza2026", "oposiciona"
 
+def detectar_dispositivo_usuario():
+    """Detecta si el alumno accede desde PC, Móvil o Tablet leyendo el User-Agent del navegador."""
+    try:
+        ua = (st.context.headers.get("User-Agent") or "").lower()
+        if not ua:
+            return "Desconocido"
+        if "ipad" in ua:
+            return "📟 Tablet (iPad)"
+        if "tablet" in ua or "playbook" in ua or "silk" in ua or ("android" in ua and "mobile" not in ua):
+            return "📟 Tablet (Android)"
+        if "iphone" in ua or "ipod" in ua:
+            return "📱 Móvil (iPhone)"
+        if "android" in ua and "mobile" in ua:
+            return "📱 Móvil (Android)"
+        if any(x in ua for x in ["mobile", "iemobile", "opera mini"]):
+            return "📱 Móvil"
+        if "windows" in ua:
+            return "💻 PC (Windows)"
+        if "macintosh" in ua or "mac os x" in ua:
+            return "💻 PC (Mac)"
+        if "cros" in ua:
+            return "💻 PC (Chromebook)"
+        if "linux" in ua:
+            return "💻 PC (Linux)"
+        return "💻 PC"
+    except Exception:
+        return "Desconocido"
+
 def formatear_duracion(segundos):
     segundos = max(0, int(segundos))
     horas, resto = divmod(segundos, 3600)
@@ -105,7 +133,8 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
             "aciertos": aciertos,
             "fallos": fallos,
             "blancos": blancos,
-            "nota": nota
+            "nota": nota,
+            "dispositivo": detectar_dispositivo_usuario()
         }
         requests.post(url, json=payload, timeout=4)
     except Exception:
