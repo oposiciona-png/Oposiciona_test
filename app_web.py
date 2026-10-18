@@ -190,7 +190,7 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\.!\?»"”])(?<!\bArt\.)(?<!\bart\.)(?<!\d)\s*(\d{1,3}[\.\-]+)(?!\s*[ºª°\d])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\.!\?»"”])(?<!\bArt\.)(?<!\bart\.)(?<!\[\.\.\.\])(?<!\d)\s*(\d{1,3}[\.\-]+)(?!\s*[ºª°\d])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -241,6 +241,20 @@ class PDFQuizParser:
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*¿', s, re.IGNORECASE)
             )
 
+        def line_starts_real_question(line_idx):
+            """Verifica que la línea en line_idx sea realmente el inicio de una pregunta con sus opciones a) y b)."""
+            fa = False
+            for k in range(line_idx + 1, min(line_idx + 45, len(lines))):
+                kt = lines[k]["text"].strip()
+                if kt == "<NEW_BLOCK>": continue
+                if not fa:
+                    if is_exp_marker(kt): return False
+                    if re.match(r'^a[\)\.\-](\s|$)', kt, re.IGNORECASE): fa = True
+                else:
+                    if is_exp_marker(kt): return False
+                    if re.match(r'^[ab][\)\.\-](\s|$)', kt, re.IGNORECASE): return True
+            return False
+
         for idx, line in enumerate(lines):
             text, is_bold = line["text"], line["bold"]
             if text == "<NEW_BLOCK>":
@@ -266,7 +280,7 @@ class PDFQuizParser:
 
             if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
                 is_real_preamble = any(
-                    match_question_number(lines[j]["text"].strip()) or
+                    (match_question_number(lines[j]["text"].strip()) and line_starts_real_question(j)) or
                     (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', lines[j]["text"].strip(), re.IGNORECASE) and lines[j]["text"].strip().endswith('?'))
                     for j in range(idx + 1, min(idx + 30, len(lines)))
                 )
@@ -285,35 +299,12 @@ class PDFQuizParser:
                     m_rescue = True
 
             if m_num or m_rescue:
-                is_real_q_candidate = found_a = found_b = aborted = False
-                cand_num = int(m_num.group(1)) if m_num else expected_q_num
-                for j in range(idx + 1, min(idx + 60, len(lines))):
-                    ft = lines[j]["text"].strip()
-                    if ft == "<NEW_BLOCK>": continue
-                    m_fnum = match_question_number(ft)
-                    if m_fnum:
-                        fn = int(m_fnum.group(1))
-                        if not (fn == 1 or cand_num < fn <= cand_num + 10):
-                            m_fnum = None
-                    if not found_a:
-                        if is_exp_marker(ft) or m_fnum:
-                            aborted = True; break
-                        if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE): found_a = True
-                    elif not found_b:
-                        if is_exp_marker(ft):
-                            aborted = True; break
-                        if re.match(r'^[ab][\)\.\-](\s|$)', ft, re.IGNORECASE):
-                            found_b = True
-                            is_real_q_candidate = True; break
-
-                if is_real_q_candidate and not aborted:
+                if line_starts_real_question(idx):
                     if m_num:
                         num = int(m_num.group(1))
                         if current_q is None:
                             is_new_q, expected_q_num = True, num + 1
                         elif current_q["state"] in ["O", "E"] and (expected_q_num - 1 <= num <= expected_q_num + 15 or (num == 1 and expected_q_num >= 5)):
-                            is_new_q, expected_q_num = True, num + 1
-                        elif current_q["state"] == "Q" and expected_q_num == num:
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
