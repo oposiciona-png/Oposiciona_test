@@ -182,12 +182,12 @@ class PDFQuizParser:
                                 if re.search(pat, tl_clean_spaces): is_header = True; break
                         if is_header: continue
 
-                        line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
@@ -222,7 +222,13 @@ class PDFQuizParser:
             if txt.startswith("D. Carlos"):
                 lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
 
-        pdf_uses_explicit_exp = sum(1 for l in lines if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', l["text"].strip(), re.IGNORECASE)) >= 10
+        def is_exp_marker(s):
+            return bool(
+                re.match(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?|respuestas?|resp)\s*:', s, re.IGNORECASE) or
+                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?\s*$', s, re.IGNORECASE)
+            )
+
+        pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
         current_q, preamble, expected_q_num = None, "", 1
 
         def match_question_number(s):
@@ -243,7 +249,7 @@ class PDFQuizParser:
 
             text_lower = text.lower()
             is_option = bool(re.match(r'^[a-zA-Z][\)\.\-]\s*', text))
-            is_explanation = False if (current_q and current_q["state"] == "E") else bool(re.match(r'^(explicaci|resp:|respuesta:|respuestas:)', text_lower))
+            is_explanation = False if (current_q and current_q["state"] == "E") else is_exp_marker(text.strip())
 
             forced_not_option = False
             if is_option and current_q and current_q["state"] == "Q" and not current_q["options"]:
@@ -287,17 +293,17 @@ class PDFQuizParser:
                     if ft == "<NEW_BLOCK>": continue
                     m_fnum = match_question_number(ft)
                     if not found_a:
-                        if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft, re.IGNORECASE) or m_fnum:
+                        if is_exp_marker(ft) or m_fnum:
                             aborted = True; break
                         if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE): found_a = True
                     elif not found_b:
-                        if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft, re.IGNORECASE):
+                        if is_exp_marker(ft):
                             aborted = True; break
                         if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_b = True
                             if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
                     else:
-                        if re.match(r'^(explicaci[óo]n|respuesta|resp)s?:', ft, re.IGNORECASE):
+                        if is_exp_marker(ft):
                             is_real_q_candidate = True; break
                         if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE) or m_fnum:
                             aborted = True; break
@@ -334,7 +340,9 @@ class PDFQuizParser:
                 continue
 
             if is_explanation:
-                current_q["explanation"] = (current_q["explanation"].rstrip() + "\n\n" + text) if current_q["explanation"] else text
+                exp_clean_line = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?|respuestas?|resp)\s*:?\s*', '', text.strip(), flags=re.IGNORECASE).strip()
+                if exp_clean_line:
+                    current_q["explanation"] = (current_q["explanation"].rstrip() + "\n\n" + exp_clean_line) if current_q["explanation"] else exp_clean_line
                 current_q["state"] = "E"
                 continue
 
@@ -486,7 +494,7 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 09 - LAS OBLIGACIONES MERCANTILES": _D + "1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
             "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": _D + "1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
             "TEMA 40 - IGUALDAD": _D + "1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
-            "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": _D + "1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
+            "TEMA 41 GOBIERNO ABIERNO Y AGENDA 2030": _D + "1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
             "TEMA 42 a 50 REPASO LABORAL GENERAL": _D + "1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
             "TEMA 42 EL DERECHO DEL TRABAJO": _D + "1ARQ8PoNtyTykdcbixOxWgEr4SZ7sZV6c",
             "TEMA 42 REPASO DERECHO DEL TRABAJO GENERAL": _D + "1_CNXYhEr-9WeBn-w9TA-iH3fG8VwII_N",
