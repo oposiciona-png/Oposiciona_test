@@ -138,6 +138,7 @@ class PDFQuizParser:
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
                             for pat in [
                                 r'^OPOSICIONA\s*', r'^GESTI[OÓ]N DE LA SEGURIDAD SOCIAL\s*', r'^ADMINISTRATIVO DE LA SEGURIDAD SOCIAL\s*',
+                                r'^EXAMEN\s+REPASO\s+TEMA\s+\d+\s+COMPLETO\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*(?:ADMINISTRATIVO|GESTI[OÓ]N)\s+202\d\s*',
                                 r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
                                 r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
@@ -153,9 +154,11 @@ class PDFQuizParser:
 
                         if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                             stop_reading = True; break
-                        if any(x in tl_clean_spaces for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "casos practicos", "caso practico"]):
-                            if line_text.isupper() or len(tl_clean_spaces) < 45:
-                                ignoring_mode = entered_supuestos = True
+                        # Solo activar modo supuesto práctico si NO empieza por número de pregunta (ej. evitar '54. Supuesto práctico:')
+                        if not re.match(r'^\d+\s*[\.\-\)]', line_text):
+                            if any(x in tl_clean_spaces for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "casos practicos", "caso practico"]):
+                                if line_text.isupper() or len(tl_clean_spaces) < 45:
+                                    ignoring_mode = entered_supuestos = True
                         if any(x in tl_clean_spaces for x in ["preguntas de reserva", "pregunta de reserva"]) or tl_clean_spaces == "reserva":
                             if not entered_supuestos: ignoring_mode = False
                         if not ignoring_mode and questions and questions[-1].get("state") == "E":
@@ -182,8 +185,8 @@ class PDFQuizParser:
                                 if re.search(pat, tl_clean_spaces): is_header = True; break
                         if is_header: continue
 
+                        line_text = re.sub(r'(?<=\S)\s+(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;\)\]"\'”])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?:|Respuest[as]?:|Resp:)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
@@ -199,12 +202,12 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-fA-F][\)\.-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # Unir referencias legales partidas al final de línea (ej. "art." + "136.2.o)")
+        # Unir referencias legales partidas al final de línea (ej. "art." + "136.2.o)" o "(Art." + "56 a 59...")
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto|n[º°\.]?)\s*$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto|n[º°\.]?)\s*\$', txt, re.IGNORECASE):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -225,14 +228,14 @@ class PDFQuizParser:
         def is_exp_marker(s):
             return bool(
                 re.match(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?|respuestas?|resp)\s*:', s, re.IGNORECASE) or
-                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?\s*$', s, re.IGNORECASE)
+                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal)?\s*\$', s, re.IGNORECASE)
             )
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
         current_q, preamble, expected_q_num = None, "", 1
 
         def match_question_number(s):
-            """Reconoce números de pregunta reales (ej. '36.- Texto', '1. Texto', '1 ¿Texto') e ignora '136.2.o)' o '2º'."""
+            """Reconoce números de pregunta reales (ej. '36.- Texto', '1. Texto', '1 ¿Texto') e ignora '136.2.o)' o '3.°' o '5°)'."""
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d|[ºª°]|[a-zA-Z]\))\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?!\d|[ºª°])\s*\S', s, re.IGNORECASE) or
@@ -270,7 +273,7 @@ class PDFQuizParser:
                 )
                 if is_real_preamble or is_reserve or is_case_study:
                     if current_q and current_q["options"]: questions.append(current_q)
-                    current_q, preamble, expected_q_num = None, preamble + text + "\n", 1
+                    current_q, preamble, expected_q_num = None, "" if is_reserve else (preamble + text + "\n"), expected_q_num if is_reserve else 1
                     continue
 
             is_new_q = False
@@ -363,7 +366,7 @@ class PDFQuizParser:
                     (bool(re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower)) and (ep or not ec))
                 )
                 if len(current_q["options"]) < 2 or ec or len(lo) <= 5: inp = ilr = iie = False
-                if inp or ilr or iie:
+                if (inp or ilr or iie) and not pdf_uses_explicit_exp:
                     current_q["state"], current_q["explanation"] = "E", text
                 else:
                     if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
@@ -494,7 +497,7 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 09 - LAS OBLIGACIONES MERCANTILES": _D + "1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
             "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": _D + "1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
             "TEMA 40 - IGUALDAD": _D + "1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
-            "TEMA 41 GOBIERNO ABIERNO Y AGENDA 2030": _D + "1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
+            "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": _D + "1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
             "TEMA 42 a 50 REPASO LABORAL GENERAL": _D + "1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
             "TEMA 42 EL DERECHO DEL TRABAJO": _D + "1ARQ8PoNtyTykdcbixOxWgEr4SZ7sZV6c",
             "TEMA 42 REPASO DERECHO DEL TRABAJO GENERAL": _D + "1_CNXYhEr-9WeBn-w9TA-iH3fG8VwII_N",
