@@ -154,7 +154,7 @@ class PDFQuizParser:
 
                         if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                             stop_reading = True; break
-                        if not re.match(r'^\d+\s*[\.\-\)]', line_text):
+                        if not re.match(r'^\s*(?:Pregunta\s+)?\d+\s*[\.\-\)]', line_text, re.IGNORECASE):
                             if any(x in tl_clean_spaces for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "casos practicos", "caso practico"]):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = entered_supuestos = True
@@ -191,7 +191,7 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'([.?!;])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;])([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-eA-E][\)\.\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ€%\)\"])\s+([a-eA-E][\)\.\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
                         for part in line_text.split('\n'):
@@ -233,7 +233,7 @@ class PDFQuizParser:
 
         def match_question_number(s):
             return (
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d|[ºª°]|[a-zA-Z]\))\s+\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?!\d|[ºª°]|[a-zA-Z]\))\s*\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?!\d|[ºª°])\s*\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*¿', s, re.IGNORECASE)
             )
@@ -294,7 +294,7 @@ class PDFQuizParser:
                     m_fnum = match_question_number(ft)
                     if m_fnum:
                         fn = int(m_fnum.group(1))
-                        if not (fn == 1 or cand_num <= fn <= cand_num + 5):
+                        if not (fn == 1 or cand_num < fn <= cand_num + 5):
                             m_fnum = None
                     if not found_a:
                         if is_exp_marker(ft) or m_fnum:
@@ -305,12 +305,7 @@ class PDFQuizParser:
                             aborted = True; break
                         if re.match(r'^[ab][\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_b = True
-                            if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
-                    else:
-                        if is_exp_marker(ft):
                             is_real_q_candidate = True; break
-                        if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE) or m_fnum:
-                            aborted = True; break
 
                 if is_real_q_candidate and not aborted:
                     if m_num:
