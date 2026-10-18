@@ -1,51 +1,12 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata, time, json, threading
+import re, random, requests, os, unicodedata, time, json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
-
-URL_REGISTRO_SHEETS = "https://script.google.com/macros/s/AKfycbwaNqWlmzc7B1izc9nJb41UCs2YdH1FSSxp1tlULZzELcISaNd6jMKdcL7hxNyQtg3GMA/exec"
-
-def registrar_evento_sheets(evento, test="", aciertos="", fallos="", blancos="", nota="", email_override=None, rol_override=None):
-    """Envía en segundo plano la actividad del usuario a Google Sheets sin ralentizar la interfaz."""
-    if not URL_REGISTRO_SHEETS:
-        return
-    try:
-        ahora = datetime.now(ZoneInfo("Europe/Madrid"))
-        fecha_str = ahora.strftime("%d/%m/%Y")
-        hora_str = ahora.strftime("%H:%M:%S")
-    except Exception:
-        ahora = datetime.now()
-        fecha_str = ahora.strftime("%d/%m/%Y")
-        hora_str = ahora.strftime("%H:%M:%S")
-
-    email_usr = email_override if email_override is not None else (st.session_state.get("email") or "Desconocido")
-    rol_usr = rol_override if rol_override is not None else (st.session_state.get("rol") or "Sin rol")
-
-    datos = {
-        "fecha": fecha_str,
-        "hora": hora_str,
-        "email": email_usr,
-        "rol": rol_usr,
-        "evento": evento,
-        "test": test,
-        "aciertos": aciertos,
-        "fallos": fallos,
-        "blancos": blancos,
-        "nota": nota
-    }
-
-    def _enviar():
-        try:
-            requests.post(URL_REGISTRO_SHEETS, data=json.dumps(datos), headers={"Content-Type": "application/json"}, timeout=8)
-        except Exception:
-            pass
-
-    threading.Thread(target=_enviar, daemon=True).start()
 
 st.markdown("""<style>
 #MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"] {visibility: hidden !important; display: none !important;}
@@ -88,10 +49,61 @@ try {
 } catch(e) {}
 </script>""", height=0)
 
+# PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT (terminada en /exec)
+GOOGLE_SHEETS_WEBHOOK_URL = st.secrets.get("GOOGLE_SHEETS_WEBHOOK_URL", "PEGA_AQUI_TU_URL_DE_APPS_SCRIPT")
+
+def formatear_duracion(segundos):
+    segundos = max(0, int(segundos))
+    horas, resto = divmod(segundos, 3600)
+    minutos, segs = divmod(resto, 60)
+    if horas > 0:
+        return f"{horas}h {minutos:02d}m {segs:02d}s"
+    return f"{minutos}m {segs:02d}s"
+
+def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", blancos="", nota="", accion="nueva_fila"):
+    """Envía el registro a Google Sheets creando 1 sola fila al iniciar un test y actualizándola con Hora Fin y Duración al terminar."""
+    url = (GOOGLE_SHEETS_WEBHOOK_URL or "").strip()
+    if not url or not url.startswith("https://script.google.com/"):
+        return
+    try:
+        ahora = datetime.now(ZoneInfo("Europe/Madrid"))
+        hora_actual = ahora.strftime("%H:%M:%S")
+        if accion == "nueva_fila":
+            st.session_state.test_start_ts = time.time()
+            st.session_state.hora_inicio_str = hora_actual
+            hora_ini, hora_fin, duracion_str = hora_actual, "", ""
+        else:
+            hora_ini = st.session_state.get("hora_inicio_str") or ""
+            hora_fin = hora_actual
+            ini_ts = st.session_state.get("test_start_ts")
+            duracion_str = formatear_duracion(time.time() - ini_ts) if ini_ts else ""
+
+        payload = {
+            "accion": accion,
+            "fecha": ahora.strftime("%d/%m/%Y"),
+            "hora_inicio": hora_ini,
+            "hora_fin": hora_fin,
+            "duracion": duracion_str,
+            "email": st.session_state.get("email") or "desconocido",
+            "rol": st.session_state.get("rol") or "",
+            "especialidad": st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "",
+            "categoria": st.session_state.get("test_cat") or st.session_state.get("saved_cat") or "",
+            "evento": evento,
+            "test": nombre_test,
+            "aciertos": aciertos,
+            "fallos": fallos,
+            "blancos": blancos,
+            "nota": nota
+        }
+        requests.post(url, json=payload, timeout=4)
+    except Exception:
+        pass
+
 for k, v in [
     ('autenticado', False), ('rol', None), ('email', None), ('es_admin', False),
     ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
-    ('resultado_registrado', False),
+    ('resultado_registrado', False), ('test_start_ts', None), ('hora_inicio_str', ""),
+    ('test_esp', ""), ('test_cat', ""),
     ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
 ]:
     if k not in st.session_state: st.session_state[k] = v
@@ -136,17 +148,14 @@ if not st.session_state.autenticado:
         if correo_limpio in USUARIOS_ADMIN:
             if password_input == PASSWORD_ADMIN:
                 st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, do_scroll=True)
-                registrar_evento_sheets("🔑 Acceso Plataforma", email_override=correo_limpio, rol_override="ACCESO TOTAL")
                 st.rerun()
             else: st.error("❌ Contraseña de administrador incorrecta.")
         elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
             st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, do_scroll=True)
-            registrar_evento_sheets("🔑 Acceso Plataforma", email_override=correo_limpio, rol_override="INVITADO")
             st.rerun()
         elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
             es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
             st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, do_scroll=True)
-            registrar_evento_sheets("🔑 Acceso Plataforma", email_override=correo_limpio, rol_override=rol_usuario)
             st.rerun()
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
     st.stop()
@@ -769,8 +778,10 @@ def obtener_grupo_tema(nombre_test, categoria):
         return f"📁 TEMA {int(nums[0]):02d}" if len(nums) == 1 else f"📁 TEMAS {b}"
     return "📁 Otros Tests"
 
-def cargar_test_desde_url(nombre_test, url_descarga):
+def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", categoria_sel=""):
     st.session_state.test_name = nombre_test
+    st.session_state.test_esp = especialidad_sel or st.session_state.get('saved_esp', '')
+    st.session_state.test_cat = categoria_sel or st.session_state.get('saved_cat', '')
     st.session_state.mostrar_opciones_simulacro = False
     with st.spinner(f"Extrayendo '{nombre_test}' de forma segura..."):
         try:
@@ -890,7 +901,7 @@ def handle_radio_change():
             st.session_state.checked = False
             st.session_state.do_scroll = True
         else:
-            st.session_state.update(finished=True, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True)
+            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
 
 def procesar_preguntas(raw_qs):
     patrones_fijos = [
@@ -919,7 +930,7 @@ def procesar_preguntas(raw_qs):
         resultado_registrado=False,
         do_scroll=True
     )
-    registrar_evento_sheets("🚀 Inicio Test", test=st.session_state.get("test_name") or "Test")
+    registrar_actividad_sheets("🚀 En curso", nombre_test=st.session_state.get("test_name") or "Test", accion="nueva_fila")
     st.rerun()
 
 def action_repetir_test():
@@ -928,7 +939,7 @@ def action_repetir_test():
         stats={i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))},
         finished=False, checked=False, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True
     )
-    registrar_evento_sheets("🔄 Repetición Test", test=st.session_state.get("test_name") or "Test")
+    registrar_actividad_sheets("🔄 En curso (Repetido)", nombre_test=st.session_state.get("test_name") or "Test", accion="nueva_fila")
 
 def action_subir_otro():
     st.session_state.update(
@@ -1045,7 +1056,7 @@ if not st.session_state.questions:
                         with cn: st.markdown(f"<div style='padding-top:6px; font-size:15px;'>{ic} <b>{tn}</b> {et}</div>", unsafe_allow_html=True)
                         with cb:
                             if st.button("🚀 Iniciar", key=f"btn_grp_{especialidad}_{categoria}_{ig}_{it}", use_container_width=True, type="primary"):
-                                cargar_test_desde_url(tn, tu)
+                                cargar_test_desde_url(tn, tu, especialidad, categoria)
 
     total_deseadas = 95 if especialidad == "GESTION" else 75
     with st.container():
@@ -1060,6 +1071,8 @@ if not st.session_state.questions:
             for col_b, lbl, amb, t_lbl in [(cs1, "🌐 TODO", "TODO", "SIMULACRO GLOBAL"), (cs2, "📘 GENERAL", "GENERAL", "SIMULACRO"), (cs3, "🎯 ESPECÍFICO", "ESPECIFICO", "SIMULACRO")]:
                 if col_b.button(lbl, use_container_width=True, type="primary"):
                     st.session_state.test_name = f"{t_lbl} ({especialidad} - {amb})"
+                    st.session_state.test_esp = especialidad
+                    st.session_state.test_cat = f"SIMULACRO ({amb})"
                     with st.spinner("Generando simulacro..."):
                         ex = generar_simulacro_aleatorio(especialidad, amb, total_deseadas, TESTS_DISPONIBLES)
                         if ex: procesar_preguntas(ex)
@@ -1069,7 +1082,7 @@ if not st.session_state.questions:
         with st.expander("Opcional: Subir un test PDF manualmente desde tu dispositivo"):
             uf = st.file_uploader("", type="pdf")
             if uf is not None:
-                st.session_state.update(modo_avance=modo_avance, test_name=uf.name)
+                st.session_state.update(modo_avance=modo_avance, test_name=uf.name, test_esp=especialidad, test_cat="ARCHIVO LOCAL")
                 with st.spinner("Procesando documento local..."):
                     rqs = PDFQuizParser.parse(uf.read())
                     if not rqs: st.error("No se encontraron preguntas válidas en este PDF.")
@@ -1139,10 +1152,10 @@ elif not st.session_state.finished:
     else:
         if c3.button("Terminar ➔", use_container_width=True):
             save_answer(sel_opt)
-            st.session_state.update(finished=True, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True); st.rerun()
+            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
     if c4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(sel_opt)
-        st.session_state.update(finished=True, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True); st.rerun()
+        st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
 
     key_rep_test = f"rep_open_test_{idx + 1}"
     if key_rep_test not in st.session_state:
@@ -1188,13 +1201,14 @@ else:
 
     if not st.session_state.get('resultado_registrado', False):
         st.session_state.resultado_registrado = True
-        registrar_evento_sheets(
-            evento="🏁 Fin Test",
-            test=st.session_state.get('test_name') or "Test",
+        registrar_actividad_sheets(
+            evento="✅ Completado",
+            nombre_test=st.session_state.get("test_name") or "Test",
             aciertos=aciertos,
             fallos=fallos,
             blancos=blancos,
-            nota=f"{nota:.2f}"
+            nota=f"{nota:.2f}",
+            accion="actualizar_fin"
         )
 
     if nota >= 5.0:
