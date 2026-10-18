@@ -191,7 +191,6 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        # En mitad de línea, evitar cortar siglas con puntos como "C.A.", "S.A.", "S.L." o "D."
                         line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
@@ -233,9 +232,9 @@ class PDFQuizParser:
 
         def match_q_num(s):
             return (
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)](?![\dºª°])', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', s, re.IGNORECASE)
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*¿', s, re.IGNORECASE)
             )
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
@@ -250,7 +249,7 @@ class PDFQuizParser:
                 continue
 
             text_lower = text.lower()
-            is_option = bool(re.match(r'^([a-z][\)\.\-]|[A-Z][\)\-])\s*', text))
+            is_option = bool(re.match(r'^([a-z][\)\.\-]|[A-Z][\)\-])(\s|$)', text))
             is_explanation = False if (current_q and current_q["state"] == "E") else is_exp_marker(text.strip())
 
             forced_not_option = False
@@ -347,7 +346,15 @@ class PDFQuizParser:
                 if not is_reserve: preamble += text + "\n"
                 continue
 
-            if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-e][\)\.-]|[A-E][\)\-])\s*', text):
+            if is_option and current_q["state"] in ["Q", "O"] and re.match(r'^([a-e][\)\.-]|[A-E][\)\-])(\s|$)', text):
+                # Si la opción viene sola (ej. "b)" en una línea tras haberse pegado su frase a la opción anterior en Pregunta 21 de Tema 09 Repaso)
+                only_marker = bool(re.match(r'^([a-e][\)\.-]|[A-E][\)\-])\s*$', text.strip()))
+                if only_marker and current_q["options"]:
+                    prev_opt = current_q["options"][-1]
+                    m_split = re.match(r'^([a-eA-E][\)\.-]\s*.+?\.)\s+([A-ZÁÉÍÓÚÑ].*)$', prev_opt)
+                    if m_split:
+                        current_q["options"][-1] = m_split.group(1)
+                        text = f"{text.strip()} {m_split.group(2)}"
                 current_q["options"].append(text)
                 current_q["state"] = "O"
                 if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
@@ -378,7 +385,6 @@ class PDFQuizParser:
                     bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower)) or
                     (bool(re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower)) and (ep or not ec))
                 )
-                # Si la pregunta ya tiene sus 4 opciones (a, b, c, d), la 4ª opción termina en punto y empieza una frase por "Artículo X...", es una explicación sin el título "Explicación:" (ej. Preguntas 7 y 20 de Tema 09)
                 implicit_after_4_opts = len(current_q["options"]) >= 4 and ep and ilr
                 if len(current_q["options"]) < 2 or ec or len(lo) <= 5: inp = ilr = iie = False
                 if ((inp or ilr or iie) and not pdf_uses_explicit_exp) or implicit_after_4_opts:
