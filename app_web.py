@@ -61,7 +61,6 @@ USUARIOS_AUTORIZADOS = {
 PASSWORD_ADMIN, PASSWORD_ACCESO, PASSWORD_INVITADO = "Gonz4loN4cho23", "plaza2026", "oposiciona"
 
 def detectar_dispositivo_usuario():
-    """Detecta si el alumno accede desde PC, Móvil o Tablet leyendo el User-Agent del navegador."""
     try:
         ua = (st.context.headers.get("User-Agent") or "").lower()
         if not ua:
@@ -96,15 +95,21 @@ def formatear_duracion(segundos):
         return f"{horas}h {minutos:02d}m {segs:02d}s"
     return f"{minutos}m {segs:02d}s"
 
+def iniciar_cronometro_test():
+    ahora = datetime.now(ZoneInfo("Europe/Madrid"))
+    st.session_state.test_start_ts = time.time()
+    st.session_state.fecha_inicio_str = ahora.strftime("%d/%m/%Y")
+    st.session_state.hora_inicio_str = ahora.strftime("%H:%M:%S")
+    st.session_state.inicio_registrado_sheets = False
+    st.session_state.resultado_registrado = False
+
 def _enviar_post_background(url, payload):
-    """Función auxiliar que se ejecuta en segundo plano sin bloquear la interfaz del usuario."""
     try:
         requests.post(url, json=payload, timeout=8)
     except Exception:
         pass
 
 def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", blancos="", nota="", accion="nueva_fila"):
-    """Prepara los datos y los envía en segundo plano (threading) a Google Sheets salvo que sea el administrador."""
     email_actual = (st.session_state.get("email") or "").lower().strip()
     if email_actual in USUARIOS_ADMIN or st.session_state.get("es_admin", False):
         return
@@ -115,19 +120,19 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
     try:
         ahora = datetime.now(ZoneInfo("Europe/Madrid"))
         hora_actual = ahora.strftime("%H:%M:%S")
+        fecha_ini = st.session_state.get("fecha_inicio_str") or ahora.strftime("%d/%m/%Y")
+        hora_ini = st.session_state.get("hora_inicio_str") or hora_actual
+
         if accion == "nueva_fila":
-            st.session_state.test_start_ts = time.time()
-            st.session_state.hora_inicio_str = hora_actual
-            hora_ini, hora_fin, duracion_str = hora_actual, "", ""
+            hora_fin, duracion_str = "", ""
         else:
-            hora_ini = st.session_state.get("hora_inicio_str") or ""
             hora_fin = hora_actual
             ini_ts = st.session_state.get("test_start_ts")
             duracion_str = formatear_duracion(time.time() - ini_ts) if ini_ts else ""
 
         payload = {
             "accion": accion,
-            "fecha": ahora.strftime("%d/%m/%Y"),
+            "fecha": fecha_ini,
             "hora_inicio": hora_ini,
             "hora_fin": hora_fin,
             "duracion": duracion_str,
@@ -150,7 +155,8 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
 for k, v in [
     ('autenticado', False), ('rol', None), ('email', None), ('es_admin', False),
     ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
-    ('resultado_registrado', False), ('test_start_ts', None), ('hora_inicio_str', ""),
+    ('inicio_registrado_sheets', False), ('resultado_registrado', False),
+    ('test_start_ts', None), ('fecha_inicio_str', ""), ('hora_inicio_str', ""),
     ('test_esp', ""), ('test_cat', ""),
     ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
 ]:
@@ -929,6 +935,9 @@ def save_answer(selected):
     if selected and selected != stat['selected']:
         stat['selected'] = selected
         stat['attempts'] += 1
+        if not st.session_state.get('inicio_registrado_sheets', False):
+            st.session_state.inicio_registrado_sheets = True
+            registrar_actividad_sheets("🚀 En curso", nombre_test=st.session_state.get("test_name") or "Test", accion="nueva_fila")
 
 def handle_radio_change():
     idx = st.session_state.current_index
@@ -966,24 +975,24 @@ def procesar_preguntas(raw_qs):
         stats={i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
-        resultado_registrado=False,
         do_scroll=True
     )
-    registrar_actividad_sheets("🚀 En curso", nombre_test=st.session_state.get("test_name") or "Test", accion="nueva_fila")
+    iniciar_cronometro_test()
     st.rerun()
 
 def action_repetir_test():
     st.session_state.update(
         current_index=0,
         stats={i: {'attempts': 0, 'selected': None} for i in range(len(st.session_state.questions))},
-        finished=False, checked=False, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True
+        finished=False, checked=False, celebracion_mostrada=False, do_scroll=True
     )
-    registrar_actividad_sheets("🔄 En curso (Repetido)", nombre_test=st.session_state.get("test_name") or "Test", accion="nueva_fila")
+    iniciar_cronometro_test()
 
 def action_subir_otro():
     st.session_state.update(
         questions=[], current_index=0, stats={}, finished=False, checked=False,
-        test_name=None, mostrar_opciones_simulacro=False, celebracion_mostrada=False, resultado_registrado=False, do_scroll=True
+        test_name=None, mostrar_opciones_simulacro=False, celebracion_mostrada=False,
+        inicio_registrado_sheets=False, resultado_registrado=False, do_scroll=True
     )
 
 def action_finalizar_sesion():
@@ -1246,7 +1255,7 @@ else:
             aciertos=aciertos,
             fallos=fallos,
             blancos=blancos,
-            nota=f"{nota:.2f}",
+            nota=f"{nota:.2f}".replace(".", ","),
             accion="actualizar_fin"
         )
 
