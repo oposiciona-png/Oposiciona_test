@@ -1245,21 +1245,41 @@ else:
             if stat['selected'] is None: blancos += 1; stat['final_status'] = "⚪ En blanco"
             else: stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
-    nota = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0
+    # 1. Nota de referencia sobre 10 (sin penalización)
+    nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
+
+    # 2. Nota convertida de Oposición según especialidad (Administrativos vs Gestión)
+    esp_actual = (st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "").upper()
+    if "GESTI" in esp_actual or st.session_state.get("rol") == "GESTION":
+        es_gestion = True
+        nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL"
+        divisor_penalizacion = 3
+        penalizacion_texto = "0,33 puntos (cada 3 errores restan 1 acierto)"
+        puntos_restados = fallos / 3.0
+    else:
+        es_gestion = False
+        nombre_cuerpo = "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL"
+        divisor_penalizacion = 4
+        penalizacion_texto = "0,25 puntos (cada 4 errores restan 1 acierto)"
+        puntos_restados = fallos / 4.0
+
+    aciertos_netos = max(0.0, aciertos - puntos_restados)
+    nota_oposicion_10 = (aciertos_netos / preg_eval) * 10 if preg_eval > 0 else 0.0
 
     if not st.session_state.get('resultado_registrado', False):
         st.session_state.resultado_registrado = True
+        nota_sheets_str = f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
         registrar_actividad_sheets(
             evento="✅ Completado",
             nombre_test=st.session_state.get("test_name") or "Test",
             aciertos=aciertos,
             fallos=fallos,
             blancos=blancos,
-            nota=f"{nota:.2f}".replace(".", ","),
+            nota=nota_sheets_str,
             accion="actualizar_fin"
         )
 
-    if nota >= 5.0:
+    if nota_oposicion_10 >= 5.0:
         if not st.session_state.get('celebracion_mostrada', False):
             st.session_state.celebracion_mostrada = True
             components.html("""<script>
@@ -1294,7 +1314,34 @@ else:
     st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: -10px;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
     if st.session_state.get('test_name'):
         st.markdown(f"<h5 style='text-align: center; color: #1f77b4; margin-top: -10px; margin-bottom: 15px;'>📄 {st.session_state.test_name}</h5>", unsafe_allow_html=True)
-    st.markdown(f"<h4 style='text-align: center; font-size: 16px; color: #555;'>✅ Acertadas: {aciertos} &nbsp;|&nbsp; ❌ Falladas: {fallos} &nbsp;|&nbsp; ⚪ En blanco: {blancos}</h4><h3 style='text-align: center; font-size: 22px; margin-bottom: 20px;'>🎓 NOTA FINAL: {nota:.2f} / 10</h3>", unsafe_allow_html=True)
+
+    st.markdown(
+        f"<h4 style='text-align: center; font-size: 16px; color: #555; margin-bottom: 10px;'>"
+        f"✅ Acertadas: <b>{aciertos}</b> &nbsp;|&nbsp; ❌ Falladas: <b>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b>{blancos}</b>"
+        f"</h4>"
+        f"<div style='background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; text-align: center;'>"
+        f"<div style='font-size: 16px; font-weight: 600; color: #495057;'>📏 PUNTUACIÓN DE REFERENCIA (SIN PENALIZACIÓN): <span style='color: #2C3E50; font-size: 19px;'>{nota_referencia:.2f} / 10</span></div>"
+        f"<div style='font-size: 12.5px; color: #6c757d; margin-top: 2px;'>Obtenida dividiendo tus {aciertos} aciertos entre las {preg_eval} preguntas evaluables ({aciertos} / {preg_eval} × 10), sin descontar errores.</div>"
+        f"</div>"
+        f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
+        f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 BAREMO OFICIAL OPOSICIÓN ({nombre_cuerpo})</div>"
+        f"<div style='text-align: center; font-size: 23px; font-weight: 800; color: #0d47a1; margin-bottom: 4px;'>"
+        f"🎓 NOTA CONVERTIDA OPOSICIÓN: {nota_oposicion_10:.2f} / 10"
+        f"</div>"
+        f"<div style='text-align: center; font-size: 15px; font-weight: 600; color: #1565c0; margin-bottom: 10px;'>"
+        f"Puntos netos directos: <b>{aciertos_netos:.2f}</b> sobre {preg_eval} puntos posibles"
+        f"</div>"
+        f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13.5px; color: #2C3E50; text-align: justify; line-height: 1.4;'>"
+        f"<b>ℹ️ ¿Cómo se ha calculado tu nota de oposición?</b><br>"
+        f"• <b>Preguntas en blanco ({blancos}):</b> No suman ni restan (0 puntos).<br>"
+        f"• <b>Penalización por errores ({fallos} {'fallo' if fallos == 1 else 'fallos'}):</b> En <b>{nombre_cuerpo.title()}</b> cada error resta <b>{penalizacion_texto}</b>. "
+        f"Tus {fallos} {'error' if fallos == 1 else 'errores'} restan <b>{puntos_restados:.2f} aciertos</b> ({fallos} ÷ {divisor_penalizacion} = {puntos_restados:.2f}).<br>"
+        f"• <b>Cálculo final:</b> {aciertos} aciertos − {puntos_restados:.2f} de penalización = <b>{aciertos_netos:.2f} puntos netos</b> de {preg_eval} posibles "
+        f"➔ <b>({aciertos_netos:.2f} ÷ {preg_eval}) × 10 = {nota_oposicion_10:.2f} sobre 10</b>."
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
 
     c1_t, c2_t, c3_t = st.columns(3)
     c1_t.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
