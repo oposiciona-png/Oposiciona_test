@@ -470,7 +470,7 @@ class PDFQuizParser:
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*\$', txt, re.IGNORECASE):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -1376,17 +1376,30 @@ else:
 
     puede_rep = usuario_puede_reportar()
     aciertos = fallos = blancos = preg_eval = 0
+    aciertos_por_intento = {}
+
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         if q['answer'] != -1:
             preg_eval += 1
             co = q['options'][q['answer']]
-            if stat['selected'] == co: aciertos += 1; stat['final_status'] = "✅ Correcta"
-            elif stat['selected'] is None: blancos += 1; stat['final_status'] = "⚪ En blanco"
-            else: fallos += 1; stat['final_status'] = "❌ Incorrecta"
+            if stat['selected'] == co:
+                aciertos += 1
+                stat['final_status'] = "✅ Correcta"
+                num_int = max(1, stat.get('attempts', 1))
+                aciertos_por_intento[num_int] = aciertos_por_intento.get(num_int, 0) + 1
+            elif stat['selected'] is None:
+                blancos += 1
+                stat['final_status'] = "⚪ En blanco"
+            else:
+                fallos += 1
+                stat['final_status'] = "❌ Incorrecta"
         else:
-            if stat['selected'] is None: blancos += 1; stat['final_status'] = "⚪ En blanco"
-            else: stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
+            if stat['selected'] is None:
+                blancos += 1
+                stat['final_status'] = "⚪ En blanco"
+            else:
+                stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
     nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
 
@@ -1409,11 +1422,19 @@ else:
 
     if not st.session_state.get('resultado_registrado', False):
         st.session_state.resultado_registrado = True
+        if aciertos > 0:
+            max_intento = max(aciertos_por_intento.keys())
+            tope_mostrar = 1 if max_intento == 1 else max(3, max_intento)
+            desglose_str = ", ".join([f"{aciertos_por_intento.get(k, 0)}-{k}" for k in range(1, tope_mostrar + 1)])
+            aciertos_sheets_str = f"{aciertos} ({desglose_str})"
+        else:
+            aciertos_sheets_str = "0"
+
         nota_sheets_str = f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
         registrar_actividad_sheets(
             evento="✅ Completado",
             nombre_test=st.session_state.get("test_name") or "Test",
-            aciertos=aciertos,
+            aciertos=aciertos_sheets_str,
             fallos=fallos,
             blancos=blancos,
             nota=nota_sheets_str,
