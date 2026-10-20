@@ -9,18 +9,161 @@ icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
 
 st.markdown("""<style>
-#MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"] {visibility: hidden !important; display: none !important;}
-[class*="viewerBadge"], [class*="styles_viewerBadge"] {display: none !important; opacity: 0 !important; pointer-events: none !important;}
-div[role="radiogroup"] label {margin-bottom: 12px !important;}
-div[role="radiogroup"] label, div[role="radiogroup"] label p, div[role="radiogroup"] label div, div[role="radiogroup"] label span {font-size: 17px !important; line-height: 1.3 !important; text-align: justify !important; color: #000000 !important; white-space: normal !important;}
-div[data-baseweb="radio"] > div:first-child {border-color: #000000 !important; border-width: 2px !important;}
-div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {background-color: #000000 !important;}
-.block-container {padding-top: 1rem !important; padding-bottom: 6rem !important; max-width: 750px !important;}
-div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button {background-color: #2e7d32 !important; border-color: #2e7d32 !important;}
-div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button p {color: #ffffff !important; font-weight: 600 !important; font-size: 17px !important;}
-div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button:hover {background-color: #1b5e20 !important; border-color: #1b5e20 !important;}
-body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {-webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important;}
-input, textarea, [data-baseweb="input"] {-webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important;}
+:root, html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    color-scheme: light only !important;
+    --text-color: #1E293B !important;
+    --background-color: #FFFFFF !important;
+    --secondary-background-color: #F8FAFC !important;
+    color: #1E293B !important;
+}
+#MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"] {
+    visibility: hidden !important;
+    display: none !important;
+}
+[class*="viewerBadge"], [class*="styles_viewerBadge"] {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+/* Textos generales, títulos, párrafos y etiquetas siempre oscuros incluso en Modo Oscuro de iPhone/iPad */
+h1, h2, h3, h4, h5, h6, p, span, label, li, summary,
+[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] h4,
+[data-testid="stMarkdownContainer"] h5, [data-testid="stMarkdownContainer"] h6,
+[data-testid="stMarkdownContainer"] span, [data-testid="stMarkdownContainer"] div,
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p {
+    color: #1E293B !important;
+}
+/* Carpetas / Desplegables (Expanders) siempre con fondo claro y texto negro */
+[data-testid="stExpander"], details {
+    background-color: #FFFFFF !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 8px !important;
+    color: #1E293B !important;
+}
+[data-testid="stExpander"] summary, details summary, [data-testid="stExpander"] summary:hover {
+    background-color: #F8FAFC !important;
+    color: #1E293B !important;
+    border-radius: 8px !important;
+}
+[data-testid="stExpander"] summary p, [data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary svg, [data-testid="stExpanderDetails"],
+[data-testid="stExpanderDetails"] div, [data-testid="stExpanderDetails"] b,
+[data-testid="stExpanderDetails"] span {
+    color: #1E293B !important;
+    fill: #1E293B !important;
+}
+/* Campos de texto, buscador y contraseñas siempre claros con letra negra */
+input, textarea, [data-baseweb="input"], [data-baseweb="base-input"], [data-baseweb="textarea"] {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    caret-color: #000000 !important;
+    border-color: #CBD5E1 !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+}
+input::placeholder, textarea::placeholder {
+    color: #64748B !important;
+    -webkit-text-fill-color: #64748B !important;
+    opacity: 1 !important;
+}
+[data-baseweb="input"] button, [data-baseweb="input"] svg {
+    background-color: transparent !important;
+    color: #1E293B !important;
+    fill: #1E293B !important;
+}
+/* Botones secundarios (Anterior, Comprobar, Siguiente, Repetir, Cambiar, Reportar en resumen) */
+div.stButton > button, button[kind="secondary"] {
+    background-color: #F1F5F9 !important;
+    color: #1E293B !important;
+    border: 1px solid #CBD5E1 !important;
+}
+div.stButton > button p, div.stButton > button span, button[kind="secondary"] p, button[kind="secondary"] span {
+    color: #1E293B !important;
+}
+div.stButton > button:hover, button[kind="secondary"]:hover {
+    background-color: #E2E8F0 !important;
+    border-color: #94A3B8 !important;
+    color: #000000 !important;
+}
+/* Botones primarios (Entrar, Iniciar Test, Enviar reporte, Finalizar sesión) */
+div.stButton > button[kind="primary"], button[kind="primary"] {
+    background-color: #1F77B4 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #1F77B4 !important;
+}
+div.stButton > button[kind="primary"] p, div.stButton > button[kind="primary"] span,
+button[kind="primary"] p, button[kind="primary"] span {
+    color: #FFFFFF !important;
+}
+div.stButton > button[kind="primary"]:hover, button[kind="primary"]:hover {
+    background-color: #155A8A !important;
+    border-color: #155A8A !important;
+}
+/* Botón verde de Simulacro Global */
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button {
+    background-color: #2e7d32 !important;
+    border-color: #2e7d32 !important;
+}
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button p,
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button span {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 17px !important;
+}
+div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button:hover {
+    background-color: #1b5e20 !important;
+    border-color: #1b5e20 !important;
+}
+/* Opciones de respuesta tipo Radio */
+div[role="radiogroup"] label {
+    margin-bottom: 12px !important;
+}
+div[role="radiogroup"] label, div[role="radiogroup"] label p, div[role="radiogroup"] label div, div[role="radiogroup"] label span {
+    font-size: 17px !important;
+    line-height: 1.3 !important;
+    text-align: justify !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    white-space: normal !important;
+}
+div[data-baseweb="radio"] > div:first-child {
+    background-color: #FFFFFF !important;
+    border-color: #000000 !important;
+    border-width: 2px !important;
+}
+div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
+    background-color: #000000 !important;
+}
+/* Alertas e info boxes legibles en modo oscuro */
+[data-testid="stAlert"] p, [data-testid="stAlert"] span, [data-testid="stAlert"] div {
+    color: #1E293B !important;
+}
+/* Subida de archivos local */
+[data-testid="stFileUploader"] section {
+    background-color: #F8FAFC !important;
+    border: 1px dashed #CBD5E1 !important;
+    color: #1E293B !important;
+}
+[data-testid="stFileUploader"] section span, [data-testid="stFileUploader"] section small, [data-testid="stFileUploader"] button {
+    color: #1E293B !important;
+}
+.block-container {
+    padding-top: 1rem !important;
+    padding-bottom: 6rem !important;
+    max-width: 750px !important;
+}
+body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+}
 @media print {
     html, body * {display: none !important; visibility: hidden !important;}
     html, body {display: block !important; background-color: white !important;}
@@ -176,7 +319,7 @@ col1, col2, col3 = st.columns([1, 0.8, 1])
 with col2:
     try: st.image("oposiciona (320 x 132 px).png", use_container_width=True)
     except: pass
-    st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4 !important;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
@@ -184,7 +327,7 @@ if not st.session_state.autenticado:
     with c_img2:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
         except: pass
-    st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: -5px;'>🔒 Acceso Restringido</h3><p style='text-align: center; font-size: 14px; margin-bottom: 20px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -5px;'>🔒 Acceso Restringido</h3><p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 20px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
     email_input = st.text_input("Usuario o correo electrónico asociado")
     password_input = st.text_input("Contraseña de acceso", type="password")
     if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
@@ -274,8 +417,8 @@ class PDFQuizParser:
                         is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+', line_text.strip(), re.IGNORECASE))
                         if not is_header and not is_page_ref and len(tl_clean_spaces) < 120:
                             for pat in [
-                                r'^oposiciona\$', r'oposicionaes', r'^pagina\s+\d+\s+de\s+\d+\$', r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
-                                r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?', r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d\$',
+                                r'^oposiciona$', r'oposicionaes', r'^pagina\s+\d+\s+de\s+\d+$', r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
+                                r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?', r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d$',
                                 r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
                                 r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+',
                                 r'^examen\s+repaso', r'^examen\s+[a-záéíóúñ0-9\s]+\s*202\d', r'^normas\s+para\s+la\s+realizacion', r'^especial\s+simulacros?',
@@ -327,7 +470,7 @@ class PDFQuizParser:
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*\$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*$', txt, re.IGNORECASE):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -707,8 +850,8 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
 
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
-        f"<b style='color:#bf360c; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
-        "<span style='font-size:13px; color:#5d4037;'>Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.</span>"
+        f"<b style='color:#bf360c !important; font-size:15px;'>🛠️ Reportar error en la Pregunta {num_pregunta} a info@oposiciona.es</b><br>"
+        "<span style='font-size:13px; color:#5d4037 !important;'>Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -1001,17 +1144,17 @@ def action_finalizar_sesion():
 
 
 if not st.session_state.questions:
-    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
+    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
     es_admin = usuario_es_admin()
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
         except: pass
     with col_texto:
-        st.markdown("<h3 style='color:#2C3E50; margin-top: -10px; margin-bottom: 10px;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color:#2C3E50 !important; margin-top: -10px; margin-bottom: 10px;'>📚 Comienza a practicar</h3>", unsafe_allow_html=True)
         rol = st.session_state.rol
         TESTS_DISPONIBLES = obtener_tests_segun_rol()
-        st.markdown("#### 1. Especialidad")
+        st.markdown("<h4 style='color:#1E293B !important; margin-bottom:6px;'>1. Especialidad</h4>", unsafe_allow_html=True)
         if rol in ["ACCESO TOTAL", "INVITADO"]:
             l_esp = list(TESTS_DISPONIBLES.keys())
             i_esp = l_esp.index(st.session_state.saved_esp) if st.session_state.get("saved_esp") in l_esp else 0
@@ -1024,13 +1167,13 @@ if not st.session_state.questions:
         else:
             st.error("Error en los permisos de usuario."); st.stop()
 
-        st.markdown("#### 2. Categoría")
+        st.markdown("<h4 style='color:#1E293B !important; margin-bottom:6px;'>2. Categoría</h4>", unsafe_allow_html=True)
         l_cat = list(TESTS_DISPONIBLES[especialidad].keys())
         i_cat = l_cat.index(st.session_state.saved_cat) if st.session_state.get("saved_cat") in l_cat else 0
         categoria = st.radio("Selecciona el tipo de test:", l_cat, index=i_cat, horizontal=True, key="radio_categoria", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad)
         st.session_state.saved_cat = categoria
 
-    st.markdown("#### 3. Modo de avance")
+    st.markdown("<h4 style='color:#1E293B !important; margin-bottom:6px;'>3. Modo de avance</h4>", unsafe_allow_html=True)
     op_av = [
         "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)",
         "**Modo metralleta** (pasa a la pregunta siguiente al pulsar una opción)"
@@ -1039,7 +1182,7 @@ if not st.session_state.questions:
     modo_avance = st.radio("Modo de avance:", op_av, index=i_av, label_visibility="collapsed")
     st.session_state.saved_avance = st.session_state.modo_avance = modo_avance
 
-    st.markdown("#### 4. Selección de Test")
+    st.markdown("<h4 style='color:#1E293B !important; margin-bottom:6px;'>4. Selección de Test</h4>", unsafe_allow_html=True)
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
     if rol == "INVITADO":
@@ -1099,22 +1242,22 @@ if not st.session_state.questions:
                     for it, (tn, tu) in enumerate(lt):
                         es_r = ("repaso" in tn.lower()) and (categoria != "EXAMENES")
                         ic = "🔄" if es_r else ("🏆" if categoria == "EXAMENES" else "📘")
-                        et = "<span style='background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:6px;'>REPASO</span>" if es_r else ""
+                        et = "<span style='background:#fff3cd; color:#856404 !important; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:6px;'>REPASO</span>" if es_r else ""
                         cn, cb = st.columns([3.2, 1])
-                        with cn: st.markdown(f"<div style='padding-top:6px; font-size:15px;'>{ic} <b>{tn}</b> {et}</div>", unsafe_allow_html=True)
+                        with cn: st.markdown(f"<div style='padding-top:6px; font-size:15px; color:#1E293B !important;'>{ic} <b style='color:#1E293B !important;'>{tn}</b> {et}</div>", unsafe_allow_html=True)
                         with cb:
                             if st.button("🚀 Iniciar", key=f"btn_grp_{especialidad}_{categoria}_{ig}_{it}", use_container_width=True, type="primary"):
                                 cargar_test_desde_url(tn, tu, especialidad, categoria)
 
     total_deseadas = 95 if especialidad == "GESTION" else 75
     with st.container():
-        st.markdown('<div class="cargar-test-container"></div><div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;"><h4 style="color: #856404; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4><p style="color: #856404; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio cruzando preguntas de los distintos temas disponibles en esta especialidad.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="cargar-test-container"></div><div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;"><h4 style="color: #856404 !important; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</h4><p style="color: #856404 !important; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio cruzando preguntas de los distintos temas disponibles en esta especialidad.</p></div>', unsafe_allow_html=True)
         if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
             if rol == "INVITADO": st.error("🔒 Función no disponible para usuarios invitados. Matricúlate para acceder al Simulacro Global Experto.")
             else: st.session_state.mostrar_opciones_simulacro = True
 
         if rol != "INVITADO" and st.session_state.get('mostrar_opciones_simulacro', False):
-            st.markdown("<div style='background-color:#eef6ff; border:2px solid #1f77b4; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:10px; text-align:center;'><b style='color:#1f77b4; font-size:16px;'>🎯 ¿Sobre qué bloques quieres realizar el Simulacro?</b></div>", unsafe_allow_html=True)
+            st.markdown("<div style='background-color:#eef6ff; border:2px solid #1f77b4; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:10px; text-align:center;'><b style='color:#1f77b4 !important; font-size:16px;'>🎯 ¿Sobre qué bloques quieres realizar el Simulacro?</b></div>", unsafe_allow_html=True)
             cs1, cs2, cs3 = st.columns(3)
             for col_b, lbl, amb, t_lbl in [(cs1, "🌐 TODO", "TODO", "SIMULACRO GLOBAL"), (cs2, "📘 GENERAL", "GENERAL", "SIMULACRO"), (cs3, "🎯 ESPECÍFICO", "ESPECIFICO", "SIMULACRO")]:
                 if col_b.button(lbl, use_container_width=True, type="primary"):
@@ -1169,14 +1312,14 @@ if not st.session_state.questions:
                 st.code(txt_copiar, language="markdown")
 
 elif not st.session_state.finished:
-    st.markdown("<style>:root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; } .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }</style>", unsafe_allow_html=True)
+    st.markdown("<style>:root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; color: #1E293B !important; } .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }</style>", unsafe_allow_html=True)
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
     puede_rep = usuario_puede_reportar()
 
-    st.markdown(f"<p style='color: #7f8c8d; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: #64748B !important; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>Pregunta {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     if q['preamble']: st.write(q['preamble'])
-    st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50; margin-bottom: 15px; line-height: 1.3; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50 !important; margin-bottom: 15px; line-height: 1.3; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
 
     def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
     sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
@@ -1221,14 +1364,14 @@ elif not st.session_state.finished:
         else:
             st.warning("⚪ EN BLANCO. La correcta no se detectó automáticamente en el PDF.") if not sel_opt else st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
         et = re.sub(r'(?i)^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
-        eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
-        st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
+        eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3; color: #0c5460 !important;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
+        st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460 !important;'>Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
     if puede_rep and st.session_state.get(key_rep_test, False):
         render_cuadro_reporte_error(q, idx + 1, "test_activo")
 
 else:
-    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #FFFFFF !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; }</style>", unsafe_allow_html=True)
+    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
 
     puede_rep = usuario_puede_reportar()
@@ -1245,10 +1388,8 @@ else:
             if stat['selected'] is None: blancos += 1; stat['final_status'] = "⚪ En blanco"
             else: stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
-    # 1. Nota de referencia sobre 10 (sin penalización)
     nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
 
-    # 2. Nota convertida de Oposición según especialidad (Administrativos vs Gestión)
     esp_actual = (st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "").upper()
     if "GESTI" in esp_actual or st.session_state.get("rol") == "GESTION":
         es_gestion = True
@@ -1300,7 +1441,7 @@ else:
                 } else disp();
             })();
             </script>""", height=0)
-        st.markdown("<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><h3 style='color: #1b5e20; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉</h3><p style='color: #2e7d32; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
+        st.markdown("<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><h3 style='color: #1b5e20 !important; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉</h3><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
         cr1, cr2, cr3 = st.columns([1, 0.4, 1])
         with cr2:
             try: st.image("test-utiles-768x768.png", use_container_width=True)
@@ -1311,33 +1452,33 @@ else:
             try: st.image("llorona.jpeg", use_container_width=True)
             except: pass
 
-    st.markdown("<h3 style='text-align: center; color: #2C3E50; margin-top: -10px;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -10px;'>📊 RESULTADOS FINALES</h3>", unsafe_allow_html=True)
     if st.session_state.get('test_name'):
-        st.markdown(f"<h5 style='text-align: center; color: #1f77b4; margin-top: -10px; margin-bottom: 15px;'>📄 {st.session_state.test_name}</h5>", unsafe_allow_html=True)
+        st.markdown(f"<h5 style='text-align: center; color: #1f77b4 !important; margin-top: -10px; margin-bottom: 15px;'>📄 {st.session_state.test_name}</h5>", unsafe_allow_html=True)
 
     st.markdown(
-        f"<h4 style='text-align: center; font-size: 16px; color: #555; margin-bottom: 10px;'>"
-        f"✅ Acertadas: <b>{aciertos}</b> &nbsp;|&nbsp; ❌ Falladas: <b>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b>{blancos}</b>"
+        f"<h4 style='text-align: center; font-size: 16px; color: #334155 !important; margin-bottom: 10px;'>"
+        f"✅ Acertadas: <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ❌ Falladas: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
         f"</h4>"
         f"<div style='background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; text-align: center;'>"
-        f"<div style='font-size: 16px; font-weight: 600; color: #495057;'>📏 PUNTUACIÓN DE REFERENCIA (SIN PENALIZACIÓN): <span style='color: #2C3E50; font-size: 19px;'>{nota_referencia:.2f} / 10</span></div>"
-        f"<div style='font-size: 12.5px; color: #6c757d; margin-top: 2px;'>Obtenida dividiendo tus {aciertos} aciertos entre las {preg_eval} preguntas evaluables ({aciertos} / {preg_eval} × 10), sin descontar errores.</div>"
+        f"<div style='font-size: 16px; font-weight: 600; color: #495057 !important;'>📏 PUNTUACIÓN DE REFERENCIA (SIN PENALIZACIÓN): <span style='color: #2C3E50 !important; font-size: 19px;'>{nota_referencia:.2f} / 10</span></div>"
+        f"<div style='font-size: 12.5px; color: #6c757d !important; margin-top: 2px;'>Obtenida dividiendo tus {aciertos} aciertos entre las {preg_eval} preguntas evaluables ({aciertos} / {preg_eval} × 10), sin descontar errores.</div>"
         f"</div>"
         f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-        f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 BAREMO OFICIAL OPOSICIÓN ({nombre_cuerpo})</div>"
-        f"<div style='text-align: center; font-size: 23px; font-weight: 800; color: #0d47a1; margin-bottom: 4px;'>"
+        f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 BAREMO OFICIAL OPOSICIÓN ({nombre_cuerpo})</div>"
+        f"<div style='text-align: center; font-size: 23px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
         f"🎓 NOTA CONVERTIDA OPOSICIÓN: {nota_oposicion_10:.2f} / 10"
         f"</div>"
-        f"<div style='text-align: center; font-size: 15px; font-weight: 600; color: #1565c0; margin-bottom: 10px;'>"
-        f"Puntos netos directos: <b>{aciertos_netos:.2f}</b> sobre {preg_eval} puntos posibles"
+        f"<div style='text-align: center; font-size: 15px; font-weight: 600; color: #1565c0 !important; margin-bottom: 10px;'>"
+        f"Puntos netos directos: <b style='color:#0d47a1 !important;'>{aciertos_netos:.2f}</b> sobre {preg_eval} puntos posibles"
         f"</div>"
-        f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13.5px; color: #2C3E50; text-align: justify; line-height: 1.4;'>"
-        f"<b>ℹ️ ¿Cómo se ha calculado tu nota de oposición?</b><br>"
-        f"• <b>Preguntas en blanco ({blancos}):</b> No suman ni restan (0 puntos).<br>"
-        f"• <b>Penalización por errores ({fallos} {'fallo' if fallos == 1 else 'fallos'}):</b> En <b>{nombre_cuerpo.title()}</b> cada error resta <b>{penalizacion_texto}</b>. "
-        f"Tus {fallos} {'error' if fallos == 1 else 'errores'} restan <b>{puntos_restados:.2f} aciertos</b> ({fallos} ÷ {divisor_penalizacion} = {puntos_restados:.2f}).<br>"
-        f"• <b>Cálculo final:</b> {aciertos} aciertos − {puntos_restados:.2f} de penalización = <b>{aciertos_netos:.2f} puntos netos</b> de {preg_eval} posibles "
-        f"➔ <b>({aciertos_netos:.2f} ÷ {preg_eval}) × 10 = {nota_oposicion_10:.2f} sobre 10</b>."
+        f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13.5px; color: #2C3E50 !important; text-align: justify; line-height: 1.4;'>"
+        f"<b style='color:#2C3E50 !important;'>ℹ️ ¿Cómo se ha calculado tu nota de oposición?</b><br>"
+        f"• <b style='color:#2C3E50 !important;'>Preguntas en blanco ({blancos}):</b> No suman ni restan (0 puntos).<br>"
+        f"• <b style='color:#2C3E50 !important;'>Penalización por errores ({fallos} {'fallo' if fallos == 1 else 'fallos'}):</b> En <b style='color:#2C3E50 !important;'>{nombre_cuerpo.title()}</b> cada error resta <b style='color:#2C3E50 !important;'>{penalizacion_texto}</b>. "
+        f"Tus {fallos} {'error' if fallos == 1 else 'errores'} restan <b style='color:#2C3E50 !important;'>{puntos_restados:.2f} aciertos</b> ({fallos} ÷ {divisor_penalizacion} = {puntos_restados:.2f}).<br>"
+        f"• <b style='color:#2C3E50 !important;'>Cálculo final:</b> {aciertos} aciertos − {puntos_restados:.2f} de penalización = <b style='color:#2C3E50 !important;'>{aciertos_netos:.2f} puntos netos</b> de {preg_eval} posibles "
+        f"➔ <b style='color:#2C3E50 !important;'>({aciertos_netos:.2f} ÷ {preg_eval}) × 10 = {nota_oposicion_10:.2f} sobre 10</b>."
         f"</div>"
         f"</div>",
         unsafe_allow_html=True
@@ -1352,16 +1493,18 @@ else:
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         co = q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)"
-        col = "green" if stat['final_status'] == "✅ Correcta" else "red" if stat['final_status'] == "❌ Incorrecta" else "#FF8C00"
+        col = "#15803d" if stat['final_status'] == "✅ Correcta" else "#dc2626" if stat['final_status'] == "❌ Incorrecta" else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
-        eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
-        ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #555;'>{q['preamble']}</div>" if q.get('preamble') else ""
+        eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3; color: #0c5460 !important;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
+        ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>" if q.get('preamble') else ""
         st.markdown(
-            f"<div style='margin-bottom: 5px;'><div style='color: {col}; font-size: 17px; font-weight: 600; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>"
-            f"{ph}<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Pregunta:</b> {q['question_text']}</div>"
-            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
-            f"<div style='font-size:15px; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b>Respuesta correcta:</b> {co}</div>"
-            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 6px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460;'>Explicación:</div><div style='font-size: 14px; color: #0c5460; text-align: justify;'>{eh}</div></div>"
+            f"<div style='margin-bottom: 5px;'>"
+            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>Pregunta {i+1} | {stat['final_status']} | Intentos: {stat['attempts']}</div>"
+            f"{ph}"
+            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b style='color:#000000 !important;'>Pregunta:</b> {q['question_text']}</div>"
+            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 2px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
+            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#000000 !important;'>Respuesta correcta:</b> {co}</div>"
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 6px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460 !important;'>Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
             f"</div>",
             unsafe_allow_html=True
         )
