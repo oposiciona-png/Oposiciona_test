@@ -350,7 +350,6 @@ if not st.session_state.autenticado:
     st.stop()
 # === FIN SECCIÓN 1 ===
 
-
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
     @staticmethod
@@ -433,9 +432,9 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=[.?!;\)\]"\'”»])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?):', r'\n\1:', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
+                        line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(?<!"\s)(?<!«\s)(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}(?:\.-|[\.\-]))(?!\s*[ºª°])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<![0-9]\.)(?<!\d)(\d{1,3}(?:\.-|[\.\-]))(?!\s*[ºª°\d])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;:"»”\)])\s*([a-e][\)\.\-]|[A-E][\)\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;:"»”\)])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
@@ -572,7 +571,7 @@ class PDFQuizParser:
             m_num = match_q_num(text)
 
             if m_num and current_q and current_q["state"] == "E":
-                if re.search(r'(?:«|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
+                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*\d*\.?\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
                     m_num = None
 
             m_rescue = False
@@ -595,9 +594,7 @@ class PDFQuizParser:
                     ):
                         m_fnum = None
                     if not found_a:
-                        if is_exp_marker(ft):
-                            aborted = True; break
-                        if m_fnum and int(m_fnum.group(1)) == cand_num + 1:
+                        if is_exp_marker(ft) or m_fnum:
                             aborted = True; break
                         if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_a = True
