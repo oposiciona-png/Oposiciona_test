@@ -852,11 +852,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 2 ===
 
-Aquí tienes **únicamente la Sección 3 completa** (`# === SECCIÓN 3: CATÁLOGO DE TESTS ===` hasta `# === FIN SECCIÓN 3 ===`) con todos los nuevos tests actualizados de Gestión (incluyendo también la actualización del enlace del *TEMA 53 - AFILIACION ACTUALIZADO* para el perfil de invitado).
-
-Como en la Sección 5 ya dejamos vaciada la lista `nuevos_hoy = []`, ninguno saldrá marcado como nuevo hoy. Solo tienes que sustituir la **Sección 3** en tu archivo `app_web.py`:
-
-```python
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
