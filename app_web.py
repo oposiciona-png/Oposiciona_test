@@ -352,6 +352,139 @@ if not st.session_state.autenticado:
 
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
+    REEMPLAZOS_INGLES_RAE = [
+        # Conectores y palabras en inglés coladas en textos en español
+        (r'\band\b', 'y'),
+        (r'\bor\b', 'o'),
+        (r'\bbut\b', 'pero'),
+        (r'\bwith\b', 'con'),
+        (r'\bwithout\b', 'sin'),
+        (r'\bbetween\b', 'entre'),
+        (r'\bfrom\b', 'desde'),
+        (r'\buntil\b', 'hasta'),
+        (r'\bsince\b', 'desde'),
+        (r'\bduring\b', 'durante'),
+        (r'\bbefore\b', 'antes de'),
+        (r'\bafter\b', 'después de'),
+        (r'\bunder\b', 'bajo'),
+        (r'\bover\b', 'sobre'),
+        (r'\bthrough\b', 'a través de'),
+        (r'\bwithin\b', 'dentro de'),
+        (r'\bagainst\b', 'contra'),
+        (r'\bamong\b', 'entre'),
+        (r'\bbecause\b', 'porque'),
+        (r'\balthough\b', 'aunque'),
+        (r'\bhowever\b', 'sin embargo'),
+        (r'\btherefore\b', 'por tanto'),
+        (r'\bmoreover\b', 'además'),
+        (r'\bfurthermore\b', 'además'),
+        (r'\bnevertheless\b', 'no obstante'),
+        (r'\botherwise\b', 'en caso contrario'),
+        (r'\binstead\b', 'en su lugar'),
+        (r'\balso\b', 'también'),
+        (r'\bonly\b', 'solo'),
+        (r'\balways\b', 'siempre'),
+        (r'\bnever\b', 'nunca'),
+        (r'\bboth\b', 'ambos'),
+        (r'\beach\b', 'cada'),
+        (r'\bevery\b', 'cada'),
+        (r'\bother\b', 'otro'),
+        (r'\banother\b', 'otro'),
+        (r'\bsuch\b', 'tal'),
+        (r'\bsame\b', 'mismo'),
+        (r'\bwhile\b', 'mientras'),
+        (r'\bwhen\b', 'cuando'),
+        (r'\bwhere\b', 'donde'),
+        (r'\bwhich\b', 'el cual'),
+        (r'\bwhose\b', 'cuyo'),
+        (r'\bwho\b', 'quien'),
+        (r'\bwhom\b', 'a quien'),
+        (r'\bthat\b', 'que'),
+        (r'\bthis\b', 'este'),
+        (r'\bthese\b', 'estos'),
+        (r'\bthose\b', 'aquellos'),
+        (r'\bthe\b', 'el'),
+        (r'\bmust\b', 'debe'),
+        (r'\bshould\b', 'debería'),
+        (r'\bcould\b', 'podría'),
+        (r'\bwould\b', 'haría'),
+        (r'\bcan\b', 'puede'),
+        (r'\bcannot\b', 'no puede'),
+        (r'\bmay\b', 'puede'),
+        (r'\bmight\b', 'podría'),
+        (r'\bshall\b', 'deberá'),
+        (r'\bwill\b', 'será'),
+        (r'\bis\b', 'es'),
+        (r'\bare\b', 'son'),
+        (r'\bwas\b', 'fue'),
+        (r'\bwere\b', 'fueron'),
+        (r'\bbeen\b', 'sido'),
+        (r'\bbeing\b', 'siendo'),
+        (r'\bhave\b', 'tienen'),
+        (r'\bhas\b', 'tiene'),
+        (r'\bhad\b', 'tenía'),
+        (r'\bnot\b', 'no'),
+        (r'\btrue\b', 'verdadero'),
+        (r'\bfalse\b', 'falso'),
+        (r'\bnull\b', 'nulo'),
+        # Anglicismos no admitidos por la RAE -> Equivalente en español
+        (r'\btrust\s+fideicomiso\b', 'fideicomiso'),
+        (r'\btrusts?\b', 'fideicomiso'),
+        (r'\bknow[\-\s]?how\b', 'saber hacer'),
+        (r'\bholdings?\b', 'grupo de sociedades'),
+        (r'\bleasing\b', 'arrendamiento financiero'),
+        (r'\brenting\b', 'alquiler a largo plazo'),
+        (r'\bfactoring\b', 'cesión de créditos'),
+        (r'\bfranchising\b', 'franquicia'),
+        (r'\bjoint[\-\s]?venture\b', 'empresa conjunta'),
+        (r'\boutsourcing\b', 'externalización'),
+        (r'\bcrowdfunding\b', 'financiación colectiva'),
+        (r'\bcompliance\b', 'cumplimiento normativo'),
+        (r'\bdeadlines?\b', 'plazo límite'),
+        (r'\btargets?\b', 'objetivo'),
+        (r'\bfeedback\b', 'retroalimentación'),
+        (r'\bstaff\b', 'personal'),
+        (r'\bmanagement\b', 'dirección'),
+        (r'\bmanagers?\b', 'director'),
+        (r'\bceo\b', 'consejero delegado'),
+        (r'\bdefault\b', 'impago'),
+        (r'\binputs?\b', 'aportación'),
+        (r'\boutputs?\b', 'resultado'),
+        (r'\bchecks?\b', 'comprobación'),
+        (r'\blinks?\b', 'enlace'),
+        (r'\be[\-\s]?mails?\b', 'correo electrónico'),
+        (r'\bon[\-\s]?line\b', 'en línea'),
+        (r'\boff[\-\s]?line\b', 'fuera de línea'),
+        (r'\bfull[\-\s]?time\b', 'a tiempo completo'),
+        (r'\bpart[\-\s]?time\b', 'a tiempo parcial'),
+        (r'\bback[\-\s]?office\b', 'administración interna'),
+        (r'\bfront[\-\s]?office\b', 'atención al público'),
+        (r'\bcall[\-\s]?center\b', 'centro de llamadas'),
+        (r'\bpen[\-\s]?drive\b', 'memoria USB'),
+        (r'\bpasswords?\b', 'contraseña'),
+        (r'\blogin\b', 'inicio de sesión'),
+        (r'\blogout\b', 'cierre de sesión'),
+        (r'\bstreaming\b', 'transmisión en directo'),
+        (r'\bplanning\b', 'planificación'),
+        (r'\btiming\b', 'calendario'),
+        (r'\branking\b', 'clasificación'),
+    ]
+
+    @classmethod
+    def traducir_ingles_no_rae(cls, texto):
+        if not texto:
+            return texto
+        for patron, reemplazo in cls.REEMPLAZOS_INGLES_RAE:
+            def _reemplazar_respetando_mayus(m):
+                orig = m.group(0)
+                if orig.isupper() and len(orig) > 1:
+                    return reemplazo.upper()
+                if orig[0].isupper():
+                    return reemplazo.capitalize()
+                return reemplazo
+            texto = re.sub(patron, _reemplazar_respetando_mayus, texto, flags=re.IGNORECASE)
+        return texto
+
     @staticmethod
     def parse(pdf_bytes):
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -428,6 +561,8 @@ class PDFQuizParser:
                             ]:
                                 if re.search(pat, tl_clean_spaces): is_header = True; break
                         if is_header: continue
+
+                        line_text = PDFQuizParser.traducir_ingles_no_rae(line_text)
 
                         line_text = re.sub(r'(?<=[.?!;\)\]"\'”»])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
