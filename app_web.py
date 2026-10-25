@@ -432,7 +432,7 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
@@ -499,7 +499,7 @@ class PDFQuizParser:
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*¿', s, re.IGNORECASE)
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'])', s, re.IGNORECASE)
             )
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
@@ -558,7 +558,7 @@ class PDFQuizParser:
             if m_num or m_rescue:
                 is_real_q_candidate = found_a = found_b = found_c = aborted = False
                 cand_num = int(m_num.group(1)) if m_num else expected_q_num
-                for j in range(idx + 1, min(idx + 60, len(lines))):
+                for j in range(idx + 1, min(idx + 140, len(lines))):
                     ft = lines[j]["text"].strip()
                     if ft == "<NEW_BLOCK>": continue
                     m_fnum = match_q_num(ft)
@@ -584,6 +584,8 @@ class PDFQuizParser:
                                 is_real_q_candidate = True; break
                             aborted = True; break
                         if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE):
+                            if found_c:
+                                is_real_q_candidate = True; break
                             aborted = True; break
 
                 if is_real_q_candidate and not aborted:
@@ -706,13 +708,13 @@ TESTS_DISPONIBLES_COMPLETO = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
-            "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026": "https://drive.google.com/uc?export=download&id=1zWrxEUexvs5IVFa3WSM96ezQ12-6NegN",
-            "EXAMEN OFICIAL 2026 B ROJO": "https://drive.google.com/uc?export=download&id=1fmh5zACnL7mPA29bxdAhhJqqm5cagv5L",
-            "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL": "https://drive.google.com/uc?export=download&id=1k0eOdHU9ZYuXP2HXw172joKzi9P25l-m",
-            "EXAMEN REPASO 1 TEMA 08 a 12 ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1Qau_6V0CjEoRAtxHigSqMjglkeCjfEB2",
-            "EXAMEN REPASO TEMA 2 COMPLETO": "https://drive.google.com/uc?export=download&id=1K60xc80vJAhbGKNs_2_UhooQ0ovSSUC2",
-            "SABADO 10 OCT 2026": "https://drive.google.com/uc?export=download&id=14rEqmgmwUPjcoAzA3H5EAux7aIWrFgsq",
-            "SABADO 5 SEP 2026": "https://drive.google.com/uc?export=download&id=1XGMVM7M0kRrNGyZYa3N-npLO7pYETxVa",
+            "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026 (RDL 31_2026)": "https://drive.google.com/uc?export=download&id=1WbIpgWBSDDPY9A6a6J5rKGVYgR72p8IT",
+            "EXAMEN OFICIAL 2026 B ROJO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1VRUncb1rKn8O1cIOiIqZAEaVmkfSvC5l",
+            "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
+            "EXAMEN REPASO 1 TEMA 08 a 12 ESPECIFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1m06sF7_F_sZVlfRQq3Uv0egrvo44gcmX",
+            "EXAMEN REPASO TEMA 2 COMPLETO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sixOo5p9R_WeuL_mg8LliJScO1ljnNV0",
+            "SABADO 10 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qtDZt9e2KsrnvElHWkSaN3wYnI1gT9Eq",
+            "SABADO 5 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17KWYOcGCSQR49cR7KMwqOKFi6QDsPkbh",
         },
         "GENERAL": {
             "Elige un test de general...": None,
@@ -1290,13 +1292,7 @@ if not st.session_state.questions:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
             st.info("Esta herramienta es visible únicamente para el administrador.")
             if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
-                nuevos_hoy = [
-                    "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL", "EXAMEN REPASO 1 TEMA 08 a 12 ESPECÍFICO",
-                    "TEMA 52 - REPASO 1 - CAMPO APLICACION", "TEMA 53 - REPASO 1 - AFILIACION",
-                    "TEMA 67 - REPASO 1 - COTIZACION", "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG",
-                    "TEMA 74.- REPASO 1 - RETA SETA Y MAR", "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL",
-                    "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO", "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL"
-                ]
+                nuevos_hoy = []
                 tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
                 bp, proc, txt_copiar = st.progress(0, text="Analizando PDFs..."), 0, ""
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
