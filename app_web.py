@@ -1006,9 +1006,6 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
-```
-
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
