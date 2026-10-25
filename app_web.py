@@ -433,8 +433,7 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        line_text = re.sub(r'([.?!;])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'([.?!;:"»”\)])\s*([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
@@ -567,20 +566,24 @@ class PDFQuizParser:
                     if not found_a:
                         if is_exp_marker(ft) or m_fnum:
                             aborted = True; break
-                        if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE): found_a = True
+                        if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE):
+                            found_a = True
+                            if re.search(r'(?:^|\s)b[\)\.\-](\s|$)', ft, re.IGNORECASE): found_b = True
+                            if re.search(r'(?:^|\s)c[\)\.\-](\s|$)', ft, re.IGNORECASE): found_c = True
                     elif not found_b:
                         if is_exp_marker(ft):
                             aborted = True; break
-                        if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE):
+                        if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE) or re.search(r'(?:^|\s)b[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_b = True
+                            if re.search(r'(?:^|\s)c[\)\.\-](\s|$)', ft, re.IGNORECASE): found_c = True
                             if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
                     else:
-                        if re.match(r'^c[\)\.\-](\s|$)', ft, re.IGNORECASE):
+                        if re.match(r'^c[\)\.\-](\s|$)', ft, re.IGNORECASE) or re.search(r'(?:^|\s)c[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_c = True
                         if is_exp_marker(ft):
                             is_real_q_candidate = True; break
                         if m_fnum:
-                            if found_c and (int(m_fnum.group(1)) == cand_num + 1):
+                            if found_c and (int(m_fnum.group(1)) == cand_num + 1 or int(m_fnum.group(1)) == 1):
                                 is_real_q_candidate = True; break
                             aborted = True; break
                         if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE):
@@ -594,11 +597,13 @@ class PDFQuizParser:
                         prev_closed_with_pageref = bool(current_q and current_q["state"] == "E" and re.search(r'\(p[aá]gina\s+\d+', current_q["explanation"], re.IGNORECASE))
                         if current_q is None:
                             is_new_q, expected_q_num = True, num + 1
-                        elif expected_q_num - 1 <= num <= expected_q_num + 7:
+                        elif pdf_uses_explicit_exp and current_q["state"] in ["O", "E"] and 1 <= num <= 250:
                             is_new_q, expected_q_num = True, num + 1
-                        elif num in [1, 2] and current_q["state"] in ["O", "E"] and expected_q_num >= 10:
+                        elif expected_q_num - 1 <= num <= expected_q_num + 15:
                             is_new_q, expected_q_num = True, num + 1
-                        elif prev_closed_with_pageref and expected_q_num < num <= expected_q_num + 35:
+                        elif num in [1, 2] and current_q["state"] in ["O", "E"] and expected_q_num >= 5:
+                            is_new_q, expected_q_num = True, num + 1
+                        elif prev_closed_with_pageref and 1 <= num <= 250:
                             is_new_q, expected_q_num = True, num + 1
                     elif m_rescue:
                         is_new_q = True; expected_q_num += 1
