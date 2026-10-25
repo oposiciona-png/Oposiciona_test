@@ -1,3 +1,4 @@
+# === SECCIÓN 1: CONFIGURACIÓN, ESTILOS Y REGISTRO SHEETS ===
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
@@ -347,8 +348,10 @@ if not st.session_state.autenticado:
             st.rerun()
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
     st.stop()
+# === FIN SECCIÓN 1 ===
 
 
+# === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
     @staticmethod
     def parse(pdf_bytes):
@@ -432,7 +435,7 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}(?:\.-|[\.\-]))(?!\s*[ºª°])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;:"»”\)])\s*([a-e][\)\.\-]|[A-E][\)\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;:"»”\)])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
@@ -709,8 +712,10 @@ class PDFQuizParser:
 
         if current_q and current_q["options"]: questions.append(current_q)
         return questions
+# === FIN SECCIÓN 2 ===
 
 
+# === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
 TESTS_DISPONIBLES_COMPLETO = {
@@ -862,7 +867,10 @@ TESTS_DISPONIBLES_INVITADO = {
         "GENERAL": {"Elige un test de general...": None},
     },
 }
+# === FIN SECCIÓN 3 ===
 
+
+# === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
     return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
@@ -1185,8 +1193,10 @@ def action_subir_otro():
 def action_finalizar_sesion():
     st.session_state.clear()
     st.session_state.do_scroll = True
+# === FIN SECCIÓN 4 ===
 
 
+# === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 if not st.session_state.questions:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
     es_admin = usuario_es_admin()
@@ -1582,4 +1592,5 @@ else:
     c1_b.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
     c2_b.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
+# === FIN SECCIÓN 5 ===
 # --- FIN DEL ARCHIVO ---
