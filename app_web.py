@@ -433,7 +433,8 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<!\d)(\d{1,3}[\.\-\)])(?!\s*[ºª°])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        line_text = re.sub(r'([.?!;:"»”\)])\s*([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<!\d)([.?!;:"»”\)])\s*([a-e][\)\.\-]|[A-E][\)\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
+                        line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;:"»”\)])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]gina\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
 
@@ -464,6 +465,29 @@ class PDFQuizParser:
             cleaned_num_lines.append(curr)
             k += 1
         lines = cleaned_num_lines
+
+        # Reparar opciones donde el PDF coloca "b)" solitario justo antes de "a) ..."
+        reordered_lines, r_idx = [], 0
+        while r_idx < len(lines):
+            if re.match(r'^b[\)\.\-]\s*$', lines[r_idx]["text"].strip(), re.IGNORECASE):
+                n_a = r_idx + 1
+                while n_a < len(lines) and lines[n_a]["text"] == "<NEW_BLOCK>":
+                    n_a += 1
+                if n_a < len(lines) and re.match(r'^a[\)\.\-]\s+\S', lines[n_a]["text"].strip(), re.IGNORECASE):
+                    n_b_txt = n_a + 1
+                    while n_b_txt < len(lines) and lines[n_b_txt]["text"] == "<NEW_BLOCK>":
+                        n_b_txt += 1
+                    if n_b_txt < len(lines) and not re.match(r'^[a-e][\)\.\-](\s|$)', lines[n_b_txt]["text"].strip(), re.IGNORECASE):
+                        reordered_lines.append(lines[n_a])
+                        reordered_lines.append({
+                            "text": "b) " + lines[n_b_txt]["text"].strip(),
+                            "bold": lines[r_idx]["bold"] or lines[n_b_txt]["bold"]
+                        })
+                        r_idx = n_b_txt + 1
+                        continue
+            reordered_lines.append(lines[r_idx])
+            r_idx += 1
+        lines = reordered_lines
 
         merged_lines, i = [], 0
         while i < len(lines):
@@ -561,10 +585,16 @@ class PDFQuizParser:
                     ft = lines[j]["text"].strip()
                     if ft == "<NEW_BLOCK>": continue
                     m_fnum = match_q_num(ft)
-                    if m_fnum and (re.match(r'^\d+\.\d+', ft) or re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE)):
+                    if m_fnum and (
+                        re.match(r'^\d+\.\d+', ft) or
+                        re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE) or
+                        re.match(r'^\d+[\.\)]?\s*(?:de\s+enero|de\s+febrero|de\s+marzo|de\s+abril|de\s+mayo|de\s+junio|de\s+julio|de\s+agosto|de\s+septiembre|de\s+octubre|de\s+noviembre|de\s+diciembre|meses|años|días|horas|euros|por\s+ciento)\b', ft, re.IGNORECASE)
+                    ):
                         m_fnum = None
                     if not found_a:
-                        if is_exp_marker(ft) or m_fnum:
+                        if is_exp_marker(ft):
+                            aborted = True; break
+                        if m_fnum and int(m_fnum.group(1)) == cand_num + 1:
                             aborted = True; break
                         if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_a = True
