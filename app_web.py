@@ -852,6 +852,11 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 2 ===
 
+Aquí tienes **únicamente la Sección 3 completa** (`# === SECCIÓN 3: CATÁLOGO DE TESTS ===` hasta `# === FIN SECCIÓN 3 ===`) con todos los nuevos tests actualizados de Gestión (incluyendo también la actualización del enlace del *TEMA 53 - AFILIACION ACTUALIZADO* para el perfil de invitado).
+
+Como en la Sección 5 ya dejamos vaciada la lista `nuevos_hoy = []`, ninguno saldrá marcado como nuevo hoy. Solo tienes que sustituir la **Sección 3** en tu archivo `app_web.py`:
+
+```python
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
@@ -919,34 +924,34 @@ TESTS_DISPONIBLES_COMPLETO = {
     "GESTION": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
-            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS": "https://drive.google.com/uc?export=download&id=1LlQvfrYuVXx2mJETTpfDGdhE2hyAWUZn",
-            "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA": "https://drive.google.com/uc?export=download&id=1ZcpNzh3IIu40K8eDcQCKpmWKrhvBUE_v",
-            "TEMA 52 - REPASO 1 - CAMPO APLICACION": "https://drive.google.com/uc?export=download&id=1oqziTFYRP3C4TQNqlAoiY1YohyrwRZTm",
-            "TEMA 53 - AFILIACION": "https://drive.google.com/uc?export=download&id=1CUhqhupF7_aiL5vjvP6aZlLjPay9xTOs",
-            "TEMA 53 - REPASO 1 - AFILIACION": "https://drive.google.com/uc?export=download&id=1DuFQD1pFPMXVFDdR9NWS9pmVGfv0JYR7",
-            "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES": "https://drive.google.com/uc?export=download&id=1OmVgiP6fGsGAYZ71v-vIKahly4V06-6o",
-            "TEMA 55 REPASO PRESTACIONES ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1sZoz0-f-oMafO1pRuCnhpF835lt_-FgW",
-            "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO": "https://drive.google.com/uc?export=download&id=1d0Q3K5dB3dT9rVjuXXCy-RX_37xIDKbO",
-            "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES": "https://drive.google.com/uc?export=download&id=1xLJwqD3zFtgGS-Q_jGa3fHFZPnNacGwz",
-            "TEMA 57 INCAPACIDAD TEMPORAL": "https://drive.google.com/uc?export=download&id=1lrSFSMDbecfW_aGYId5QChIhgVyYFKC5",
-            "TEMA 57 REPASO INCAPACIDAD TEMPORAL ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1KwxD3UEy0VgtFf5Kf_z6RlKXCdh0vICF",
-            "TEMA 58 - NYCM": "https://drive.google.com/uc?export=download&id=1iw4NDqaC1gMGiMgd-VZTbtaoWyWKLE8L",
-            "TEMA 58 REPASO NACIMIENTO Y CUIDADO DEL MENOR ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1eL8YOkh6PtaUkMMCHp8V1dDJHyN0V4bp",
-            "TEMA 59 y 60 IP": "https://drive.google.com/uc?export=download&id=16ahUMTSgXAcjTVH700BoL6eZgwQo2_7E",
-            "TEMA 59 y 60 IP y LESIONES PERMANENTES": "https://drive.google.com/uc?export=download&id=12_N6QFcTShR-w-yX9ptJD9pbfC_CQuUD",
-            "TEMA 59 y 60 REPASO INCAPACIDAD PERMANETE ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1KCbfeYJhi8ANXEGcilye4IrYjtsOknfM",
-            "TEMA 61 JUBILACION": "https://drive.google.com/uc?export=download&id=1K2u4rSuqXjjBJ3wzKQbn84Ezu-9Ibg-d",
-            "TEMA 61 REPASO  JUBILACIÓN ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1csf7oIdntqrXRhA2CLSMJqn7J1AMog0T",
-            "TEMA 62 MUERTE Y SUPERVIVENCIA": "https://drive.google.com/uc?export=download&id=1HtVMPv1Shbfx90cSKFdr-9kcUA6pHlNG",
-            "TEMA 62 REPASO MUERTE SUPERVIVENCIA ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1j8MmXwrdpeLR7VEfzkEPixUZbn83KjNE",
-            "TEMA 64 IMV REPASO ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1n6hNSEgl5w2sSqN2dNcVGe_pqKKQi36x",
-            "TEMA 67 - REPASO 1 - COTIZACION": "https://drive.google.com/uc?export=download&id=1uUEBkcwMwsOtS6LmQ2Q_PhxAzbO7TCyp",
-            "Tema 67 COTIZACION": "https://drive.google.com/uc?export=download&id=1kErdym1yxTP-Qd0Frx-5XIwOkI3aq5aL",
-            "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL": "https://drive.google.com/uc?export=download&id=16JKTt0G8UycnAsclRtoHC1mGkgDtvHI0",
-            "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG": "https://drive.google.com/uc?export=download&id=1A2tEioQS4Xfd7OAcOWsCOnDWfSMla1dW",
-            "TEMA 74 - RETA, SETA  Y MAR": "https://drive.google.com/uc?export=download&id=1N2ezL7ohgKxcoZVPex_oGday9JHMMxl7",
-            "TEMA 74.- REPASO 1 - RETA SETA Y MAR": "https://drive.google.com/uc?export=download&id=1VFu51nTOGd5fknYDmd5mUkc_Z_Ma0pwr",
-            "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS": "https://drive.google.com/uc?export=download&id=1eHZ9Ajqujk-wtnzcsAo_e6lpkH9kfrao",
+            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
+            "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-5Rm3LkOugs5dVSYdURRAfLVR0FIVnmz",
+            "TEMA 52 - REPASO 1 - CAMPO APLICACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YLYxtBUxnyqcqRonpnOZBH1gs4BiOM1_",
+            "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf",
+            "TEMA 53 - REPASO 1 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1_CJEGRuBVlSNa65SOD9N6oey7ZzbNvXb",
+            "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oN_zQjZndYyv6Vqb23RSwnbc3kOLr_qG",
+            "TEMA 55 REPASO PRESTACIONES ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-s-CC-bmKNxORvrB_fojQJzYri0ghLnm",
+            "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1KemtXXZhcBEjA_D3-4MzrVqMcX3LTprK",
+            "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1dNoTqgXlXHmNK1YJEZVMb5K6ml5gKv9V",
+            "TEMA 57 INCAPACIDAD TEMPORAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1X5vyIIDpecxuu3OjUSg5UM3bOVjgKFjd",
+            "TEMA 57 REPASO INCAPACIDAD TEMPORAL ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13H8QscCgfCTJ2HPCmNwE7g_1pmn2WPWX",
+            "TEMA 58 REPASO NACIMIENTO Y CUIDADO DEL MENOR ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Vpa3ITJ-U-gT53nfJBZFbW7M-5QSMbZm",
+            "TEMA 59 y 60 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1POaTzuPYzbWlZyXnfwVaGjA0V_UqwDwb",
+            "TEMA 59 y 60 IP y LESIONES PERMANENTES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1eQdN_fTcyn_T605iUc9FjpqFf64uDa0A",
+            "TEMA 59 y 60 REPASO INCAPACIDAD PERMANETE ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18C0alZZHd4iGVGRaFOHivbUOBzyEdksV",
+            "TEMA 61 JUBILACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1nKrr7F0EeskM4NNFc4vY3qmBdWb9qpg5",
+            "TEMA 61 REPASO  JUBILACIÓN ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YXAiZqWdlEpdXUCnqjennX2hHwT87N-8",
+            "TEMA 62 MUERTE Y SUPERVIVENCIA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1z0iTZLKWW49SF_TDCZ5TzAikHIw0Dl96",
+            "TEMA 62 REPASO MUERTE SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18UwNzRcHE-XTJWy8Va58krL_65MNgQEZ",
+            "TEMA 64 IMV REPASO ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fsmjqL8jeCPS_mMLP0Svuq3IWAr_BVd-",
+            "TEMA 67 - REPASO 1 - COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1XfUA3JPXNS3AiDLU0x3m18D2FV8aLuR2",
+            "Tema 67 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10oRTI6Rw_yF0yFZTQXhP8f8cHrZUWxK6",
+            "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
+            "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Cct-h4j1Pn9g5YUg27ihZ0bNk9dKNUQO",
+            "TEMA 74 - RETA, SETA  Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18N_VW51u8AsyPx57fBzQ9TUAacy4YEw6",
+            "TEMA 74.- REPASO 1 - RETA SETA Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1IKx62YjsGUH_Ph7hAsYDcBreVWAuJ7SA",
+            "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1syZMOnCoJ3MEydEK2r7Due7b37FM9ywt",
+            "TEMA 75- REPASO 1 - MINERÍA DEL CARBÓN - SEGURO ESCOLAR - FUNCIONARIOS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fM7zE6644urC4osPFd_zJCzQpbdlteB3",
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
@@ -999,12 +1004,14 @@ TESTS_DISPONIBLES_INVITADO = {
         "GENERAL": {"Elige un test de general...": None},
     },
     "GESTION": {
-        "ESPECIFICO": {"Elige un test de especifico...": None, "TEMA 53 - AFILIACION": "https://drive.google.com/uc?export=download&id=1CUhqhupF7_aiL5vjvP6aZlLjPay9xTOs"},
+        "ESPECIFICO": {"Elige un test de especifico...": None, "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf"},
         "EXAMENES": {"Elige un test de examenes...": None},
         "GENERAL": {"Elige un test de general...": None},
     },
 }
 # === FIN SECCIÓN 3 ===
+
+```
 
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
