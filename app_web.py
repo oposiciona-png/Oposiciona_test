@@ -399,7 +399,7 @@ class PDFQuizParser:
 
                         if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                             stop_reading = True; break
-                        if not re.match(r'^\s*(?:Pregunta\s+)?\d+\s*[\.\-\)]', line_text, re.IGNORECASE):
+                        if not re.match(r'^\s*(?:Pregunta\s+)?\d+\s*[\.\-\):]', line_text, re.IGNORECASE):
                             if any(x in tl_clean_spaces for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "casos practicos", "caso practico"]):
                                 if line_text.isupper() or len(tl_clean_spaces) < 45:
                                     ignoring_mode = entered_supuestos = True
@@ -434,7 +434,7 @@ class PDFQuizParser:
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?):', r'\n\1:', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(?<!"\s)(?<!«\s)(Art[íi]culo aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<![0-9]\.)(?<!\d)(\d{1,3}(?:\.-|[\.\-]))(?!\s*[ºª°\d])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<![0-9]\.)(?<!\d)(\d{1,3}(?:[\.\-]+:?|:))(?!\s*[ºª°\d])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
                         line_text = re.sub(r'(?<!\d)([.?!;:"»”\)])\s*([a-e][\)\.\-]|[A-E][\)\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<![\dA-ZÁÉÍÓÚÑ])([.?!;:"»”\)])([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ])\s+([a-e][\)\.\-]|[A-E][\)\-])\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])(?!\s*[A-Z]\.)', r'\n\1 ', line_text)
@@ -450,13 +450,13 @@ class PDFQuizParser:
         while k < len(lines):
             curr = lines[k]
             txt = curr["text"].strip()
-            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\)]+$', txt, re.IGNORECASE):
+            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\):]+$', txt, re.IGNORECASE):
                 m = k + 1
                 while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
                     m += 1
                 if m < len(lines):
                     next_txt = lines[m]["text"].strip()
-                    if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\)]+(\s|$)', next_txt, re.IGNORECASE):
+                    if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\):]+(\s|$)', next_txt, re.IGNORECASE):
                         k = m
                         continue
                     else:
@@ -522,9 +522,9 @@ class PDFQuizParser:
 
         def match_q_num(s):
             return (
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\)]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\)]*\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'])', s, re.IGNORECASE)
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]*\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'])', s, re.IGNORECASE)
             )
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
@@ -639,8 +639,14 @@ class PDFQuizParser:
                         is_new_q = True; expected_q_num += 1
 
             if is_new_q:
+                ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+\s*¿', '¿', re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\):]+\s*(-*\s*)?', '', text, flags=re.IGNORECASE), flags=re.IGNORECASE)
+                if m_rescue and current_q and current_q["state"] == "E" and current_q["explanation"]:
+                    exp_parts = current_q["explanation"].rstrip().split("\n\n")
+                    last_part = exp_parts[-1].strip()
+                    if last_part.endswith(",") and len(last_part) < 180:
+                        ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\):]*\s*', '', last_part, flags=re.IGNORECASE) + " " + ct
+                        current_q["explanation"] = "\n\n".join(exp_parts[:-1]).strip()
                 if current_q and current_q["options"]: questions.append(current_q)
-                ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+\s*¿', '¿', re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\)]+\s*(-*\s*)?', '', text, flags=re.IGNORECASE), flags=re.IGNORECASE)
                 current_q, preamble = {"preamble": preamble.strip(), "question_text": ct, "options": [], "answer": -1, "explanation": "", "state": "Q"}, ""
                 continue
 
@@ -710,7 +716,6 @@ class PDFQuizParser:
         if current_q and current_q["options"]: questions.append(current_q)
         return questions
 # === FIN SECCIÓN 2 ===
-
 
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
