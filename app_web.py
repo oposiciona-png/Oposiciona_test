@@ -950,11 +950,12 @@ TESTS_DISPONIBLES_COMPLETO = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
-            "DOMINGO 6 SEP 2026": "https://drive.google.com/uc?export=download&id=1pEuW36jClxKZQjwAuSx6TpfFaxlmkcln",
-            "Examen oficial 17 de mayo de 2026": "https://drive.google.com/uc?export=download&id=1-ZFGIZGsixCwIS5Tr_4dZ5hX8mcX4yDL",
-            "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL": "https://drive.google.com/uc?export=download&id=1WXCXKhlCSgPzm4TrWIvrrV1ffzUGYog3",
-            "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO": "https://drive.google.com/uc?export=download&id=1ZpHomgomojh3AsKBton7A7OloVLfoKTk",
-            "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL": "https://drive.google.com/uc?export=download&id=16vMfq7ToTQBXr1-f8nB89FVO_Y2yGG1A",
+            "DOMINGO 11 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1cQ9aPHfcpZmJrP3nOv52GNaY3ag9KVZ0",
+            "DOMINGO 6 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17Sn2tH9MnBKs4waafXN5NvLEJW8Dieq4",
+            "Examen oficial 17 de mayo de 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sZT_v_KQE1R0kyKxojAbpxMssu9vkdnG",
+            "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1h_08kcGUlybuOk-VXUA6Ca6h11UFWBT2",
+            "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1jwafdNNaw4H9IgkjW7-TJgzcSaUkKFHm",
+            "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1QT7rmZPvuuNr7SradBQGCk3ieIi8n9V0",
         },
         "GENERAL": {
             "Elige un test de general...": None,
