@@ -563,6 +563,8 @@ class PDFQuizParser:
                         if is_header: continue
 
                         line_text = PDFQuizParser.traducir_ingles_no_rae(line_text)
+                        # Unir superíndices ordinales separados por PyMuPDF (ej. "1. ª" -> "1.ª")
+                        line_text = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', line_text)
 
                         line_text = re.sub(r'(?<=[.?!;\)\]"\'”»])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s{2,}(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
@@ -663,7 +665,8 @@ class PDFQuizParser:
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]*\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'])', s, re.IGNORECASE)
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'])', s) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', s, re.IGNORECASE)
             )
 
         pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
@@ -755,7 +758,8 @@ class PDFQuizParser:
                         if m_fnum:
                             if found_c and (int(m_fnum.group(1)) == cand_num + 1 or int(m_fnum.group(1)) == 1):
                                 is_real_q_candidate = True; break
-                            aborted = True; break
+                            if not pdf_uses_explicit_exp:
+                                aborted = True; break
                         if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE):
                             if found_c:
                                 is_real_q_candidate = True; break
