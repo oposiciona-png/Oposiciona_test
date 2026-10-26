@@ -630,7 +630,7 @@ class PDFQuizParser:
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto|Decreto)\s*$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', txt, re.IGNORECASE):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -656,6 +656,10 @@ class PDFQuizParser:
             )
 
         def match_q_num(s):
+            if re.match(r'^\s*\d{1,4}[\.\-\),\s]+(?:de\s+enero|de\s+febrero|de\s+marzo|de\s+abril|de\s+mayo|de\s+junio|de\s+julio|de\s+agosto|de\s+septiembre|de\s+octubre|de\s+noviembre|de\s+diciembre|meses|años|días|horas|euros|por\s+ciento|y\s+\d+|del\s+t[íi]tulo|del\s+art[íi]culo|del\s+real|de\s+la\s+ley)\b', s, re.IGNORECASE):
+                return None
+            if re.match(r'^\s*(?:19\d\d|20\d\d)\b', s):
+                return None
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
@@ -706,7 +710,7 @@ class PDFQuizParser:
             m_num = match_q_num(text)
 
             if m_num and current_q and current_q["state"] == "E":
-                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto)\s*\d*\.?\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
+                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*\d*\.?\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
                     m_num = None
 
             m_rescue = False
@@ -724,12 +728,13 @@ class PDFQuizParser:
                     m_fnum = match_q_num(ft)
                     if m_fnum and (
                         re.match(r'^\d+\.\d+', ft) or
-                        re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE) or
-                        re.match(r'^\d+[\.\)]?\s*(?:de\s+enero|de\s+febrero|de\s+marzo|de\s+abril|de\s+mayo|de\s+junio|de\s+julio|de\s+agosto|de\s+septiembre|de\s+octubre|de\s+noviembre|de\s+diciembre|meses|años|días|horas|euros|por\s+ciento)\b', ft, re.IGNORECASE)
+                        re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE)
                     ):
                         m_fnum = None
                     if not found_a:
-                        if is_exp_marker(ft) or m_fnum:
+                        if is_exp_marker(ft):
+                            aborted = True; break
+                        if m_fnum and int(m_fnum.group(1)) == cand_num + 1:
                             aborted = True; break
                         if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE):
                             found_a = True
