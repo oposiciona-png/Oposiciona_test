@@ -421,7 +421,6 @@ class PDFQuizParser:
         (r'\bbeen\b', 'sido'),
         (r'\bbeing\b', 'siendo'),
         (r'\bhave\b', 'tienen'),
-        (r'\bhas\b', 'tiene'),
         (r'\bhad\b', 'tenía'),
         (r'\bnot\b', 'no'),
         (r'\btrue\b', 'verdadero'),
@@ -636,7 +635,7 @@ class PDFQuizParser:
                                 break
                             chunk_lines.append(lines[scan_k])
                         scan_k += 1
-                    if len(chunk_lines) >= 2:
+                    if len(chunk_lines) >= 1:
                         combined_txt = " ".join(x["text"].strip() for x in chunk_lines)
                         m_two = re.match(r'^(.+?\.)\s+([A-ZÁÉÍÓÚÑ¿¡0-9].*)$', combined_txt)
                         if m_two:
@@ -751,7 +750,7 @@ class PDFQuizParser:
             m_num = match_q_num(text)
 
             if m_num and current_q and current_q["state"] == "E":
-                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*\d*\.?\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
+                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
                     m_num = None
 
             m_rescue = False
