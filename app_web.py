@@ -591,7 +591,6 @@ class PDFQuizParser:
                 m = k + 1
                 while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
                     m += 1
-                # Si termina el cierre de un paréntesis anterior (ej. "(Grupos 2 a" + "11).") o la siguiente línea es una opción a)
                 if cleaned_num_lines and (
                     ")" in txt and "(" not in txt and cleaned_num_lines[-1]["text"].count("(") > cleaned_num_lines[-1]["text"].count(")") or
                     (m < len(lines) and re.match(r'^[a-e][\)\.\-](\s|$)', lines[m]["text"].strip(), re.IGNORECASE))
@@ -618,7 +617,7 @@ class PDFQuizParser:
         lines = cleaned_num_lines
 
         # Reparar opciones desordenadas o agrupadas sin texto:
-        # Caso 1: "a)" solitario seguido de "b)" solitario y luego los 2 textos debajo (ej. Pregunta 14 de Tema 73)
+        # Caso 1: "a)" solitario seguido de "b)" solitario y luego varias líneas de texto hasta "c)" (ej. Pregunta 14 de Tema 73)
         # Caso 2: "b)" solitario justo antes de "a) ..." (ej. Pregunta 38 de Tema 10)
         reordered_lines, r_idx = [], 0
         while r_idx < len(lines):
@@ -628,23 +627,25 @@ class PDFQuizParser:
                 while n_b < len(lines) and lines[n_b]["text"] == "<NEW_BLOCK>":
                     n_b += 1
                 if n_b < len(lines) and re.match(r'^b[\)\.\-]\s*$', lines[n_b]["text"].strip(), re.IGNORECASE):
-                    n_t1 = n_b + 1
-                    while n_t1 < len(lines) and lines[n_t1]["text"] == "<NEW_BLOCK>":
-                        n_t1 += 1
-                    n_t2 = n_t1 + 1
-                    while n_t2 < len(lines) and lines[n_t2]["text"] == "<NEW_BLOCK>":
-                        n_t2 += 1
-                    if n_t2 < len(lines) and not re.match(r'^[a-e][\)\.\-](\s|$)', lines[n_t1]["text"].strip(), re.IGNORECASE) and not re.match(r'^[a-e][\)\.\-](\s|$)', lines[n_t2]["text"].strip(), re.IGNORECASE):
-                        reordered_lines.append({
-                            "text": "a) " + lines[n_t1]["text"].strip(),
-                            "bold": lines[r_idx]["bold"] or lines[n_t1]["bold"]
-                        })
-                        reordered_lines.append({
-                            "text": "b) " + lines[n_t2]["text"].strip(),
-                            "bold": lines[n_b]["bold"] or lines[n_t2]["bold"]
-                        })
-                        r_idx = n_t2 + 1
-                        continue
+                    chunk_lines = []
+                    scan_k = n_b + 1
+                    while scan_k < len(lines) and len(chunk_lines) < 8:
+                        tk = lines[scan_k]["text"].strip()
+                        if tk != "<NEW_BLOCK>":
+                            if re.match(r'^[c-e][\)\.\-](\s|$)', tk, re.IGNORECASE):
+                                break
+                            chunk_lines.append(lines[scan_k])
+                        scan_k += 1
+                    if len(chunk_lines) >= 2:
+                        combined_txt = " ".join(x["text"].strip() for x in chunk_lines)
+                        m_two = re.match(r'^(.+?\.)\s+([A-ZÁÉÍÓÚÑ¿¡0-9].*)$', combined_txt)
+                        if m_two:
+                            bold_a = lines[r_idx]["bold"] or chunk_lines[0]["bold"]
+                            bold_b = lines[n_b]["bold"] or chunk_lines[-1]["bold"]
+                            reordered_lines.append({"text": "a) " + m_two.group(1).strip(), "bold": bold_a})
+                            reordered_lines.append({"text": "b) " + m_two.group(2).strip(), "bold": bold_b})
+                            r_idx = scan_k
+                            continue
             if re.match(r'^b[\)\.\-]\s*$', t_curr, re.IGNORECASE):
                 n_a = r_idx + 1
                 while n_a < len(lines) and lines[n_a]["text"] == "<NEW_BLOCK>":
