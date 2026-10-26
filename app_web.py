@@ -855,6 +855,11 @@ class PDFQuizParser:
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
+NUEVOS_HOY = [
+    "✨ NOVEDADES RDL 31_2026 adm",
+    "✨NOVEDADES RDL_31_2026 gestion",
+]
+
 TESTS_DISPONIBLES_COMPLETO = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -885,6 +890,7 @@ TESTS_DISPONIBLES_COMPLETO = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
+            "✨ NOVEDADES RDL 31_2026 adm": "https://drive.google.com/uc?export=download&id=1B0Ff30-Hao-HsG2CkXTHYiuJ-1tkQwmK",
             "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026 (RDL 31_2026)": "https://drive.google.com/uc?export=download&id=1WbIpgWBSDDPY9A6a6J5rKGVYgR72p8IT",
             "EXAMEN OFICIAL 2026 B ROJO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1VRUncb1rKn8O1cIOiIqZAEaVmkfSvC5l",
             "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
@@ -950,6 +956,7 @@ TESTS_DISPONIBLES_COMPLETO = {
         },
         "EXAMENES": {
             "Elige un test de examenes...": None,
+            "✨NOVEDADES RDL_31_2026 gestion": "https://drive.google.com/uc?export=download&id=1Sfsqc1wV7rCfTaaoVbWOOLlDai5f7sMm",
             "DOMINGO 11 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1cQ9aPHfcpZmJrP3nOv52GNaY3ag9KVZ0",
             "DOMINGO 6 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17Sn2tH9MnBKs4waafXN5NvLEJW8Dieq4",
             "Examen oficial 17 de mayo de 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sZT_v_KQE1R0kyKxojAbpxMssu9vkdnG",
