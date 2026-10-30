@@ -426,6 +426,7 @@ if not st.session_state.autenticado:
 # === FIN SECCIÓN 1 ===
 
 
+
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
     REEMPLAZOS_INGLES_RAE = [
@@ -822,7 +823,10 @@ class PDFQuizParser:
             m_num = match_q_num(text)
 
             if m_num and current_q and current_q["state"] == "E":
-                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', current_q["explanation"].strip()[-60:], re.IGNORECASE):
+                exp_so_far = current_q["explanation"].strip()
+                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', exp_so_far[-60:], re.IGNORECASE):
+                    m_num = None
+                elif exp_so_far.count("«") > exp_so_far.count("»") and not re.search(r'\(p[aá]gina\s+\d+', exp_so_far[-80:], re.IGNORECASE):
                     m_num = None
 
             m_rescue = False
@@ -865,12 +869,12 @@ class PDFQuizParser:
                         if is_exp_marker(ft):
                             is_real_q_candidate = True; break
                         if m_fnum:
-                            if found_c and (int(m_fnum.group(1)) == cand_num + 1 or int(m_fnum.group(1)) == 1):
+                            if not pdf_uses_explicit_exp and found_c and (int(m_fnum.group(1)) == cand_num + 1 or int(m_fnum.group(1)) == 1):
                                 is_real_q_candidate = True; break
                             if not pdf_uses_explicit_exp:
                                 aborted = True; break
                         if re.match(r'^\(p[aá]gina\s+\d+', ft, re.IGNORECASE):
-                            if found_c:
+                            if not pdf_uses_explicit_exp and found_c:
                                 is_real_q_candidate = True; break
                             aborted = True; break
 
