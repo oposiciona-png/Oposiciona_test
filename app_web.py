@@ -2,7 +2,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import fitz  # PyMuPDF
-import re, random, requests, os, unicodedata, time, json, threading
+import re, random, requests, os, unicodedata, time, json, threading, base64, zlib
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -186,10 +186,27 @@ try {
                     if (s.length > 0) { e.clipboardData.setData('text/plain', s + "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0"); e.preventDefault(); }
                 });
                 document.addEventListener('keydown', function(e) { if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) { e.preventDefault(); e.stopPropagation(); } });
+
+                /* Latido anti-desconexión cada 25s y WakeLock para que no se suspenda la pestaña leyendo explicaciones */
+                setInterval(function() {
+                    try {
+                        fetch(window.location.origin + "/_stcore/health", { method: "GET", cache: "no-store" }).catch(function(){});
+                        document.dispatchEvent(new CustomEvent("oposiciona_keepalive"));
+                    } catch(err) {}
+                }, 25000);
+
+                var wakeLockObj = null;
+                function activarWakeLock() {
+                    if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+                        navigator.wakeLock.request('screen').then(function(wl) { wakeLockObj = wl; }).catch(function(){});
+                    }
+                }
+                document.addEventListener('visibilitychange', activarWakeLock);
+                document.addEventListener('click', activarWakeLock, { once: true });
             `;
             parentDoc.head.appendChild(script);
         }
-    }, 1000);
+    }, 800);
 } catch(e) {}
 </script>""", height=0)
 
@@ -301,10 +318,19 @@ for k, v in [
     ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
     ('inicio_registrado_sheets', False), ('resultado_registrado', False),
     ('test_start_ts', None), ('fecha_inicio_str', ""), ('hora_inicio_str', ""),
-    ('test_esp', ""), ('test_cat', ""),
+    ('test_esp', ""), ('test_cat', ""), ('borrar_backup_ls', False),
     ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
 ]:
     if k not in st.session_state: st.session_state[k] = v
+
+if st.session_state.get("borrar_backup_ls", False):
+    st.session_state.borrar_backup_ls = False
+    components.html("""<script>
+    try {
+        window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
+        window.parent.localStorage.removeItem("oposiciona_auth_backup_v1");
+    } catch(e) {}
+    </script>""", height=0)
 
 if st.session_state.do_scroll:
     st.session_state.do_scroll = False
@@ -324,6 +350,55 @@ with col2:
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
+    qp_restore = st.query_params.get("restore_session", "")
+    if qp_restore:
+        try:
+            raw_bytes = zlib.decompress(base64.urlsafe_b64decode(qp_restore.encode("ascii")))
+            datos_rec = json.loads(raw_bytes.decode("utf-8"))
+            correo_rec = (datos_rec.get("email") or "").lower().strip()
+            rol_rec = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_rec in lc), None)
+            if rol_rec:
+                st.session_state.autenticado = True
+                st.session_state.email = correo_rec
+                st.session_state.rol = "ACCESO TOTAL" if correo_rec in USUARIOS_ADMIN else rol_rec
+                st.session_state.es_admin = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
+                st.session_state.saved_esp = datos_rec.get("saved_esp", "ADMINISTRATIVOS")
+                st.session_state.saved_cat = datos_rec.get("saved_cat", "ESPECIFICO")
+                st.session_state.modo_avance = datos_rec.get("modo_avance", st.session_state.modo_avance)
+                st.session_state.saved_avance = st.session_state.modo_avance
+                if datos_rec.get("questions"):
+                    st.session_state.questions = datos_rec["questions"]
+                    st.session_state.stats = {int(k): v for k, v in datos_rec.get("stats", {}).items()}
+                    st.session_state.current_index = int(datos_rec.get("current_index", 0))
+                    st.session_state.finished = bool(datos_rec.get("finished", False))
+                    st.session_state.checked = bool(datos_rec.get("checked", False))
+                    st.session_state.test_name = datos_rec.get("test_name")
+                    st.session_state.test_esp = datos_rec.get("test_esp", "")
+                    st.session_state.test_cat = datos_rec.get("test_cat", "")
+                    st.session_state.test_start_ts = datos_rec.get("test_start_ts", time.time())
+                    st.session_state.fecha_inicio_str = datos_rec.get("fecha_inicio_str", "")
+                    st.session_state.hora_inicio_str = datos_rec.get("hora_inicio_str", "")
+                    st.session_state.inicio_registrado_sheets = bool(datos_rec.get("inicio_registrado_sheets", False))
+                    st.session_state.resultado_registrado = bool(datos_rec.get("resultado_registrado", False))
+                st.query_params.clear()
+                st.rerun()
+        except Exception:
+            st.query_params.clear()
+
+    components.html("""<script>
+    (function() {
+        try {
+            var ls = window.parent.localStorage;
+            var savedTest = ls.getItem("oposiciona_test_backup_v1") || ls.getItem("oposiciona_auth_backup_v1");
+            if (savedTest && window.parent.location.search.indexOf("restore_session=") === -1) {
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set("restore_session", savedTest);
+                window.parent.location.replace(url.toString());
+            }
+        } catch(e) {}
+    })();
+    </script>""", height=0)
+
     c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
     with c_img2:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
@@ -349,6 +424,7 @@ if not st.session_state.autenticado:
         else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
     st.stop()
 # === FIN SECCIÓN 1 ===
+
 
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
@@ -562,7 +638,6 @@ class PDFQuizParser:
                         if is_header: continue
 
                         line_text = PDFQuizParser.traducir_ingles_no_rae(line_text)
-                        # Unir superíndices ordinales separados por PyMuPDF (ej. "1. ª" -> "1.ª")
                         line_text = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', line_text)
 
                         line_text = re.sub(r'(?<=[.?!;\)\]"\'”»])\s*(Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s*\([^)]*\))?:|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
@@ -615,9 +690,6 @@ class PDFQuizParser:
             k += 1
         lines = cleaned_num_lines
 
-        # Reparar opciones desordenadas o agrupadas sin texto:
-        # Caso 1: "a)" solitario seguido de "b)" solitario y luego varias líneas de texto hasta "c)" (ej. Pregunta 14 de Tema 73)
-        # Caso 2: "b)" solitario justo antes de "a) ..." (ej. Pregunta 38 de Tema 10)
         reordered_lines, r_idx = [], 0
         while r_idx < len(lines):
             t_curr = lines[r_idx]["text"].strip()
@@ -898,6 +970,7 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 2 ===
 
+
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
@@ -1060,6 +1133,7 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
+
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
@@ -1070,6 +1144,52 @@ def usuario_puede_reportar():
 
 def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_INVITADO if st.session_state.get('rol') == 'INVITADO' else TESTS_DISPONIBLES_COMPLETO
+
+def sincronizar_progreso_navegador():
+    try:
+        datos_auth = {
+            "email": st.session_state.get("email"),
+            "rol": st.session_state.get("rol"),
+            "es_admin": st.session_state.get("es_admin", False),
+            "saved_esp": st.session_state.get("saved_esp", "ADMINISTRATIVOS"),
+            "saved_cat": st.session_state.get("saved_cat", "ESPECIFICO"),
+            "modo_avance": st.session_state.get("modo_avance", "")
+        }
+        b64_auth = base64.urlsafe_b64encode(zlib.compress(json.dumps(datos_auth, ensure_ascii=False).encode("utf-8"), level=9)).decode("ascii")
+
+        if st.session_state.get("questions"):
+            datos_test = dict(datos_auth)
+            datos_test.update({
+                "questions": st.session_state.get("questions", []),
+                "stats": {str(k): v for k, v in st.session_state.get("stats", {}).items()},
+                "current_index": st.session_state.get("current_index", 0),
+                "finished": st.session_state.get("finished", False),
+                "checked": st.session_state.get("checked", False),
+                "test_name": st.session_state.get("test_name"),
+                "test_esp": st.session_state.get("test_esp", ""),
+                "test_cat": st.session_state.get("test_cat", ""),
+                "test_start_ts": st.session_state.get("test_start_ts"),
+                "fecha_inicio_str": st.session_state.get("fecha_inicio_str", ""),
+                "hora_inicio_str": st.session_state.get("hora_inicio_str", ""),
+                "inicio_registrado_sheets": st.session_state.get("inicio_registrado_sheets", False),
+                "resultado_registrado": st.session_state.get("resultado_registrado", False)
+            })
+            b64_test = base64.urlsafe_b64encode(zlib.compress(json.dumps(datos_test, ensure_ascii=False).encode("utf-8"), level=9)).decode("ascii")
+            components.html(f"""<script>
+            try {{
+                window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.localStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
+            }} catch(e) {{}}
+            </script>""", height=0)
+        else:
+            components.html(f"""<script>
+            try {{
+                window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
+            }} catch(e) {{}}
+            </script>""", height=0)
+    except Exception:
+        pass
 
 def descargar_pdf_fresco(url):
     sep = "&" if "?" in url else "?"
@@ -1375,6 +1495,9 @@ def procesar_preguntas(raw_qs):
     random.shuffle(raw_qs)
     st.session_state.update(
         questions=raw_qs,
+        current_index=0,
+        finished=False,
+        checked=False,
         stats={i: {'attempts': 0, 'selected': None} for i in range(len(raw_qs))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
@@ -1400,11 +1523,14 @@ def action_subir_otro():
 
 def action_finalizar_sesion():
     st.session_state.clear()
+    st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
+sincronizar_progreso_navegador()
+
 if not st.session_state.questions:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
     es_admin = usuario_es_admin()
@@ -1545,7 +1671,7 @@ if not st.session_state.questions:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
             st.info("Esta herramienta es visible únicamente para el administrador.")
             if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
-                nuevos_hoy = []
+                nuevos_hoy = globals().get("NUEVOS_HOY", [])
                 tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
                 bp, proc, txt_copiar = st.progress(0, text="Analizando PDFs..."), 0, ""
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
@@ -1678,6 +1804,7 @@ else:
 
     if not st.session_state.get('resultado_registrado', False):
         st.session_state.resultado_registrado = True
+        sincronizar_progreso_navegador()
         if aciertos > 0:
             max_intento = max(aciertos_por_intento.keys())
             tope_mostrar = 1 if max_intento == 1 else max(3, max_intento)
