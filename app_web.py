@@ -1082,7 +1082,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         return
 
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
-    usuario_rep = st.session_state.get('email') or "Alumno Oposiciona"
+    usuario_rep = (st.session_state.get('email') or "Alumno Oposiciona").strip()
     preamble_txt = re.sub(r'\*\*|\🏷️', '', q.get('preamble', '')).strip()
     pregunta_txt = q.get('question_text', '').strip()
     lista_opciones = q.get('options', [])
@@ -1110,72 +1110,90 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         else:
             payload = {
                 "_subject": f"⚠️ Revisar Pregunta {num_pregunta} | {nombre_pdf}",
-                "01_🚨_QUE_REPORTA_EL_ALUMNO": f"« {motivo.strip()} »",
-                "02_👤_ALUMNO_Y_TEST": f"Alumno: {usuario_rep}   |   Test: {nombre_pdf} (Pregunta Nº {num_pregunta})" + (f"   |   {preamble_txt}" if preamble_txt else ""),
-                "03_❓_ENUNCIADO_DE_LA_PREGUNTA": pregunta_txt,
+                "email": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
+                "_replyto": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
+                "01_QUE_REPORTA_EL_ALUMNO": f"🚨 « {motivo.strip()} »",
+                "02_ALUMNO_Y_TEST": f"👤 Alumno: {usuario_rep}   |   Test: {nombre_pdf} (Pregunta Nº {num_pregunta})" + (f"   |   {preamble_txt}" if preamble_txt else ""),
+                "03_ENUNCIADO_DE_LA_PREGUNTA": f"❓ {pregunta_txt}",
             }
 
             for i_opt, texto_opt in enumerate(lista_opciones):
                 letra_mayus = chr(65 + i_opt)
                 num_campo = 4 + i_opt
                 if i_opt == idx_correcta:
-                    payload[f"{num_campo:02d}_✅_OPCION_{letra_mayus}_(MARCADA_CORRECTA)"] = f"✅ [CORRECTA] ➡️ {texto_opt}"
+                    payload[f"{num_campo:02d}_OPCION_{letra_mayus}_(MARCADA_CORRECTA)"] = f"✅ [CORRECTA] ➡️ {texto_opt}"
                 else:
-                    payload[f"{num_campo:02d}_⚪_OPCION_{letra_mayus}"] = f"⚪ {texto_opt}"
+                    payload[f"{num_campo:02d}_OPCION_{letra_mayus}"] = f"⚪ {texto_opt}"
 
-            payload["09_🎯_RESPUESTA_QUE_DA_POR_BUENA_EL_SISTEMA"] = correcta_txt
-            payload["10_💡_EXPLICACION_EXTRAIDA_DEL_PDF"] = exp_limpia
+            payload["09_RESPUESTA_QUE_DA_POR_BUENA_EL_SISTEMA"] = f"🎯 {correcta_txt}"
+            payload["10_EXPLICACION_EXTRAIDA_DEL_PDF"] = f"💡 {exp_limpia}"
             payload["_template"] = "box"
             payload["_captcha"] = "false"
 
-            payload_json = json.dumps(payload)
-            components.html(f"""
-            <div id="status_envio" style="font-family:sans-serif; padding:10px; border-radius:6px; background:#e8f5e9; border:1px solid #2e7d32; color:#1b5e20; font-size:14px; font-weight:600; text-align:center;">
-                ⏳ Enviando reporte a info@oposiciona.es...
-            </div>
-            <script>
-            (function() {{
-                var rawData = {payload_json};
-                var formData = new FormData();
-                for (var k in rawData) {{
-                    if (Object.prototype.hasOwnProperty.call(rawData, k)) {{
-                        formData.append(k, rawData[k]);
-                    }}
-                }}
-                var box = document.getElementById("status_envio");
-                fetch("https://formsubmit.co/ajax/info@oposiciona.es", {{
-                    method: "POST",
-                    headers: {{ "Accept": "application/json" }},
-                    body: formData
-                }})
-                .then(function(r) {{ return r.json(); }})
-                .then(function(res) {{
-                    if (res.success === "true" || res.success === true) {{
-                        box.style.background = "#e8f5e9";
-                        box.style.borderColor = "#2e7d32";
-                        box.style.color = "#1b5e20";
-                        box.innerHTML = "✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.";
-                    }} else {{
-                        var msg = res.message || "";
-                        box.style.background = "#fff3cd";
-                        box.style.borderColor = "#ffc107";
-                        box.style.color = "#856404";
-                        if (msg.toLowerCase().indexOf("activate") !== -1 || msg.toLowerCase().indexOf("confirm") !== -1) {{
-                            box.innerHTML = "🔔 <b>Activación única necesaria:</b> Revisa el correo (y carpeta SPAM) de <b>info@oposiciona.es</b> y pulsa <b>'Activate Form'</b>.";
-                        }} else {{
-                            box.innerHTML = "ℹ️ Respuesta del servidor: " + (msg || JSON.stringify(res));
+            enviado_servidor = False
+            try:
+                headers_fs = {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Referer": "https://test-oposiciona.streamlit.app/",
+                    "Origin": "https://test-oposiciona.streamlit.app",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                }
+                resp_fs = requests.post("https://formsubmit.co/ajax/info@oposiciona.es", json=payload, headers=headers_fs, timeout=10)
+                if resp_fs.status_code == 200:
+                    datos_fs = resp_fs.json()
+                    if str(datos_fs.get("success", "")).lower() == "true":
+                        enviado_servidor = True
+            except Exception:
+                enviado_servidor = False
+
+            if enviado_servidor:
+                st.success("✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.")
+            else:
+                payload_json = json.dumps(payload)
+                components.html(f"""
+                <div id="status_envio" style="font-family:sans-serif; padding:10px; border-radius:6px; background:#e8f5e9; border:1px solid #2e7d32; color:#1b5e20; font-size:14px; font-weight:600; text-align:center;">
+                    ⏳ Enviando reporte a info@oposiciona.es...
+                </div>
+                <script>
+                (function() {{
+                    var rawData = {payload_json};
+                    var formData = new FormData();
+                    for (var k in rawData) {{
+                        if (Object.prototype.hasOwnProperty.call(rawData, k)) {{
+                            formData.append(k, rawData[k]);
                         }}
                     }}
-                }})
-                .catch(function(err) {{
-                    box.style.background = "#ffebee";
-                    box.style.borderColor = "#c62828";
-                    box.style.color = "#b71c1c";
-                    box.innerHTML = "❌ No se pudo completar el envío desde el navegador.";
-                }});
-            }})();
-            </script>
-            """, height=75)
+                    var box = document.getElementById("status_envio");
+                    fetch("https://formsubmit.co/ajax/info@oposiciona.es", {{
+                        method: "POST",
+                        headers: {{ "Accept": "application/json" }},
+                        body: formData
+                    }})
+                    .then(function(r) {{ return r.json(); }})
+                    .then(function(res) {{
+                        if (res.success === "true" || res.success === true) {{
+                            box.style.background = "#e8f5e9";
+                            box.style.borderColor = "#2e7d32";
+                            box.style.color = "#1b5e20";
+                            box.innerHTML = "✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.";
+                        }} else {{
+                            var msg = res.message || "";
+                            box.style.background = "#fff3cd";
+                            box.style.borderColor = "#ffc107";
+                            box.style.color = "#856404";
+                            box.innerHTML = "ℹ️ Respuesta del servidor: " + (msg || JSON.stringify(res));
+                        }}
+                    }})
+                    .catch(function(err) {{
+                        box.style.background = "#ffebee";
+                        box.style.borderColor = "#c62828";
+                        box.style.color = "#b71c1c";
+                        box.innerHTML = "❌ No se pudo completar el envío desde el navegador.";
+                    }});
+                }})();
+                </script>
+                """, height=75)
 
 def limpiar_todas_las_busquedas():
     for k in list(st.session_state.keys()):
