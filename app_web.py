@@ -981,6 +981,7 @@ _D = "https://drive.google.com/uc?export=download&id="
 NUEVOS_HOY = [
     "✨ NOVEDADES RDL 31_2026 adm",
     "✨NOVEDADES RDL_31_2026 gestion",
+    "EXAMEN SABADO 01 NOVIEMBRE 2026",
 ]
 
 TESTS_DISPONIBLES_COMPLETO = {
@@ -1008,6 +1009,7 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 11 MUERTE Y SUPERVIVENCIA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=19ueHQsspJTQ1geqPm79kgnCgQO0zvgHt",
             "TEMA 11 REPASO 1 MUERTE Y SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1OFCPOGSZUdIwXdwYXX8lSFIESHTHnM7c",
             "TEMA 11 REPASO 2 MUERTE Y SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=19NIPI-Sh8adW9Xui5QSBVE9-PxCCm9l6",
+            "TEMA 11 REPASO FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1OzmfuJkQooMX7ld_KFrNRnLj4xH9XHD1",
             "TEMA 12 REPASO 1 MV ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1GnVkEUXfN2OS2j96nxOu2jhl1OVSEEvx",
             "TEMA 12 REPASO 2 IMV ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Uo7K8giiosHapdoWpnq5Vy7WaTpHUWg2",
         },
@@ -1019,6 +1021,7 @@ TESTS_DISPONIBLES_COMPLETO = {
             "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
             "EXAMEN REPASO 1 TEMA 08 a 12 ESPECIFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1m06sF7_F_sZVlfRQq3Uv0egrvo44gcmX",
             "EXAMEN REPASO TEMA 2 COMPLETO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sixOo5p9R_WeuL_mg8LliJScO1ljnNV0",
+            "EXAMEN SABADO 01 NOVIEMBRE 2026": "https://drive.google.com/uc?export=download&id=1BBP15fBozr5LWH4Gq3MY9knfNvwDF4kr",
             "SABADO 10 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qtDZt9e2KsrnvElHWkSaN3wYnI1gT9Eq",
             "SABADO 5 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17KWYOcGCSQR49cR7KMwqOKFi6QDsPkbh",
         },
@@ -1531,7 +1534,6 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -1680,7 +1682,7 @@ if not st.session_state.questions:
                 bp, proc, txt_copiar = st.progress(0, text="Analizando PDFs..."), 0, ""
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
                     st.markdown(f"### 📋 Catálogo de Tests: {esp}")
-                    t_md = "| Categoría | Nombre del Test | Nº de Preguntas |\n| :--- | :--- | :---: |\n"
+                    t_md = "| Categoría | Nombre del Test | Nº de Preguntas | Media Opciones |\n| :--- | :--- | :---: | :---: |\n"
                     for cat, tests in cats.items():
                         for nom, url in tests.items():
                             if url is None: continue
@@ -1688,9 +1690,22 @@ if not st.session_state.questions:
                             bp.progress(proc / tot_pdfs, text=f"Analizando ({proc}/{tot_pdfs}): {nom}...")
                             try:
                                 r = descargar_pdf_fresco(url)
-                                nq = len(PDFQuizParser.parse(r.content)) if r.status_code == 200 else "Error"
-                            except Exception: nq = "-"
-                            t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** |\n" if nom in nuevos_hoy else f"| {cat} | {nom} | {nq} preguntas |\n"
+                                if r.status_code == 200:
+                                    qs_parsed = PDFQuizParser.parse(r.content)
+                                    nq = len(qs_parsed)
+                                    if nq > 0:
+                                        avg_val = sum(len(q.get("options", [])) for q in qs_parsed) / nq
+                                        media_op = str(int(avg_val)) if avg_val.is_integer() else f"{avg_val:.2f}".replace(".", ",")
+                                    else:
+                                        media_op = "0"
+                                else:
+                                    nq, media_op = "Error", "-"
+                            except Exception:
+                                nq, media_op = "-", "-"
+                            if nom in nuevos_hoy:
+                                t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** | **{media_op}** |\n"
+                            else:
+                                t_md += f"| {cat} | {nom} | {nq} preguntas | {media_op} |\n"
                     st.markdown(t_md)
                     txt_copiar += f"### 📋 Catálogo de Tests: {esp}\n\n" + t_md + "\n---\n\n"
                 bp.empty()
