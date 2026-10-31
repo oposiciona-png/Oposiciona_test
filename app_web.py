@@ -1456,6 +1456,44 @@ def obtener_tests_segun_rol():
         return cat_admin
     return TESTS_DISPONIBLES_COMPLETO
 
+def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
+    """
+    Analiza las frases iniciales y el conjunto del texto para detectar expresiones
+    inaceptables, desahogos sin contenido jurídico o pulsaciones de teclado sin sentido.
+    Devuelve un mensaje elegante y con clase si procede, o None si es un intento serio.
+    """
+    t_raw = (texto_alumno or "").strip()
+    if not t_raw:
+        return None
+    t_norm = ''.join(c for c in unicodedata.normalize('NFD', t_raw.lower()) if unicodedata.category(c) != 'Mn')
+    t_norm = re.sub(r'\s+', ' ', t_norm).strip()
+    primera_frase = re.split(r'[.?!;\n]', t_norm)[0].strip()
+
+    patrones_inaceptables = [
+        r'\b(puta|puto|mierda|caca|joder|coño|hostia|ostia|polla|capullo|gilipollas|imbecil|idiota|estupidez|asco|basura|porqueria)\b',
+        r'\b(esto\s+es\s+una\s+(caca|mierda|porqueria|basura|tonteria|chorrada))\b',
+        r'\b(paso\s+de\s+(todo|hacerlo|responder|estudiar|esto))\b',
+        r'\b(me\s+da\s+igual|me\s+importa\s+un\s+(bledo|pimiento|carajo|huevo)|no\s+me\s+da\s+la\s+gana)\b',
+        r'\b(que\s+te\s+den|vete\s+a\s+la\s+mierda|estoy\s+harto|estoy\s+hasta\s+las\s+narices)\b',
+        r'^(no\s+se(\s+nada)?|ni\s+idea|paso|nada|hola|prueba|test|asdf+|qwer+|zxcv+|jaja+|jeje+|bla\s*bla.*)$'
+    ]
+
+    es_inapropiada = any(re.search(p, primera_frase) or re.search(p, t_norm) for p in patrones_inaceptables)
+    palabras_reales = re.findall(r'\b[a-záéíóúñ]{3,}\b', t_norm)
+    sin_sentido = (len(t_norm) < 12 and len(palabras_reales) < 2) or bool(re.match(r'^([a-z])\1{4,}$', t_norm))
+
+    if es_inapropiada or sin_sentido:
+        return (
+            "🎩 **Observación del Tribunal Evaluador de Oposiciona:**\n\n"
+            "Comprendemos que el camino hacia el Cuerpo de Gestión de la Administración de la Seguridad Social "
+            "tiene momentos de cansancio y máxima exigencia, pero esta plataforma ha sido diseñada con un único propósito: "
+            "**forjar funcionarios de excelencia y acercarte cada día más a tu plaza, no perder el tiempo**.\n\n"
+            "El día del examen oficial ante el Tribunal, cada línea que escribas será el reflejo de tu rigor técnico y de tu temple como futuro gestor público. "
+            "Respira hondo, retoma el pulso jurídico y redacta una respuesta a la altura del profesional en el que te estás convirtiendo. "
+            "Cuando estés listo, vuelve a pulsar **«Comprobar»**."
+        )
+    return None
+
 def _dividir_en_oraciones_juridicas(texto):
     if not texto:
         return []
@@ -1474,27 +1512,30 @@ def _dividir_en_oraciones_juridicas(texto):
             oraciones.append(p_rest)
     return oraciones
 
-# Estructura de Fuentes extraída directamente de los cuadernos de NotebookLM de Oposiciona
+# Estructura de Fuentes conectada con los cuadernos de NotebookLM:
+# "TEMAS GESTION HASTA EL MOMENTO", "TEMAS ADMINISTRATIVO HASTA EL MOMENTO" y "NOVEDADES 2026"
 FUENTES_TEMARIO_NOTEBOOKLM = {
     "SEEH": {
-        "cuaderno": "TEMA 73 - REGÍMENES ESPECIALES INTEGRADOS EN EL RÉGIMEN GENERAL (NotebookLM)",
-        "epigrafe": "Epígrafe 5: SISTEMA ESPECIAL DE EMPLEADAS DE HOGAR (SEEEHH) — Campo de aplicación (pág. 16), Afiliación, altas y bajas (pág. 17), Cotización y Particularidades de la Acción Protectora (págs. 17-20)",
+        "cuaderno": "TEMAS GESTIÓN HASTA EL MOMENTO + NOVEDADES 2026 (NotebookLM)",
+        "epigrafe": "Tema 73 — Epígrafe 5: SISTEMA ESPECIAL DE EMPLEADAS DE HOGAR (SEEEHH): Campo de aplicación, Afiliación, altas y bajas, Cotización y Particularidades de la Acción Protectora",
         "resumen_fuente": (
-            "- Integración en el Régimen General: Ley 27/2011, de 1 de agosto (con efectos 1 de enero de 2012) y art. 136.2.b) TRLGSS.\n"
-            "- Regulación laboral especial: Real Decreto 1620/2011, de 14 de noviembre (art. 2.1.b ET) y reforma por RDL 16/2022, de 6 de septiembre (protección por desempleo y FOGASA).\n"
+            "- Fuentes en NotebookLM ('TEMAS GESTIÓN HASTA EL MOMENTO' y 'NOVEDADES 2026'): Tema 73.pdf, TRLGSS.pdf, Orden Cotización 2026 (Orden PJC/297/2026), Salario Mínimo 2026 (RD 126/2026), RDL 3/2026 y RDL 31/2026 (BOE-A-2026-21872).\n"
+            "- Integración en el Régimen General: Ley 27/2011, de 1 de agosto (efectos 01/01/2012) y art. 136.2.b) TRLGSS.\n"
+            "- Regulación laboral especial: Real Decreto 1620/2011, de 14 de noviembre (art. 2.1.b ET) y RDL 16/2022, de 6 de septiembre (protección por desempleo y FOGASA).\n"
             "- Campo de aplicación (art. 250 TRLGSS): Servicios retribuidos por cuenta y dependencia del titular del hogar familiar (tareas domésticas, cuidado/atención de miembros de la familia, guardería, jardinería, conducción). Excluidos: personas jurídicas/ETT (van al RG ordinario), parientes hasta 2.º grado salvo prueba en contrario de condición salarial, trabajos por amistad/benevolencia o «a la par».\n"
-            "- Cotización y beneficios: Escala de tramos sobre retribución (Orden PJC/297/2026 y RD 126/2026 SMI); en tiempo parcial la retribución mínima del tramo es SMI/hora × horas mensuales; no aplica el recargo por contratos inferiores a 30 días (art. 151 TRLGSS) ni la cotización adicional por horas del art. 122 de la Ley 31/2022; reducción del 20% en contingencias comunes o bonificación del 80% por contratación de cuidadores en familias numerosas (solo para un cuidador por unidad familiar).\n"
+            "- Cotización y beneficios: Escala de tramos sobre retribución (Orden PJC/297/2026 y RD 126/2026 SMI); en tiempo parcial la retribución mínima del tramo es SMI/hora × horas mensuales; no aplica el recargo por contratos inferiores a 30 días (art. 151 TRLGSS) ni la cotización adicional por horas del art. 122 de la Ley 31/2022; reducción del 20% en contingencias comunes o bonificación del 45%/80% en familias numerosas (solo para un cuidador por unidad familiar).\n"
             "- Acción protectora (art. 251 TRLGSS): Derecho a prestaciones del RG con particularidades: a) IT común se abona desde el 9.º día (días 4.º al 8.º a cargo del empleador), salvo en las 5 situaciones especiales del art. 169.1.a) TRLGSS tras el RDL 31/2026 (menstruación incapacitante/interrupción embarazo, semana 39.ª, donación órganos, trastorno menopáusico secundario codificado y violencia de género), donde se abona por la entidad gestora/mutua desde el día siguiente a la baja (día de la baja a cargo del empleador); b) Pago directo de IT por la entidad gestora/mutua (no procede pago delegado); c) En contingencias profesionales no aplica el régimen de responsabilidad empresarial en orden a las prestaciones del art. 167 TRLGSS (capital coste); d) Integración de lagunas desde 01/01/2024 en IP común y jubilación conforme a arts. 197.4 y 209.1.b) TRLGSS; e) Desempleo y cobertura del FOGASA (RD 505/1985 y art. 11.2 RD 1620/2011: indemnización de 12 días por año con tope de 6 mensualidades y salario diario máximo del doble del SMI)."
         )
     },
     "SEA": {
-        "cuaderno": "TEMA 73 - REGÍMENES ESPECIALES INTEGRADOS EN EL RÉGIMEN GENERAL + Profesor SEA Inactividad (NotebookLM)",
-        "epigrafe": "Epígrafe 4: SISTEMA ESPECIAL AGRARIO (SEA) — Normativa (pág. 7), Campo de aplicación (pág. 7), Afiliación, altas y bajas (pág. 9), Cotización en actividad e inactividad (págs. 10-14) y Acción Protectora (pág. 15)",
+        "cuaderno": "TEMAS GESTIÓN HASTA EL MOMENTO + NOVEDADES 2026 (NotebookLM)",
+        "epigrafe": "Tema 73 — Epígrafe 4: SISTEMA ESPECIAL AGRARIO (SEA): Normativa, Campo de aplicación, Afiliación, Cotización en actividad e inactividad y Acción Protectora",
         "resumen_fuente": (
+            "- Fuentes en NotebookLM ('TEMAS GESTIÓN HASTA EL MOMENTO' y 'NOVEDADES 2026'): Tema 73.pdf, 2026_06 GUIA SEA INACTIVIDAD.pdf, Orden Cotización 2026 (PJC/297/2026), RDL 3/2026 y RDL 31/2026.\n"
             "- Integración en el Régimen General: Ley 28/2011, de 22 de septiembre (efectos 01/01/2012), arts. 252 a 256 del TRLGSS, Ley 19/1995 de Modernización de Explotaciones Agrarias y supletoriamente Decreto 3772/1972.\n"
             "- Campo de aplicación (art. 252 TRLGSS): Trabajadores por cuenta ajena en labores agrarias, forestales o pecuarias y tareas complementarias. Exclusión expresa (art. 252.1.b): manipulado, empaquetado y comercialización del plátano (van al RG ordinario aunque sea en la explotación) y mecánicos/administrativos de fincas.\n"
             "- Períodos de inactividad (art. 253 TRLGSS): Existen cuando las jornadas reales en el mes natural sean inferiores al 76,67% de los días naturales de alta. Inclusión en inactividad requiere 30 jornadas reales en 365 días (o 5 jornadas reales si estuvo antes integrado + solicitud en 3 meses con efectos día 1 del mes siguiente). Exclusión por impago de 2 mensualidades consecutivas o no realizar 30 jornadas reales.\n"
-            "- Cotización 2026 (art. 254 y 255 TRLGSS y Orden PJC/297/2026): En inactividad cotiza a cargo exclusivo del trabajador sobre base mínima grupo 7 al 11,50% + MEI (0,90%), con reducción del 19,11% si en 2025 realizó un máximo de 55 jornadas reales. Tope máximo cuota empresarial grupo 1 en actividad: 279,00 €/mes o 12,68 €/jornada. Excedencia por cuidado de hijo (art. 237 TRLGSS) es período de cotización efectiva durante 3 años.\n"
+            "- Cotización 2026 (arts. 254 y 255 TRLGSS y Orden PJC/297/2026): En inactividad cotiza a cargo exclusivo del trabajador sobre base mínima grupo 7 al 11,50% + MEI (0,90%), con reducción del 19,11% si en 2025 realizó un máximo de 55 jornadas reales. Tope máximo cuota empresarial grupo 1 en actividad: 279,00 €/mes o 12,68 €/jornada. Excedencia por cuidado de hijo (art. 237 TRLGSS) es período de cotización efectiva durante 3 años.\n"
             "- Acción protectora (art. 256 TRLGSS): Requisito de estar al corriente en cuotas de inactividad; pago directo del subsidio de IT desde el día 16.º; en inactividad la protección comprende maternidad, paternidad, IP y muerte y supervivencia por contingencias comunes y jubilación."
         )
     }
@@ -1652,8 +1693,11 @@ def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pr
         "84/1996": "Reglamento General de Inscripción y Afiliación",
         "1415/2004": "Reglamento General de Recaudación de la Seguridad Social",
         "2621/1986": "Real Decreto de integración de regímenes especiales en el Régimen General",
+        "3/2026": "Real Decreto-ley de revalorización de pensiones y cotización para 2026",
         "31/2026": "Real Decreto-ley de reforma de prestaciones de Seguridad Social",
         "126/2026": "Real Decreto de fijación del SMI para 2026",
+        "607/2026": "Real Decreto de relación laboral especial de personas artistas y técnicos",
+        "643/2026": "Real Decreto de modificación de plazos de afiliación y recaudación",
         "297/2026": "Orden PJC/297/2026 de cotización para 2026",
     }
     if k_tipo == "NORMA" and k_id in normas_troncales:
@@ -1690,7 +1734,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     contexto_total = f"{enunciado_pregunta or ''} {ref_completa}".strip()
     ref_norm = _norm(ref_completa)
 
-    # 1. Auditoría de Normativa y Artículos
     pat_normas = r'\b(?:art(?:[íi]culos?|\.)\s*\d+(?:\.\d+)?(?:\.[a-z])?|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
 
     def _clave_norma(texto_cita):
@@ -1764,7 +1807,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
                 else:
                     citas_erroneas.append(explicacion_extra)
 
-    # 2. Auditoría de Plazos, Porcentajes, Cuantías y Tramos
     pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
     cifras_raw = re.findall(pat_cifras, ref_completa, flags=re.IGNORECASE)
     cifras_unicas = []
@@ -1784,7 +1826,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             cifras_faltan.append(cf)
 
-    # 3. Análisis por ideas jurídicas completas
     stopwords = {
         "para", "como", "este", "esta", "estos", "estas", "pero", "sino", "porque", "cuando", "donde",
         "cual", "cuales", "quien", "quienes", "todo", "toda", "todos", "todas", "otro", "otra", "otros",
@@ -1819,7 +1860,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             puntos_omitidos.append(orac_limpia)
 
-    # 4. Verificar sentido de conclusión (Sí / No / Ninguno / Nadie)
     alerta_sentido = ""
     resp_inicio = _norm(respuesta_oficial[:40]) if respuesta_oficial else ""
     alumno_inicio = alumno_norm[:50]
@@ -1869,7 +1909,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
     bloques = []
 
-    # Bloque 1: Encuadre en el epígrafe del temario (NotebookLM) y análisis de lo escrito
     encuadre_nb = ""
     if ev.get("fuente_notebooklm"):
         primera_linea_nb = ev["fuente_notebooklm"].split("\n")[1] if "\n" in ev["fuente_notebooklm"] else ""
@@ -1896,7 +1935,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe del temario oficial."
         )
 
-    # Bloque 2: Revisión de artículos y leyes citadas (consultando texto legal y fuentes de NotebookLM)
     rev_normativa = []
     if ev["alerta_sentido"]:
         rev_normativa.append(ev["alerta_sentido"])
@@ -1918,7 +1956,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible en este epígrafe.")
     bloques.append("2. **⚖️ Auditoría de artículos y fuentes legales (verificación en el bloque normativo):**\n" + "\n".join(rev_normativa))
 
-    # Bloque 3: Detalles omitidos y texto modelo que debería haber añadido
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         detalles_str = ""
         if ev["cifras_faltan"]:
@@ -1935,7 +1972,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             "¡Excelente trabajo! Tu respuesta abarca todos los requisitos, excepciones y matices técnicos del epígrafe oficial."
         )
 
-    # Bloque 4: Calificación orientativa
     comentario_nota = (
         "Exposición sobresaliente, rigurosa y enriquecida con interrelación normativa propia de un examen de plaza." if ev["nota"] >= 7.5 else
         "Respuesta aprobada en su estructura básica, pero debes incorporar los preceptos y matices del epígrafe omitidos." if ev["nota"] >= 5.0 else
@@ -1958,34 +1994,41 @@ def obtener_gemini_api_key_activa():
     return GEMINI_API_KEY_DEFAULT
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
+    # 1. Filtro inmediato de elegancia y rigor ante frases iniciales inaceptables o sin interés
+    aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
+    if aviso_elegante:
+        return aviso_elegante
+
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     contexto_total = f"{enunciado_supuesto} {pregunta} {respuesta_oficial} {explicacion_oficial}"
     fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
 
     prompt = (
         "Actúa como Presidente del Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social y preparador experto de Oposiciona.\n"
-        "Tu misión es realizar un ANÁLISIS JURÍDICO PROFUNDO, RIGUROSO Y PEDAGÓGICO de la respuesta escrita por el opositor (en el 2.º Ejercicio de Desarrollo o 3.er Ejercicio de Supuestos Prácticos), "
-        "contrastándola con la Solución Oficial, con la Explicación del PDF y con la FUENTE DEL TEMARIO EXTRAÍDA DE NOTEBOOKLM.\n\n"
+        "Tu misión es realizar un ANÁLISIS JURÍDICO PROFUNDO, RIGUROSO Y PEDAGÓGICO de la respuesta escrita por el opositor, "
+        "contrastándola con la Solución Oficial, con la Explicación del PDF y con las FUENTES DE NOTEBOOKLM ('TEMAS GESTIÓN HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026').\n\n"
         "INSTRUCCIONES CRÍTICAS DE EVALUACIÓN PARA EL TRIBUNAL IA:\n"
+        "0. **FILTRO DE SERIEDAD Y ELEGANCIA EN FRASES INICIALES:** Analiza ante todo las frases iniciales y el tono del texto del alumno. Si el alumno escribe expresiones inaceptables, vulgares, desahogos o frases sin ningún interés para el tema (ej. 'esto es una caca', 'puta mierda', 'paso de todo', 'no sé nada', etc.), NO realices el desglose técnico: respóndele únicamente con un mensaje sumamente educado, elegante y con mucha clase recordándole que esta plataforma ha sido creada para alcanzar la excelencia y conseguir su plaza, no para perder el tiempo, invitándole a redactar una respuesta digna de un futuro funcionario.\n"
         "1. **ENCUADRE EN EL EPÍGRAFE DEL TEMARIO (NOTEBOOKLM):** Ubica la respuesta dentro del epígrafe exacto del tema (indicado abajo en la Fuente de NotebookLM) y evalúa la estructura, precisión terminológica y sistemática del alumno.\n"
         "2. **PROHIBIDO DAR POR INVÁLIDO UN ARTÍCULO SIN CONSULTAR ANTES EL TEXTO LEGAL Y LAS FUENTES CONEXAS:** "
-        "Los buenos opositores de Gestión relacionan artículos transversales del TRLGSS (RD Legislativo 8/2015), del Estatuto de los Trabajadores (RD Legislativo 2/2015), de la Ley 27/2011, Ley 28/2011, RD 1620/2011, RDL 16/2022, RD 505/1985, Ley 31/2022 (art. 122), RDL 31/2026, Orden PJC/297/2026, RD 126/2026, RD 84/1996, RD 2064/1995 y RD 1415/2004. "
+        "Los buenos opositores relacionan artículos transversales del TRLGSS (RD Legislativo 8/2015), del Estatuto de los Trabajadores (RD Legislativo 2/2015), de la Ley 27/2011, Ley 28/2011, RD 1620/2011, RDL 16/2022, RD 505/1985, Ley 31/2022 (art. 122), RDL 3/2026, RDL 31/2026 (BOE-A-2026-21872), Orden PJC/297/2026, RD 126/2026, RD 643/2026, RD 607/2026, RD 84/1996, RD 2064/1995 y RD 1415/2004. "
         "Si el alumno cita un artículo o norma que NO aparece literalmente en la explicación pero SÍ es jurídicamente cierto y guarda relación con la institución jurídica preguntada, DEBES EXPLICAR qué regula ese precepto, cómo se conecta con la fuente del tema y VALORARLO MUY POSITIVAMENTE subiendo su calificación.\n"
         "3. **DETECCIÓN MILIMÉTRICA DE OMISIONES:** Compara frase por frase lo escrito por el alumno con la Explicación Oficial y el Epígrafe de NotebookLM. Detalla exactamente qué requisitos, plazos (días hábiles/naturales), tramos, porcentajes, topes (SMI/IPREM), exclusiones o excepciones se ha dejado en el tintero.\n"
         "4. **REDACCIÓN MAGISTRAL DE COMPLEMENTO:** Redacta un párrafo modelo con estilo de examen oficial (listo para memorizar e insertar en su texto) que contenga todo lo que le ha faltado para sacar un 10.\n\n"
-        f"=== FUENTE DEL TEMARIO Y EPÍGRAFE (NOTEBOOKLM) ===\n{fuente_nb if fuente_nb else 'Temario Oficial de Gestión de la Seguridad Social (TRLGSS y normativa de desarrollo vigente en 2026).'}\n\n"
+        f"=== FUENTE DEL TEMARIO Y EPÍGRAFE (NOTEBOOKLM: TEMAS GESTIÓN / ADMINISTRATIVO Y NOVEDADES 2026) ===\n{fuente_nb if fuente_nb else 'Temario Oficial Oposiciona en NotebookLM (TEMAS GESTIÓN HASTA EL MOMENTO, TEMAS ADMINISTRATIVO HASTA EL MOMENTO y NOVEDADES 2026: TRLGSS, RDL 3/2026, RDL 31/2026, Orden PJC/297/2026, RD 126/2026, RD 643/2026).'}\n\n"
         f"=== CONTEXTO / ENUNCIADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
         f"=== RESPUESTA DIRECTA OFICIAL ===\n{respuesta_oficial}\n\n"
         f"=== EXPLICACIÓN Y FUNDAMENTACIÓN OFICIAL DEL TEMA ===\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
         "Estructura tu dictamen en estos 4 apartados claros:\n"
         "1. **✅ Análisis jurídico de tu exposición y conexión con el epígrafe del tema**\n"
-        "2. **⚖️ Auditoría de artículos, leyes y relaciones normativas (verificación con el texto legal y fuentes)**\n"
+        "2. **⚖️ Auditoría de artículos, leyes y relaciones normativas (verificación con el texto legal y fuentes de NotebookLM)**\n"
         "3. **⚠️ Detalles técnicos omitidos y párrafo magistral que deberías haber incluido**\n"
         "4. **🎓 Calificación orientativa del Tribunal (sobre 10)**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    # Primera y única opción principal: IA de Gemini
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
@@ -1996,6 +2039,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         except Exception:
             continue
 
+    # Segunda alternativa únicamente si están agotados los créditos o sin respuesta del servidor externo
     if ev_fallback is None:
         ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
     return generar_dictamen_tribunal_inteligente(ev_fallback, respuesta_alumno, respuesta_oficial, explicacion_oficial)
@@ -2456,7 +2500,7 @@ if not st.session_state.questions:
     st.markdown(f"<h4 style='color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</h4>", unsafe_allow_html=True)
     if categoria in ["PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "Segundo Ejercicio (Pregunta de Desarrollo)" if categoria == "PREGUNTA DE DESARROLLO" else "Tercer Ejercicio (Supuestos Prácticos)"
-        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», el sistema contrasta tu respuesta con el epígrafe de NotebookLM y el bloque legal (premiando los artículos conexos bien relacionados) y emite el dictamen del Tribunal Evaluador IA.")
+        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», la IA de Gemini analiza tu respuesta contrastándola con las fuentes de NotebookLM (`TEMAS GESTIÓN HASTA EL MOMENTO`, `TEMAS ADMINISTRATIVO HASTA EL MOMENTO` y `NOVEDADES 2026`).")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2675,72 +2719,52 @@ elif not st.session_state.finished:
             if not txt_alumno:
                 st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que el Tribunal Evaluador analice qué te falta.")
             else:
-                ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
-                stat["open_score"] = ev["nota"]
-
-                if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
-                    stat["last_evaluated_text"] = txt_alumno
-                    clave_activa = obtener_gemini_api_key_activa()
-                    with st.spinner("🤖 El Tribunal Evaluador IA está consultando las fuentes de NotebookLM y el texto legal..."):
-                        stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                            clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
-                        )
-
-                # Mostrar SIEMPRE el dictamen personalizado del Tribunal Evaluador IA
-                st.markdown(
-                    "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
-                    "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN DEL TRIBUNAL EVALUADOR IA (CONECTADO CON FUENTES NOTEBOOKLM)</div>"
-                    "</div>",
-                    unsafe_allow_html=True
-                )
-                st.markdown(stat.get("ai_feedback") or "")
-
-                color_nota = "#15803d" if ev["nota"] >= 5.0 else "#d97706" if ev["nota"] >= 3.5 else "#dc2626"
-                html_cubiertos = "".join([f"<li style='color:#15803d !important; margin-bottom:6px; text-align:justify;'>{pt}</li>" for pt in ev["puntos_cubiertos"]])
-                html_omitidos = "".join([f"<li style='color:#b91c1c !important; margin-bottom:6px; text-align:justify;'>{pt}</li>" for pt in ev["puntos_omitidos"]])
-
-                st.markdown(
-                    f"<div style='background-color:#FFFFFF; border:2px solid {color_nota}; border-radius:8px; padding:15px; margin-top:10px;'>"
-                    f"<div style='font-size:17px; font-weight:700; color:{color_nota} !important; margin-bottom:8px;'>📊 DESGLOSE TÉCNICO POR PÁRRAFOS Y PRECEPTOS — Cobertura: {ev['nota']:.2f} / 10</div>"
-                    + (f"<div style='background-color:#fef2f2; border-left:4px solid #dc2626; padding:9px; margin-bottom:10px; font-size:14px; color:#991b1b !important;'>{ev['alerta_sentido']}</div>" if ev["alerta_sentido"] else "")
-                    + "<div style='font-size:14px; color:#1E293B !important; line-height:1.5;'>"
-                    + f"<b style='color:#1E293B !important;'>⚖️ 1. Revisión de Artículos y Normativa citada (verificación con el texto legal):</b><br>"
-                    + f"&nbsp;&nbsp;• <b>Citas legales principales incluidas:</b> <span style='color:#15803d !important; font-weight:600;'>{', '.join(ev['citas_ok']) if ev['citas_ok'] else 'Ninguna de las principales'}</span><br>"
-                    + (f"&nbsp;&nbsp;• <b>🌟 Normativa complementaria acertada (enriquece el contenido y suma nota):</b> <span style='color:#0d9488 !important; font-weight:700;'>{', '.join(ev['citas_complementarias'])}</span><br>" if ev.get("citas_complementarias") else "")
-                    + (f"&nbsp;&nbsp;• <b>❌ Preceptos sin relación con el supuesto planteado:</b> <span style='color:#dc2626 !important; font-weight:700;'>{', '.join(ev['citas_erroneas'])}</span><br>" if ev["citas_erroneas"] else "")
-                    + (f"&nbsp;&nbsp;• <b>⚠️ Normativa de la explicación oficial que has omitido citar:</b> <span style='color:#b45309 !important; font-weight:600;'>{', '.join(ev['citas_faltan'])}</span><br>" if ev["citas_faltan"] else "&nbsp;&nbsp;• <span style='color:#15803d !important;'>¡Has citado toda la normativa de referencia!</span><br>")
-                    + "<br><b style='color:#1E293B !important;'>🔢 2. Plazos, porcentajes, tramos y cuantías:</b><br>"
-                    + f"&nbsp;&nbsp;• <b>Incluidos correctamente:</b> <span style='color:#15803d !important;'>{', '.join(ev['cifras_ok']) if ev['cifras_ok'] else 'Ninguno'}</span><br>"
-                    + (f"&nbsp;&nbsp;• <b>Omitidos en tu respuesta:</b> <span style='color:#dc2626 !important; font-weight:600;'>{', '.join(ev['cifras_faltan'])}</span><br>" if ev["cifras_faltan"] else "")
-                    + (f"<br><b style='color:#15803d !important;'>✅ 3. Aspectos e ideas que SÍ has recogido en tu respuesta:</b><ul style='margin-top:4px; margin-bottom:8px;'>{html_cubiertos}</ul>" if html_cubiertos else "")
-                    + (f"<br><b style='color:#b91c1c !important;'>⚠️ 4. Detalles e ideas de la explicación que HAS OMITIDO:</b><ul style='margin-top:4px; margin-bottom:8px;'>{html_omitidos}</ul>" if html_omitidos else "<br><b style='color:#15803d !important;'>🎉 ¡No has omitido ningún punto esencial de la explicación!</b><br>")
-                    + (
-                        f"<div style='background-color:#fff8e1; border-left:4px solid #f59e0b; padding:10px 12px; border-radius:4px; margin-top:8px;'>"
-                        f"<b style='color:#92400e !important;'>✍️ Qué deberías haber incluido como texto para completar tu respuesta al 100%:</b><br>"
-                        f"<span style='color:#78350f !important; font-size:13.5px; text-align:justify; display:block; margin-top:4px;'>« {ev['texto_sugerido']} »</span>"
-                        f"</div>"
-                        if ev["puntos_omitidos"] else ""
+                aviso_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(txt_alumno)
+                if aviso_inapropiado:
+                    stat["open_score"] = 0.0
+                    st.markdown(
+                        f"<div style='background-color:#fff8e1; border:2px solid #d97706; border-radius:8px; padding:16px; margin-top:10px; margin-bottom:10px; font-size:15px; color:#1E293B !important; line-height:1.55; text-align:justify;'>"
+                        f"{aviso_inapropiado}"
+                        f"</div>",
+                        unsafe_allow_html=True
                     )
-                    + "</div></div>",
-                    unsafe_allow_html=True
-                )
+                else:
+                    ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
+                    stat["open_score"] = ev["nota"]
 
-            if resp_of and resp_of != exp_of:
-                st.markdown(
-                    f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
-                    f"<div style='font-size:14px; font-weight:700; color:#1b5e20 !important; margin-bottom:4px;'>🎯 Respuesta Directa Oficial:</div>"
-                    f"<div style='font-size:14px; color:#1b5e20 !important; text-align:justify;'>{resp_of}</div></div>",
-                    unsafe_allow_html=True
-                )
-            if exp_of:
-                eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
-                titulo_exp = "📖 Texto Íntegro Oficial de Desarrollo (2.º Ejercicio):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (3.er Ejercicio):"
-                st.markdown(
-                    f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
-                    f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #0c5460 !important;'>{titulo_exp}</div>"
-                    f"<div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>",
-                    unsafe_allow_html=True
-                )
+                    if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
+                        stat["last_evaluated_text"] = txt_alumno
+                        clave_activa = obtener_gemini_api_key_activa()
+                        with st.spinner("🤖 El Tribunal Evaluador de Gemini está contrastando tu respuesta con las fuentes de NotebookLM y la normativa vigente..."):
+                            stat["ai_feedback"] = consultar_ia_gemini_correccion(
+                                clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
+                            )
+
+                    # ÚNICA CORRECCIÓN VISIBLE: Gemini IA (con respaldo automático solo si se agotan los créditos)
+                    st.markdown(
+                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
+                        "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN DEL TRIBUNAL EVALUADOR IA (GEMINI + FUENTES NOTEBOOKLM)</div>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(stat.get("ai_feedback") or "")
+
+                    if resp_of and resp_of != exp_of:
+                        st.markdown(
+                            f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
+                            f"<div style='font-size:14px; font-weight:700; color:#1b5e20 !important; margin-bottom:4px;'>🎯 Respuesta Directa Oficial:</div>"
+                            f"<div style='font-size:14px; color:#1b5e20 !important; text-align:justify;'>{resp_of}</div></div>",
+                            unsafe_allow_html=True
+                        )
+                    if exp_of:
+                        eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
+                        titulo_exp = "📖 Texto Íntegro Oficial de Desarrollo (2.º Ejercicio):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (3.er Ejercicio):"
+                        st.markdown(
+                            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
+                            f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #0c5460 !important;'>{titulo_exp}</div>"
+                            f"<div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>",
+                            unsafe_allow_html=True
+                        )
         else:
             if q['answer'] != -1:
                 co = q['options'][q['answer']]
@@ -2774,6 +2798,9 @@ else:
             if not txt_al:
                 blancos += 1
                 stat['final_status'] = "⚪ En blanco"
+            elif detectar_respuesta_inapropiada_o_sin_interes(txt_al):
+                fallos += 1
+                stat['final_status'] = "⚠️ Respuesta no evaluable (0,00/10)"
             else:
                 ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
                 ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
@@ -2932,9 +2959,20 @@ else:
             unsafe_allow_html=True
         )
 
+    cat_actual_fin = (st.session_state.get("test_cat") or st.session_state.get("saved_cat") or "").upper()
+    if "DESARROLLO" in cat_actual_fin or any(q.get("tipo_abierta") == "DESARROLLO" for q in st.session_state.questions):
+        lbl_repetir = "🔄 Repetir Preguntas"
+        lbl_cambiar = "📁 Cambiar de Preguntas"
+    elif "SUPUESTO" in cat_actual_fin or any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions):
+        lbl_repetir = "🔄 Repetir Supuestos"
+        lbl_cambiar = "📁 Cambiar de Supuestos"
+    else:
+        lbl_repetir = "🔄 Repetir Test"
+        lbl_cambiar = "📁 Cambiar de Test"
+
     c1_t, c2_t, c3_t = st.columns(3)
-    c1_t.button("🔄 Repetir Test", key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
-    c2_t.button("📁 Cambiar de Test", key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
+    c1_t.button(lbl_repetir, key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
+    c2_t.button(lbl_cambiar, key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
     c3_t.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
     st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
@@ -2968,7 +3006,7 @@ else:
         st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
     c1_b, c2_b, c3_b = st.columns(3)
-    c1_b.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
-    c2_b.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
+    c1_b.button(lbl_repetir, key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
+    c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
