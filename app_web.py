@@ -1474,7 +1474,32 @@ def _dividir_en_oraciones_juridicas(texto):
             oraciones.append(p_rest)
     return oraciones
 
-# Base de Conocimiento Legal Consolidada para verificar artículos y normas adicionales relacionados con la materia
+# Estructura de Fuentes extraída directamente de los cuadernos de NotebookLM de Oposiciona
+FUENTES_TEMARIO_NOTEBOOKLM = {
+    "SEEH": {
+        "cuaderno": "TEMA 73 - REGÍMENES ESPECIALES INTEGRADOS EN EL RÉGIMEN GENERAL (NotebookLM)",
+        "epigrafe": "Epígrafe 5: SISTEMA ESPECIAL DE EMPLEADAS DE HOGAR (SEEEHH) — Campo de aplicación (pág. 16), Afiliación, altas y bajas (pág. 17), Cotización y Particularidades de la Acción Protectora (págs. 17-20)",
+        "resumen_fuente": (
+            "- Integración en el Régimen General: Ley 27/2011, de 1 de agosto (con efectos 1 de enero de 2012) y art. 136.2.b) TRLGSS.\n"
+            "- Regulación laboral especial: Real Decreto 1620/2011, de 14 de noviembre (art. 2.1.b ET) y reforma por RDL 16/2022, de 6 de septiembre (protección por desempleo y FOGASA).\n"
+            "- Campo de aplicación (art. 250 TRLGSS): Servicios retribuidos por cuenta y dependencia del titular del hogar familiar (tareas domésticas, cuidado/atención de miembros de la familia, guardería, jardinería, conducción). Excluidos: personas jurídicas/ETT (van al RG ordinario), parientes hasta 2.º grado salvo prueba en contrario de condición salarial, trabajos por amistad/benevolencia o «a la par».\n"
+            "- Cotización y beneficios: Escala de tramos sobre retribución (Orden PJC/297/2026 y RD 126/2026 SMI); en tiempo parcial la retribución mínima del tramo es SMI/hora × horas mensuales; no aplica el recargo por contratos inferiores a 30 días (art. 151 TRLGSS) ni la cotización adicional por horas del art. 122 de la Ley 31/2022; reducción del 20% en contingencias comunes o bonificación del 80% por contratación de cuidadores en familias numerosas (solo para un cuidador por unidad familiar).\n"
+            "- Acción protectora (art. 251 TRLGSS): Derecho a prestaciones del RG con particularidades: a) IT común se abona desde el 9.º día (días 4.º al 8.º a cargo del empleador), salvo en las 5 situaciones especiales del art. 169.1.a) TRLGSS tras el RDL 31/2026 (menstruación incapacitante/interrupción embarazo, semana 39.ª, donación órganos, trastorno menopáusico secundario codificado y violencia de género), donde se abona por la entidad gestora/mutua desde el día siguiente a la baja (día de la baja a cargo del empleador); b) Pago directo de IT por la entidad gestora/mutua (no procede pago delegado); c) En contingencias profesionales no aplica el régimen de responsabilidad empresarial en orden a las prestaciones del art. 167 TRLGSS (capital coste); d) Integración de lagunas desde 01/01/2024 en IP común y jubilación conforme a arts. 197.4 y 209.1.b) TRLGSS; e) Desempleo y cobertura del FOGASA (RD 505/1985 y art. 11.2 RD 1620/2011: indemnización de 12 días por año con tope de 6 mensualidades y salario diario máximo del doble del SMI)."
+        )
+    },
+    "SEA": {
+        "cuaderno": "TEMA 73 - REGÍMENES ESPECIALES INTEGRADOS EN EL RÉGIMEN GENERAL + Profesor SEA Inactividad (NotebookLM)",
+        "epigrafe": "Epígrafe 4: SISTEMA ESPECIAL AGRARIO (SEA) — Normativa (pág. 7), Campo de aplicación (pág. 7), Afiliación, altas y bajas (pág. 9), Cotización en actividad e inactividad (págs. 10-14) y Acción Protectora (pág. 15)",
+        "resumen_fuente": (
+            "- Integración en el Régimen General: Ley 28/2011, de 22 de septiembre (efectos 01/01/2012), arts. 252 a 256 del TRLGSS, Ley 19/1995 de Modernización de Explotaciones Agrarias y supletoriamente Decreto 3772/1972.\n"
+            "- Campo de aplicación (art. 252 TRLGSS): Trabajadores por cuenta ajena en labores agrarias, forestales o pecuarias y tareas complementarias. Exclusión expresa (art. 252.1.b): manipulado, empaquetado y comercialización del plátano (van al RG ordinario aunque sea en la explotación) y mecánicos/administrativos de fincas.\n"
+            "- Períodos de inactividad (art. 253 TRLGSS): Existen cuando las jornadas reales en el mes natural sean inferiores al 76,67% de los días naturales de alta. Inclusión en inactividad requiere 30 jornadas reales en 365 días (o 5 jornadas reales si estuvo antes integrado + solicitud en 3 meses con efectos día 1 del mes siguiente). Exclusión por impago de 2 mensualidades consecutivas o no realizar 30 jornadas reales.\n"
+            "- Cotización 2026 (art. 254 y 255 TRLGSS y Orden PJC/297/2026): En inactividad cotiza a cargo exclusivo del trabajador sobre base mínima grupo 7 al 11,50% + MEI (0,90%), con reducción del 19,11% si en 2025 realizó un máximo de 55 jornadas reales. Tope máximo cuota empresarial grupo 1 en actividad: 279,00 €/mes o 12,68 €/jornada. Excedencia por cuidado de hijo (art. 237 TRLGSS) es período de cotización efectiva durante 3 años.\n"
+            "- Acción protectora (art. 256 TRLGSS): Requisito de estar al corriente en cuotas de inactividad; pago directo del subsidio de IT desde el día 16.º; en inactividad la protección comprende maternidad, paternidad, IP y muerte y supervivencia por contingencias comunes y jubilación."
+        )
+    }
+}
+
 MAPA_TEMATICO_PRECEPTOS = [
     {
         "materia": "Sistema Especial para Empleados de Hogar (SEEH)",
@@ -1490,9 +1515,11 @@ MAPA_TEMATICO_PRECEPTOS = [
             "33": "Cobertura indemnizatoria del Fondo de Garantía Salarial - FOGASA (ET)",
             "42": "Catálogo general de prestaciones de la Acción Protectora del sistema (TRLGSS)",
             "49": "Causas de extinción del contrato de trabajo (ET)",
+            "122": "Exclusión de la cotización adicional por horas en el SEEH (art. 122 Ley 31/2022)",
             "136": "Integración de los Empleados de Hogar en el Régimen General (art. 136.2.b TRLGSS)",
             "137": "Exclusiones del Régimen General (trabajos amistosos/familiares)",
             "147": "Determinación de la base de cotización (TRLGSS)",
+            "151": "Exclusión del recargo por contratos inferiores a 30 días en el SEEH (TRLGSS)",
             "162": "Caracteres de las relaciones laborales de carácter especial en el Régimen General (TRLGSS)",
             "165": "Requisitos generales del derecho a las prestaciones y alta (TRLGSS)",
             "166": "Situaciones asimiladas a la de alta (TRLGSS)",
@@ -1514,10 +1541,12 @@ MAPA_TEMATICO_PRECEPTOS = [
             "16/2022": "Real Decreto-ley para la mejora de las condiciones de trabajo y de Seguridad Social de las personas trabajadoras al servicio del hogar (desempleo y FOGASA)",
             "505/1985": "Real Decreto sobre organización y funcionamiento del Fondo de Garantía Salarial (FOGASA)",
             "27/2011": "Ley sobre actualización, adecuación y modernización del sistema de Seguridad Social (integración del SEEH)",
+            "31/2022": "Ley de Presupuestos Generales del Estado (art. 122 sobre cotización en el SEEH)",
             "84/1996": "Reglamento General sobre inscripción de empresas, afiliación, altas y bajas",
             "2064/1995": "Reglamento General sobre Cotización y Liquidación de otros Derechos de la Seguridad Social",
             "31/2026": "Real Decreto-ley de reforma de situaciones especiales de IT y protección social",
-            "297/2026": "Orden anual de cotización para 2026",
+            "126/2026": "Real Decreto por el que se fija el salario mínimo interprofesional para 2026",
+            "297/2026": "Orden PJC/297/2026 anual de cotización para 2026",
         }
     },
     {
@@ -1530,6 +1559,7 @@ MAPA_TEMATICO_PRECEPTOS = [
             "42": "Acción protectora del Sistema de la Seguridad Social (TRLGSS)",
             "136": "Inclusión del Sistema Especial Agrario en el Régimen General (art. 136.2.a TRLGSS)",
             "144": "Duración de la obligación de cotizar en IT, maternidad y riesgo (TRLGSS)",
+            "151": "Exclusión de cotización adicional en contratos de corta duración en el SEA (TRLGSS)",
             "165": "Requisitos de acceso a prestaciones (TRLGSS)",
             "166": "Situaciones asimiladas al alta (TRLGSS)",
             "169": "Incapacidad temporal y situaciones especiales (TRLGSS)",
@@ -1545,10 +1575,12 @@ MAPA_TEMATICO_PRECEPTOS = [
         "normas_validas": {
             "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
             "28/2011": "Ley por la que se procede a la integración del Régimen Especial Agrario en el Régimen General",
+            "19/1995": "Ley de Modernización de las Explotaciones Agrarias",
+            "3772/1972": "Decreto por el que se aprueba el Reglamento General del Régimen Especial Agrario (aplicación supletoria)",
             "84/1996": "Reglamento General de Afiliación, Altas y Bajas",
             "2064/1995": "Reglamento General sobre Cotización y Liquidación",
             "31/2026": "Real Decreto-ley de actualización de prestaciones de la Seguridad Social",
-            "297/2026": "Orden anual de cotización para 2026",
+            "297/2026": "Orden PJC/297/2026 anual de cotización para 2026",
         }
     },
     {
@@ -1586,36 +1618,42 @@ MAPA_TEMATICO_PRECEPTOS = [
     }
 ]
 
+def obtener_fuente_notebooklm_para_pregunta(texto_contexto):
+    t_low = (texto_contexto or "").lower()
+    partes = []
+    if any(k in t_low for k in ["hogar", "domestico", "domestica", "seeh", "250", "251", "1620/2011", "montoro", "garcia-valenzuela"]):
+        f = FUENTES_TEMARIO_NOTEBOOKLM["SEEH"]
+        partes.append(f"📘 **Fuente NotebookLM:** {f['cuaderno']}\n📌 **{f['epigrafe']}**\n{f['resumen_fuente']}")
+    if any(k in t_low for k in ["agrario", "agraria", "sea", "inactividad", "jornadas reales", "252", "253", "254", "255", "256", "montoro"]):
+        f = FUENTES_TEMARIO_NOTEBOOKLM["SEA"]
+        partes.append(f"📘 **Fuente NotebookLM:** {f['cuaderno']}\n📌 **{f['epigrafe']}**\n{f['resumen_fuente']}")
+    return "\n\n".join(partes)
+
 def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pregunta_y_exp):
-    """
-    Antes de dar por inválido un artículo o ley no citado literalmente en la explicación del PDF,
-    consulta el Mapa Temático Legal y el contexto en el que el alumno lo ha utilizado.
-    """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
         return re.sub(r'\s+', ' ', s).strip()
 
     ctx_norm = _norm(contexto_pregunta_y_exp)
-    al_norm = _norm(texto_alumno)
 
-    # 1. Buscar en todos los bloques temáticos aplicables al contexto de la pregunta
     for bloque in MAPA_TEMATICO_PRECEPTOS:
         if any(kw in ctx_norm for kw in bloque["keywords_contexto"]):
             if k_tipo == "ART" and k_id in bloque["articulos_validos"]:
                 desc = bloque["articulos_validos"][k_id]
-                return True, f"{k_lbl} ({desc} — aplicable a {bloque['materia']})"
+                return True, f"{k_lbl} ({desc} — conectado con {bloque['materia']})"
             if k_tipo == "NORMA" and k_id in bloque["normas_validas"]:
                 desc = bloque["normas_validas"][k_id]
                 return True, f"{k_lbl} ({desc})"
 
-    # 2. Normas troncales transversales de Seguridad Social y Derecho del Trabajo siempre conexas si el alumno explica su relación
     normas_troncales = {
         "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
         "2/2015": "Texto Refundido de la Ley del Estatuto de los Trabajadores (ET)",
         "2064/1995": "Reglamento General sobre Cotización y Liquidación",
         "84/1996": "Reglamento General de Inscripción y Afiliación",
         "1415/2004": "Reglamento General de Recaudación de la Seguridad Social",
+        "2621/1986": "Real Decreto de integración de regímenes especiales en el Régimen General",
         "31/2026": "Real Decreto-ley de reforma de prestaciones de Seguridad Social",
+        "126/2026": "Real Decreto de fijación del SMI para 2026",
         "297/2026": "Orden PJC/297/2026 de cotización para 2026",
     }
     if k_tipo == "NORMA" and k_id in normas_troncales:
@@ -1623,7 +1661,6 @@ def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pr
     if k_tipo == "SIGLA" and k_id in ["trlgss", "et"]:
         return True, k_lbl
 
-    # 3. Verificar si la oración donde el alumno cita ese artículo comparte vocabulario jurídico directo con la explicación oficial
     oraciones_al = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
     palabras_ctx = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', ctx_norm))
     for orac in oraciones_al:
@@ -1631,7 +1668,7 @@ def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pr
             palabras_orac = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', _norm(orac)))
             coincidencias = palabras_orac.intersection(palabras_ctx)
             if len(coincidencias) >= 3 and len(orac.strip()) >= 40:
-                return True, f"{k_lbl} (precepto relacionado argumentado pertinentemente en tu exposición)"
+                return True, f"{k_lbl} (precepto conexo bien interrelacionado en tu exposición)"
 
     return False, f"{k_lbl} (no guarda relación directa con el supuesto planteado)"
 
@@ -1653,7 +1690,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     contexto_total = f"{enunciado_pregunta or ''} {ref_completa}".strip()
     ref_norm = _norm(ref_completa)
 
-    # 1. Auditoría de Normativa y Artículos (Distingue: Principales citados, Complementarios pertinentes que suman valor, Omitidos y Erróneos)
+    # 1. Auditoría de Normativa y Artículos
     pat_normas = r'\b(?:art(?:[íi]culos?|\.)\s*\d+(?:\.\d+)?(?:\.[a-z])?|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
 
     def _clave_norma(texto_cita):
@@ -1805,13 +1842,14 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     total_eval = len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos)
     acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
     nota_base = (acertados_eval / max(1, total_eval)) * 10
-    # Bonificación positiva por aportar preceptos complementarios pertinentes (+0,40 puntos por cada uno, hasta 10)
     bonificacion_comp = 0.40 * len(citas_complementarias)
     nota_10 = min(10.0, round(nota_base + bonificacion_comp, 2))
     if citas_erroneas:
         nota_10 = max(0.0, round(nota_10 - 0.50 * len(citas_erroneas), 2))
     if alerta_sentido:
         nota_10 = max(0.0, round(nota_10 - 2.5, 2))
+
+    fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
 
     return {
         "nota": nota_10,
@@ -1824,54 +1862,61 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "cifras_faltan": cifras_faltan,
         "puntos_cubiertos": puntos_cubiertos,
         "puntos_omitidos": puntos_omitidos,
-        "texto_sugerido": texto_sugerido
+        "texto_sugerido": texto_sugerido,
+        "fuente_notebooklm": fuente_nb
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
     bloques = []
 
-    # Bloque 1: Lo que ha acertado y valor añadido
+    # Bloque 1: Encuadre en el epígrafe del temario (NotebookLM) y análisis de lo escrito
+    encuadre_nb = ""
+    if ev.get("fuente_notebooklm"):
+        primera_linea_nb = ev["fuente_notebooklm"].split("\n")[1] if "\n" in ev["fuente_notebooklm"] else ""
+        encuadre_nb = f"📌 *Encuadre en las fuentes de tu temario (NotebookLM):* {primera_linea_nb}\n\n"
+
     if ev["puntos_cubiertos"] or ev["citas_ok"] or ev["citas_complementarias"] or ev["cifras_ok"]:
         aciertos_txt = []
         if ev["citas_ok"]:
-            aciertos_txt.append(f"Has fundamentado adecuadamente tu exposición citando la normativa principal (**{', '.join(ev['citas_ok'])}**).")
+            aciertos_txt.append(f"Has fundamentado con rigor tu exposición invocando la normativa nuclear del epígrafe (**{', '.join(ev['citas_ok'])}**).")
         if ev["citas_complementarias"]:
             aciertos_txt.append(
-                f"🌟 **Aportación jurídica de alto valor:** Además de la base principal, has relacionado con acierto otros preceptos conexos del ordenamiento (**{'; '.join(ev['citas_complementarias'])}**), lo cual enriquece tu examen y es valorado muy positivamente por el Tribunal."
+                f"🌟 **Interrelación normativa de alto nivel:** Has conectado acertadamente otros preceptos del bloque legal aplicables a la materia (**{'; '.join(ev['citas_complementarias'])}**), demostrando dominio transversal del temario y sumando puntuación adicional."
             )
         if ev["cifras_ok"]:
             aciertos_txt.append(f"Has precisado correctamente los parámetros cuantitativos/temporales (**{', '.join(ev['cifras_ok'])}**).")
         if ev["puntos_cubiertos"]:
             resumen_ideas = " ".join([f"«{p}»" for p in ev["puntos_cubiertos"][:2]])
-            aciertos_txt.append(f"Tu redacción recoge con acierto la idea esencial sobre: {resumen_ideas}")
-        bloques.append("1. **✅ Aciertos y valor añadido en tu respuesta:**\n" + " ".join(aciertos_txt))
+            aciertos_txt.append(f"En cuanto al fondo jurídico, tu redacción desarrolla con acierto: {resumen_ideas}")
+        bloques.append("1. **✅ Análisis jurídico de tu exposición y conexión con el temario:**\n" + encuadre_nb + " ".join(aciertos_txt))
     else:
         bloques.append(
-            "1. **✅ Aciertos en tu respuesta:**\n"
-            "Tu contestación es todavía muy genérica o incompleta y no llega a recoger los elementos técnicos nucleares exigidos por el temario oficial para esta pregunta."
+            "1. **✅ Análisis jurídico de tu exposición y conexión con el temario:**\n"
+            + encuadre_nb +
+            "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe del temario oficial."
         )
 
-    # Bloque 2: Revisión de artículos y leyes citadas (consultando texto legal aplicable)
+    # Bloque 2: Revisión de artículos y leyes citadas (consultando texto legal y fuentes de NotebookLM)
     rev_normativa = []
     if ev["alerta_sentido"]:
         rev_normativa.append(ev["alerta_sentido"])
     if ev["citas_ok"]:
-        rev_normativa.append(f"✔️ **Normativa principal acertada:** {', '.join(ev['citas_ok'])}.")
+        rev_normativa.append(f"✔️ **Normativa principal del epígrafe acertada:** {', '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
         rev_normativa.append(
-            f"🌟 **Normativa complementaria verificada en el texto legal (suma puntuación):** {', '.join(ev['citas_complementarias'])}."
+            f"🌟 **Normativa complementaria verificada en las fuentes legales (suma +0,40 ptos/precepto):** {', '.join(ev['citas_complementarias'])}."
         )
     if ev["citas_erroneas"]:
         rev_normativa.append(
-            f"❌ **Preceptos sin aplicación directa en esta materia tras consultar el texto legal:** {', '.join(ev['citas_erroneas'])}."
+            f"❌ **Preceptos sin aplicación directa en este epígrafe tras consultar el texto legal:** {', '.join(ev['citas_erroneas'])}."
         )
     if ev["citas_faltan"]:
         rev_normativa.append(
-            f"⚠️ **Normativa de la explicación oficial que te faltó citar:** {', '.join(ev['citas_faltan'])}."
+            f"⚠️ **Artículos y normas del epígrafe oficial que te faltó citar:** {', '.join(ev['citas_faltan'])}."
         )
     if not rev_normativa:
-        rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible.")
-    bloques.append("2. **⚖️ Revisión de artículos y leyes citadas (verificación con el texto legal):**\n" + "\n".join(rev_normativa))
+        rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible en este epígrafe.")
+    bloques.append("2. **⚖️ Auditoría de artículos y fuentes legales (verificación en el bloque normativo):**\n" + "\n".join(rev_normativa))
 
     # Bloque 3: Detalles omitidos y texto modelo que debería haber añadido
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
@@ -1880,21 +1925,21 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             detalles_str += f"Te ha faltado especificar los siguientes plazos, tramos o porcentajes clave: **{', '.join(ev['cifras_faltan'])}**.\n"
         if ev["puntos_omitidos"]:
             lista_om = "\n".join([f"   - *{p}*" for p in ev["puntos_omitidos"][:5]])
-            detalles_str += f"Además, en comparación con la explicación oficial, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
+            detalles_str += f"Comparando tu texto con el epígrafe oficial del tema, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
         modelo_parrafo = respuesta_oficial if (respuesta_oficial and len(respuesta_oficial) > 40) else ev["texto_sugerido"]
-        detalles_str += f"✍️ **Párrafo modelo que deberías haber incluido en tu examen:**\n« {modelo_parrafo} »"
-        bloques.append("3. **⚠️ Detalles omitidos y qué texto deberías haber añadido:**\n" + detalles_str)
+        detalles_str += f"✍️ **Párrafo magistral que deberías incorporar a tu examen para alcanzar el 10:**\n« {modelo_parrafo} »"
+        bloques.append("3. **⚠️ Detalles omitidos del epígrafe y redacción modelo recomendada:**\n" + detalles_str)
     else:
         bloques.append(
-            "3. **⚠️ Detalles omitidos y qué texto deberías haber añadido:**\n"
-            "¡Excelente trabajo! Tu respuesta abarca todos los requisitos, excepciones y matices técnicos de la explicación oficial."
+            "3. **⚠️ Detalles omitidos del epígrafe y redacción modelo recomendada:**\n"
+            "¡Excelente trabajo! Tu respuesta abarca todos los requisitos, excepciones y matices técnicos del epígrafe oficial."
         )
 
     # Bloque 4: Calificación orientativa
     comentario_nota = (
-        "Respuesta sobresaliente, muy sólida y enriquecida con referencias normativas pertinentes." if ev["nota"] >= 7.5 else
-        "Respuesta aprobada en lo básico, pero debes incorporar los preceptos y matices omitidos." if ev["nota"] >= 5.0 else
-        "Respuesta aún incompleta para superar el corte del ejercicio escrito; añade el párrafo modelo y los preceptos indicados arriba."
+        "Exposición sobresaliente, rigurosa y enriquecida con interrelación normativa propia de un examen de plaza." if ev["nota"] >= 7.5 else
+        "Respuesta aprobada en su estructura básica, pero debes incorporar los preceptos y matices del epígrafe omitidos." if ev["nota"] >= 5.0 else
+        "Respuesta aún incompleta para superar el corte del ejercicio escrito; incorpora el párrafo magistral y los artículos indicados arriba."
     )
     bloques.append(f"4. **🎓 Calificación orientativa del Tribunal:** **{ev['nota']:.2f} / 10** — *{comentario_nota}*")
 
@@ -1914,32 +1959,37 @@ def obtener_gemini_api_key_activa():
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
+    contexto_total = f"{enunciado_supuesto} {pregunta} {respuesta_oficial} {explicacion_oficial}"
+    fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
+
     prompt = (
-        "Eres Tribunal Evaluador del Cuerpo de Gestión de la Administración de la Seguridad Social (Oposiciona).\n"
-        "Compara minuciosamente la respuesta del alumno con la Respuesta Oficial y la Explicación Oficial.\n"
-        "REGLA MUY IMPORTANTE SOBRE ARTÍCULOS Y LEYES CITADAS POR EL ALUMNO:\n"
-        "Antes de dar por inválido cualquier artículo, Real Decreto, Orden o Ley que el alumno haya citado y que no figure literalmente en la explicación oficial, "
-        "DEBES CONSULTAR tu conocimiento del texto legal vigente (TRLGSS RD Legislativo 8/2015, Estatuto de los Trabajadores, RD 1620/2011, RDL 16/2022, RDL 31/2026, Reglamentos Generales de Afiliación RD 84/1996, Cotización RD 2064/1995 y Recaudación RD 1415/2004, etc.) "
-        "para comprobar si ese artículo o norma SÍ guarda relación con la materia o supuesto planteado. "
-        "Si el artículo o contenido adicional introducido por el alumno es jurídicamente cierto y guarda relación con el tema (por ejemplo, citar el art. 136.2.b TRLGSS sobre integración en el Régimen General, el art. 162 sobre relaciones laborales especiales, el art. 42 sobre acción protectora, el art. 267 sobre desempleo o el art. 33 ET sobre FOGASA), "
-        "explícale qué regula ese artículo, felicítale por relacionar preceptos conexos y EVALÚALO POSITIVAMENTE subiendo su nota.\n\n"
-        f"CONTEXTO:\n{enunciado_supuesto}\n\n"
-        f"CUESTIÓN PLANTEADA:\n{pregunta}\n\n"
-        f"RESPUESTA OFICIAL:\n{respuesta_oficial}\n\n"
-        f"EXPLICACIÓN Y NORMATIVA OFICIAL:\n{explicacion_oficial}\n\n"
-        f"TEXTO ESCRITO POR EL ALUMNO:\n{respuesta_alumno}\n\n"
-        "Respóndele directamente al alumno en 4 bloques muy concretos:\n"
-        "1. **✅ Aciertos y aportaciones de valor en tu respuesta:** Qué ideas, normas principales y preceptos complementarios conexos has expresado correctamente.\n"
-        "2. **⚖️ Revisión de artículos y leyes citadas (verificación con el texto legal):** Analiza cada artículo o norma citada por el alumno verificando en la ley si es aplicable (valorándolo positivamente si mejora y amplía el contenido), e indícale qué artículos de la explicación oficial le han faltado.\n"
-        "3. **⚠️ Detalles omitidos y qué texto deberías haber añadido:** Lista cada requisito, plazo, porcentaje o excepción de la explicación oficial que ha omitido y redacta un párrafo modelo con lo que debería haber añadido.\n"
-        "4. **🎓 Calificación orientativa sobre 10 (premiando las relaciones normativas acertadas).**"
+        "Actúa como Presidente del Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social y preparador experto de Oposiciona.\n"
+        "Tu misión es realizar un ANÁLISIS JURÍDICO PROFUNDO, RIGUROSO Y PEDAGÓGICO de la respuesta escrita por el opositor (en el 2.º Ejercicio de Desarrollo o 3.er Ejercicio de Supuestos Prácticos), "
+        "contrastándola con la Solución Oficial, con la Explicación del PDF y con la FUENTE DEL TEMARIO EXTRAÍDA DE NOTEBOOKLM.\n\n"
+        "INSTRUCCIONES CRÍTICAS DE EVALUACIÓN PARA EL TRIBUNAL IA:\n"
+        "1. **ENCUADRE EN EL EPÍGRAFE DEL TEMARIO (NOTEBOOKLM):** Ubica la respuesta dentro del epígrafe exacto del tema (indicado abajo en la Fuente de NotebookLM) y evalúa la estructura, precisión terminológica y sistemática del alumno.\n"
+        "2. **PROHIBIDO DAR POR INVÁLIDO UN ARTÍCULO SIN CONSULTAR ANTES EL TEXTO LEGAL Y LAS FUENTES CONEXAS:** "
+        "Los buenos opositores de Gestión relacionan artículos transversales del TRLGSS (RD Legislativo 8/2015), del Estatuto de los Trabajadores (RD Legislativo 2/2015), de la Ley 27/2011, Ley 28/2011, RD 1620/2011, RDL 16/2022, RD 505/1985, Ley 31/2022 (art. 122), RDL 31/2026, Orden PJC/297/2026, RD 126/2026, RD 84/1996, RD 2064/1995 y RD 1415/2004. "
+        "Si el alumno cita un artículo o norma que NO aparece literalmente en la explicación pero SÍ es jurídicamente cierto y guarda relación con la institución jurídica preguntada, DEBES EXPLICAR qué regula ese precepto, cómo se conecta con la fuente del tema y VALORARLO MUY POSITIVAMENTE subiendo su calificación.\n"
+        "3. **DETECCIÓN MILIMÉTRICA DE OMISIONES:** Compara frase por frase lo escrito por el alumno con la Explicación Oficial y el Epígrafe de NotebookLM. Detalla exactamente qué requisitos, plazos (días hábiles/naturales), tramos, porcentajes, topes (SMI/IPREM), exclusiones o excepciones se ha dejado en el tintero.\n"
+        "4. **REDACCIÓN MAGISTRAL DE COMPLEMENTO:** Redacta un párrafo modelo con estilo de examen oficial (listo para memorizar e insertar en su texto) que contenga todo lo que le ha faltado para sacar un 10.\n\n"
+        f"=== FUENTE DEL TEMARIO Y EPÍGRAFE (NOTEBOOKLM) ===\n{fuente_nb if fuente_nb else 'Temario Oficial de Gestión de la Seguridad Social (TRLGSS y normativa de desarrollo vigente en 2026).'}\n\n"
+        f"=== CONTEXTO / ENUNCIADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
+        f"=== RESPUESTA DIRECTA OFICIAL ===\n{respuesta_oficial}\n\n"
+        f"=== EXPLICACIÓN Y FUNDAMENTACIÓN OFICIAL DEL TEMA ===\n{explicacion_oficial}\n\n"
+        f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
+        "Estructura tu dictamen en estos 4 apartados claros:\n"
+        "1. **✅ Análisis jurídico de tu exposición y conexión con el epígrafe del tema**\n"
+        "2. **⚖️ Auditoría de artículos, leyes y relaciones normativas (verificación con el texto legal y fuentes)**\n"
+        "3. **⚠️ Detalles técnicos omitidos y párrafo magistral que deberías haber incluido**\n"
+        "4. **🎓 Calificación orientativa del Tribunal (sobre 10)**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
-            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=10)
+            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=12)
             if r.status_code == 200:
                 data = r.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"]
@@ -2406,7 +2456,7 @@ if not st.session_state.questions:
     st.markdown(f"<h4 style='color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</h4>", unsafe_allow_html=True)
     if categoria in ["PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "Segundo Ejercicio (Pregunta de Desarrollo)" if categoria == "PREGUNTA DE DESARROLLO" else "Tercer Ejercicio (Supuestos Prácticos)"
-        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», el sistema verifica en el texto legal todos los artículos citados (evaluando positivamente los artículos conexos que enriquezcan la respuesta) y muestra el dictamen del Tribunal Evaluador IA seguido de la explicación.")
+        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», el sistema contrasta tu respuesta con el epígrafe de NotebookLM y el bloque legal (premiando los artículos conexos bien relacionados) y emite el dictamen del Tribunal Evaluador IA.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2631,7 +2681,7 @@ elif not st.session_state.finished:
                 if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
                     stat["last_evaluated_text"] = txt_alumno
                     clave_activa = obtener_gemini_api_key_activa()
-                    with st.spinner("🤖 El Tribunal Evaluador IA está consultando los textos legales y corrigiendo tu respuesta..."):
+                    with st.spinner("🤖 El Tribunal Evaluador IA está consultando las fuentes de NotebookLM y el texto legal..."):
                         stat["ai_feedback"] = consultar_ia_gemini_correccion(
                             clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                         )
@@ -2639,7 +2689,7 @@ elif not st.session_state.finished:
                 # Mostrar SIEMPRE el dictamen personalizado del Tribunal Evaluador IA
                 st.markdown(
                     "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
-                    "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 CORRECCIÓN PERSONALIZADA DEL TRIBUNAL EVALUADOR IA</div>"
+                    "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN DEL TRIBUNAL EVALUADOR IA (CONECTADO CON FUENTES NOTEBOOKLM)</div>"
                     "</div>",
                     unsafe_allow_html=True
                 )
