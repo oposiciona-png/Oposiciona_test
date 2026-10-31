@@ -574,7 +574,6 @@ class PDFQuizParser:
             del q["options"][idx_del]
             if ans > idx_del:
                 q["answer"] = ans - 1
-        # Reenumerar prefijos a), b), c)... limpiamente
         nuevas_opts = []
         for i, opt in enumerate(q["options"]):
             limpia = re.sub(r'^[a-eA-E][\)\.\-]\s*', '', opt).strip()
@@ -586,6 +585,7 @@ class PDFQuizParser:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         questions, lines = [], []
         stop_reading = ignoring_mode = entered_supuestos = False
+        detected_gestion_header = False
 
         for page in doc:
             if stop_reading: break
@@ -603,6 +603,8 @@ class PDFQuizParser:
                                 if not re.match(r'^[a-dA-D][\)\.-]?$', t): is_bold = True
                         line_text = line_text.strip()
                         if line_text:
+                            if re.search(r'GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL', line_text, re.IGNORECASE):
+                                detected_gestion_header = True
                             line_text = re.sub(r'<{2,}', '«', line_text)
                             line_text = re.sub(r'>{2,}', '»', line_text)
                             line_text = re.sub(r'<(?=[A-ZÁÉÍÓÚÑa-záéíóúñ0-9"«])', '«', line_text)
@@ -625,6 +627,9 @@ class PDFQuizParser:
                         if not line_text: continue
                         tl = line_text.lower().translate(str.maketrans("áéíóúäτεμα", "aeiouatema"))
                         tl_clean_spaces = re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9\s]', '', tl).strip())
+
+                        if "gestion de la seguridad social" in tl_clean_spaces:
+                            detected_gestion_header = True
 
                         if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                             stop_reading = True; break
@@ -1017,12 +1022,15 @@ class PDFQuizParser:
                     if letra_det and 0 <= (ord(letra_det) - ord('a')) < len(q["options"]):
                         q["answer"] = ord(letra_det) - ord('a')
 
-        # Si se especifica max_options (ej. 3 en GESTION) o si >=80% de las preguntas del PDF son de 3 opciones, ajustar a 3
+        # Si el PDF tiene cabecera de GESTIÓN, o si se pasó max_options, o si >=80% de las preguntas son de 3 opciones, ajustar a 3
         target_max = max_options
-        if target_max is None and len(questions) >= 5:
-            count_3_opts = sum(1 for q in questions if len(q["options"]) == 3)
-            if count_3_opts / len(questions) >= 0.80:
+        if target_max is None:
+            if detected_gestion_header:
                 target_max = 3
+            elif len(questions) >= 5:
+                count_3_opts = sum(1 for q in questions if len(q["options"]) == 3)
+                if count_3_opts / len(questions) >= 0.80:
+                    target_max = 3
 
         if target_max is not None:
             for q in questions:
@@ -1031,7 +1039,6 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 2 ===
-
 
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
