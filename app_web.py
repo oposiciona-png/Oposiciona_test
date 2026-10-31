@@ -1748,7 +1748,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # Intentar conexión con Gemini API si la clave está activa
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
@@ -1759,7 +1758,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         except Exception:
             continue
 
-    # Respaldo instantáneo garantizado por el Motor del Tribunal Evaluador Inteligente
     if ev_fallback is None:
         ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial)
     return generar_dictamen_tribunal_inteligente(ev_fallback, respuesta_alumno, respuesta_oficial, explicacion_oficial)
@@ -2393,7 +2391,6 @@ elif not st.session_state.finished:
             key=f"open_txt_{idx}",
             placeholder="Redacta aquí tu contestación indicando la conclusión jurídica, requisitos, plazos, porcentajes y los artículos o normas aplicables..."
         )
-        # Sincronizar en vivo el texto del widget por si pulsa Comprobar directamente
         if st.session_state.get(f"open_txt_{idx}") is not None:
             sel_opt = st.session_state.get(f"open_txt_{idx}")
     else:
@@ -2731,7 +2728,6 @@ else:
 
     c1_b, c2_b, c3_b = st.columns(3)
     c1_b.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
-    c1_b_ dummy = None
     c2_b.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
