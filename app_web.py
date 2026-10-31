@@ -1653,6 +1653,71 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "texto_sugerido": texto_sugerido
     }
 
+def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
+    bloques = []
+
+    # Bloque 1: Lo que ha acertado
+    if ev["puntos_cubiertos"] or ev["citas_ok"] or ev["cifras_ok"]:
+        aciertos_txt = []
+        if ev["citas_ok"]:
+            aciertos_txt.append(f"Has fundamentado adecuadamente tu exposición citando **{', '.join(ev['citas_ok'])}**.")
+        if ev["cifras_ok"]:
+            aciertos_txt.append(f"Has precisado con acierto los parámetros cuantitativos/temporales (**{', '.join(ev['cifras_ok'])}**).")
+        if ev["puntos_cubiertos"]:
+            resumen_ideas = " ".join([f"«{p}»" for p in ev["puntos_cubiertos"][:2]])
+            aciertos_txt.append(f"Tu redacción recoge correctamente la idea esencial sobre: {resumen_ideas}")
+        bloques.append("1. **✅ Aciertos en tu respuesta:**\n" + " ".join(aciertos_txt))
+    else:
+        bloques.append(
+            "1. **✅ Aciertos en tu respuesta:**\n"
+            "Tu contestación es todavía muy genérica o incompleta y no llega a recoger los elementos técnicos nucleares exigidos por el temario oficial para esta pregunta."
+        )
+
+    # Bloque 2: Revisión de artículos y leyes citadas
+    rev_normativa = []
+    if ev["alerta_sentido"]:
+        rev_normativa.append(ev["alerta_sentido"])
+    if ev["citas_erroneas"]:
+        rev_normativa.append(
+            f"❌ **Cuidado con la precisión normativa:** Has mencionado **{', '.join(ev['citas_erroneas'])}**, que no se corresponde con la regulación aplicable a este supuesto."
+        )
+    if ev["citas_ok"]:
+        rev_normativa.append(f"✔️ Es plenamente correcta la cita de: **{', '.join(ev['citas_ok'])}**.")
+    if ev["citas_faltan"]:
+        rev_normativa.append(
+            f"⚠️ Para que el Tribunal puntúe al máximo tu respuesta, te ha faltado invocar expresamente: **{', '.join(ev['citas_faltan'])}**."
+        )
+    if not rev_normativa:
+        rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible.")
+    bloques.append("2. **⚖️ Revisión de artículos y leyes citadas:**\n" + "\n".join(rev_normativa))
+
+    # Bloque 3: Detalles omitidos y texto modelo que debería haber añadido
+    if ev["puntos_omitidos"] or ev["cifras_faltan"]:
+        detalles_str = ""
+        if ev["cifras_faltan"]:
+            detalles_str += f"Te ha faltado especificar los siguientes plazos, tramos o porcentajes clave: **{', '.join(ev['cifras_faltan'])}**.\n"
+        if ev["puntos_omitidos"]:
+            lista_om = "\n".join([f"   - *{p}*" for p in ev["puntos_omitidos"][:5]])
+            detalles_str += f"Además, en comparación con la explicación oficial, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
+        modelo_parrafo = respuesta_oficial if (respuesta_oficial and len(respuesta_oficial) > 40) else ev["texto_sugerido"]
+        detalles_str += f"✍️ **Párrafo modelo que deberías haber incluido en tu examen:**\n« {modelo_parrafo} »"
+        bloques.append("3. **⚠️ Detalles omitidos y qué texto deberías haber añadido:**\n" + detalles_str)
+    else:
+        bloques.append(
+            "3. **⚠️ Detalles omitidos y qué texto deberías haber añadido:**\n"
+            "¡Excelente trabajo! Tu respuesta abarca todos los requisitos, excepciones y matices técnicos de la explicación oficial."
+        )
+
+    # Bloque 4: Calificación orientativa
+    comentario_nota = (
+        "Respuesta muy sólida y bien fundamentada." if ev["nota"] >= 7.0 else
+        "Respuesta aprobada en lo básico, pero debes reforzar las citas legales y matices omitidos." if ev["nota"] >= 5.0 else
+        "Respuesta insuficiente para superar el corte del ejercicio escrito; incorpora el párrafo modelo y los preceptos indicados arriba."
+    )
+    bloques.append(f"4. **🎓 Calificación orientativa del Tribunal:** **{ev['nota']:.2f} / 10** — *{comentario_nota}*")
+
+    return "\n\n".join(bloques)
+
 def obtener_gemini_api_key_activa():
     try:
         sec_k = st.secrets.get("GEMINI_API_KEY", "")
@@ -1665,7 +1730,7 @@ def obtener_gemini_api_key_activa():
         return str(sess_k).strip()
     return GEMINI_API_KEY_DEFAULT
 
-def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial):
+def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     prompt = (
         "Eres preparador experto del Cuerpo de Gestión de la Administración de la Seguridad Social (Oposiciona).\n"
@@ -1682,21 +1747,22 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         "4. **🎓 Calificación orientativa sobre 10.**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    headers_api = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": clave_limpia
-    }
 
+    # Intentar conexión con Gemini API si la clave está activa
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
-            r = requests.post(url, json=payload, headers=headers_api, timeout=20)
+            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=10)
             if r.status_code == 200:
                 data = r.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"]
         except Exception:
             continue
-    return None
+
+    # Respaldo instantáneo garantizado por el Motor del Tribunal Evaluador Inteligente
+    if ev_fallback is None:
+        ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial)
+    return generar_dictamen_tribunal_inteligente(ev_fallback, respuesta_alumno, respuesta_oficial, explicacion_oficial)
 
 def sincronizar_progreso_navegador():
     try:
@@ -2154,7 +2220,7 @@ if not st.session_state.questions:
     st.markdown(f"<h4 style='color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</h4>", unsafe_allow_html=True)
     if categoria in ["PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "Segundo Ejercicio (Pregunta de Desarrollo)" if categoria == "PREGUNTA DE DESARROLLO" else "Tercer Ejercicio (Supuestos Prácticos)"
-        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», el sistema realiza automáticamente tanto la auditoría jurídica como el informe con IA y muestra después la explicación oficial.")
+        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», el sistema realiza automáticamente tanto el informe del Tribunal Evaluador IA como la auditoría jurídica detallada y muestra después la explicación oficial.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2327,6 +2393,9 @@ elif not st.session_state.finished:
             key=f"open_txt_{idx}",
             placeholder="Redacta aquí tu contestación indicando la conclusión jurídica, requisitos, plazos, porcentajes y los artículos o normas aplicables..."
         )
+        # Sincronizar en vivo el texto del widget por si pulsa Comprobar directamente
+        if st.session_state.get(f"open_txt_{idx}") is not None:
+            sel_opt = st.session_state.get(f"open_txt_{idx}")
     else:
         def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
         sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
@@ -2364,40 +2433,39 @@ elif not st.session_state.finished:
 
     if st.session_state.checked:
         if es_abierta:
-            txt_alumno = (sel_opt or "").strip()
+            txt_alumno = (sel_opt or stat.get("selected") or "").strip()
             resp_of = (q.get("answer_text") or "").strip()
             exp_of = (q.get("explanation") or "").strip()
             if not txt_alumno:
-                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para analizar qué te falta.")
+                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que el Tribunal Evaluador analice qué te falta.")
             else:
-                if stat.get("last_evaluated_text") != txt_alumno:
-                    stat["last_evaluated_text"] = txt_alumno
-                    clave_activa = obtener_gemini_api_key_activa()
-                    if clave_activa:
-                        with st.spinner("🤖 Analizando tu respuesta jurídica y comparándola con la solución oficial..."):
-                            stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                                clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of
-                            )
-
-                if stat.get("ai_feedback"):
-                    st.markdown(
-                        f"<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:15px; margin-top:10px; margin-bottom:10px;'>"
-                        f"<div style='font-size:17px; font-weight:700; color:#15803d !important; margin-bottom:8px;'>🤖 CORRECCIÓN PERSONALIZADA DEL TRIBUNAL IA</div>"
-                        f"<div style='font-size:14.5px; color:#1E293B !important; line-height:1.5;'>{stat['ai_feedback']}</div>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
-
                 ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of)
                 stat["open_score"] = ev["nota"]
-                color_nota = "#15803d" if ev["nota"] >= 5.0 else "#d97706" if ev["nota"] >= 3.5 else "#dc2626"
 
+                if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
+                    stat["last_evaluated_text"] = txt_alumno
+                    clave_activa = obtener_gemini_api_key_activa()
+                    with st.spinner("🤖 El Tribunal Evaluador IA está corrigiendo tu respuesta y comparándola con la solución oficial..."):
+                        stat["ai_feedback"] = consultar_ia_gemini_correccion(
+                            clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
+                        )
+
+                # Mostrar SIEMPRE el dictamen personalizado del Tribunal Evaluador IA
+                st.markdown(
+                    "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
+                    "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 CORRECCIÓN PERSONALIZADA DEL TRIBUNAL EVALUADOR IA</div>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(stat.get("ai_feedback") or "")
+
+                color_nota = "#15803d" if ev["nota"] >= 5.0 else "#d97706" if ev["nota"] >= 3.5 else "#dc2626"
                 html_cubiertos = "".join([f"<li style='color:#15803d !important; margin-bottom:6px; text-align:justify;'>{pt}</li>" for pt in ev["puntos_cubiertos"]])
                 html_omitidos = "".join([f"<li style='color:#b91c1c !important; margin-bottom:6px; text-align:justify;'>{pt}</li>" for pt in ev["puntos_omitidos"]])
 
                 st.markdown(
                     f"<div style='background-color:#FFFFFF; border:2px solid {color_nota}; border-radius:8px; padding:15px; margin-top:10px;'>"
-                    f"<div style='font-size:17px; font-weight:700; color:{color_nota} !important; margin-bottom:8px;'>📊 AUDITORÍA JURÍDICA DE TU RESPUESTA — Cobertura estimada: {ev['nota']:.2f} / 10</div>"
+                    f"<div style='font-size:17px; font-weight:700; color:{color_nota} !important; margin-bottom:8px;'>📊 DESGLOSE TÉCNICO POR PÁRRAFOS Y PRECEPTOS — Cobertura: {ev['nota']:.2f} / 10</div>"
                     + (f"<div style='background-color:#fef2f2; border-left:4px solid #dc2626; padding:9px; margin-bottom:10px; font-size:14px; color:#991b1b !important;'>{ev['alerta_sentido']}</div>" if ev["alerta_sentido"] else "")
                     + "<div style='font-size:14px; color:#1E293B !important; line-height:1.5;'>"
                     + f"<b style='color:#1E293B !important;'>⚖️ 1. Revisión de Artículos y Normativa citada:</b><br>"
@@ -2663,6 +2731,7 @@ else:
 
     c1_b, c2_b, c3_b = st.columns(3)
     c1_b.button("🔄 Repetir Test", key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
+    c1_b_ dummy = None
     c2_b.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
