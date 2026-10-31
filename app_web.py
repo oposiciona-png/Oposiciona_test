@@ -586,6 +586,7 @@ class PDFQuizParser:
         questions, lines = [], []
         stop_reading = ignoring_mode = entered_supuestos = False
         detected_gestion_header = False
+        detected_adm_header = False
 
         for page in doc:
             if stop_reading: break
@@ -603,8 +604,11 @@ class PDFQuizParser:
                                 if not re.match(r'^[a-dA-D][\)\.-]?$', t): is_bold = True
                         line_text = line_text.strip()
                         if line_text:
-                            if re.search(r'GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL', line_text, re.IGNORECASE):
-                                detected_gestion_header = True
+                            if line_text.isupper():
+                                if re.search(r'\bADMINISTRATIVOS?\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', line_text):
+                                    detected_adm_header = True
+                                elif re.search(r'\bGESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', line_text):
+                                    detected_gestion_header = True
                             line_text = re.sub(r'<{2,}', '«', line_text)
                             line_text = re.sub(r'>{2,}', '»', line_text)
                             line_text = re.sub(r'<(?=[A-ZÁÉÍÓÚÑa-záéíóúñ0-9"«])', '«', line_text)
@@ -627,9 +631,6 @@ class PDFQuizParser:
                         if not line_text: continue
                         tl = line_text.lower().translate(str.maketrans("áéíóúäτεμα", "aeiouatema"))
                         tl_clean_spaces = re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9\s]', '', tl).strip())
-
-                        if "gestion de la seguridad social" in tl_clean_spaces:
-                            detected_gestion_header = True
 
                         if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
                             stop_reading = True; break
@@ -734,6 +735,26 @@ class PDFQuizParser:
                                 break
                             chunk_lines.append(lines[scan_k])
                         scan_k += 1
+                    # Comprobar si la primera parte de la opción a) quedó en la línea anterior a "a)" (ej. Pregunta 44 Examen Oficial 2023)
+                    prev_real = len(reordered_lines) - 1
+                    while prev_real >= 0 and reordered_lines[prev_real]["text"] == "<NEW_BLOCK>":
+                        prev_real -= 1
+                    if prev_real >= 0:
+                        prev_txt = reordered_lines[prev_real]["text"].strip()
+                        prev_prev = prev_real - 1
+                        while prev_prev >= 0 and reordered_lines[prev_prev]["text"] == "<NEW_BLOCK>":
+                            prev_prev -= 1
+                        if prev_prev >= 0 and reordered_lines[prev_prev]["text"].strip().endswith(":") and not prev_txt.endswith(":") and not prev_txt.endswith("?"):
+                            orphan_line = reordered_lines.pop(prev_real)
+                            if len(chunk_lines) >= 2:
+                                txt_b = chunk_lines[0]["text"].strip()
+                                txt_a = orphan_line["text"].strip() + " " + " ".join(x["text"].strip() for x in chunk_lines[1:])
+                                bold_a = lines[r_idx]["bold"] or orphan_line["bold"] or chunk_lines[-1]["bold"]
+                                bold_b = lines[n_b]["bold"] or chunk_lines[0]["bold"]
+                                reordered_lines.append({"text": "a) " + txt_a, "bold": bold_a})
+                                reordered_lines.append({"text": "b) " + txt_b, "bold": bold_b})
+                                r_idx = scan_k
+                                continue
                     if len(chunk_lines) >= 1:
                         combined_txt = " ".join(x["text"].strip() for x in chunk_lines)
                         m_two = re.match(r'^(.+?\.)\s+([A-ZÁÉÍÓÚÑ¿¡0-9].*)$', combined_txt)
@@ -803,7 +824,7 @@ class PDFQuizParser:
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'])', s) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'\[\(])', s) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', s, re.IGNORECASE)
             )
 
@@ -1022,10 +1043,10 @@ class PDFQuizParser:
                     if letra_det and 0 <= (ord(letra_det) - ord('a')) < len(q["options"]):
                         q["answer"] = ord(letra_det) - ord('a')
 
-        # Si el PDF tiene cabecera de GESTIÓN, o si se pasó max_options, o si >=80% de las preguntas son de 3 opciones, ajustar a 3
+        # Si el PDF tiene cabecera en mayúsculas exclusiva de GESTIÓN, o si se pasó max_options, o si >=80% de las preguntas son de 3 opciones, ajustar a 3
         target_max = max_options
         if target_max is None:
-            if detected_gestion_header:
+            if detected_gestion_header and not detected_adm_header:
                 target_max = 3
             elif len(questions) >= 5:
                 count_3_opts = sum(1 for q in questions if len(q["options"]) == 3)
