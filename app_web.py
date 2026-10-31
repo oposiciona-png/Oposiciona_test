@@ -425,6 +425,7 @@ if not st.session_state.autenticado:
     st.stop()
 # === FIN SECCIÓN 1 ===
 
+
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
     REEMPLAZOS_INGLES_RAE = [
@@ -581,11 +582,33 @@ class PDFQuizParser:
         q["options"] = nuevas_opts
 
     @staticmethod
+    def _unir_lineas_en_parrafos(lista_lineas):
+        if not lista_lineas:
+            return ""
+        parrafos = []
+        actual = ""
+        for l in lista_lineas:
+            l_str = l.strip()
+            if not l_str:
+                continue
+            es_nuevo_apartado = bool(re.match(r'^([a-e][\)\.\-]|\d+[\.\)]|[•\*])\s+', l_str))
+            if not actual:
+                actual = l_str
+            elif es_nuevo_apartado or (actual.endswith(('.', ':', '»', '"')) and l_str[0].isupper() and len(actual) > 120):
+                parrafos.append(actual)
+                actual = l_str
+            else:
+                actual += " " + l_str
+        if actual:
+            parrafos.append(actual)
+        return "\n\n".join(parrafos)
+
+    @staticmethod
     def parse_abiertas_gestion(pdf_bytes, modo="TODOS"):
         """
         Extrae por separado:
-        - modo="DESARROLLO": únicamente las Preguntas de Desarrollo.
-        - modo="SUPUESTOS": únicamente los Supuestos Prácticos y sus cuestiones numeradas.
+        - modo="DESARROLLO": únicamente las Preguntas de Desarrollo (Segundo Ejercicio de Gestión).
+        - modo="SUPUESTOS": únicamente los Supuestos Prácticos (Tercer Ejercicio de Gestión).
         """
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         raw_lines = []
@@ -630,16 +653,25 @@ class PDFQuizParser:
         while idx < len(raw_lines):
             line = raw_lines[idx].strip()
 
-            # 1. Detectar PREGUNTA DE DESARROLLO
+            # 1. Detectar PREGUNTA DE DESARROLLO (uniendo todas las líneas en mayúsculas del título para que no se corte)
             if re.match(r'^PREGUNTAS?\s+DE\s+DESARROLLO\b', line, re.IGNORECASE):
                 if current_q and (current_q["answer_text"] or current_q["explanation"]):
                     supuestos_qs.append(current_q)
                     current_q = None
-                titulo_des = re.sub(r'^PREGUNTAS?\s+DE\s+DESARROLLO\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
+                partes_titulo = []
+                t_ini = re.sub(r'^PREGUNTAS?\s+DE\s+DESARROLLO\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
+                if t_ini:
+                    partes_titulo.append(t_ini)
                 idx += 1
-                if not titulo_des and idx < len(raw_lines):
-                    titulo_des = raw_lines[idx].strip()
-                    idx += 1
+                while idx < len(raw_lines):
+                    cand_t = raw_lines[idx].strip()
+                    if cand_t.isupper() and not re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', cand_t, re.IGNORECASE):
+                        partes_titulo.append(cand_t)
+                        idx += 1
+                    else:
+                        break
+                titulo_des = " ".join(partes_titulo).strip()
+
                 cuerpo_des = []
                 while idx < len(raw_lines):
                     l_next = raw_lines[idx].strip()
@@ -647,12 +679,12 @@ class PDFQuizParser:
                         break
                     cuerpo_des.append(l_next)
                     idx += 1
-                texto_oficial = "\n\n".join(cuerpo_des).strip()
+                texto_oficial = PDFQuizParser._unir_lineas_en_parrafos(cuerpo_des)
                 if texto_oficial:
                     desarrollo_qs.append({
                         "is_open": True,
                         "tipo_abierta": "DESARROLLO",
-                        "preamble": "📝 **PREGUNTA DE DESARROLLO (TERCER EJERCICIO GESTIÓN)**",
+                        "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
                         "question_text": f"Desarrolla de forma completa y rigurosa el siguiente epígrafe conforme a la normativa vigente:\n\n« {titulo_des} »",
                         "options": [],
                         "answer": -1,
@@ -674,7 +706,6 @@ class PDFQuizParser:
             # 3. Detectar nuevo planteamiento narrativo intermedio después de la explicación de una pregunta (ej. "La familia Montoro...")
             if current_q and current_q["state"] == "E" and not re.match(r'^\d+[\.\-\)]', line):
                 if re.match(r'^(La\s+familia|La\s+empresa|La\s+mercantil|Don\s+|Doña\s+|El\s+trabajador|En\s+el\s+ejercicio)\b', line) and "?" not in line:
-                    # Verificar si unas líneas más abajo viene la siguiente pregunta numerada
                     hay_preg_despues = any(re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[k].strip()) for k in range(idx + 1, min(idx + 20, len(raw_lines))))
                     if hay_preg_despues and len(current_q["explanation"]) > 120:
                         supuestos_qs.append(current_q)
@@ -700,7 +731,7 @@ class PDFQuizParser:
                 current_q = {
                     "is_open": True,
                     "tipo_abierta": "SUPUESTO",
-                    "preamble": f"📋 **PLANTEAMIENTO DEL SUPUESTO PRÁCTICO:**\n\n{current_context.strip()}" if current_context.strip() else "📋 **SUPUESTO PRÁCTICO**",
+                    "preamble": f"📋 **PLANTEAMIENTO DEL SUPUESTO PRÁCTICO (TERCER EJERCICIO DE GESTIÓN):**\n\n{current_context.strip()}" if current_context.strip() else "📋 **SUPUESTO PRÁCTICO (TERCER EJERCICIO DE GESTIÓN)**",
                     "question_text": f"Cuestión {m_q.group(1)}. {q_txt}",
                     "options": [],
                     "answer": -1,
@@ -1227,6 +1258,7 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 2 ===
 
+
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
@@ -1236,10 +1268,10 @@ NUEVOS_HOY = [
     "EXAMEN SABADO 01 NOVIEMBRE 2026",
 ]
 
-# Categorías exclusivas en GESTIÓN para el Administrador
+# Categorías exclusivas en GESTIÓN para el Administrador (Segundo y Tercer Ejercicio)
 DESARROLLO_GESTION_ADMIN = {
     "Elige una pregunta de desarrollo...": None,
-    "📝 TEMA 73 - PREGUNTA DE DESARROLLO: ACCIÓN PROTECTORA EN EL SEEH": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
+    "📝 TEMA 73 - PREGUNTA DE DESARROLLO: ACCIÓN PROTECTORA EN EL SISTEMA ESPECIAL DE EMPLEADOS DE HOGAR": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
 }
 
 SUPUESTOS_GESTION_ADMIN = {
@@ -1403,6 +1435,7 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
+
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
@@ -1424,6 +1457,26 @@ def obtener_tests_segun_rol():
         return cat_admin
     return TESTS_DISPONIBLES_COMPLETO
 
+def _dividir_en_oraciones_juridicas(texto):
+    if not texto:
+        return []
+    # Unir saltos de línea simples (manteniendo saltos de párrafo o de apartados a), b), c))
+    t = re.sub(r'(?<![.?!:;»"\'])\n(?![a-e][\)\.\-]\s|\d+[\.\)]\s)', ' ', texto)
+    # Proteger puntos de abreviaturas y numeraciones legales para no cortar las frases a la mitad
+    t = re.sub(r'\b(art|arts|núm|num|cap|disp|ad|trans|apdo|párr|pág|rd|rdl|et|cc|lec)\.', r'\1<DOT>', t, flags=re.IGNORECASE)
+    t = re.sub(r'(\d)\.(\d)', r'\1<DOT>\2', t)
+    t = re.sub(r'(\d)\.([a-zA-Zºª°])', r'\1<DOT>\2', t)
+    t = re.sub(r'\.([a-e])\b', r'<DOT>\1', t)
+
+    partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[a-e][\)\.\-]\s|\d+[\.\)]\s)|\n+', t)
+    oraciones = []
+    for p in partes:
+        p_rest = p.replace('<DOT>', '.').strip()
+        p_rest = re.sub(r'^[«"\'\-\•\*]+|[»"\']+$', '', p_rest).strip()
+        if len(p_rest) >= 30:
+            oraciones.append(p_rest)
+    return oraciones
+
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial):
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -1441,7 +1494,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
     ref_norm = _norm(ref_completa)
 
-    # 1. Auditoría de Normativa y Artículos (Detecta los acertados, los omitidos y los ERRÓNEOS que cite el alumno)
+    # 1. Auditoría de Normativa y Artículos
     pat_normas = r'\b(?:art(?:[íi]culos?|\.)\s*\d+(?:\.\d+)?(?:\.[a-z])?|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
 
     def _clave_norma(texto_cita):
@@ -1488,11 +1541,10 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         if (k_tipo, k_id) not in mapa_al:
             mapa_al[(k_tipo, k_id)] = k_lbl
 
-    # Si la referencia menciona "RD Legislativo 8/2015", dar por equivalente citar "TRLGSS" y viceversa
-    ids_ref_Equiv = set(mapa_ref.keys())
-    if ("NORMA", "8/2015") in ids_ref_Equiv or ("SIGLA", "trlgss") in ids_ref_Equiv:
-        ids_ref_Equiv.add(("NORMA", "8/2015"))
-        ids_ref_Equiv.add(("SIGLA", "trlgss"))
+    ids_ref_equiv = set(mapa_ref.keys())
+    if ("NORMA", "8/2015") in ids_ref_equiv or ("SIGLA", "trlgss") in ids_ref_equiv:
+        ids_ref_equiv.add(("NORMA", "8/2015"))
+        ids_ref_equiv.add(("SIGLA", "trlgss"))
 
     citas_ok, citas_faltan, citas_erroneas = [], [], []
     for k_par, lbl in mapa_ref.items():
@@ -1504,8 +1556,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             citas_faltan.append(lbl)
 
     for k_par, lbl in mapa_al.items():
-        if k_par not in ids_ref_Equiv:
-            # Comprobar si el número aparece en el texto oficial aunque sea sin prefijo
+        if k_par not in ids_ref_equiv:
             if k_par[1] not in ref_norm:
                 citas_erroneas.append(f"{lbl} (no aplicable a esta cuestión)")
 
@@ -1529,7 +1580,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             cifras_faltan.append(cf)
 
-    # 3. Análisis frase por frase de la Respuesta Oficial y Explicación (qué ideas se han incluido y cuáles se han omitido)
+    # 3. Análisis por ideas jurídicas completas (sin cortar renglones ni abreviaturas)
     stopwords = {
         "para", "como", "este", "esta", "estos", "estas", "pero", "sino", "porque", "cuando", "donde",
         "cual", "cuales", "quien", "quienes", "todo", "toda", "todos", "todas", "otro", "otra", "otros",
@@ -1544,17 +1595,12 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     }
 
     texto_base_ideas = f"{respuesta_oficial}. {explicacion_oficial}" if respuesta_oficial else explicacion_oficial
-    # Dividir en oraciones jurídicas con sentido completo
-    oraciones_raw = re.split(r'(?<=[.?!;])\s+|\n+', texto_base_ideas)
+    oraciones_completas = _dividir_en_oraciones_juridicas(texto_base_ideas)
     puntos_cubiertos = []
     puntos_omitidos = []
 
-    for orac in oraciones_raw:
-        orac_limpia = re.sub(r'^[«"\'\-\•\*]+|[»"\']+$', '', orac.strip()).strip()
-        if len(orac_limpia) < 28:
-            continue
-        # Evitar duplicar una oración idéntica a la respuesta corta si ya se evaluó
-        if any(_norm(orac_limpia)[:45] == _norm(x)[:45] for x in (puntos_cubiertos + puntos_omitidos)):
+    for orac_limpia in oraciones_completas:
+        if any(_norm(orac_limpia)[:50] == _norm(x)[:50] for x in (puntos_cubiertos + puntos_omitidos)):
             continue
         palabras_orac = [
             w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b|\b\d+(?:[\.,]\d+)?\b', _norm(orac_limpia))
@@ -1569,27 +1615,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             puntos_omitidos.append(orac_limpia)
 
-    # 4. Conceptos nucleares sueltos
-    fuente_conceptos = respuesta_oficial if (respuesta_oficial and len(respuesta_oficial) > 25) else ref_completa
-    palabras_ref = re.findall(r'\b[a-záéíóúñ]{5,}\b', fuente_conceptos.lower())
-    conceptos_unicos = []
-    vistos_p = set()
-    for p in palabras_ref:
-        pn = _norm(p)
-        if pn not in stopwords and pn not in vistos_p:
-            vistos_p.add(pn)
-            conceptos_unicos.append(p)
-            if len(conceptos_unicos) >= 15:
-                break
-
-    conceptos_ok, conceptos_faltan = [], []
-    for p in conceptos_unicos:
-        if _raiz(p) in alumno_norm:
-            conceptos_ok.append(p)
-        else:
-            conceptos_faltan.append(p)
-
-    # 5. Verificar sentido de conclusión (Sí / No / Ninguno / Nadie)
+    # 4. Verificar sentido de conclusión (Sí / No / Ninguno / Nadie)
     alerta_sentido = ""
     resp_inicio = _norm(respuesta_oficial[:40]) if respuesta_oficial else ""
     alumno_inicio = alumno_norm[:50]
@@ -1602,13 +1628,12 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     elif re.match(r'^nadie\b', resp_inicio) and not any(x in alumno_norm for x in ["nadie", "exento", "no existe obligacion", "cotizacion efectiva", "no ingresa"]):
         alerta_sentido = "⚠️ **Falta la conclusión directa:** La solución oficial concluye que **nadie** asume el ingreso por tratarse de un período de cotización efectiva."
 
-    # 6. Construir propuesta de texto recomendado para completar la respuesta del alumno
     if puntos_omitidos:
-        texto_sugerido = " ".join(puntos_omitidos[:4])
+        texto_sugerido = " ".join(puntos_omitidos[:3])
     elif respuesta_oficial:
         texto_sugerido = respuesta_oficial
     else:
-        texto_sugerido = explicacion_oficial[:400]
+        texto_sugerido = explicacion_oficial
 
     total_eval = len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos)
     acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
@@ -1626,15 +1651,22 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "citas_erroneas": citas_erroneas,
         "cifras_ok": cifras_ok,
         "cifras_faltan": cifras_faltan,
-        "conceptos_ok": conceptos_ok,
-        "conceptos_faltan": conceptos_faltan,
         "puntos_cubiertos": puntos_cubiertos,
         "puntos_omitidos": puntos_omitidos,
         "texto_sugerido": texto_sugerido
     }
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key.strip()}"
+    clave_limpia = (api_key or "").strip()
+    if not clave_limpia.startswith("AIza"):
+        return (
+            "⚠️ **La clave introducida no tiene el formato de Google Gemini.**\n\n"
+            "Para obtener tu clave gratuita en 30 segundos:\n"
+            "1. Entra en **https://aistudio.google.com/app/apikey**\n"
+            "2. Pulsa **Create API key**.\n"
+            "3. Copia el código que empieza por **`AIzaSy...`** y pégalo aquí."
+        )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={clave_limpia}"
     prompt = (
         "Eres preparador experto del Cuerpo de Gestión de la Administración de la Seguridad Social (Oposiciona).\n"
         "Compara minuciosamente la respuesta del alumno con la Respuesta Oficial y la Explicación Oficial.\n\n"
@@ -1654,7 +1686,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if r.status_code == 200:
         data = r.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
-    return f"⚠️ No se pudo conectar con la API de Gemini (Código {r.status_code}): {r.text[:200]}"
+    return f"⚠️ No se pudo conectar con la API de Gemini (Código {r.status_code}). Verifica que tu clave de aistudio.google.com esté activa."
 
 def sincronizar_progreso_navegador():
     try:
@@ -1850,8 +1882,8 @@ def coincide_busqueda(nombre_test, consulta):
 
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES": return "🏆 Exámenes y Simulacros Oficiales"
-    if categoria == "PREGUNTA DE DESARROLLO": return "📝 Preguntas de Desarrollo Oficiales"
-    if categoria == "SUPUESTOS PRÁCTICOS": return "📋 Supuestos Prácticos de Gestión"
+    if categoria == "PREGUNTA DE DESARROLLO": return "📝 2.º Ejercicio Gestión — Preguntas de Desarrollo"
+    if categoria == "SUPUESTOS PRÁCTICOS": return "📋 3.er Ejercicio Gestión — Supuestos Prácticos"
     m = re.match(r'^TEMAS?\s*[\.\-]?\s*(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
     if m:
         b = m.group(1).upper().strip()
@@ -2059,6 +2091,7 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
+
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -2102,15 +2135,16 @@ if not st.session_state.questions:
     st.session_state.saved_avance = st.session_state.modo_avance = modo_avance
 
     if categoria == "PREGUNTA DE DESARROLLO":
-        titulo_paso_4 = "4. Seleccionar Pregunta de desarrollo"
+        titulo_paso_4 = "4. Seleccionar Pregunta de desarrollo (2.º Ejercicio)"
     elif categoria == "SUPUESTOS PRÁCTICOS":
-        titulo_paso_4 = "4. Seleccionar Supuestos prácticos"
+        titulo_paso_4 = "4. Seleccionar Supuestos prácticos (3.er Ejercicio)"
     else:
         titulo_paso_4 = "4. Selección de Test"
 
     st.markdown(f"<h4 style='color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</h4>", unsafe_allow_html=True)
     if categoria in ["PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"] and es_admin:
-        st.info(f"🔒 **Modo de prueba exclusivo para Administrador ({categoria}):** El alumno redacta su contestación y el sistema audita los artículos/leyes citados (detectando si son correctos o ajenos a la pregunta), los plazos/porcentajes, los detalles omitidos y el texto exacto que debería haber incluido antes de mostrar la explicación.")
+        ej_txt = "Segundo Ejercicio (Pregunta de Desarrollo)" if categoria == "PREGUNTA DE DESARROLLO" else "Tercer Ejercicio (Supuestos Prácticos)"
+        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** El alumno redacta su contestación y el sistema audita los artículos/leyes citados (detectando si son correctos o ajenos a la pregunta), los plazos/porcentajes, los detalles omitidos por párrafos completos y el texto que debería haber incluido.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2330,8 +2364,8 @@ elif not st.session_state.finished:
                 stat["open_score"] = ev["nota"]
                 color_nota = "#15803d" if ev["nota"] >= 5.0 else "#d97706" if ev["nota"] >= 3.5 else "#dc2626"
 
-                html_cubiertos = "".join([f"<li style='color:#15803d !important; margin-bottom:4px;'>{pt}</li>" for pt in ev["puntos_cubiertos"]])
-                html_omitidos = "".join([f"<li style='color:#b91c1c !important; margin-bottom:5px;'>{pt}</li>" for pt in ev["puntos_omitidos"]])
+                html_cubiertos = "".join([f"<li style='color:#15803d !important; margin-bottom:6px; text-align:justify;'>{pt}</li>" for pt in ev["puntos_cubiertos"]])
+                html_omitidos = "".join([f"<li style='color:#b91c1c !important; margin-bottom:6px; text-align:justify;'>{pt}</li>" for pt in ev["puntos_omitidos"]])
 
                 st.markdown(
                     f"<div style='background-color:#FFFFFF; border:2px solid {color_nota}; border-radius:8px; padding:15px; margin-top:10px;'>"
@@ -2345,7 +2379,7 @@ elif not st.session_state.finished:
                     + "<br><b style='color:#1E293B !important;'>🔢 2. Plazos, porcentajes, tramos y cuantías:</b><br>"
                     + f"&nbsp;&nbsp;• <b>Incluidos correctamente:</b> <span style='color:#15803d !important;'>{', '.join(ev['cifras_ok']) if ev['cifras_ok'] else 'Ninguno'}</span><br>"
                     + (f"&nbsp;&nbsp;• <b>Omitidos en tu respuesta:</b> <span style='color:#dc2626 !important; font-weight:600;'>{', '.join(ev['cifras_faltan'])}</span><br>" if ev["cifras_faltan"] else "")
-                    + (f"<br><b style='color:#15803B !important;'>✅ 3. Aspectos e ideas que SÍ has recogido en tu respuesta:</b><ul style='margin-top:4px; margin-bottom:8px;'>{html_cubiertos}</ul>" if html_cubiertos else "")
+                    + (f"<br><b style='color:#15803d !important;'>✅ 3. Aspectos e ideas que SÍ has recogido en tu respuesta:</b><ul style='margin-top:4px; margin-bottom:8px;'>{html_cubiertos}</ul>" if html_cubiertos else "")
                     + (f"<br><b style='color:#b91c1c !important;'>⚠️ 4. Detalles e ideas de la explicación que HAS OMITIDO:</b><ul style='margin-top:4px; margin-bottom:8px;'>{html_omitidos}</ul>" if html_omitidos else "<br><b style='color:#15803d !important;'>🎉 ¡No has omitido ningún punto esencial de la explicación!</b><br>")
                     + (
                         f"<div style='background-color:#fff8e1; border-left:4px solid #f59e0b; padding:10px 12px; border-radius:4px; margin-top:8px;'>"
@@ -2360,13 +2394,14 @@ elif not st.session_state.finished:
 
                 # Corrección opcional profunda con IA (Gemini Flash)
                 with st.expander("🤖 Ampliar corrección con IA (Opcional - Prueba Admin con Gemini Flash Gratis)"):
+                    st.caption("Obtén tu clave gratuita en **https://aistudio.google.com/app/apikey** (empieza por `AIzaSy...`) o guárdala en `Secrets` como `GEMINI_API_KEY`.")
                     secret_key = ""
                     try:
                         secret_key = st.secrets.get("GEMINI_API_KEY", "")
                     except Exception:
                         secret_key = ""
                     api_key_input = st.text_input(
-                        "Clave API gratuita de Google Gemini (aistudio.google.com):",
+                        "Clave API gratuita de Google Gemini (empieza por AIzaSy...):",
                         value=st.session_state.get("gemini_api_key_session", secret_key),
                         type="password",
                         key=f"gem_key_{idx}"
@@ -2375,7 +2410,7 @@ elif not st.session_state.finished:
                         st.session_state.gemini_api_key_session = api_key_input
                     if st.button("✨ Solicitar informe del Tribunal IA", key=f"btn_ia_{idx}", type="primary"):
                         if not api_key_input.strip():
-                            st.warning("Introduce una clave API de Google Gemini para usar el corrector neuronal.")
+                            st.warning("Introduce una clave API de Google Gemini (empieza por AIzaSy...) para usar el corrector neuronal.")
                         else:
                             with st.spinner("El tribunal IA está analizando tu respuesta frase por frase..."):
                                 stat["ai_feedback"] = consultar_ia_gemini_correccion(
@@ -2387,7 +2422,6 @@ elif not st.session_state.finished:
                             unsafe_allow_html=True
                         )
 
-            # A continuación aparece la respuesta oficial directa (si es supuesto) y la explicación oficial
             if resp_of and resp_of != exp_of:
                 st.markdown(
                     f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
@@ -2396,8 +2430,8 @@ elif not st.session_state.finished:
                     unsafe_allow_html=True
                 )
             if exp_of:
-                eh = "".join([f"<div style='margin-top: 4px; line-height: 1.35; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
-                titulo_exp = "📖 Texto Íntegro Oficial de Desarrollo:" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal:"
+                eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
+                titulo_exp = "📖 Texto Íntegro Oficial de Desarrollo (2.º Ejercicio):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (3.er Ejercicio):"
                 st.markdown(
                     f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
                     f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #0c5460 !important;'>{titulo_exp}</div>"
@@ -2475,7 +2509,7 @@ else:
         puntos_restados = 0.0
         divisor_penalizacion = 1
         penalizacion_texto = "0 puntos (evaluación por cobertura jurídica y normativa)"
-        nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL — DESARROLLO Y SUPUESTOS"
+        nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL — 2.º Y 3.er EJERCICIO"
     else:
         nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
         esp_actual = (st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "").upper()
@@ -2634,5 +2668,3 @@ else:
     c2_b.button("📁 Cambiar de Test", key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
-
-# --- FIN DEL ARCHIVO ---
