@@ -433,7 +433,6 @@ if not st.session_state.autenticado:
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
     REEMPLAZOS_INGLES_RAE = [
-        # Conectores y palabras en inglés coladas en textos en español
         (r'\band\b', 'y'),
         (r'\bor\b', 'o'),
         (r'\bbut\b', 'pero'),
@@ -506,7 +505,6 @@ class PDFQuizParser:
         (r'\btrue\b', 'verdadero'),
         (r'\bfalse\b', 'falso'),
         (r'\bnull\b', 'nulo'),
-        # Anglicismos no admitidos por la RAE -> Equivalente en español
         (r'\btrust\s+fideicomiso\b', 'fideicomiso'),
         (r'\btrusts?\b', 'fideicomiso'),
         (r'\bknow[\-\s]?how\b', 'saber hacer'),
@@ -586,6 +584,35 @@ class PDFQuizParser:
         q["options"] = nuevas_opts
 
     @staticmethod
+    def _es_basura_cabecera_o_pie(linea):
+        if not linea:
+            return True
+        s = linea.strip()
+        if not s:
+            return True
+        # Numeración de página suelta o "Página X de Y"
+        if re.match(r'^(?:P[aá]g(?:ina)?\.?\s*)?\d{1,3}(?:\s*(?:de|/)\s*\d{1,3})?$', s, re.IGNORECASE):
+            return True
+        # Cabeceras / pies de página repetitivos en los PDFs de resumen o test
+        patrones_cabecera = [
+            r'^OPOSICIONA\b',
+            r'^ADMINISTRATIVOS?\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL$',
+            r'^GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL$',
+            r'^CUERPO\s+DE\s+GESTI[OÓ]N\b',
+            r'^TEMA\s+\d+\s*[:\-–]\s*RESUMEN\b',
+            r'^RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES\b',
+            r'^RESUMEN\s+DE\s+EP[IÍ]GRAFES\b',
+            r'^[■▪▫◆●•\*]?\s*S[IÍ]NTESIS\s+DEL?\s+',
+            r'^BLOQUE\s+[IVX0-9]+\b',
+        ]
+        for pat in patrones_cabecera:
+            if re.match(pat, s, re.IGNORECASE) and (s.isupper() or len(s) < 115):
+                return True
+        if "RESUMEN ANALÍTICO DE EPÍGRAFES" in s.upper() or "RESUMEN ANALITICO DE EPIGRAFES" in s.upper():
+            return True
+        return False
+
+    @staticmethod
     def _unir_lineas_en_parrafos(lista_lineas):
         if not lista_lineas:
             return ""
@@ -593,12 +620,16 @@ class PDFQuizParser:
         actual = ""
         for l in lista_lineas:
             l_str = l.strip()
+            if not l_str or PDFQuizParser._es_basura_cabecera_o_pie(l_str):
+                continue
+            # Limpiar marcas de subtítulo incrustadas como "■ SÍNTESIS DEL..." si vinieran pegadas a otra frase
+            l_str = re.sub(r'[■▪▫◆]\s*S[IÍ]NTESIS\s+DE[L\s]+[A-ZÁÉÍÓÚÑ\s,\.\(\)\/0-9\-–]+(?=[•\*]|\bAprobaci|\bEl\b|\bLa\b|\bLos\b|\bLas\b)', '', l_str, flags=re.IGNORECASE).strip()
             if not l_str:
                 continue
-            es_nuevo_apartado = bool(re.match(r'^([a-e][\)\.\-]|\d+[\.\)]|[•\*\-–])\s+', l_str))
+            es_nuevo_apartado = bool(re.match(r'^([a-e][\)\.\-]|\d+[\.\)]|[•\*\-–▪])\s+', l_str))
             if not actual:
                 actual = l_str
-            elif es_nuevo_apartado or (actual.endswith(('.', ':', '»', '"')) and l_str[0].isupper() and len(actual) > 120):
+            elif es_nuevo_apartado or (actual.endswith(('.', ':', '»', '"')) and l_str[0].isupper() and len(actual) > 100):
                 parrafos.append(actual)
                 actual = l_str
             else:
@@ -611,10 +642,10 @@ class PDFQuizParser:
     def _limpiar_titulo_epigrafe(titulo):
         if not titulo:
             return ""
-        # Elimina añadidos o subtítulos pegados como "Síntesis del marco...", "Resumen...", etc.
+        t = re.sub(r'[■▪▫◆]\s*S[IÍ]NTESIS.*$', '', titulo, flags=re.IGNORECASE).strip()
         t = re.split(
-            r'\s+(?:S[IÍ]NTESIS\s+DEL?\b|RESUMEN\s+DEL?\b|ESQUEMA\s+DEL?\b|INTRODUCCI[ÓO]N\s*[:\-]|DESARROLLO\s*[:\-]|CONTENIDO\s*[:\-]|1[\.\-\)]\s+)',
-            titulo,
+            r'\s+(?:S[IÍ]NTESIS\s+DEL?\b|RESUMEN\s+ANAL[IÍ]TICO\b|RESUMEN\s+DEL?\b|ESQUEMA\s+DEL?\b)',
+            t,
             maxsplit=1,
             flags=re.IGNORECASE
         )[0].strip()
@@ -638,8 +669,11 @@ class PDFQuizParser:
                         lt = re.sub(r'>{2,}', '»', lt)
                         lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
                         lt = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', lt, flags=re.IGNORECASE).strip()
-                        if not lt or re.match(r'^(OPOSICIONA|ADMINISTRATIVO DE LA SEGURIDAD SOCIAL|GESTI[OÓ]N DE LA SEGURIDAD SOCIAL)$', lt, re.IGNORECASE):
+                        # Si en una misma línea viene pegado al final "TEMA 51: RESUMEN ANALÍTICO DE EPÍGRAFES", lo recortamos
+                        lt = re.sub(r'\s*TEMA\s+\d+\s*:\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
+                        if not lt or PDFQuizParser._es_basura_cabecera_o_pie(lt):
                             continue
+
                         tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
                         tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
 
@@ -647,14 +681,21 @@ class PDFQuizParser:
                         lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
                         lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
                         lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
-                        all_clean_lines.append(lt_proc)
 
-                        if not in_abiertas:
-                            if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
-                                if lt.isupper() or len(tl_clean) < 95:
-                                    in_abiertas = True
-                        if in_abiertas:
-                            raw_lines.append(lt_proc)
+                        # Si un EPÍGRAFE viene pegado en la misma línea detrás de un punto, lo separamos en salto de línea
+                        lt_proc = re.sub(r'(?<=[.?!:;])\s+(?=(?:[■▪•\*]\s*)?EP[IÍ]GRAFE\s+\d+)', '\n', lt_proc, flags=re.IGNORECASE)
+
+                        for sub_l in lt_proc.split('\n'):
+                            sub_l = sub_l.strip()
+                            if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l):
+                                continue
+                            all_clean_lines.append(sub_l)
+                            if not in_abiertas:
+                                if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
+                                    if sub_l.isupper() or len(tl_clean) < 95:
+                                        in_abiertas = True
+                            if in_abiertas:
+                                raw_lines.append(sub_l)
 
         desarrollo_qs = []
         supuestos_qs = []
@@ -667,7 +708,6 @@ class PDFQuizParser:
             while idx < len(raw_lines):
                 line = raw_lines[idx].strip()
 
-                # 1. Detectar PREGUNTA DE DESARROLLO explícita
                 if re.match(r'^PREGUNTAS?\s+DE\s+DESARROLLO\b', line, re.IGNORECASE):
                     if current_q and (current_q["answer_text"] or current_q["explanation"]):
                         supuestos_qs.append(current_q)
@@ -695,7 +735,8 @@ class PDFQuizParser:
                         l_next = raw_lines[idx].strip()
                         if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|PREGUNTAS?\s+DE\s+DESARROLLO)\b', l_next, re.IGNORECASE) and (l_next.isupper() or len(l_next) < 85):
                             break
-                        cuerpo_des.append(l_next)
+                        if not PDFQuizParser._es_basura_cabecera_o_pie(l_next):
+                            cuerpo_des.append(l_next)
                         idx += 1
                     texto_oficial = PDFQuizParser._unir_lineas_en_parrafos(cuerpo_des)
                     if texto_oficial:
@@ -703,7 +744,7 @@ class PDFQuizParser:
                             "is_open": True,
                             "tipo_abierta": "DESARROLLO",
                             "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
-                            "question_text": f"« {titulo_des} »",
+                            "question_text": titulo_des,
                             "options": [],
                             "answer": -1,
                             "answer_text": "",
@@ -711,7 +752,6 @@ class PDFQuizParser:
                         })
                     continue
 
-                # 2. Detectar cabecera SUPUESTO PRÁCTICO
                 if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', line, re.IGNORECASE) and (line.isupper() or len(line) < 80):
                     if current_q and (current_q["answer_text"] or current_q["explanation"]):
                         supuestos_qs.append(current_q)
@@ -721,7 +761,6 @@ class PDFQuizParser:
                     idx += 1
                     continue
 
-                # 3. Detectar nuevo planteamiento narrativo intermedio
                 if current_q and current_q["state"] == "E" and not re.match(r'^\d+[\.\-\)]', line):
                     if re.match(r'^(La\s+familia|La\s+empresa|La\s+mercantil|Don\s+|Doña\s+|El\s+trabajador|En\s+el\s+ejercicio)\b', line) and "?" not in line:
                         hay_preg_despues = any(re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[k].strip()) for k in range(idx + 1, min(idx + 20, len(raw_lines))))
@@ -735,7 +774,6 @@ class PDFQuizParser:
                                 idx += 1
                             continue
 
-                # 4. Detectar pregunta numerada del supuesto
                 m_q = re.match(r'^(\d{1,2})[\.\-\)]\s+(.+)$', line)
                 if m_q:
                     if current_q and (current_q["answer_text"] or current_q["explanation"]):
@@ -792,30 +830,21 @@ class PDFQuizParser:
             if current_q and (current_q["answer_text"] or current_q["explanation"]):
                 supuestos_qs.append(current_q)
 
-        # 5. EXTRACCIÓN LIMPIA DE EPÍGRAFES (el título es estrictamente el Epígrafe tal cual, sin subtítulos añadidos)
-        # El contenido (explanation) abarca todo el texto desde el Epígrafe hasta el siguiente Epígrafe o el final del PDF.
+        # 5. EXTRACCIÓN LIMPIA DE EPÍGRAFES PARA PDFs DE RESUMEN (Tema 51, Tema 52, etc.)
         if modo in ["DESARROLLO", "TODOS"] and not desarrollo_qs and all_clean_lines:
-            tema_cabecera = ""
-            lineas_utiles = []
-            for l in all_clean_lines:
-                l_s = l.strip()
-                if not l_s:
-                    continue
-                if not tema_cabecera and re.match(r'^(?:RESUMEN\s+)?TEMA\s+\d+', l_s, re.IGNORECASE):
-                    tema_cabecera = l_s
-                    continue
-                if re.match(r'^RESUMEN\s+DE\s+EP[IÍ]GRAFES', l_s, re.IGNORECASE) and len(l_s) < 90:
-                    continue
-                lineas_utiles.append(l_s)
+            lineas_utiles = [
+                l.strip() for l in all_clean_lines
+                if l.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(l.strip())
+            ]
 
             tiene_palabra_epigrafe = any(
-                re.match(r'^(?:[•\*\-–]\s*)?EP[IÍ]GRAFE\s+(?:\d+|[I|V|X]+)', l, re.IGNORECASE)
+                re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l, re.IGNORECASE)
                 for l in lineas_utiles
             )
 
             def _es_inicio_epigrafe(linea):
                 if tiene_palabra_epigrafe:
-                    return bool(re.match(r'^(?:[•\*\-–]\s*)?EP[IÍ]GRAFE\s+(?:\d+|[I|V|X]+)\b', linea, re.IGNORECASE))
+                    return bool(re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', linea, re.IGNORECASE))
                 return bool(
                     re.match(r'^(?:\d{1,2}[\.\-\)]|[I|V|X]{1,4}[\.\-\)])\s+[A-ZÁÉÍÓÚÑ0-9\s,\.\-–:\(\)\/«»"]+$', linea)
                     and linea.isupper()
@@ -831,15 +860,15 @@ class PDFQuizParser:
                 if _es_inicio_epigrafe(l_actual):
                     partes_tit = [l_actual]
                     idx_l += 1
-                    # Solo une otra línea al título si la primera línea quedó cortada a mitad de frase (ej. termina en preposición/conjunción)
-                    # NUNCA une subtítulos como "Síntesis del marco constitucional..."
+                    # Si el título oficial del epígrafe continúa en la línea siguiente (antes del bloque "■ SÍNTESIS..." o de las viñetas "•"), lo unimos al título
                     while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
                         cand = lineas_utiles[idx_l]
-                        if re.match(r'^(?:S[IÍ]NTESIS|RESUMEN|ESQUEMA|INTRODUCCI[ÓO]N|CONTENIDO|DESARROLLO|\d+[\.\-\)]|[a-e][\)\.\-]|[•\*])\b', cand, re.IGNORECASE):
+                        if PDFQuizParser._es_basura_cabecera_o_pie(cand):
+                            idx_l += 1
+                            continue
+                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Aprobaci[óo]n\b|El\s+art[íi]culo\b|La\s+Constituci[óo]n\b|Regula\b)', cand, re.IGNORECASE):
                             break
-                        termina_incompleto = bool(re.search(r'\b(DE|DEL|LA|LAS|EL|LOS|EN|Y|O|A|CON|POR|PARA|SOBRE|SEGÚN|COMO)\s*$', partes_tit[-1], re.IGNORECASE))
-                        es_solo_etiqueta = bool(re.match(r'^(?:[•\*\-–]\s*)?EP[IÍ]GRAFE\s+(?:\d+|[I|V|X]+)\s*[:\.\-–]?\s*$', partes_tit[-1], re.IGNORECASE))
-                        if es_solo_etiqueta or (termina_incompleto and not partes_tit[-1].endswith('.')):
+                        if len(cand) < 95 and len(" ".join(partes_tit)) < 160:
                             partes_tit.append(cand)
                             idx_l += 1
                         else:
@@ -847,10 +876,12 @@ class PDFQuizParser:
 
                     titulo_ep = PDFQuizParser._limpiar_titulo_epigrafe(" ".join(partes_tit).strip())
 
-                    # Recoge TODO el texto hasta el siguiente Epígrafe o hasta el final del documento
+                    # Recoge TODO el texto de la explicación de este epígrafe hasta que empiece el siguiente EPÍGRAFE o termine el documento
                     cuerpo_ep = []
                     while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
-                        cuerpo_ep.append(lineas_utiles[idx_l])
+                        l_cuerpo = lineas_utiles[idx_l]
+                        if not PDFQuizParser._es_basura_cabecera_o_pie(l_cuerpo):
+                            cuerpo_ep.append(l_cuerpo)
                         idx_l += 1
 
                     texto_ep = PDFQuizParser._unir_lineas_en_parrafos(cuerpo_ep)
@@ -861,11 +892,10 @@ class PDFQuizParser:
 
             if epigrafes_detectados:
                 for i_ep, (tit_ep, txt_ep) in enumerate(epigrafes_detectados, 1):
-                    enc_tema = f" — {tema_cabecera}" if tema_cabecera else ""
                     desarrollo_qs.append({
                         "is_open": True,
                         "tipo_abierta": "DESARROLLO",
-                        "preamble": f"📝 **EPÍGRAFE {i_ep} DE {len(epigrafes_detectados)}{enc_tema}**",
+                        "preamble": "",
                         "question_text": tit_ep,
                         "options": [],
                         "answer": -1,
@@ -874,11 +904,11 @@ class PDFQuizParser:
                     })
             elif lineas_utiles:
                 texto_integro = PDFQuizParser._unir_lineas_en_parrafos(lineas_utiles)
-                tit_gen = PDFQuizParser._limpiar_titulo_epigrafe(tema_cabecera or lineas_utiles[0][:100])
+                tit_gen = PDFQuizParser._limpiar_titulo_epigrafe(lineas_utiles[0][:120])
                 desarrollo_qs.append({
                     "is_open": True,
                     "tipo_abierta": "DESARROLLO",
-                    "preamble": "📝 **PREGUNTA DE DESARROLLO**",
+                    "preamble": "",
                     "question_text": tit_gen,
                     "options": [],
                     "answer": -1,
@@ -1655,18 +1685,20 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
 def _dividir_en_oraciones_juridicas(texto):
     if not texto:
         return []
-    t = re.sub(r'(?<![.?!:;»"\'])\n(?![a-e][\)\.\-]\s|\d+[\.\)]\s)', ' ', texto)
+    t = re.sub(r'(?<![.?!:;»"\'])\n(?![a-e][\)\.\-]\s|\d+[\.\)]\s|[•\*\-–]\s)', ' ', texto)
     t = re.sub(r'\b(art|arts|núm|num|cap|disp|ad|trans|apdo|párr|pág|rd|rdl|et|cc|lec)\.', r'\1<DOT>', t, flags=re.IGNORECASE)
     t = re.sub(r'(\d)\.(\d)', r'\1<DOT>\2', t)
     t = re.sub(r'(\d)\.([a-zA-Zºª°])', r'\1<DOT>\2', t)
     t = re.sub(r'\.([a-e])\b', r'<DOT>\1', t)
 
-    partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[a-e][\)\.\-]\s|\d+[\.\)]\s)|\n+', t)
+    partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[a-e][\)\.\-]\s|\d+[\.\)]\s|[•\*\-–]\s)|\n+', t)
     oraciones = []
     for p in partes:
         p_rest = p.replace('<DOT>', '.').strip()
-        p_rest = re.sub(r'^[«"\'\-\•\*]+|[»"\']+$', '', p_rest).strip()
-        if len(p_rest) >= 30:
+        p_rest = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', p_rest).strip()
+        if PDFQuizParser._es_basura_cabecera_o_pie(p_rest):
+            continue
+        if len(p_rest) >= 25:
             oraciones.append(p_rest)
     return oraciones
 
@@ -1688,209 +1720,27 @@ D) Baremo de la Segunda Parte (Supuesto Práctico - máximo 50 puntos):
    3. Calidad de la expresión escrita: de 0 a 2 puntos (SIEMPRE QUE se alcancen al menos 20 puntos sobre 45 en el apartado 1).
 """
 
-MAPA_TEMATICO_PRECEPTOS = [
-    {
-        "materia": "Marco Constitucional y Fuentes del Sistema de la Seguridad Social",
-        "keywords_contexto": ["constitucion", "articulo 41", "art. 41", "149.1.17", "pacto de toledo", "caja unica", "solidaridad", "refundido", "8/2015"],
-        "articulos_validos": {
-            "1": "Estado social y democrático de Derecho (CE) / Derecho de los españoles a la Seguridad Social (TRLGSS)",
-            "2": "Principios y fines de la Seguridad Social: universalidad, unidad, solidaridad e igualdad (TRLGSS)",
-            "3": "Irrenunciabilidad de los derechos de la Seguridad Social (TRLGSS)",
-            "7": "Extensión del campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
-            "9": "Estructura del sistema de la Seguridad Social: Régimen General y Regímenes Especiales (TRLGSS)",
-            "10": "Regímenes Especiales de la Seguridad Social (TRLGSS)",
-            "14": "Principio de igualdad ante la ley (CE)",
-            "39": "Protección social, económica y jurídica de la familia (CE)",
-            "41": "Régimen público de Seguridad Social para todos los ciudadanos (CE)",
-            "42": "Salvaguardia de los derechos económicos y sociales de los trabajadores españoles en el extranjero (CE) / Acción protectora (TRLGSS)",
-            "43": "Derecho a la protección de la salud (CE)",
-            "49": "Atención e integración de las personas con discapacidad (CE)",
-            "50": "Suficiencia económica en la tercera edad mediante pensiones adecuadas y periódicamente actualizadas (CE)",
-            "53": "Garantías de los principios rectores de la política social y económica (CE)",
-            "82": "Delegación legislativa mediante textos refundidos (CE)",
-            "86": "Legislación de urgencia mediante Reales Decretos-leyes (CE)",
-            "129": "Participación de los interesados en la Seguridad Social (CE)",
-            "149": "Competencia exclusiva del Estado sobre legislación básica y régimen económico de la Seguridad Social (art. 149.1.17.ª CE)",
-        },
-        "normas_validas": {
-            "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
-            "2/2015": "Texto Refundido de la Ley del Estatuto de los Trabajadores (ET)",
-            "27/2011": "Ley sobre actualización, adecuación y modernización del sistema de Seguridad Social",
-            "21/2021": "Ley de garantía del poder adquisitivo de las pensiones",
-            "2/2023": "Real Decreto-ley de medidas urgentes para la ampliación de derechos de los pensionistas y reducción de la brecha de género",
-        }
-    },
-    {
-        "materia": "Sistema Especial para Empleados de Hogar (SEEH)",
-        "keywords_contexto": ["empleados de hogar", "empleada de hogar", "hogar familiar", "seeh", "1620/2011", "art. 250", "articulo 250", "art. 251", "articulo 251"],
-        "articulos_validos": {
-            "1": "Ámbito de aplicación y exclusiones laborales (ET)",
-            "2": "Relación laboral de carácter especial del servicio del hogar familiar (art. 2.1.b ET)",
-            "7": "Extensión del campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
-            "11": "Extinción del contrato en el servicio del hogar familiar (RD 1620/2011)",
-            "12": "Exclusión de relaciones entre familiares y trabajo a tiempo parcial",
-            "15": "Inscripción, afiliación, altas y bajas (TRLGSS)",
-            "16": "Obligación de afiliación y alta previa (TRLGSS)",
-            "33": "Cobertura indemnizatoria del Fondo de Garantía Salarial - FOGASA (ET)",
-            "42": "Catálogo general de prestaciones de la Acción Protectora del sistema (TRLGSS)",
-            "49": "Causas de extinción del contrato de trabajo (ET)",
-            "122": "Exclusión de la cotización adicional por horas en el SEEH (art. 122 Ley 31/2022)",
-            "136": "Integración de los Empleados de Hogar en el Régimen General (art. 136.2.b TRLGSS)",
-            "137": "Exclusiones del Régimen General (trabajos amistosos/familiares)",
-            "147": "Determinación de la base de cotización (TRLGSS)",
-            "151": "Exclusión del recargo por contratos inferiores a 30 días en el SEEH (TRLGSS)",
-            "162": "Caracteres de las relaciones laborales de carácter especial en el Régimen General (TRLGSS)",
-            "165": "Requisitos generales del derecho a las prestaciones y alta (TRLGSS)",
-            "166": "Situaciones asimiladas a la de alta (TRLGSS)",
-            "167": "Responsabilidad en orden a las prestaciones y exclusión de capital coste (TRLGSS)",
-            "169": "Concepto y situaciones especiales de Incapacidad Temporal (TRLGSS)",
-            "171": "Cuantía y base reguladora de la prestación de IT (TRLGSS)",
-            "172": "Períodos de carencia en Incapacidad Temporal (TRLGSS)",
-            "173": "Nacimiento, duración y pago del subsidio de IT (TRLGSS)",
-            "197": "Base reguladora e integración de lagunas en Incapacidad Permanente (TRLGSS)",
-            "209": "Base reguladora e integración de lagunas en la pensión de Jubilación (TRLGSS)",
-            "250": "Objeto y configuración del Sistema Especial para Empleados de Hogar (TRLGSS)",
-            "251": "Acción protectora y peculiaridades de cotización y prestaciones en el SEEH (TRLGSS)",
-            "267": "Situación legal de desempleo en extinción del contrato del hogar familiar (TRLGSS)",
-        },
-        "normas_validas": {
-            "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
-            "2/2015": "Texto Refundido de la Ley del Estatuto de los Trabajadores (ET)",
-            "1620/2011": "Real Decreto regulador de la relación laboral especial del servicio del hogar familiar",
-            "16/2022": "Real Decreto-ley para la mejora de las condiciones de trabajo y de Seguridad Social de las personas trabajadoras al servicio del hogar (desempleo y FOGASA)",
-            "505/1985": "Real Decreto sobre organización y funcionamiento del Fondo de Garantía Salarial (FOGASA)",
-            "27/2011": "Ley sobre actualización, adecuación y modernización del sistema de Seguridad Social (integración del SEEH)",
-            "31/2022": "Ley de Presupuestos Generales del Estado (art. 122 sobre cotización en el SEEH)",
-            "84/1996": "Reglamento General sobre inscripción de empresas, afiliación, altas y bajas",
-            "2064/1995": "Reglamento General sobre Cotización y Liquidación de otros Derechos de la Seguridad Social",
-            "31/2026": "Real Decreto-ley de reforma de situaciones especiales de IT y protección social",
-            "126/2026": "Real Decreto por el que se fija el salario mínimo interprofesional para 2026",
-            "297/2026": "Orden PJC/297/2026 anual de cotización para 2026",
-        }
-    },
-    {
-        "materia": "Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (SEA)",
-        "keywords_contexto": ["trabajadores agrarios", "sistema especial agrario", "jornadas reales", "explotacion agraria", "art. 252", "articulo 252", "art. 253", "articulo 253"],
-        "articulos_validos": {
-            "7": "Campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
-            "15": "Afiliación, altas y bajas en el sistema (TRLGSS)",
-            "16": "Solicitudes de afiliación y alta previa (TRLGSS)",
-            "42": "Acción protectora del Sistema de la Seguridad Social (TRLGSS)",
-            "136": "Inclusión del Sistema Especial Agrario en el Régimen General (art. 136.2.a TRLGSS)",
-            "144": "Duración de la obligación de cotizar en IT, maternidad y riesgo (TRLGSS)",
-            "151": "Exclusión de cotización adicional en contratos de corta duración en el SEA (TRLGSS)",
-            "165": "Requisitos de acceso a prestaciones (TRLGSS)",
-            "166": "Situaciones asimiladas al alta (TRLGSS)",
-            "169": "Incapacidad temporal y situaciones especiales (TRLGSS)",
-            "173": "Abono y pago directo del subsidio de IT (TRLGSS)",
-            "237": "Prestaciones familiares y períodos de cotización efectiva por excedencia (TRLGSS)",
-            "252": "Ámbito de aplicación y concepto de labores agrarias en el SEA (TRLGSS)",
-            "253": "Inclusión y exclusión en los períodos de inactividad del SEA y requisito de 30 jornadas reales (TRLGSS)",
-            "254": "Reglas de cotización en actividad e inactividad en el SEA (TRLGSS)",
-            "255": "Cotización durante las situaciones de incapacidad temporal, nacimiento y riesgo en el SEA (TRLGSS)",
-            "256": "Peculiaridades de la acción protectora, pago directo de IT y requisito de estar al corriente en el SEA (TRLGSS)",
-            "284": "Protección por desempleo de los trabajadores eventuales agrarios (TRLGSS)",
-        },
-        "normas_validas": {
-            "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
-            "28/2011": "Ley por la que se procede a la integración del Régimen Especial Agrario en el Régimen General",
-            "19/1995": "Ley de Modernización de las Explotaciones Agrarias",
-            "3772/1972": "Decreto por el que se aprueba el Reglamento General del Régimen Especial Agrario (aplicación supletoria)",
-            "84/1996": "Reglamento General de Afiliación, Altas y Bajas",
-            "2064/1995": "Reglamento General sobre Cotización y Liquidación",
-            "31/2026": "Real Decreto-ley de actualización de prestaciones de la Seguridad Social",
-            "297/2026": "Orden PJC/297/2026 anual de cotización para 2026",
-        }
-    },
-    {
-        "materia": "Cotización, Recaudación y Afiliación General",
-        "keywords_contexto": ["cotizacion", "base de cotizacion", "recaudacion", "afiliacion", "alta", "baja", "pluriempleo", "recargo", "tgss", "cuota"],
-        "articulos_validos": {
-            "7": "Extensión del campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
-            "8": "Prohibición de inclusión múltiple obligatoria (TRLGSS)",
-            "9": "Estructura del sistema de la Seguridad Social (TRLGSS)",
-            "10": "Regímenes Especiales (TRLGSS)",
-            "12": "Trabajadores familiares y asimilados (TRLGSS)",
-            "15": "Obligatoriedad y alcance de la afiliación (TRLGSS)",
-            "16": "Sujetos obligados a solicitar la afiliación y el alta (TRLGSS)",
-            "17": "Procedimiento y efectos de la afiliación (TRLGSS)",
-            "18": "Obligatoriedad de la cotización (TRLGSS)",
-            "19": "Bases y tipos de cotización y cotización adicional de solidaridad (TRLGSS)",
-            "20": "Adquisición, mantenimiento y pérdida de beneficios en la cotización (TRLGSS)",
-            "24": "Prescripción de cuatro años de las deudas por cuotas (TRLGSS)",
-            "26": "Devolución de ingresos indebidos (TRLGSS)",
-            "28": "Recargos por ingreso fuera de plazo (TRLGSS)",
-            "30": "Reclamaciones de deuda y recargos del 10% y 20% (TRLGSS)",
-            "136": "Campo de aplicación del Régimen General (TRLGSS)",
-            "137": "Exclusiones del Régimen General (TRLGSS)",
-            "139": "Inscripción de empresas (TRLGSS)",
-            "141": "Sujetos obligados y responsables en la cotización (TRLGSS)",
-            "142": "Sujeto responsable del ingreso de cuotas y descuento de la cuota obrera (TRLGSS)",
-            "143": "Nacimiento de la obligación de cotizar (TRLGSS)",
-            "144": "Duración y subsistencia de la obligación de cotizar en IT y nacimiento (TRLGSS)",
-            "147": "Conceptos computables y excluidos de la base de cotización (TRLGSS)",
-            "148": "Topes máximo y mínimo de la base de cotización y pluriempleo (TRLGSS)",
-            "151": "Cotización adicional en contratos temporales de corta duración (TRLGSS)",
-            "305": "Extensión del campo de aplicación del RETA (TRLGSS)",
-        },
-        "normas_validas": {
-            "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
-            "84/1996": "Reglamento General sobre Inscripción de Empresas y Afiliación",
-            "2064/1995": "Reglamento General sobre Cotización y Liquidación",
-            "1415/2004": "Reglamento General de Recaudación de la Seguridad Social",
-            "643/2026": "Real Decreto de reforma de plazos de bajas y variaciones de datos",
-            "297/2026": "Orden de cotización para 2026",
-        }
-    }
-]
-
-def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pregunta_y_exp):
-    def _norm(s):
-        s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
-        return re.sub(r'\s+', ' ', s).strip()
-
-    ctx_norm = _norm(contexto_pregunta_y_exp)
-
-    for bloque in MAPA_TEMATICO_PRECEPTOS:
-        if any(kw in ctx_norm for kw in bloque["keywords_contexto"]):
-            if k_tipo == "ART" and k_id in bloque["articulos_validos"]:
-                desc = bloque["articulos_validos"][k_id]
-                return True, f"{k_lbl} ({desc})"
-            if k_tipo == "NORMA" and k_id in bloque["normas_validas"]:
-                desc = bloque["normas_validas"][k_id]
-                return True, f"{k_lbl} ({desc})"
-
-    normas_troncales = {
-        "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
-        "2/2015": "Texto Refundido de la Ley del Estatuto de los Trabajadores (ET)",
-        "2064/1995": "Reglamento General sobre Cotización y Liquidación",
-        "84/1996": "Reglamento General de Inscripción y Afiliación",
-        "1415/2004": "Reglamento General de Recaudación de la Seguridad Social",
-        "2621/1986": "Real Decreto de integración de regímenes especiales en el Régimen General",
-        "3/2026": "Real Decreto-ley de revalorización de pensiones y cotización para 2026",
-        "31/2026": "Real Decreto-ley de reforma de prestaciones de Seguridad Social",
-        "126/2026": "Real Decreto de fijación del SMI para 2026",
-        "607/2026": "Real Decreto de relación laboral especial de personas artistas y técnicos",
-        "643/2026": "Real Decreto de modificación de plazos de afiliación y recaudación",
-        "297/2026": "Orden PJC/297/2026 de cotización para 2026",
-    }
-    if k_tipo == "NORMA" and k_id in normas_troncales:
-        return True, f"{k_lbl} ({normas_troncales[k_id]})"
-    if k_tipo == "SIGLA" and k_id in ["trlgss", "et"]:
-        return True, k_lbl
-
-    oraciones_al = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
-    palabras_ctx = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', ctx_norm))
-    for orac in oraciones_al:
-        if k_id in _norm(orac):
-            palabras_orac = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', _norm(orac)))
-            coincidencias = palabras_orac.intersection(palabras_ctx)
-            if len(coincidencias) >= 3 and len(orac.strip()) >= 40:
-                return True, f"{k_lbl} (precepto conexo bien interrelacionado en tu exposición)"
-
-    return False, f"{k_lbl} (no guarda relación directa con el epígrafe planteado)"
+def _extraer_rangos_articulos(texto):
+    """Extrae todos los números de artículo individuales y rangos (ej. 'Arts. 136 a 261') presentes en un texto."""
+    arts = set()
+    if not texto:
+        return arts
+    # Rangos tipo "Arts. 136 a 261" o "artículos 1 al 7"
+    for m_r in re.finditer(r'\bart(?:[íi]culos?|\.|\s*s\.)\s*(\d{1,3})\s*(?:a|al|\-|–)\s*(\d{1,3})\b', texto, flags=re.IGNORECASE):
+        ini, fin = int(m_r.group(1)), int(m_r.group(2))
+        if ini <= fin and (fin - ini) <= 300:
+            for n in range(ini, fin + 1):
+                arts.add(str(n))
+    # Artículos individuales
+    for m_i in re.finditer(r'\bart(?:[íi]culos?|\.|\s*s\.)\s*(\d{1,3})\b', texto, flags=re.IGNORECASE):
+        arts.add(m_i.group(1))
+    return arts
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
+    """
+    Evalúa la respuesta del alumno ÚNICA Y EXCLUSIVAMENTE contra el texto oficial del epígrafe actual,
+    sin mezclar diccionarios ni textos de otros temas o epígrafes.
+    """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
         return re.sub(r'\s+', ' ', s).strip()
@@ -1905,16 +1755,22 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     alumno_norm = _norm(texto_alumno)
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
-    contexto_total = f"{enunciado_pregunta or ''} {ref_completa}".strip()
     ref_norm = _norm(ref_completa)
 
-    pat_normas = r'\b(?:art(?:[íi]culos?|\.)\s*\d+(?:\.\d+)?(?:\.[a-z])?|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|constitucion\s+espanola|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
+    pat_normas = r'\b(?:arts?(?:[íi]culos?|\.)\s*\d+(?:\s*(?:a|al|\-|–)\s*\d+)?(?:\.\d+)?(?:\.[a-z])?|t[íi]tulo\s+(?:[ivx]+|\d+)|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|constituci[óo]n\s+espa[ñn]ola|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria|final)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
 
     def _clave_norma(texto_cita):
         cn = _norm(texto_cita)
-        m_art = re.match(r'^art(?:iculos?|\.)\s*(\d+)', cn)
+        m_rango = re.match(r'^arts?(?:iculos?|\.)\s*(\d+\s*(?:a|al|\-|–)\s*\d+)', cn)
+        if m_rango:
+            r_limpio = re.sub(r'\s+', ' ', m_rango.group(1))
+            return ("RANGO_ART", r_limpio, f"Arts. {r_limpio}")
+        m_art = re.match(r'^arts?(?:iculos?|\.)\s*(\d+)', cn)
         if m_art:
             return ("ART", m_art.group(1), f"Artículo {m_art.group(1)}")
+        m_tit = re.match(r'^titulo\s+([ivx0-9]+)', cn)
+        if m_tit:
+            return ("TITULO", m_tit.group(1).upper(), f"Título {m_tit.group(1).upper()}")
         m_ley = re.search(r'(ley(?:\s+organica)?|real\s+decreto(?:\-ley|\s+legislativo)?|rdl|rd[\-\s]*ley|rd|decreto|orden(?:\s+[a-z]+)?)\s+(\d+/\d{4})', cn)
         if m_ley:
             tipo = m_ley.group(1).upper()
@@ -1936,7 +1792,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             return ("SIGLA", "et", "Estatuto de los Trabajadores")
         if "constitucion espanola" in cn:
             return ("SIGLA", "ce", "Constitución Española")
-        m_da = re.match(r'^disposicion\s+(adicional|transitoria)\s+(.+)$', cn)
+        m_da = re.match(r'^disposicion\s+(adicional|transitoria|final)\s+(.+)$', cn)
         if m_da:
             return ("DISP", f"{m_da.group(1)}_{m_da.group(2)}", texto_cita.strip().capitalize())
         return ("OTRO", cn, texto_cita.strip())
@@ -1956,6 +1812,9 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         if (k_tipo, k_id) not in mapa_al:
             mapa_al[(k_tipo, k_id)] = k_lbl
 
+    arts_en_ref = _extraer_rangos_articulos(ref_completa)
+    arts_en_alumno = _extraer_rangos_articulos(texto_alumno)
+
     ids_ref_equiv = set(mapa_ref.keys())
     if ("NORMA", "8/2015") in ids_ref_equiv or ("SIGLA", "trlgss") in ids_ref_equiv:
         ids_ref_equiv.add(("NORMA", "8/2015"))
@@ -1965,23 +1824,47 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     for k_par, lbl in mapa_ref.items():
         if k_par in mapa_al or (k_par in [("NORMA", "8/2015"), ("SIGLA", "trlgss")] and any(x in mapa_al for x in [("NORMA", "8/2015"), ("SIGLA", "trlgss")])):
             citas_ok.append(lbl)
-        elif k_par[0] == "ART" and re.search(rf'\b{re.escape(k_par[1])}\b', alumno_norm) and "art" in alumno_norm:
+        elif k_par[0] == "ART" and k_par[1] in arts_en_alumno:
             citas_ok.append(lbl)
+        elif k_par[0] == "RANGO_ART":
+            nums_r = re.findall(r'\d+', k_par[1])
+            if nums_r and all(n in arts_en_alumno for n in nums_r):
+                citas_ok.append(lbl)
+            else:
+                citas_faltan.append(lbl)
         else:
             citas_faltan.append(lbl)
 
     for k_par, lbl in mapa_al.items():
         if k_par not in ids_ref_equiv:
-            if k_par[1] in ref_norm:
-                citas_ok.append(lbl)
-            else:
-                es_valido_extra, explicacion_extra = _verificar_precepto_adicional(
-                    k_par[0], k_par[1], lbl, texto_alumno, contexto_total
-                )
-                if es_valido_extra:
-                    citas_complementarias.append(explicacion_extra)
+            if k_par[0] == "ART" and k_par[1] in arts_en_ref:
+                if lbl not in citas_ok:
+                    citas_ok.append(lbl)
+            elif k_par[0] == "RANGO_ART":
+                nums_r = re.findall(r'\d+', k_par[1])
+                if nums_r and any(n in arts_en_ref for n in nums_r):
+                    if lbl not in citas_ok:
+                        citas_ok.append(lbl)
                 else:
-                    citas_erroneas.append(explicacion_extra)
+                    citas_complementarias.append(lbl)
+            elif k_par[1] in ref_norm:
+                if lbl not in citas_ok:
+                    citas_ok.append(lbl)
+            else:
+                # Comprobamos si la frase donde el alumno cita esa norma usa vocabulario propio de este epígrafe
+                palabras_ref_ep = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', ref_norm))
+                oraciones_al = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
+                conectado_al_epigrafe = False
+                for orac in oraciones_al:
+                    if k_par[1] in _norm(orac):
+                        palabras_orac = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', _norm(orac)))
+                        if len(palabras_orac.intersection(palabras_ref_ep)) >= 2:
+                            conectado_al_epigrafe = True
+                            break
+                if conectado_al_epigrafe:
+                    citas_complementarias.append(lbl)
+                else:
+                    citas_erroneas.append(lbl)
 
     pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
     cifras_raw = re.findall(pat_cifras, ref_completa, flags=re.IGNORECASE)
@@ -2012,7 +1895,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "regula", "articulo", "texto", "refundido", "general", "seguridad", "social", "norma", "normativa",
         "literalmente", "siguiente", "siguientes", "caso", "casos", "supuesto", "supuestos", "efectos",
         "parte", "partes", "forma", "manera", "dichos", "dicha", "dicho", "dichas", "aquel", "aquella",
-        "ademas", "asimismo", "obstante", "embargo", "respecto", "aplicacion", "sistema", "especial"
+        "ademas", "asimismo", "obstante", "embargo", "respecto", "aplicacion", "sistema", "especial",
+        "sintesis", "resumen", "analitico", "epigrafe", "epigrafes"
     }
 
     texto_base_ideas = f"{respuesta_oficial}. {explicacion_oficial}" if respuesta_oficial else explicacion_oficial
@@ -2021,6 +1905,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     puntos_omitidos = []
 
     for orac_limpia in oraciones_completas:
+        if PDFQuizParser._es_basura_cabecera_o_pie(orac_limpia):
+            continue
         if any(_norm(orac_limpia)[:50] == _norm(x)[:50] for x in (puntos_cubiertos + puntos_omitidos)):
             continue
         palabras_orac = [
@@ -2031,7 +1917,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             continue
         aciertos_orac = sum(1 for w in palabras_orac if _raiz(w) in alumno_norm)
         ratio_orac = aciertos_orac / len(palabras_orac)
-        if ratio_orac >= 0.42 or (len(palabras_orac) <= 4 and aciertos_orac >= 2):
+        if ratio_orac >= 0.40 or (len(palabras_orac) <= 4 and aciertos_orac >= 2):
             puntos_cubiertos.append(orac_limpia)
         else:
             puntos_omitidos.append(orac_limpia)
@@ -2055,20 +1941,27 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     else:
         texto_sugerido = explicacion_oficial
 
-    total_eval = len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos)
+    # Cálculo exacto del Criterio 1 (0 a 45 puntos) y desglose exacto de puntos restados / dejados de ganar
+    total_eval = max(1, len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos))
+    valor_por_item = 45.0 / total_eval
+
+    puntos_perdidos_citas = round(len(citas_faltan) * valor_por_item, 2)
+    puntos_perdidos_cifras = round(len(cifras_faltan) * valor_por_item, 2)
+    puntos_perdidos_ideas = round(len(puntos_omitidos) * valor_por_item, 2)
+    penalizacion_citas_erroneas = round(2.25 * len(citas_erroneas), 2)
+    penalizacion_sentido = 11.25 if alerta_sentido else 0.0
+    bonificacion_complementarias = round(min(4.5, 0.90 * len(citas_complementarias)), 2)
+
     acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
-    pts_criterio_1 = (acertados_eval / max(1, total_eval)) * 45.0
-    pts_criterio_1 = min(45.0, pts_criterio_1 + (1.80 * len(citas_complementarias)))
-    if citas_erroneas:
-        pts_criterio_1 = max(0.0, pts_criterio_1 - (2.25 * len(citas_erroneas)))
-    if alerta_sentido:
-        pts_criterio_1 = max(0.0, pts_criterio_1 - 11.25)
+    pts_criterio_1_base = (acertados_eval / total_eval) * 45.0
+    pts_criterio_1 = min(45.0, pts_criterio_1_base + bonificacion_complementarias)
+    pts_criterio_1 = max(0.0, pts_criterio_1 - penalizacion_citas_erroneas - penalizacion_sentido)
     pts_criterio_1 = round(pts_criterio_1, 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
         num_parrafos_al = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 20])
-        usa_conectores = sum(1 for c in ["conforme", "virtud", "establece", "dispone", "asimismo", "obstante", "tanto", "articulo", "respecto"] if c in alumno_norm)
+        usa_conectores = sum(1 for c in ["conforme", "virtud", "establece", "dispone", "asimismo", "obstante", "tanto", "articulo", "respecto", "titulo"] if c in alumno_norm)
         pts_criterio_2 = round(min(3.0, 1.8 + (0.6 if num_parrafos_al >= 2 else 0.0) + (0.6 if usa_conectores >= 2 else 0.0)), 2)
         pts_criterio_3 = round(min(2.0, 1.2 + (0.8 if len(texto_alumno.strip()) >= 180 and usa_conectores >= 1 else 0.3)), 2)
     else:
@@ -2077,6 +1970,29 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
+
+    # Lista detallada de motivos por los que se han restado o no se han alcanzado puntos
+    motivos_resta = []
+    if penalizacion_sentido > 0:
+        motivos_resta.append(f"🔻 **-{penalizacion_sentido:.2f} ptos (Penalización directa en Criterio 1):** Por invertir el sentido afirmativo/negativo de la conclusión principal o no responder directamente a la cuestión planteada.")
+    if penalizacion_citas_erroneas > 0:
+        motivos_resta.append(f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos (Penalización por cita imprecisa en Criterio 1):** Por invocar preceptos sin relación directa con este epígrafe ({', '.join(citas_erroneas)}).")
+    if puntos_perdidos_citas > 0 and citas_faltan:
+        motivos_resta.append(f"🔸 **-{puntos_perdidos_citas:.2f} ptos (Normativa del epígrafe no citada en Criterio 1):** Por omitir la cita expresa de {', '.join(citas_faltan)}.")
+    if puntos_perdidos_cifras > 0 and cifras_faltan:
+        motivos_resta.append(f"🔸 **-{puntos_perdidos_cifras:.2f} ptos (Parámetros/plazos/porcentajes omitidos en Criterio 1):** Por no especificar {', '.join(cifras_faltan)}.")
+    if puntos_perdidos_ideas > 0 and puntos_omitidos:
+        resumen_om = "; ".join([p[:95] + ("..." if len(p) > 95 else "") for p in puntos_omitidos[:3]])
+        motivos_resta.append(f"🔸 **-{puntos_perdidos_ideas:.2f} ptos (Contenido nuclear del epígrafe no desarrollado en Criterio 1):** Por omitir {len(puntos_omitidos)} {'apartado clave' if len(puntos_omitidos)==1 else 'apartados clave'} del texto oficial ({resumen_om}).")
+    if not supera_umbral_20:
+        motivos_resta.append("🔻 **-5,00 ptos (Bloqueo oficial de Criterios 2 y 3):** Al no alcanzar el mínimo de 20,00 / 45 puntos en el Criterio 1, el baremo del Tribunal impide sumar los puntos de estructura (0/3 ptos) y calidad de expresión escrita (0/2 ptos).")
+    else:
+        resta_c2 = round(3.0 - pts_criterio_2, 2)
+        resta_c3 = round(2.0 - pts_criterio_3, 2)
+        if resta_c2 > 0:
+            motivos_resta.append(f"🔸 **-{resta_c2:.2f} ptos en Criterio 2 (Orden de ideas):** Para obtener los 3,00 puntos íntegros conviene estructurar el texto en más párrafos diferenciados con conectores jurídicos.")
+        if resta_c3 > 0:
+            motivos_resta.append(f"🔸 **-{resta_c3:.2f} ptos en Criterio 3 (Expresión escrita):** Para obtener los 2,00 puntos íntegros conviene ampliar el desarrollo con mayor riqueza técnica y literalidad.")
 
     return {
         "nota": nota_10,
@@ -2094,7 +2010,9 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "cifras_faltan": cifras_faltan,
         "puntos_cubiertos": puntos_cubiertos,
         "puntos_omitidos": puntos_omitidos,
-        "texto_sugerido": texto_sugerido
+        "texto_sugerido": texto_sugerido,
+        "motivos_resta": motivos_resta,
+        "bonificacion_complementarias": bonificacion_complementarias
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
@@ -2106,7 +2024,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             aciertos_txt.append(f"Has fundamentado con rigor tu exposición invocando la normativa nuclear del epígrafe (**{', '.join(ev['citas_ok'])}**).")
         if ev["citas_complementarias"]:
             aciertos_txt.append(
-                f"🌟 **Interrelación normativa de alto nivel:** Has conectado acertadamente otros preceptos del bloque legal aplicables a la materia (**{'; '.join(ev['citas_complementarias'])}**), demostrando dominio transversal del temario y sumando puntuación adicional."
+                f"🌟 **Preceptos y referencias adicionales bien conectados (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** Has incluido acertadamente **{', '.join(ev['citas_complementarias'])}** en relación con el contenido del epígrafe."
             )
         if ev["cifras_ok"]:
             aciertos_txt.append(f"Has precisado correctamente los parámetros cuantitativos/temporales (**{', '.join(ev['cifras_ok'])}**).")
@@ -2117,7 +2035,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     else:
         bloques.append(
             "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n"
-            "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe del temario oficial."
+            "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe."
         )
 
     rev_normativa = []
@@ -2127,11 +2045,11 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normativa.append(f"✔️ **Normativa principal del epígrafe acertada:** {', '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
         rev_normativa.append(
-            f"🌟 **Normativa complementaria verificada (suma valor en Criterio 1):** {', '.join(ev['citas_complementarias'])}."
+            f"🌟 **Referencias normativas adicionales conectadas con el tema:** {', '.join(ev['citas_complementarias'])}."
         )
     if ev["citas_erroneas"]:
         rev_normativa.append(
-            f"❌ **Preceptos sin aplicación directa en este epígrafe:** {', '.join(ev['citas_erroneas'])}."
+            f"❌ **Preceptos sin relación directa con este epígrafe:** {', '.join(ev['citas_erroneas'])}."
         )
     if ev["citas_faltan"]:
         rev_normativa.append(
@@ -2147,7 +2065,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             detalles_str += f"Te ha faltado especificar los siguientes plazos, tramos o porcentajes clave: **{', '.join(ev['cifras_faltan'])}**.\n"
         if ev["puntos_omitidos"]:
             lista_om = "\n".join([f"   - *{p}*" for p in ev["puntos_omitidos"][:5]])
-            detalles_str += f"Comparando tu texto con el epígrafe oficial del tema, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
+            detalles_str += f"Comparando tu texto con el contenido oficial de este epígrafe, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
         modelo_parrafo = respuesta_oficial if (respuesta_oficial and len(respuesta_oficial) > 40) else ev["texto_sugerido"]
         detalles_str += f"✍️ **Párrafo magistral que deberías incorporar a tu examen para alcanzar la máxima puntuación:**\n« {modelo_parrafo} »"
         bloques.append("3. **⚠️ Detalles omitidos del epígrafe y redacción modelo recomendada:**\n" + detalles_str)
@@ -2161,25 +2079,14 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     c2 = ev.get("pts_criterio_2", 0.0)
     c3 = ev.get("pts_criterio_3", 0.0)
     n50 = ev.get("nota_50", round(ev["nota"] * 5, 2))
-    umbral_txt = (
-        "✔️ Superas el umbral mínimo de **20,00 / 45 puntos** en el Criterio 1, por lo que **sí se te computan** los puntos de orden de ideas (hasta 3 ptos) y calidad de expresión escrita (hasta 2 ptos)."
-        if ev.get("supera_umbral_20") else
-        "⚠️ Al no alcanzar al menos **20,00 / 45 puntos** en el Criterio 1 (conocimiento y literalidad normativa), conforme a los Criterios Oficiales del Tribunal **no pueden sumarse** los apartados de orden de ideas (0/3) ni calidad de expresión escrita (0/2)."
-    )
-    estado_corte = (
-        "✅ **PARTE SUPERADA** (alcanzas el mínimo eliminatorio de **25,00 / 50 puntos** necesario para sumar ambas partes del Segundo Ejercicio)."
-        if n50 >= 25.0 else
-        "❌ **NO ALCANZA EL MÍNIMO ELIMINATORIO DE 25,00 / 50 PUNTOS** (recuerda que el Tribunal no admite compensación entre la 1.ª y la 2.ª parte si alguna es inferior a 25 puntos)."
-    )
+    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin penalizaciones ni deducciones significativas."
 
     desglose_tribunal = (
-        "4. **🎓 Calificación Oficial según los Criterios del Tribunal (Resolución 22/12/2025):**\n"
-        f"   - **Criterio 1 — Conocimiento, precisión normativa ajustada a su literalidad y resolución práctica (0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
+        "4. **🎓 Desglose del Baremo Oficial y Motivo Exacto de Puntos Restados:**\n"
+        f"   - **Criterio 1 — Conocimiento y precisión normativa ajustada a su literalidad (0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
         f"   - **Criterio 2 — Orden de las ideas y estructura de la exposición (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
         f"   - **Criterio 3 — Calidad de la expresión escrita (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
-        f"   - {umbral_txt}\n"
-        f"   - 📊 **PUNTUACIÓN DIRECTA DE LA PARTE (Escala Oficial 0-50):** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{ev['nota']:.2f} / 10`**)*\n"
-        f"   - 🏛️ **Estado frente al corte del Tribunal:** {estado_corte}"
+        f"   - **📉 Detalle exacto de puntos restados o no alcanzados hasta los 50,00 puntos:**\n{motivos_txt}"
     )
     bloques.append(desglose_tribunal)
 
@@ -2202,29 +2109,31 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if aviso_elegante:
         return aviso_elegante
 
+    if ev_fallback is None:
+        ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
+
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
+    motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
 
     prompt = (
         "Actúa como la Presidenta del Tribunal Calificador de las pruebas selectivas del Cuerpo de Gestión de la Administración de la Seguridad Social (Resolución de 22 de diciembre de 2025) y preparador experto de Oposiciona.\n"
-        "Tu misión es corregir con rigor técnico absoluto la respuesta escrita por el opositor en el Segundo Ejercicio, "
-        "contrastándola estrictamente con el texto oficial del epígrafe que figura a continuación.\n\n"
+        "Tu misión es corregir con rigor técnico absoluto la respuesta escrita por el opositor, "
+        "contrastándola ÚNICA Y EXCLUSIVAMENTE con el TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE que se adjunta más abajo.\n\n"
         f"{CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO}\n\n"
         "REGLAS DE CORRECCIÓN DE OBLIGADO CUMPLIMIENTO:\n"
-        "0. **PROHIBICIÓN DE CITAR FUENTES EXTERNAS O TEMAS AJENOS:** NO menciones nunca en tu respuesta nombres de archivos, ni 'NotebookLM', ni 'TEMAS HASTA EL MOMENTO', ni 'NOVEDADES 2026', ni hagas referencia a otros números de tema distintos al que se está evaluando.\n"
-        "1. **INTERRELACIÓN NORMATIVA Y CONSULTA DEL TEXTO LEGAL:** Antes de dar por inválido cualquier artículo o norma citado por el alumno que no figure literalmente en la explicación del epígrafe, comprueba si es un precepto válido de la Constitución Española, del TRLGSS (RD Legislativo 8/2015), del Estatuto de los Trabajadores o de sus reglamentos que guarde relación con la materia del epígrafe. Si es correcto y enriquece el desarrollo, valóralo positivamente y súmale puntos en el Criterio 1.\n"
-        "2. **APLICACIÓN ESTRICTA DEL BAREMO DE 50 PUNTOS DEL TRIBUNAL:**\n"
-        "   - Evalúa el **Criterio 1 (0 a 45 puntos)** exigiendo precisión normativa ajustada a su literalidad y rigor técnico sobre el contenido del epígrafe.\n"
-        "   - Evalúa el **Criterio 2 — Orden de las ideas y estructura (0 a 3 puntos)** y el **Criterio 3 — Calidad de la expresión escrita (0 a 2 puntos)**, aplicando rigurosamente la regla oficial del Tribunal: **solo puntúan si el alumno alcanza al menos 20 puntos sobre 45 en el Criterio 1** (si obtiene menos de 20/45 en el Criterio 1, asigna 0 puntos en Criterio 2 y 0 puntos en Criterio 3).\n"
-        "   - Indica la nota total sobre **50 puntos** (señalando si supera los **25 puntos eliminatorios** necesarios para no quedar excluido sin compensación) y su nota equivalente sobre **10 puntos**.\n\n"
-        f"=== EPÍGRAFE / ENUNCIADO ===\n{pregunta}\n\n"
-        f"=== RESPUESTA DIRECTA OFICIAL ===\n{respuesta_oficial}\n\n"
-        f"=== TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE ===\n{explicacion_oficial}\n\n"
+        "0. **PROHIBICIÓN ABSOLUTA DE MEZCLAR OTROS TEMAS O CITAR FUENTES EXTERNAS:** Evalúa SOLO lo que aparece en el 'TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE' adjunto. NO menciones nunca en tu respuesta nombres de archivos, ni 'NotebookLM', ni 'TEMAS HASTA EL MOMENTO', ni 'NOVEDADES 2026', ni mezcles artículos o contenidos de otros epígrafes o temas distintos.\n"
+        "1. **RESPETO A LA PUNTUACIÓN Y EXPLICACIÓN EXACTA DE CADA PUNTO RESTADO:**\n"
+        f"   - La calificación numérica auditada para esta respuesta es: Criterio 1 = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 puntos ({ev_fallback['nota']:.2f}/10).\n"
+        "   - En el bloque 4 debes explicar con total claridad el **motivo exacto por el que se le ha restado cada punto** (qué artículos concretos del epígrafe omitió, qué ideas o apartados del epígrafe dejó sin explicar o qué precepto erróneo citó).\n\n"
+        f"=== EPÍGRAFE A DESARROLLAR ===\n{pregunta}\n\n"
+        f"=== TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE (ÚNICA REFERENCIA VÁLIDA) ===\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        "Estructura tu respuesta en estos 4 bloques exactos (sin añadir encabezados sobre fuentes):\n"
+        f"=== AUDITORÍA DE PUNTOS RESTADOS CALCULADA ===\n{motivos_calculados}\n\n"
+        "Estructura tu respuesta en estos 4 bloques exactos:\n"
         "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa**\n"
-        "2. **⚖️ Auditoría de artículos y preceptos normativos**\n"
-        "3. **⚠️ Detalles técnicos omitidos del epígrafe y párrafo magistral que deberías haber incluido**\n"
-        "4. **🎓 Calificación Oficial según los Criterios del Tribunal (desglose Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2], Total sobre 50 puntos y equivalencia sobre 10)**"
+        "2. **⚖️ Auditoría de artículos y preceptos normativos del epígrafe**\n"
+        "3. **⚠️ Detalles técnicos omitidos de este epígrafe y párrafo magistral que deberías haber incluido**\n"
+        "4. **🎓 Desglose del Baremo Oficial y Motivo Exacto de Puntos Restados (Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2] y explicación detallada de cada punto restado)**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
@@ -2238,8 +2147,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         except Exception:
             continue
 
-    if ev_fallback is None:
-        ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
     return generar_dictamen_tribunal_inteligente(ev_fallback, respuesta_alumno, respuesta_oficial, explicacion_oficial)
 
 def sincronizar_progreso_navegador():
@@ -2645,7 +2552,6 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -2942,9 +2848,45 @@ elif not st.session_state.finished:
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
 
+                    # TARJETA RESALTADA DE CALIFICACIÓN DE LA PREGUNTA Y DESGLOSE DE PUNTOS RESTADOS
+                    n50_q = ev.get("nota_50", 0.0)
+                    n10_q = ev.get("nota", 0.0)
+                    c1_q = ev.get("pts_criterio_1", 0.0)
+                    c2_q = ev.get("pts_criterio_2", 0.0)
+                    c3_q = ev.get("pts_criterio_3", 0.0)
+                    aprobado_q = n50_q >= 25.0
+                    bg_card = "#ecfdf5" if aprobado_q else "#fff7ed"
+                    border_card = "#16a34a" if aprobado_q else "#ea580c"
+                    color_nota = "#15803d" if aprobado_q else "#c2410c"
+                    badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
+
+                    motivos_html = ""
+                    if ev.get("motivos_resta"):
+                        items_m = "".join([f"<div style='margin-top:4px; font-size:13.5px; color:#7c2d12 !important;'>{m}</div>" for m in ev["motivos_resta"]])
+                        motivos_html = (
+                            f"<div style='background-color:#ffffff; border-left:4px solid {border_card}; padding:10px 12px; border-radius:6px; margin-top:10px; text-align:left;'>"
+                            f"<div style='font-size:14px; font-weight:700; color:#9a3412 !important; margin-bottom:4px;'>📉 Motivo exacto de los puntos restados / no alcanzados ({50.0 - n50_q:.2f} ptos hasta 50):</div>"
+                            f"{items_m}</div>"
+                        )
+
                     st.markdown(
-                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
-                        "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN OFICIAL DEL TRIBUNAL EVALUADOR IA (BAREMO 0-50 PTOS)</div>"
+                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:16px; margin-top:12px; margin-bottom:12px; text-align:center;'>"
+                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OBTENIDA EN ESTE EPÍGRAFE</div>"
+                        f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
+                        f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
+                        f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
+                        f"<b>Criterio 1 (Conocimiento y literalidad):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
+                        f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
+                        f"<b>Criterio 3 (Expresión):</b> {c3_q:.2f} / 2,00 ptos"
+                        f"</div>"
+                        f"{motivos_html}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    st.markdown(
+                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:12px 16px 6px 16px; margin-top:8px; margin-bottom:8px;'>"
+                        "<div style='font-size:16px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 INFORME DETALLADO DE CORRECCIÓN DEL EPÍGRAFE</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -2958,7 +2900,11 @@ elif not st.session_state.finished:
                             unsafe_allow_html=True
                         )
                     if exp_of:
-                        eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
+                        lineas_exp_limpias = [
+                            p.strip() for p in exp_of.split('\n')
+                            if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip())
+                        ]
+                        eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p}</div>" for p in lineas_exp_limpias])
                         titulo_exp = "📖 Texto Íntegro Oficial del Epígrafe:" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (2.º Ejercicio - 2.ª Parte):"
                         st.markdown(
                             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
@@ -3194,7 +3140,11 @@ else:
         co = (q.get('answer_text') or "Ver texto íntegro del epígrafe debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
-        eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3; color: #0c5460 !important;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
+        lineas_res_limpias = [
+            p.strip() for p in et.split('\n')
+            if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip())
+        ]
+        eh = "".join([f"<div style='margin-top: 3px; line-height: 1.3; color: #0c5460 !important;'>{p}</div>" for p in lineas_res_limpias])
         ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>" if q.get('preamble') else ""
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
