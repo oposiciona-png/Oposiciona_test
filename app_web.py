@@ -1434,7 +1434,6 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
@@ -1457,11 +1456,6 @@ def obtener_tests_segun_rol():
     return TESTS_DISPONIBLES_COMPLETO
 
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
-    """
-    Analiza las frases iniciales y el conjunto del texto para detectar expresiones
-    inaceptables, desahogos sin contenido jurídico o pulsaciones de teclado sin sentido.
-    Devuelve un mensaje elegante y con clase si procede, o None si es un intento serio.
-    """
     t_raw = (texto_alumno or "").strip()
     if not t_raw:
         return None
@@ -1485,8 +1479,8 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     if es_inapropiada or sin_sentido:
         return (
             "🎩 **Observación del Tribunal Evaluador de Oposiciona:**\n\n"
-            "Comprendemos que el camino hacia el Cuerpo de Gestión de la Administración de la Seguridad Social "
-            "tiene momentos de cansancio y máxima exigencia, pero esta plataforma ha sido diseñada con un único propósito: "
+            "Comprendemos que la preparación hacia el Cuerpo de Gestión de la Administración de la Seguridad Social "
+            "tiene momentos de cansancio y máxima exigencia, pero esta plataforma ha sido concebida con un único propósito: "
             "**forjar funcionarios de excelencia y acercarte cada día más a tu plaza, no perder el tiempo**.\n\n"
             "El día del examen oficial ante el Tribunal, cada línea que escribas será el reflejo de tu rigor técnico y de tu temple como futuro gestor público. "
             "Respira hondo, retoma el pulso jurídico y redacta una respuesta a la altura del profesional en el que te estás convirtiendo. "
@@ -1512,26 +1506,47 @@ def _dividir_en_oraciones_juridicas(texto):
             oraciones.append(p_rest)
     return oraciones
 
-# Estructura de Fuentes conectada con los cuadernos de NotebookLM:
-# "TEMAS GESTION HASTA EL MOMENTO", "TEMAS ADMINISTRATIVO HASTA EL MOMENTO" y "NOVEDADES 2026"
+# Criterios Oficiales del Tribunal (Resolución 22 de diciembre de 2025 - Cuerpo de Gestión Acceso Libre)
+CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
+CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
+A) Estructura eliminatoria:
+   - Primera parte (Preguntas de desarrollo): contestación por escrito a un cuestionario de preguntas sobre las materias del bloque VIII del programa.
+   - Segunda parte (Supuestos prácticos): resolución por escrito de un supuesto práctico de ocho preguntas relacionadas con las materias del bloque VIII del programa.
+B) Calificación y no compensación:
+   - El segundo ejercicio se califica de 0 a 100 puntos (mínimo 50 puntos para superar).
+   - Cada parte se califica de 0 a 50 puntos, siendo necesario obtener AL MENOS 25 PUNTOS directos en cada una para sumar ambas partes (sin compensación si alguna es inferior a 25 puntos).
+C) Baremo de la Primera Parte (Desarrollo - máximo 50 puntos):
+   1. Conocimiento manifestado en la respuesta y precisión de la normativa correspondiente y ajustada a su literalidad: de 0 a 45 puntos.
+   2. Orden de las ideas a través de una exposición correctamente estructurada: de 0 a 3 puntos (SIEMPRE QUE se alcancen al menos 20 puntos sobre 45 en el apartado 1; si no llega a 20/45, recibe 0 puntos en este apartado).
+   3. Calidad de la expresión escrita: de 0 a 2 puntos (SIEMPRE QUE se alcancen al menos 20 puntos sobre 45 en el apartado 1; si no llega a 20/45, recibe 0 puntos en este apartado).
+D) Baremo de la Segunda Parte (Supuesto Práctico - máximo 50 puntos):
+   1. Conocimiento manifestado, precisión de la normativa correspondiente y ajustada a su literalidad y precisión de las respuestas a las situaciones prácticas planteadas: de 0 a 45 puntos.
+   2. Orden de las ideas a través de una exposición correctamente estructurada: de 0 a 3 puntos (SIEMPRE QUE se alcancen al menos 20 puntos sobre 45 en el apartado 1).
+   3. Calidad de la expresión escrita: de 0 a 2 puntos (SIEMPRE QUE se alcancen al menos 20 puntos sobre 45 en el apartado 1).
+"""
+
+# Fuentes exclusivas autorizadas de NotebookLM:
+# 1) "TEMAS GESTION HASTA EL MOMENTO"
+# 2) "TEMAS ADMINISTRATIVO HASTA EL MOMENTO"
+# 3) "NOVEDADES 2026"
 FUENTES_TEMARIO_NOTEBOOKLM = {
     "SEEH": {
-        "cuaderno": "TEMAS GESTIÓN HASTA EL MOMENTO + NOVEDADES 2026 (NotebookLM)",
-        "epigrafe": "Tema 73 — Epígrafe 5: SISTEMA ESPECIAL DE EMPLEADAS DE HOGAR (SEEEHH): Campo de aplicación, Afiliación, altas y bajas, Cotización y Particularidades de la Acción Protectora",
+        "cuaderno": "TEMAS GESTION HASTA EL MOMENTO | TEMAS ADMINISTRATIVO HASTA EL MOMENTO | NOVEDADES 2026",
+        "epigrafe": "Tema 73 (Bloque VIII) — Epígrafe 5: SISTEMA ESPECIAL PARA EMPLEADOS DE HOGAR (SEEH): Altas, bajas, cotización y particularidades de la acción protectora",
         "resumen_fuente": (
-            "- Fuentes en NotebookLM ('TEMAS GESTIÓN HASTA EL MOMENTO' y 'NOVEDADES 2026'): Tema 73.pdf, TRLGSS.pdf, Orden Cotización 2026 (Orden PJC/297/2026), Salario Mínimo 2026 (RD 126/2026), RDL 3/2026 y RDL 31/2026 (BOE-A-2026-21872).\n"
+            "- Fuentes consultadas: 'TEMAS GESTION HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026' (TRLGSS RD Legislativo 8/2015, Orden PJC/297/2026, RD 126/2026 SMI, RDL 3/2026 y RDL 31/2026).\n"
             "- Integración en el Régimen General: Ley 27/2011, de 1 de agosto (efectos 01/01/2012) y art. 136.2.b) TRLGSS.\n"
             "- Regulación laboral especial: Real Decreto 1620/2011, de 14 de noviembre (art. 2.1.b ET) y RDL 16/2022, de 6 de septiembre (protección por desempleo y FOGASA).\n"
-            "- Campo de aplicación (art. 250 TRLGSS): Servicios retribuidos por cuenta y dependencia del titular del hogar familiar (tareas domésticas, cuidado/atención de miembros de la familia, guardería, jardinería, conducción). Excluidos: personas jurídicas/ETT (van al RG ordinario), parientes hasta 2.º grado salvo prueba en contrario de condición salarial, trabajos por amistad/benevolencia o «a la par».\n"
+            "- Campo de aplicación (art. 250 TRLGSS): Servicios retribuidos por cuenta y dependencia del titular del hogar familiar. Excluidos: personas jurídicas/ETT (van al RG ordinario), parientes hasta 2.º grado salvo prueba en contrario de condición salarial, trabajos por amistad/benevolencia o «a la par».\n"
             "- Cotización y beneficios: Escala de tramos sobre retribución (Orden PJC/297/2026 y RD 126/2026 SMI); en tiempo parcial la retribución mínima del tramo es SMI/hora × horas mensuales; no aplica el recargo por contratos inferiores a 30 días (art. 151 TRLGSS) ni la cotización adicional por horas del art. 122 de la Ley 31/2022; reducción del 20% en contingencias comunes o bonificación del 45%/80% en familias numerosas (solo para un cuidador por unidad familiar).\n"
-            "- Acción protectora (art. 251 TRLGSS): Derecho a prestaciones del RG con particularidades: a) IT común se abona desde el 9.º día (días 4.º al 8.º a cargo del empleador), salvo en las 5 situaciones especiales del art. 169.1.a) TRLGSS tras el RDL 31/2026 (menstruación incapacitante/interrupción embarazo, semana 39.ª, donación órganos, trastorno menopáusico secundario codificado y violencia de género), donde se abona por la entidad gestora/mutua desde el día siguiente a la baja (día de la baja a cargo del empleador); b) Pago directo de IT por la entidad gestora/mutua (no procede pago delegado); c) En contingencias profesionales no aplica el régimen de responsabilidad empresarial en orden a las prestaciones del art. 167 TRLGSS (capital coste); d) Integración de lagunas desde 01/01/2024 en IP común y jubilación conforme a arts. 197.4 y 209.1.b) TRLGSS; e) Desempleo y cobertura del FOGASA (RD 505/1985 y art. 11.2 RD 1620/2011: indemnización de 12 días por año con tope de 6 mensualidades y salario diario máximo del doble del SMI)."
+            "- Acción protectora (art. 251 TRLGSS): a) IT común se abona desde el 9.º día (días 4.º al 8.º a cargo del empleador), salvo en las 5 situaciones especiales del art. 169.1.a) TRLGSS tras el RDL 31/2026 (menstruación incapacitante/interrupción embarazo, semana 39.ª, donación órganos, trastorno menopáusico secundario codificado y violencia de género), donde se abona por la entidad gestora/mutua desde el día siguiente a la baja (día de la baja a cargo del empleador); b) Pago directo de IT por la entidad gestora/mutua (no procede pago delegado); c) En contingencias profesionales no aplica el régimen de responsabilidad empresarial en orden a las prestaciones del art. 167 TRLGSS (capital coste); d) Integración de lagunas desde 01/01/2024 en IP común y jubilación conforme a arts. 197.4 y 209.1.b) TRLGSS; e) Desempleo y cobertura del FOGASA (RD 505/1985 y art. 11.2 RD 1620/2011: indemnización de 12 días por año con tope de 6 mensualidades y salario diario máximo del doble del SMI)."
         )
     },
     "SEA": {
-        "cuaderno": "TEMAS GESTIÓN HASTA EL MOMENTO + NOVEDADES 2026 (NotebookLM)",
-        "epigrafe": "Tema 73 — Epígrafe 4: SISTEMA ESPECIAL AGRARIO (SEA): Normativa, Campo de aplicación, Afiliación, Cotización en actividad e inactividad y Acción Protectora",
+        "cuaderno": "TEMAS GESTION HASTA EL MOMENTO | TEMAS ADMINISTRATIVO HASTA EL MOMENTO | NOVEDADES 2026",
+        "epigrafe": "Tema 73 (Bloque VIII) — Epígrafe 4: SISTEMA ESPECIAL PARA TRABAJADORES POR CUENTA AJENA AGRARIOS (SEA): Campo de aplicación, cotización, recaudación y acción protectora",
         "resumen_fuente": (
-            "- Fuentes en NotebookLM ('TEMAS GESTIÓN HASTA EL MOMENTO' y 'NOVEDADES 2026'): Tema 73.pdf, 2026_06 GUIA SEA INACTIVIDAD.pdf, Orden Cotización 2026 (PJC/297/2026), RDL 3/2026 y RDL 31/2026.\n"
+            "- Fuentes consultadas: 'TEMAS GESTION HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026' (TRLGSS arts. 252-256, Guía SEA Inactividad 2026, Orden PJC/297/2026, RDL 3/2026 y RDL 31/2026).\n"
             "- Integración en el Régimen General: Ley 28/2011, de 22 de septiembre (efectos 01/01/2012), arts. 252 a 256 del TRLGSS, Ley 19/1995 de Modernización de Explotaciones Agrarias y supletoriamente Decreto 3772/1972.\n"
             "- Campo de aplicación (art. 252 TRLGSS): Trabajadores por cuenta ajena en labores agrarias, forestales o pecuarias y tareas complementarias. Exclusión expresa (art. 252.1.b): manipulado, empaquetado y comercialización del plátano (van al RG ordinario aunque sea en la explotación) y mecánicos/administrativos de fincas.\n"
             "- Períodos de inactividad (art. 253 TRLGSS): Existen cuando las jornadas reales en el mes natural sean inferiores al 76,67% de los días naturales de alta. Inclusión en inactividad requiere 30 jornadas reales en 365 días (o 5 jornadas reales si estuvo antes integrado + solicitud en 3 meses con efectos día 1 del mes siguiente). Exclusión por impago de 2 mensualidades consecutivas o no realizar 30 jornadas reales.\n"
@@ -1879,20 +1894,41 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     else:
         texto_sugerido = explicacion_oficial
 
+    # Cálculo conforme a los Criterios Oficiales del Tribunal (sobre 50 puntos y conversión a base 10):
+    # Criterio 1: Conocimiento, literalidad normativa y precisión práctica -> de 0 a 45 puntos
     total_eval = len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos)
     acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
-    nota_base = (acertados_eval / max(1, total_eval)) * 10
-    bonificacion_comp = 0.40 * len(citas_complementarias)
-    nota_10 = min(10.0, round(nota_base + bonificacion_comp, 2))
+    pts_criterio_1 = (acertados_eval / max(1, total_eval)) * 45.0
+    pts_criterio_1 = min(45.0, pts_criterio_1 + (1.80 * len(citas_complementarias)))
     if citas_erroneas:
-        nota_10 = max(0.0, round(nota_10 - 0.50 * len(citas_erroneas), 2))
+        pts_criterio_1 = max(0.0, pts_criterio_1 - (2.25 * len(citas_erroneas)))
     if alerta_sentido:
-        nota_10 = max(0.0, round(nota_10 - 2.5, 2))
+        pts_criterio_1 = max(0.0, pts_criterio_1 - 11.25)
+    pts_criterio_1 = round(pts_criterio_1, 2)
 
+    # Criterios 2 (Orden de ideas: 0 a 3 ptos) y 3 (Calidad expresión escrita: 0 a 2 ptos)
+    # Solo se suman si alcanza al menos 20 puntos sobre 45 en el Criterio 1
+    supera_umbral_20 = pts_criterio_1 >= 20.0
+    if supera_umbral_20:
+        num_parrafos_al = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 20])
+        usa_conectores = sum(1 for c in ["conforme", "virtud", "establece", "dispone", "asimismo", "obstante", "tanto", "articulo", "respecto"] if c in alumno_norm)
+        pts_criterio_2 = round(min(3.0, 1.8 + (0.6 if num_parrafos_al >= 2 else 0.0) + (0.6 if usa_conectores >= 2 else 0.0)), 2)
+        pts_criterio_3 = round(min(2.0, 1.2 + (0.8 if len(texto_alumno.strip()) >= 180 and usa_conectores >= 1 else 0.3)), 2)
+    else:
+        pts_criterio_2 = 0.0
+        pts_criterio_3 = 0.0
+
+    nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
+    nota_10 = round((nota_50 / 50.0) * 10.0, 2)
     fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
 
     return {
         "nota": nota_10,
+        "nota_50": nota_50,
+        "pts_criterio_1": pts_criterio_1,
+        "pts_criterio_2": pts_criterio_2,
+        "pts_criterio_3": pts_criterio_3,
+        "supera_umbral_20": supera_umbral_20,
         "alerta_sentido": alerta_sentido,
         "citas_ok": citas_ok,
         "citas_complementarias": citas_complementarias,
@@ -1912,7 +1948,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     encuadre_nb = ""
     if ev.get("fuente_notebooklm"):
         primera_linea_nb = ev["fuente_notebooklm"].split("\n")[1] if "\n" in ev["fuente_notebooklm"] else ""
-        encuadre_nb = f"📌 *Encuadre en las fuentes de tu temario (NotebookLM):* {primera_linea_nb}\n\n"
+        encuadre_nb = f"📌 *Fuentes de contraste (TEMAS GESTIÓN / ADMINISTRATIVO HASTA EL MOMENTO y NOVEDADES 2026):* {primera_linea_nb}\n\n"
 
     if ev["puntos_cubiertos"] or ev["citas_ok"] or ev["citas_complementarias"] or ev["cifras_ok"]:
         aciertos_txt = []
@@ -1927,10 +1963,10 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         if ev["puntos_cubiertos"]:
             resumen_ideas = " ".join([f"«{p}»" for p in ev["puntos_cubiertos"][:2]])
             aciertos_txt.append(f"En cuanto al fondo jurídico, tu redacción desarrolla con acierto: {resumen_ideas}")
-        bloques.append("1. **✅ Análisis jurídico de tu exposición y conexión con el temario:**\n" + encuadre_nb + " ".join(aciertos_txt))
+        bloques.append("1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n" + encuadre_nb + " ".join(aciertos_txt))
     else:
         bloques.append(
-            "1. **✅ Análisis jurídico de tu exposición y conexión con el temario:**\n"
+            "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n"
             + encuadre_nb +
             "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe del temario oficial."
         )
@@ -1942,7 +1978,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normativa.append(f"✔️ **Normativa principal del epígrafe acertada:** {', '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
         rev_normativa.append(
-            f"🌟 **Normativa complementaria verificada en las fuentes legales (suma +0,40 ptos/precepto):** {', '.join(ev['citas_complementarias'])}."
+            f"🌟 **Normativa complementaria verificada en las fuentes legales (suma valor en Criterio 1):** {', '.join(ev['citas_complementarias'])}."
         )
     if ev["citas_erroneas"]:
         rev_normativa.append(
@@ -1954,7 +1990,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         )
     if not rev_normativa:
         rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible en este epígrafe.")
-    bloques.append("2. **⚖️ Auditoría de artículos y fuentes legales (verificación en el bloque normativo):**\n" + "\n".join(rev_normativa))
+    bloques.append("2. **⚖️ Auditoría de artículos y fuentes legales (TEMAS HASTA EL MOMENTO Y NOVEDADES 2026):**\n" + "\n".join(rev_normativa))
 
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         detalles_str = ""
@@ -1964,7 +2000,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             lista_om = "\n".join([f"   - *{p}*" for p in ev["puntos_omitidos"][:5]])
             detalles_str += f"Comparando tu texto con el epígrafe oficial del tema, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
         modelo_parrafo = respuesta_oficial if (respuesta_oficial and len(respuesta_oficial) > 40) else ev["texto_sugerido"]
-        detalles_str += f"✍️ **Párrafo magistral que deberías incorporar a tu examen para alcanzar el 10:**\n« {modelo_parrafo} »"
+        detalles_str += f"✍️ **Párrafo magistral que deberías incorporar a tu examen para alcanzar la máxima puntuación:**\n« {modelo_parrafo} »"
         bloques.append("3. **⚠️ Detalles omitidos del epígrafe y redacción modelo recomendada:**\n" + detalles_str)
     else:
         bloques.append(
@@ -1972,12 +2008,31 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             "¡Excelente trabajo! Tu respuesta abarca todos los requisitos, excepciones y matices técnicos del epígrafe oficial."
         )
 
-    comentario_nota = (
-        "Exposición sobresaliente, rigurosa y enriquecida con interrelación normativa propia de un examen de plaza." if ev["nota"] >= 7.5 else
-        "Respuesta aprobada en su estructura básica, pero debes incorporar los preceptos y matices del epígrafe omitidos." if ev["nota"] >= 5.0 else
-        "Respuesta aún incompleta para superar el corte del ejercicio escrito; incorpora el párrafo magistral y los artículos indicados arriba."
+    c1 = ev.get("pts_criterio_1", 0.0)
+    c2 = ev.get("pts_criterio_2", 0.0)
+    c3 = ev.get("pts_criterio_3", 0.0)
+    n50 = ev.get("nota_50", round(ev["nota"] * 5, 2))
+    umbral_txt = (
+        "✔️ Superas el umbral mínimo de **20,00 / 45 puntos** en el Criterio 1, por lo que **sí se te computan** los puntos de orden de ideas (hasta 3 ptos) y calidad de expresión escrita (hasta 2 ptos)."
+        if ev.get("supera_umbral_20") else
+        "⚠️ Al no alcanzar al menos **20,00 / 45 puntos** en el Criterio 1 (conocimiento y literalidad normativa), conforme a los Criterios Oficiales del Tribunal **no pueden sumarse** los apartados de orden de ideas (0/3) ni calidad de expresión escrita (0/2)."
     )
-    bloques.append(f"4. **🎓 Calificación orientativa del Tribunal:** **{ev['nota']:.2f} / 10** — *{comentario_nota}*")
+    estado_corte = (
+        "✅ **PARTE SUPERADA** (alcanzas el mínimo eliminatorio de **25,00 / 50 puntos** necesario para sumar ambas partes del Segundo Ejercicio)."
+        if n50 >= 25.0 else
+        "❌ **NO ALCANZA EL MÍNIMO ELIMINATORIO DE 25,00 / 50 PUNTOS** (recuerda que el Tribunal no admite compensación entre la 1.ª y la 2.ª parte si alguna es inferior a 25 puntos)."
+    )
+
+    desglose_tribunal = (
+        "4. **🎓 Calificación Oficial según los Criterios del Tribunal (Resolución 22/12/2025):**\n"
+        f"   - **Criterio 1 — Conocimiento, precisión normativa ajustada a su literalidad y resolución práctica (0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
+        f"   - **Criterio 2 — Orden de las ideas y estructura de la exposición (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
+        f"   - **Criterio 3 — Calidad de la expresión escrita (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
+        f"   - {umbral_txt}\n"
+        f"   - 📊 **PUNTUACIÓN DIRECTA DE LA PARTE (Escala Oficial 0-50):** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{ev['nota']:.2f} / 10`**)*\n"
+        f"   - 🏛️ **Estado frente al corte del Tribunal:** {estado_corte}"
+    )
+    bloques.append(desglose_tribunal)
 
     return "\n\n".join(bloques)
 
@@ -1994,7 +2049,6 @@ def obtener_gemini_api_key_activa():
     return GEMINI_API_KEY_DEFAULT
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
-    # 1. Filtro inmediato de elegancia y rigor ante frases iniciales inaceptables o sin interés
     aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
     if aviso_elegante:
         return aviso_elegante
@@ -2004,31 +2058,31 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
 
     prompt = (
-        "Actúa como Presidente del Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social y preparador experto de Oposiciona.\n"
-        "Tu misión es realizar un ANÁLISIS JURÍDICO PROFUNDO, RIGUROSO Y PEDAGÓGICO de la respuesta escrita por el opositor, "
-        "contrastándola con la Solución Oficial, con la Explicación del PDF y con las FUENTES DE NOTEBOOKLM ('TEMAS GESTIÓN HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026').\n\n"
-        "INSTRUCCIONES CRÍTICAS DE EVALUACIÓN PARA EL TRIBUNAL IA:\n"
-        "0. **FILTRO DE SERIEDAD Y ELEGANCIA EN FRASES INICIALES:** Analiza ante todo las frases iniciales y el tono del texto del alumno. Si el alumno escribe expresiones inaceptables, vulgares, desahogos o frases sin ningún interés para el tema (ej. 'esto es una caca', 'puta mierda', 'paso de todo', 'no sé nada', etc.), NO realices el desglose técnico: respóndele únicamente con un mensaje sumamente educado, elegante y con mucha clase recordándole que esta plataforma ha sido creada para alcanzar la excelencia y conseguir su plaza, no para perder el tiempo, invitándole a redactar una respuesta digna de un futuro funcionario.\n"
-        "1. **ENCUADRE EN EL EPÍGRAFE DEL TEMARIO (NOTEBOOKLM):** Ubica la respuesta dentro del epígrafe exacto del tema (indicado abajo en la Fuente de NotebookLM) y evalúa la estructura, precisión terminológica y sistemática del alumno.\n"
-        "2. **PROHIBIDO DAR POR INVÁLIDO UN ARTÍCULO SIN CONSULTAR ANTES EL TEXTO LEGAL Y LAS FUENTES CONEXAS:** "
-        "Los buenos opositores relacionan artículos transversales del TRLGSS (RD Legislativo 8/2015), del Estatuto de los Trabajadores (RD Legislativo 2/2015), de la Ley 27/2011, Ley 28/2011, RD 1620/2011, RDL 16/2022, RD 505/1985, Ley 31/2022 (art. 122), RDL 3/2026, RDL 31/2026 (BOE-A-2026-21872), Orden PJC/297/2026, RD 126/2026, RD 643/2026, RD 607/2026, RD 84/1996, RD 2064/1995 y RD 1415/2004. "
-        "Si el alumno cita un artículo o norma que NO aparece literalmente en la explicación pero SÍ es jurídicamente cierto y guarda relación con la institución jurídica preguntada, DEBES EXPLICAR qué regula ese precepto, cómo se conecta con la fuente del tema y VALORARLO MUY POSITIVAMENTE subiendo su calificación.\n"
-        "3. **DETECCIÓN MILIMÉTRICA DE OMISIONES:** Compara frase por frase lo escrito por el alumno con la Explicación Oficial y el Epígrafe de NotebookLM. Detalla exactamente qué requisitos, plazos (días hábiles/naturales), tramos, porcentajes, topes (SMI/IPREM), exclusiones o excepciones se ha dejado en el tintero.\n"
-        "4. **REDACCIÓN MAGISTRAL DE COMPLEMENTO:** Redacta un párrafo modelo con estilo de examen oficial (listo para memorizar e insertar en su texto) que contenga todo lo que le ha faltado para sacar un 10.\n\n"
-        f"=== FUENTE DEL TEMARIO Y EPÍGRAFE (NOTEBOOKLM: TEMAS GESTIÓN / ADMINISTRATIVO Y NOVEDADES 2026) ===\n{fuente_nb if fuente_nb else 'Temario Oficial Oposiciona en NotebookLM (TEMAS GESTIÓN HASTA EL MOMENTO, TEMAS ADMINISTRATIVO HASTA EL MOMENTO y NOVEDADES 2026: TRLGSS, RDL 3/2026, RDL 31/2026, Orden PJC/297/2026, RD 126/2026, RD 643/2026).'}\n\n"
-        f"=== CONTEXTO / ENUNCIADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
+        "Actúa como la Presidenta del Tribunal Calificador de las pruebas selectivas del Cuerpo de Gestión de la Administración de la Seguridad Social (Resolución de 22 de diciembre de 2025) y preparador experto de Oposiciona.\n"
+        "Tu misión es corregir con rigor técnico absoluto la respuesta escrita por el opositor en el Segundo Ejercicio, "
+        "contrastándola exclusivamente con las 3 fuentes oficiales de Oposiciona en NotebookLM: "
+        "1) 'TEMAS GESTION HASTA EL MOMENTO', 2) 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 3) 'NOVEDADES 2026'.\n\n"
+        f"{CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO}\n\n"
+        "REGLAS DE CORRECCIÓN DE OBLIGADO CUMPLIMIENTO:\n"
+        "0. **FILTRO DE ELEGANCIA EN FRASES INICIALES:** Si el texto contiene expresiones inaceptables, vulgares o frases sin ningún interés para el tema ('esto es una caca', 'puta mierda', 'paso de todo', etc.), NO realices la corrección técnica: responde únicamente con un mensaje lleno de clase, educación y estilo recordando que la plataforma se ha creado para alcanzar la excelencia y conseguir su plaza, no para perder el tiempo.\n"
+        "1. **INTERRELACIÓN NORMATIVA Y CONSULTA PREVIA DEL TEXTO LEGAL:** Antes de dar por inválido cualquier artículo o norma citado por el alumno que no figure literalmente en la explicación del PDF, comprueba en 'TEMAS GESTION HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026' (TRLGSS, ET, Ley 27/2011, Ley 28/2011, RD 1620/2011, RDL 16/2022, RD 505/1985, Ley 31/2022 art. 122, RDL 3/2026, RDL 31/2026, Orden PJC/297/2026, RD 126/2026, RD 643/2026, RD 84/1996, RD 2064/1995, RD 1415/2004) si guarda relación con la materia. Si es correcto y mejora el contenido, explícalo y súmale puntos en el Criterio 1.\n"
+        "2. **APLICACIÓN ESTRICTA DEL BAREMO DE 50 PUNTOS DEL TRIBUNAL:**\n"
+        "   - Evalúa el **Criterio 1 (0 a 45 puntos)** exigiendo precisión normativa ajustada a su literalidad y precisión en la situación práctica.\n"
+        "   - Evalúa el **Criterio 2 — Orden de las ideas y estructura (0 a 3 puntos)** y el **Criterio 3 — Calidad de la expresión escrita (0 a 2 puntos)**, aplicando rigurosamente la regla oficial del Tribunal: **solo puntúan si el alumno alcanza al menos 20 puntos sobre 45 en el Criterio 1** (si obtiene menos de 20/45 en el Criterio 1, asigna 0 puntos en Criterio 2 y 0 puntos en Criterio 3).\n"
+        "   - Indica la nota total sobre **50 puntos** (señalando si supera los **25 puntos eliminatorios** necesarios para no quedar excluido sin compensación) y su nota equivalente sobre **10 puntos**.\n\n"
+        f"=== FUENTES OFICIALES NOTEBOOKLM (TEMAS GESTION HASTA EL MOMENTO | TEMAS ADMINISTRATIVO HASTA EL MOMENTO | NOVEDADES 2026) ===\n{fuente_nb if fuente_nb else 'Corpus Oficial NotebookLM: TEMAS GESTION HASTA EL MOMENTO, TEMAS ADMINISTRATIVO HASTA EL MOMENTO y NOVEDADES 2026.'}\n\n"
+        f"=== ENUNCIADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
         f"=== RESPUESTA DIRECTA OFICIAL ===\n{respuesta_oficial}\n\n"
-        f"=== EXPLICACIÓN Y FUNDAMENTACIÓN OFICIAL DEL TEMA ===\n{explicacion_oficial}\n\n"
+        f"=== EXPLICACIÓN OFICIAL DEL TEMA ===\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        "Estructura tu dictamen en estos 4 apartados claros:\n"
-        "1. **✅ Análisis jurídico de tu exposición y conexión con el epígrafe del tema**\n"
-        "2. **⚖️ Auditoría de artículos, leyes y relaciones normativas (verificación con el texto legal y fuentes de NotebookLM)**\n"
+        "Estructura tu respuesta en estos 4 bloques exactos:\n"
+        "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa**\n"
+        "2. **⚖️ Auditoría de artículos, leyes y relaciones con las fuentes (TEMAS HASTA EL MOMENTO y NOVEDADES 2026)**\n"
         "3. **⚠️ Detalles técnicos omitidos y párrafo magistral que deberías haber incluido**\n"
-        "4. **🎓 Calificación orientativa del Tribunal (sobre 10)**"
+        "4. **🎓 Calificación Oficial según los Criterios del Tribunal (desglose Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2], Total sobre 50 puntos y equivalencia sobre 10)**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # Primera y única opción principal: IA de Gemini
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
@@ -2039,7 +2093,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         except Exception:
             continue
 
-    # Segunda alternativa únicamente si están agotados los créditos o sin respuesta del servidor externo
     if ev_fallback is None:
         ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
     return generar_dictamen_tribunal_inteligente(ev_fallback, respuesta_alumno, respuesta_oficial, explicacion_oficial)
@@ -2238,8 +2291,8 @@ def coincide_busqueda(nombre_test, consulta):
 
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES": return "🏆 Exámenes y Simulacros Oficiales"
-    if categoria == "PREGUNTA DE DESARROLLO": return "📝 2.º Ejercicio Gestión — Preguntas de Desarrollo"
-    if categoria == "SUPUESTOS PRÁCTICOS": return "📋 3.er Ejercicio Gestión — Supuestos Prácticos"
+    if categoria == "PREGUNTA DE DESARROLLO": return "📝 2.º Ejercicio (1.ª Parte) — Preguntas de Desarrollo"
+    if categoria == "SUPUESTOS PRÁCTICOS": return "📋 2.º Ejercicio (2.ª Parte) — Supuestos Prácticos"
     m = re.match(r'^TEMAS?\s*[\.\-]?\s*(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
     if m:
         b = m.group(1).upper().strip()
@@ -2447,7 +2500,6 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -2491,16 +2543,16 @@ if not st.session_state.questions:
     st.session_state.saved_avance = st.session_state.modo_avance = modo_avance
 
     if categoria == "PREGUNTA DE DESARROLLO":
-        titulo_paso_4 = "4. Seleccionar Pregunta de desarrollo (2.º Ejercicio)"
+        titulo_paso_4 = "4. Seleccionar Pregunta de desarrollo (2.º Ejercicio - 1.ª Parte)"
     elif categoria == "SUPUESTOS PRÁCTICOS":
-        titulo_paso_4 = "4. Seleccionar Supuestos prácticos (3.er Ejercicio)"
+        titulo_paso_4 = "4. Seleccionar Supuestos prácticos (2.º Ejercicio - 2.ª Parte)"
     else:
         titulo_paso_4 = "4. Selección de Test"
 
     st.markdown(f"<h4 style='color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</h4>", unsafe_allow_html=True)
     if categoria in ["PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"] and es_admin:
-        ej_txt = "Segundo Ejercicio (Pregunta de Desarrollo)" if categoria == "PREGUNTA DE DESARROLLO" else "Tercer Ejercicio (Supuestos Prácticos)"
-        st.info(f"🔒 **Modo de prueba exclusivo para Administrador — {ej_txt}:** Al pulsar «Comprobar», la IA de Gemini analiza tu respuesta contrastándola con las fuentes de NotebookLM (`TEMAS GESTIÓN HASTA EL MOMENTO`, `TEMAS ADMINISTRATIVO HASTA EL MOMENTO` y `NOVEDADES 2026`).")
+        ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria == "PREGUNTA DE DESARROLLO" else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
+        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Corrección con IA de Gemini aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar $\ge 20/45$; mínimo eliminatorio $25/50$ ptos) y contrastando con `TEMAS GESTION HASTA EL MOMENTO`, `TEMAS ADMINISTRATIVO HASTA EL MOMENTO` y `NOVEDADES 2026`.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2735,7 +2787,7 @@ elif not st.session_state.finished:
                     if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
                         stat["last_evaluated_text"] = txt_alumno
                         clave_activa = obtener_gemini_api_key_activa()
-                        with st.spinner("🤖 El Tribunal Evaluador de Gemini está contrastando tu respuesta con las fuentes de NotebookLM y la normativa vigente..."):
+                        with st.spinner("🤖 El Tribunal Evaluador de Gemini está aplicando los Criterios Oficiales (0-50 ptos) y contrastando con NotebookLM..."):
                             stat["ai_feedback"] = consultar_ia_gemini_correccion(
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
@@ -2743,7 +2795,7 @@ elif not st.session_state.finished:
                     # ÚNICA CORRECCIÓN VISIBLE: Gemini IA (con respaldo automático solo si se agotan los créditos)
                     st.markdown(
                         "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
-                        "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN DEL TRIBUNAL EVALUADOR IA (GEMINI + FUENTES NOTEBOOKLM)</div>"
+                        "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN OFICIAL DEL TRIBUNAL EVALUADOR IA (BAREMO 0-50 PTOS + NOTEBOOKLM)</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -2758,7 +2810,7 @@ elif not st.session_state.finished:
                         )
                     if exp_of:
                         eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
-                        titulo_exp = "📖 Texto Íntegro Oficial de Desarrollo (2.º Ejercicio):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (3.er Ejercicio):"
+                        titulo_exp = "📖 Texto Íntegro Oficial de Desarrollo (2.º Ejercicio - 1.ª Parte):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (2.º Ejercicio - 2.ª Parte):"
                         st.markdown(
                             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
                             f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #0c5460 !important;'>{titulo_exp}</div>"
@@ -2788,6 +2840,7 @@ else:
     aciertos = fallos = blancos = preg_eval = 0
     aciertos_por_intento = {}
     suma_notas_abiertas = 0.0
+    suma_notas_50 = 0.0
     es_test_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
 
     for i, q in enumerate(st.session_state.questions):
@@ -2797,21 +2850,23 @@ else:
             txt_al = (stat.get("selected") or "").strip()
             if not txt_al:
                 blancos += 1
-                stat['final_status'] = "⚪ En blanco"
+                stat['final_status'] = "⚪ En blanco (0,00 / 50 ptos)"
             elif detectar_respuesta_inapropiada_o_sin_interes(txt_al):
                 fallos += 1
-                stat['final_status'] = "⚠️ Respuesta no evaluable (0,00/10)"
+                stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
             else:
                 ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
                 ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
                 nota_q = ev["nota"]
+                nota_q_50 = ev["nota_50"]
                 suma_notas_abiertas += nota_q
-                if nota_q >= 5.0:
+                suma_notas_50 += nota_q_50
+                if nota_q_50 >= 25.0:
                     aciertos += 1
-                    stat['final_status'] = f"✅ Superada ({nota_q:.2f}/10)"
+                    stat['final_status'] = f"✅ Superada ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
                 else:
                     fallos += 1
-                    stat['final_status'] = f"⚠️ Incompleta ({nota_q:.2f}/10)"
+                    stat['final_status'] = f"⚠️ Inferior al corte de 25 ptos ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
         elif q['answer'] != -1:
             preg_eval += 1
             co = q['options'][q['answer']]
@@ -2835,14 +2890,16 @@ else:
 
     if es_test_abierto:
         nota_referencia = suma_notas_abiertas / preg_eval if preg_eval > 0 else 0.0
+        nota_media_50 = suma_notas_50 / preg_eval if preg_eval > 0 else 0.0
         nota_oposicion_10 = nota_referencia
         aciertos_netos = aciertos
         puntos_restados = 0.0
         divisor_penalizacion = 1
-        penalizacion_texto = "0 puntos (evaluación por cobertura jurídica y normativa)"
-        nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL — 2.º Y 3.er EJERCICIO"
+        penalizacion_texto = "Mínimo eliminatorio de 25,00 / 50 puntos en cada parte (sin compensación)"
+        nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL — SEGUNDO EJERCICIO (ACCESO LIBRE)"
     else:
         nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
+        nota_media_50 = 0.0
         esp_actual = (st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "").upper()
         if "GESTI" in esp_actual or st.session_state.get("rol") == "GESTION":
             es_gestion = True
@@ -2903,7 +2960,7 @@ else:
                 } else disp();
             })();
             </script>""", height=0)
-        st.markdown("<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><h3 style='color: #1b5e20 !important; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS SUPERADO LA PRUEBA! 🎉</h3><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
+        st.markdown("<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><h3 style='color: #1b5e20 !important; margin: 0; font-size: 22px;'>🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉</h3><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
         cr1, cr2, cr3 = st.columns([1, 0.4, 1])
         with cr2:
             try: st.image("test-utiles-768x768.png", use_container_width=True)
@@ -2921,12 +2978,18 @@ else:
     if es_test_abierto:
         st.markdown(
             f"<h4 style='text-align: center; font-size: 16px; color: #334155 !important; margin-bottom: 10px;'>"
-            f"✅ Superadas: <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Incompletas: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
+            f"✅ Superadas ($\ge 25/50$): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Inferiores a 25/50: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
             f"</h4>"
             f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 CALIFICACIÓN MEDIA DE COBERTURA JURÍDICA ({nombre_cuerpo})</div>"
-            f"<div style='text-align: center; font-size: 23px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
-            f"🎓 NOTA MEDIA: {nota_oposicion_10:.2f} / 10"
+            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 BAREMO OFICIAL DEL TRIBUNAL ({nombre_cuerpo})</div>"
+            f"<div style='text-align: center; font-size: 22px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
+            f"🏛️ PUNTUACIÓN DIRECTA DE LA PARTE: {nota_media_50:.2f} / 50,00 PUNTOS"
+            f"</div>"
+            f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1565c0 !important; margin-bottom: 8px;'>"
+            f"🎓 Equivalencia sobre 10: {nota_oposicion_10:.2f} / 10"
+            f"</div>"
+            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.4;'>"
+            f"<b>Criterios Oficiales (Resolución 22/12/2025):</b> Cada parte del Segundo Ejercicio se califica de 0 a 50 puntos (0-45 ptos conocimiento, literalidad normativa y precisión práctica; 0-3 ptos orden de ideas y 0-2 ptos calidad de expresión escrita siempre que se alcancen al menos 20/45 ptos en el apartado 1). Es necesario obtener al menos <b>25 puntos directos</b> en cada parte para sumar ambas sin posibilidad de compensación."
             f"</div></div>",
             unsafe_allow_html=True
         )
@@ -3010,3 +3073,4 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
