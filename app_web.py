@@ -608,6 +608,19 @@ class PDFQuizParser:
         return "\n\n".join(parrafos)
 
     @staticmethod
+    def _limpiar_titulo_epigrafe(titulo):
+        if not titulo:
+            return ""
+        # Elimina añadidos o subtítulos pegados como "Síntesis del marco...", "Resumen...", etc.
+        t = re.split(
+            r'\s+(?:S[IÍ]NTESIS\s+DEL?\b|RESUMEN\s+DEL?\b|ESQUEMA\s+DEL?\b|INTRODUCCI[ÓO]N\s*[:\-]|DESARROLLO\s*[:\-]|CONTENIDO\s*[:\-]|1[\.\-\)]\s+)',
+            titulo,
+            maxsplit=1,
+            flags=re.IGNORECASE
+        )[0].strip()
+        return t
+
+    @staticmethod
     def parse_abiertas_gestion(pdf_bytes, modo="TODOS"):
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         raw_lines = []
@@ -666,12 +679,16 @@ class PDFQuizParser:
                     idx += 1
                     while idx < len(raw_lines):
                         cand_t = raw_lines[idx].strip()
-                        if cand_t.isupper() and not re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', cand_t, re.IGNORECASE):
+                        if (
+                            cand_t.isupper()
+                            and not re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b)', cand_t, re.IGNORECASE)
+                            and (not partes_titulo or not partes_titulo[-1].endswith('.'))
+                        ):
                             partes_titulo.append(cand_t)
                             idx += 1
                         else:
                             break
-                    titulo_des = " ".join(partes_titulo).strip()
+                    titulo_des = PDFQuizParser._limpiar_titulo_epigrafe(" ".join(partes_titulo).strip())
 
                     cuerpo_des = []
                     while idx < len(raw_lines):
@@ -686,7 +703,7 @@ class PDFQuizParser:
                             "is_open": True,
                             "tipo_abierta": "DESARROLLO",
                             "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
-                            "question_text": f"Desarrolla de forma completa y rigurosa el siguiente epígrafe conforme a la normativa vigente:\n\n« {titulo_des} »",
+                            "question_text": f"« {titulo_des} »",
                             "options": [],
                             "answer": -1,
                             "answer_text": "",
@@ -775,8 +792,8 @@ class PDFQuizParser:
             if current_q and (current_q["answer_text"] or current_q["explanation"]):
                 supuestos_qs.append(current_q)
 
-        # 5. EXTRACCIÓN DE EPÍGRAFES PARA PDFs DE RESUMEN (ej. Tema_51_Resumen_Epigrafes y Tema_52_Resumen_Epigrafes)
-        # Cada explicación abarca íntegramente desde el título del Epígrafe hasta el siguiente Epígrafe o el final del PDF.
+        # 5. EXTRACCIÓN LIMPIA DE EPÍGRAFES (el título es estrictamente el Epígrafe tal cual, sin subtítulos añadidos)
+        # El contenido (explanation) abarca todo el texto desde el Epígrafe hasta el siguiente Epígrafe o el final del PDF.
         if modo in ["DESARROLLO", "TODOS"] and not desarrollo_qs and all_clean_lines:
             tema_cabecera = ""
             lineas_utiles = []
@@ -791,7 +808,6 @@ class PDFQuizParser:
                     continue
                 lineas_utiles.append(l_s)
 
-            # Comprobamos si el documento usa la palabra explícita "EPÍGRAFE"
             tiene_palabra_epigrafe = any(
                 re.match(r'^(?:[•\*\-–]\s*)?EP[IÍ]GRAFE\s+(?:\d+|[I|V|X]+)', l, re.IGNORECASE)
                 for l in lineas_utiles
@@ -800,7 +816,6 @@ class PDFQuizParser:
             def _es_inicio_epigrafe(linea):
                 if tiene_palabra_epigrafe:
                     return bool(re.match(r'^(?:[•\*\-–]\s*)?EP[IÍ]GRAFE\s+(?:\d+|[I|V|X]+)\b', linea, re.IGNORECASE))
-                # Si el PDF no escribe la palabra "EPÍGRAFE", solo corta en títulos principales EN MAYÚSCULAS numerados (1., 2., I., II.)
                 return bool(
                     re.match(r'^(?:\d{1,2}[\.\-\)]|[I|V|X]{1,4}[\.\-\)])\s+[A-ZÁÉÍÓÚÑ0-9\s,\.\-–:\(\)\/«»"]+$', linea)
                     and linea.isupper()
@@ -816,17 +831,23 @@ class PDFQuizParser:
                 if _es_inicio_epigrafe(l_actual):
                     partes_tit = [l_actual]
                     idx_l += 1
-                    # Si el título del epígrafe continúa en la línea siguiente en mayúsculas (o empieza sin terminar frase), lo unimos al título
+                    # Solo une otra línea al título si la primera línea quedó cortada a mitad de frase (ej. termina en preposición/conjunción)
+                    # NUNCA une subtítulos como "Síntesis del marco constitucional..."
                     while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
                         cand = lineas_utiles[idx_l]
-                        if (cand.isupper() and len(cand) < 140) or (not partes_tit[-1].endswith(('.', ':')) and len(" ".join(partes_tit)) < 75 and len(cand) < 95 and not cand.endswith('.')):
+                        if re.match(r'^(?:S[IÍ]NTESIS|RESUMEN|ESQUEMA|INTRODUCCI[ÓO]N|CONTENIDO|DESARROLLO|\d+[\.\-\)]|[a-e][\)\.\-]|[•\*])\b', cand, re.IGNORECASE):
+                            break
+                        termina_incompleto = bool(re.search(r'\b(DE|DEL|LA|LAS|EL|LOS|EN|Y|O|A|CON|POR|PARA|SOBRE|SEGÚN|COMO)\s*$', partes_tit[-1], re.IGNORECASE))
+                        es_solo_etiqueta = bool(re.match(r'^(?:[•\*\-–]\s*)?EP[IÍ]GRAFE\s+(?:\d+|[I|V|X]+)\s*[:\.\-–]?\s*$', partes_tit[-1], re.IGNORECASE))
+                        if es_solo_etiqueta or (termina_incompleto and not partes_tit[-1].endswith('.')):
                             partes_tit.append(cand)
                             idx_l += 1
                         else:
                             break
-                    titulo_ep = " ".join(partes_tit).strip()
 
-                    # Recogemos TODO el cuerpo de explicación hasta el siguiente Epígrafe o hasta el final del documento
+                    titulo_ep = PDFQuizParser._limpiar_titulo_epigrafe(" ".join(partes_tit).strip())
+
+                    # Recoge TODO el texto hasta el siguiente Epígrafe o hasta el final del documento
                     cuerpo_ep = []
                     while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
                         cuerpo_ep.append(lineas_utiles[idx_l])
@@ -844,8 +865,8 @@ class PDFQuizParser:
                     desarrollo_qs.append({
                         "is_open": True,
                         "tipo_abierta": "DESARROLLO",
-                        "preamble": f"📝 **PREGUNTA DE DESARROLLO — EPÍGRAFE {i_ep} DE {len(epigrafes_detectados)}{enc_tema} (2.º EJERCICIO GESTIÓN)**",
-                        "question_text": f"Desarrolla de forma completa y rigurosa el siguiente epígrafe conforme a la normativa vigente:\n\n« {tit_ep} »",
+                        "preamble": f"📝 **EPÍGRAFE {i_ep} DE {len(epigrafes_detectados)}{enc_tema}**",
+                        "question_text": tit_ep,
                         "options": [],
                         "answer": -1,
                         "answer_text": "",
@@ -853,12 +874,12 @@ class PDFQuizParser:
                     })
             elif lineas_utiles:
                 texto_integro = PDFQuizParser._unir_lineas_en_parrafos(lineas_utiles)
-                tit_gen = tema_cabecera or lineas_utiles[0][:100]
+                tit_gen = PDFQuizParser._limpiar_titulo_epigrafe(tema_cabecera or lineas_utiles[0][:100])
                 desarrollo_qs.append({
                     "is_open": True,
                     "tipo_abierta": "DESARROLLO",
-                    "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
-                    "question_text": f"Desarrolla de forma completa y rigurosa los epígrafes del tema conforme a la normativa vigente:\n\n« {tit_gen} »",
+                    "preamble": "📝 **PREGUNTA DE DESARROLLO**",
+                    "question_text": tit_gen,
                     "options": [],
                     "answer": -1,
                     "answer_text": "",
@@ -1543,7 +1564,6 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -1561,12 +1581,10 @@ def obtener_tests_segun_rol():
     if st.session_state.get('rol') == 'INVITADO':
         return TESTS_DISPONIBLES_INVITADO
 
-    # Copiamos las categorías limpiando duplicados vacíos si existen
     cat_adm = dict(catalogo_base.get("ADMINISTRATIVOS", {}))
     cat_ges = dict(catalogo_base.get("GESTION", {}))
 
     if usuario_es_admin():
-        # 1. Unificar DESARROLLO y PREGUNTA DE DESARROLLO en una sola categoría ("DESARROLLO")
         desarrollo_unificado = {"Elige un tema de desarrollo...": None}
         for k_d, v_d in cat_ges.get("DESARROLLO", {}).items():
             if v_d is not None:
@@ -1577,7 +1595,6 @@ def obtener_tests_segun_rol():
                 if nombre_limpio not in desarrollo_unificado and k_d not in desarrollo_unificado:
                     desarrollo_unificado[k_d] = v_d
 
-        # 2. Unificar SUPUESTOS y SUPUESTOS PRÁCTICOS en una sola categoría ("SUPUESTOS")
         supuestos_unificados = {"Elige un supuesto práctico...": None}
         for k_s, v_s in cat_ges.get("SUPUESTOS", {}).items():
             if v_s is not None:
@@ -1587,7 +1604,6 @@ def obtener_tests_segun_rol():
                 if k_s not in supuestos_unificados:
                     supuestos_unificados[k_s] = v_s
 
-        # Eliminar posibles claves duplicadas y dejar solo DESARROLLO y SUPUESTOS
         cat_ges.pop("PREGUNTA DE DESARROLLO", None)
         cat_ges.pop("SUPUESTOS PRÁCTICOS", None)
         cat_ges["DESARROLLO"] = desarrollo_unificado
@@ -1654,7 +1670,6 @@ def _dividir_en_oraciones_juridicas(texto):
             oraciones.append(p_rest)
     return oraciones
 
-# Criterios Oficiales del Tribunal (Resolución 22 de diciembre de 2025 - Cuerpo de Gestión Acceso Libre)
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 A) Estructura eliminatoria:
@@ -1673,41 +1688,41 @@ D) Baremo de la Segunda Parte (Supuesto Práctico - máximo 50 puntos):
    3. Calidad de la expresión escrita: de 0 a 2 puntos (SIEMPRE QUE se alcancen al menos 20 puntos sobre 45 en el apartado 1).
 """
 
-# Fuentes exclusivas autorizadas de NotebookLM:
-# 1) "TEMAS GESTION HASTA EL MOMENTO"
-# 2) "TEMAS ADMINISTRATIVO HASTA EL MOMENTO"
-# 3) "NOVEDADES 2026"
-FUENTES_TEMARIO_NOTEBOOKLM = {
-    "SEEH": {
-        "cuaderno": "TEMAS GESTION HASTA EL MOMENTO | TEMAS ADMINISTRATIVO HASTA EL MOMENTO | NOVEDADES 2026",
-        "epigrafe": "Tema 73 (Bloque VIII) — Epígrafe 5: SISTEMA ESPECIAL PARA EMPLEADOS DE HOGAR (SEEH): Altas, bajas, cotización y particularidades de la acción protectora",
-        "resumen_fuente": (
-            "- Fuentes consultadas: 'TEMAS GESTION HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026' (TRLGSS RD Legislativo 8/2015, Orden PJC/297/2026, RD 126/2026 SMI, RDL 3/2026 y RDL 31/2026).\n"
-            "- Integración en el Régimen General: Ley 27/2011, de 1 de agosto (efectos 01/01/2012) y art. 136.2.b) TRLGSS.\n"
-            "- Regulación laboral especial: Real Decreto 1620/2011, de 14 de noviembre (art. 2.1.b ET) y RDL 16/2022, de 6 de septiembre (protección por desempleo y FOGASA).\n"
-            "- Campo de aplicación (art. 250 TRLGSS): Servicios retribuidos por cuenta y dependencia del titular del hogar familiar. Excluidos: personas jurídicas/ETT (van al RG ordinario), parientes hasta 2.º grado salvo prueba en contrario de condición salarial, trabajos por amistad/benevolencia o «a la par».\n"
-            "- Cotización y beneficios: Escala de tramos sobre retribución (Orden PJC/297/2026 y RD 126/2026 SMI); en tiempo parcial la retribución mínima del tramo es SMI/hora × horas mensuales; no aplica el recargo por contratos inferiores a 30 días (art. 151 TRLGSS) ni la cotización adicional por horas del art. 122 de la Ley 31/2022; reducción del 20% en contingencias comunes o bonificación del 45%/80% en familias numerosas (solo para un cuidador por unidad familiar).\n"
-            "- Acción protectora (art. 251 TRLGSS): a) IT común se abona desde el 9.º día (días 4.º al 8.º a cargo del empleador), salvo en las 5 situaciones especiales del art. 169.1.a) TRLGSS tras el RDL 31/2026 (menstruación incapacitante/interrupción embarazo, semana 39.ª, donación órganos, trastorno menopáusico secundario codificado y violencia de género), donde se abona por la entidad gestora/mutua desde el día siguiente a la baja (día de la baja a cargo del empleador); b) Pago directo de IT por la entidad gestora/mutua (no procede pago delegado); c) En contingencias profesionales no aplica el régimen de responsabilidad empresarial en orden a las prestaciones del art. 167 TRLGSS (capital coste); d) Integración de lagunas desde 01/01/2024 en IP común y jubilación conforme a arts. 197.4 y 209.1.b) TRLGSS; e) Desempleo y cobertura del FOGASA (RD 505/1985 y art. 11.2 RD 1620/2011: indemnización de 12 días por año con tope de 6 mensualidades y salario diario máximo del doble del SMI)."
-        )
-    },
-    "SEA": {
-        "cuaderno": "TEMAS GESTION HASTA EL MOMENTO | TEMAS ADMINISTRATIVO HASTA EL MOMENTO | NOVEDADES 2026",
-        "epigrafe": "Tema 73 (Bloque VIII) — Epígrafe 4: SISTEMA ESPECIAL PARA TRABAJADORES POR CUENTA AJENA AGRARIOS (SEA): Campo de aplicación, cotización, recaudación y acción protectora",
-        "resumen_fuente": (
-            "- Fuentes consultadas: 'TEMAS GESTION HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026' (TRLGSS arts. 252-256, Guía SEA Inactividad 2026, Orden PJC/297/2026, RDL 3/2026 y RDL 31/2026).\n"
-            "- Integración en el Régimen General: Ley 28/2011, de 22 de septiembre (efectos 01/01/2012), arts. 252 a 256 del TRLGSS, Ley 19/1995 de Modernización de Explotaciones Agrarias y supletoriamente Decreto 3772/1972.\n"
-            "- Campo de aplicación (art. 252 TRLGSS): Trabajadores por cuenta ajena en labores agrarias, forestales o pecuarias y tareas complementarias. Exclusión expresa (art. 252.1.b): manipulado, empaquetado y comercialización del plátano (van al RG ordinario aunque sea en la explotación) y mecánicos/administrativos de fincas.\n"
-            "- Períodos de inactividad (art. 253 TRLGSS): Existen cuando las jornadas reales en el mes natural sean inferiores al 76,67% de los días naturales de alta. Inclusión en inactividad requiere 30 jornadas reales en 365 días (o 5 jornadas reales si estuvo antes integrado + solicitud en 3 meses con efectos día 1 del mes siguiente). Exclusión por impago de 2 mensualidades consecutivas o no realizar 30 jornadas reales.\n"
-            "- Cotización 2026 (arts. 254 y 255 TRLGSS y Orden PJC/297/2026): En inactividad cotiza a cargo exclusivo del trabajador sobre base mínima grupo 7 al 11,50% + MEI (0,90%), con reducción del 19,11% si en 2025 realizó un máximo de 55 jornadas reales. Tope máximo cuota empresarial grupo 1 en actividad: 279,00 €/mes o 12,68 €/jornada. Excedencia por cuidado de hijo (art. 237 TRLGSS) es período de cotización efectiva durante 3 años.\n"
-            "- Acción protectora (art. 256 TRLGSS): Requisito de estar al corriente en cuotas de inactividad; pago directo del subsidio de IT desde el día 16.º; en inactividad la protección comprende maternidad, paternidad, IP y muerte y supervivencia por contingencias comunes y jubilación."
-        )
-    }
-}
-
 MAPA_TEMATICO_PRECEPTOS = [
     {
+        "materia": "Marco Constitucional y Fuentes del Sistema de la Seguridad Social",
+        "keywords_contexto": ["constitucion", "articulo 41", "art. 41", "149.1.17", "pacto de toledo", "caja unica", "solidaridad", "refundido", "8/2015"],
+        "articulos_validos": {
+            "1": "Estado social y democrático de Derecho (CE) / Derecho de los españoles a la Seguridad Social (TRLGSS)",
+            "2": "Principios y fines de la Seguridad Social: universalidad, unidad, solidaridad e igualdad (TRLGSS)",
+            "3": "Irrenunciabilidad de los derechos de la Seguridad Social (TRLGSS)",
+            "7": "Extensión del campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
+            "9": "Estructura del sistema de la Seguridad Social: Régimen General y Regímenes Especiales (TRLGSS)",
+            "10": "Regímenes Especiales de la Seguridad Social (TRLGSS)",
+            "14": "Principio de igualdad ante la ley (CE)",
+            "39": "Protección social, económica y jurídica de la familia (CE)",
+            "41": "Régimen público de Seguridad Social para todos los ciudadanos (CE)",
+            "42": "Salvaguardia de los derechos económicos y sociales de los trabajadores españoles en el extranjero (CE) / Acción protectora (TRLGSS)",
+            "43": "Derecho a la protección de la salud (CE)",
+            "49": "Atención e integración de las personas con discapacidad (CE)",
+            "50": "Suficiencia económica en la tercera edad mediante pensiones adecuadas y periódicamente actualizadas (CE)",
+            "53": "Garantías de los principios rectores de la política social y económica (CE)",
+            "82": "Delegación legislativa mediante textos refundidos (CE)",
+            "86": "Legislación de urgencia mediante Reales Decretos-leyes (CE)",
+            "129": "Participación de los interesados en la Seguridad Social (CE)",
+            "149": "Competencia exclusiva del Estado sobre legislación básica y régimen económico de la Seguridad Social (art. 149.1.17.ª CE)",
+        },
+        "normas_validas": {
+            "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
+            "2/2015": "Texto Refundido de la Ley del Estatuto de los Trabajadores (ET)",
+            "27/2011": "Ley sobre actualización, adecuación y modernización del sistema de Seguridad Social",
+            "21/2021": "Ley de garantía del poder adquisitivo de las pensiones",
+            "2/2023": "Real Decreto-ley de medidas urgentes para la ampliación de derechos de los pensionistas y reducción de la brecha de género",
+        }
+    },
+    {
         "materia": "Sistema Especial para Empleados de Hogar (SEEH)",
-        "keywords_contexto": ["hogar", "domestico", "domestica", "empleada de hogar", "empleados de hogar", "seeh", "1620/2011", "250", "251", "familiar", "familia"],
+        "keywords_contexto": ["empleados de hogar", "empleada de hogar", "hogar familiar", "seeh", "1620/2011", "art. 250", "articulo 250", "art. 251", "articulo 251"],
         "articulos_validos": {
             "1": "Ámbito de aplicación y exclusiones laborales (ET)",
             "2": "Relación laboral de carácter especial del servicio del hogar familiar (art. 2.1.b ET)",
@@ -1755,7 +1770,7 @@ MAPA_TEMATICO_PRECEPTOS = [
     },
     {
         "materia": "Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (SEA)",
-        "keywords_contexto": ["agrario", "agraria", "agricola", "sea", "jornadas reales", "inactividad", "finca", "recoleccion", "agropecuaria", "252", "253", "254", "255", "256"],
+        "keywords_contexto": ["trabajadores agrarios", "sistema especial agrario", "jornadas reales", "explotacion agraria", "art. 252", "articulo 252", "art. 253", "articulo 253"],
         "articulos_validos": {
             "7": "Campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
             "15": "Afiliación, altas y bajas en el sistema (TRLGSS)",
@@ -1791,6 +1806,11 @@ MAPA_TEMATICO_PRECEPTOS = [
         "materia": "Cotización, Recaudación y Afiliación General",
         "keywords_contexto": ["cotizacion", "base de cotizacion", "recaudacion", "afiliacion", "alta", "baja", "pluriempleo", "recargo", "tgss", "cuota"],
         "articulos_validos": {
+            "7": "Extensión del campo de aplicación del Sistema de la Seguridad Social (TRLGSS)",
+            "8": "Prohibición de inclusión múltiple obligatoria (TRLGSS)",
+            "9": "Estructura del sistema de la Seguridad Social (TRLGSS)",
+            "10": "Regímenes Especiales (TRLGSS)",
+            "12": "Trabajadores familiares y asimilados (TRLGSS)",
             "15": "Obligatoriedad y alcance de la afiliación (TRLGSS)",
             "16": "Sujetos obligados a solicitar la afiliación y el alta (TRLGSS)",
             "17": "Procedimiento y efectos de la afiliación (TRLGSS)",
@@ -1802,6 +1822,7 @@ MAPA_TEMATICO_PRECEPTOS = [
             "28": "Recargos por ingreso fuera de plazo (TRLGSS)",
             "30": "Reclamaciones de deuda y recargos del 10% y 20% (TRLGSS)",
             "136": "Campo de aplicación del Régimen General (TRLGSS)",
+            "137": "Exclusiones del Régimen General (TRLGSS)",
             "139": "Inscripción de empresas (TRLGSS)",
             "141": "Sujetos obligados y responsables en la cotización (TRLGSS)",
             "142": "Sujeto responsable del ingreso de cuotas y descuento de la cuota obrera (TRLGSS)",
@@ -1810,6 +1831,7 @@ MAPA_TEMATICO_PRECEPTOS = [
             "147": "Conceptos computables y excluidos de la base de cotización (TRLGSS)",
             "148": "Topes máximo y mínimo de la base de cotización y pluriempleo (TRLGSS)",
             "151": "Cotización adicional en contratos temporales de corta duración (TRLGSS)",
+            "305": "Extensión del campo de aplicación del RETA (TRLGSS)",
         },
         "normas_validas": {
             "8/2015": "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS)",
@@ -1822,17 +1844,6 @@ MAPA_TEMATICO_PRECEPTOS = [
     }
 ]
 
-def obtener_fuente_notebooklm_para_pregunta(texto_contexto):
-    t_low = (texto_contexto or "").lower()
-    partes = []
-    if any(k in t_low for k in ["hogar", "domestico", "domestica", "seeh", "250", "251", "1620/2011", "montoro", "garcia-valenzuela"]):
-        f = FUENTES_TEMARIO_NOTEBOOKLM["SEEH"]
-        partes.append(f"📘 **Fuente NotebookLM:** {f['cuaderno']}\n📌 **{f['epigrafe']}**\n{f['resumen_fuente']}")
-    if any(k in t_low for k in ["agrario", "agraria", "sea", "inactividad", "jornadas reales", "252", "253", "254", "255", "256", "montoro"]):
-        f = FUENTES_TEMARIO_NOTEBOOKLM["SEA"]
-        partes.append(f"📘 **Fuente NotebookLM:** {f['cuaderno']}\n📌 **{f['epigrafe']}**\n{f['resumen_fuente']}")
-    return "\n\n".join(partes)
-
 def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pregunta_y_exp):
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -1844,7 +1855,7 @@ def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pr
         if any(kw in ctx_norm for kw in bloque["keywords_contexto"]):
             if k_tipo == "ART" and k_id in bloque["articulos_validos"]:
                 desc = bloque["articulos_validos"][k_id]
-                return True, f"{k_lbl} ({desc} — conectado con {bloque['materia']})"
+                return True, f"{k_lbl} ({desc})"
             if k_tipo == "NORMA" and k_id in bloque["normas_validas"]:
                 desc = bloque["normas_validas"][k_id]
                 return True, f"{k_lbl} ({desc})"
@@ -1877,7 +1888,7 @@ def _verificar_precepto_adicional(k_tipo, k_id, k_lbl, texto_alumno, contexto_pr
             if len(coincidencias) >= 3 and len(orac.strip()) >= 40:
                 return True, f"{k_lbl} (precepto conexo bien interrelacionado en tu exposición)"
 
-    return False, f"{k_lbl} (no guarda relación directa con el supuesto planteado)"
+    return False, f"{k_lbl} (no guarda relación directa con el epígrafe planteado)"
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     def _norm(s):
@@ -1897,7 +1908,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     contexto_total = f"{enunciado_pregunta or ''} {ref_completa}".strip()
     ref_norm = _norm(ref_completa)
 
-    pat_normas = r'\b(?:art(?:[íi]culos?|\.)\s*\d+(?:\.\d+)?(?:\.[a-z])?|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
+    pat_normas = r'\b(?:art(?:[íi]culos?|\.)\s*\d+(?:\.\d+)?(?:\.[a-z])?|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|constitucion\s+espanola|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
 
     def _clave_norma(texto_cita):
         cn = _norm(texto_cita)
@@ -1923,6 +1934,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             return ("SIGLA", "trlgss", "TRLGSS (RD Legislativo 8/2015)")
         if "estatuto de los trabajadores" in cn:
             return ("SIGLA", "et", "Estatuto de los Trabajadores")
+        if "constitucion espanola" in cn:
+            return ("SIGLA", "ce", "Constitución Española")
         m_da = re.match(r'^disposicion\s+(adicional|transitoria)\s+(.+)$', cn)
         if m_da:
             return ("DISP", f"{m_da.group(1)}_{m_da.group(2)}", texto_cita.strip().capitalize())
@@ -2064,7 +2077,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
-    fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
 
     return {
         "nota": nota_10,
@@ -2082,17 +2094,11 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "cifras_faltan": cifras_faltan,
         "puntos_cubiertos": puntos_cubiertos,
         "puntos_omitidos": puntos_omitidos,
-        "texto_sugerido": texto_sugerido,
-        "fuente_notebooklm": fuente_nb
+        "texto_sugerido": texto_sugerido
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
     bloques = []
-
-    encuadre_nb = ""
-    if ev.get("fuente_notebooklm"):
-        primera_linea_nb = ev["fuente_notebooklm"].split("\n")[1] if "\n" in ev["fuente_notebooklm"] else ""
-        encuadre_nb = f"📌 *Fuentes de contraste (TEMAS GESTIÓN / ADMINISTRATIVO HASTA EL MOMENTO y NOVEDADES 2026):* {primera_linea_nb}\n\n"
 
     if ev["puntos_cubiertos"] or ev["citas_ok"] or ev["citas_complementarias"] or ev["cifras_ok"]:
         aciertos_txt = []
@@ -2107,11 +2113,10 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         if ev["puntos_cubiertos"]:
             resumen_ideas = " ".join([f"«{p}»" for p in ev["puntos_cubiertos"][:2]])
             aciertos_txt.append(f"En cuanto al fondo jurídico, tu redacción desarrolla con acierto: {resumen_ideas}")
-        bloques.append("1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n" + encuadre_nb + " ".join(aciertos_txt))
+        bloques.append("1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n" + " ".join(aciertos_txt))
     else:
         bloques.append(
             "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n"
-            + encuadre_nb +
             "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe del temario oficial."
         )
 
@@ -2122,11 +2127,11 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normativa.append(f"✔️ **Normativa principal del epígrafe acertada:** {', '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
         rev_normativa.append(
-            f"🌟 **Normativa complementaria verificada en las fuentes legales (suma valor en Criterio 1):** {', '.join(ev['citas_complementarias'])}."
+            f"🌟 **Normativa complementaria verificada (suma valor en Criterio 1):** {', '.join(ev['citas_complementarias'])}."
         )
     if ev["citas_erroneas"]:
         rev_normativa.append(
-            f"❌ **Preceptos sin aplicación directa en este epígrafe tras consultar el texto legal:** {', '.join(ev['citas_erroneas'])}."
+            f"❌ **Preceptos sin aplicación directa en este epígrafe:** {', '.join(ev['citas_erroneas'])}."
         )
     if ev["citas_faltan"]:
         rev_normativa.append(
@@ -2134,7 +2139,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         )
     if not rev_normativa:
         rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible en este epígrafe.")
-    bloques.append("2. **⚖️ Auditoría de artículos y fuentes legales (TEMAS HASTA EL MOMENTO Y NOVEDADES 2026):**\n" + "\n".join(rev_normativa))
+    bloques.append("2. **⚖️ Auditoría de artículos y preceptos normativos:**\n" + "\n".join(rev_normativa))
 
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         detalles_str = ""
@@ -2198,31 +2203,27 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         return aviso_elegante
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
-    contexto_total = f"{enunciado_supuesto} {pregunta} {respuesta_oficial} {explicacion_oficial}"
-    fuente_nb = obtener_fuente_notebooklm_para_pregunta(contexto_total)
 
     prompt = (
         "Actúa como la Presidenta del Tribunal Calificador de las pruebas selectivas del Cuerpo de Gestión de la Administración de la Seguridad Social (Resolución de 22 de diciembre de 2025) y preparador experto de Oposiciona.\n"
         "Tu misión es corregir con rigor técnico absoluto la respuesta escrita por el opositor en el Segundo Ejercicio, "
-        "contrastándola exclusivamente con las 3 fuentes oficiales de Oposiciona en NotebookLM: "
-        "1) 'TEMAS GESTION HASTA EL MOMENTO', 2) 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 3) 'NOVEDADES 2026'.\n\n"
+        "contrastándola estrictamente con el texto oficial del epígrafe que figura a continuación.\n\n"
         f"{CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO}\n\n"
         "REGLAS DE CORRECCIÓN DE OBLIGADO CUMPLIMIENTO:\n"
-        "0. **FILTRO DE ELEGANCIA EN FRASES INICIALES:** Si el texto contiene expresiones inaceptables, vulgares o frases sin ningún interés para el tema ('esto es una caca', 'puta mierda', 'paso de todo', etc.), NO realices la corrección técnica: responde únicamente con un mensaje lleno de clase, educación y estilo recordando que la plataforma se ha creado para alcanzar la excelencia y conseguir su plaza, no para perder el tiempo.\n"
-        "1. **INTERRELACIÓN NORMATIVA Y CONSULTA PREVIA DEL TEXTO LEGAL:** Antes de dar por inválido cualquier artículo o norma citado por el alumno que no figure literalmente en la explicación del PDF, comprueba en 'TEMAS GESTION HASTA EL MOMENTO', 'TEMAS ADMINISTRATIVO HASTA EL MOMENTO' y 'NOVEDADES 2026' (TRLGSS, ET, Ley 27/2011, Ley 28/2011, RD 1620/2011, RDL 16/2022, RD 505/1985, Ley 31/2022 art. 122, RDL 3/2026, RDL 31/2026, Orden PJC/297/2026, RD 126/2026, RD 643/2026, RD 84/1996, RD 2064/1995, RD 1415/2004) si guarda relación con la materia. Si es correcto y mejora el contenido, explícalo y súmale puntos en el Criterio 1.\n"
+        "0. **PROHIBICIÓN DE CITAR FUENTES EXTERNAS O TEMAS AJENOS:** NO menciones nunca en tu respuesta nombres de archivos, ni 'NotebookLM', ni 'TEMAS HASTA EL MOMENTO', ni 'NOVEDADES 2026', ni hagas referencia a otros números de tema distintos al que se está evaluando.\n"
+        "1. **INTERRELACIÓN NORMATIVA Y CONSULTA DEL TEXTO LEGAL:** Antes de dar por inválido cualquier artículo o norma citado por el alumno que no figure literalmente en la explicación del epígrafe, comprueba si es un precepto válido de la Constitución Española, del TRLGSS (RD Legislativo 8/2015), del Estatuto de los Trabajadores o de sus reglamentos que guarde relación con la materia del epígrafe. Si es correcto y enriquece el desarrollo, valóralo positivamente y súmale puntos en el Criterio 1.\n"
         "2. **APLICACIÓN ESTRICTA DEL BAREMO DE 50 PUNTOS DEL TRIBUNAL:**\n"
-        "   - Evalúa el **Criterio 1 (0 a 45 puntos)** exigiendo precisión normativa ajustada a su literalidad y precisión en la situación práctica.\n"
+        "   - Evalúa el **Criterio 1 (0 a 45 puntos)** exigiendo precisión normativa ajustada a su literalidad y rigor técnico sobre el contenido del epígrafe.\n"
         "   - Evalúa el **Criterio 2 — Orden de las ideas y estructura (0 a 3 puntos)** y el **Criterio 3 — Calidad de la expresión escrita (0 a 2 puntos)**, aplicando rigurosamente la regla oficial del Tribunal: **solo puntúan si el alumno alcanza al menos 20 puntos sobre 45 en el Criterio 1** (si obtiene menos de 20/45 en el Criterio 1, asigna 0 puntos en Criterio 2 y 0 puntos en Criterio 3).\n"
         "   - Indica la nota total sobre **50 puntos** (señalando si supera los **25 puntos eliminatorios** necesarios para no quedar excluido sin compensación) y su nota equivalente sobre **10 puntos**.\n\n"
-        f"=== FUENTES OFICIALES NOTEBOOKLM (TEMAS GESTION HASTA EL MOMENTO | TEMAS ADMINISTRATIVO HASTA EL MOMENTO | NOVEDADES 2026) ===\n{fuente_nb if fuente_nb else 'Corpus Oficial NotebookLM: TEMAS GESTION HASTA EL MOMENTO, TEMAS ADMINISTRATIVO HASTA EL MOMENTO y NOVEDADES 2026.'}\n\n"
-        f"=== ENUNCIADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
+        f"=== EPÍGRAFE / ENUNCIADO ===\n{pregunta}\n\n"
         f"=== RESPUESTA DIRECTA OFICIAL ===\n{respuesta_oficial}\n\n"
-        f"=== EXPLICACIÓN OFICIAL DEL TEMA ===\n{explicacion_oficial}\n\n"
+        f"=== TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE ===\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        "Estructura tu respuesta en estos 4 bloques exactos:\n"
+        "Estructura tu respuesta en estos 4 bloques exactos (sin añadir encabezados sobre fuentes):\n"
         "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa**\n"
-        "2. **⚖️ Auditoría de artículos, leyes y relaciones con las fuentes (TEMAS HASTA EL MOMENTO y NOVEDADES 2026)**\n"
-        "3. **⚠️ Detalles técnicos omitidos y párrafo magistral que deberías haber incluido**\n"
+        "2. **⚖️ Auditoría de artículos y preceptos normativos**\n"
+        "3. **⚠️ Detalles técnicos omitidos del epígrafe y párrafo magistral que deberías haber incluido**\n"
         "4. **🎓 Calificación Oficial según los Criterios del Tribunal (desglose Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2], Total sobre 50 puntos y equivalencia sobre 10)**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -2697,7 +2698,7 @@ if not st.session_state.questions:
     st.markdown(f"<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
-        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Corrección con IA de Gemini aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos) y contrastando con `TEMAS GESTION HASTA EL MOMENTO`, `TEMAS ADMINISTRATIVO HASTA EL MOMENTO` y `NOVEDADES 2026`.")
+        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Corrección con IA aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2857,7 +2858,7 @@ elif not st.session_state.finished:
     puede_rep = usuario_puede_reportar()
     es_abierta = bool(q.get("is_open", False))
 
-    st.markdown(f"<p style='color: #64748B !important; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>{'Epígrafe / Cuestión' if es_abierta else 'Pregunta'} {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: #64748B !important; font-size: 14px; margin-top: -10px; margin-bottom: 5px;'>{'Epígrafe' if q.get('tipo_abierta') == 'DESARROLLO' else ('Cuestión' if es_abierta else 'Pregunta')} {idx + 1} de {len(st.session_state.questions)}</p>", unsafe_allow_html=True)
     if q.get('preamble'):
         st.markdown(
             f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; font-size:15px; line-height:1.45; text-align:justify; color:#1E293B !important;'>{q['preamble']}</div>",
@@ -2936,14 +2937,14 @@ elif not st.session_state.finished:
                     if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
                         stat["last_evaluated_text"] = txt_alumno
                         clave_activa = obtener_gemini_api_key_activa()
-                        with st.spinner("🤖 El Tribunal Evaluador de Gemini está aplicando los Criterios Oficiales (0-50 ptos) y contrastando con el texto completo del Epígrafe..."):
+                        with st.spinner("🤖 El Tribunal Evaluador está aplicando los Criterios Oficiales (0-50 ptos) sobre el texto del Epígrafe..."):
                             stat["ai_feedback"] = consultar_ia_gemini_correccion(
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
 
                     st.markdown(
                         "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:14px 16px 6px 16px; margin-top:10px; margin-bottom:8px;'>"
-                        "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN OFICIAL DEL TRIBUNAL EVALUADOR IA (BAREMO 0-50 PTOS + NOTEBOOKLM)</div>"
+                        "<div style='font-size:17px; font-weight:800; color:#15803d !important; margin-bottom:6px;'>🤖 DICTAMEN OFICIAL DEL TRIBUNAL EVALUADOR IA (BAREMO 0-50 PTOS)</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -2958,7 +2959,7 @@ elif not st.session_state.finished:
                         )
                     if exp_of:
                         eh = "".join([f"<div style='margin-top: 6px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in exp_of.split('\n') if p.strip()])
-                        titulo_exp = "📖 Texto Íntegro Oficial del Epígrafe (hasta el siguiente epígrafe / final del documento):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (2.º Ejercicio - 2.ª Parte):"
+                        titulo_exp = "📖 Texto Íntegro Oficial del Epígrafe:" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal (2.º Ejercicio - 2.ª Parte):"
                         st.markdown(
                             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'>"
                             f"<div style='font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #0c5460 !important;'>{titulo_exp}</div>"
@@ -3037,7 +3038,6 @@ else:
                 stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
     if es_test_abierto:
-        # Evaluamos la media tanto sobre las contestadas como sobre el total de epígrafes del tema
         preg_contestadas = max(1, aciertos + fallos)
         nota_referencia = suma_notas_abiertas / preg_contestadas if (aciertos + fallos) > 0 else 0.0
         nota_media_50 = suma_notas_50 / preg_contestadas if (aciertos + fallos) > 0 else 0.0
@@ -3198,9 +3198,9 @@ else:
         ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>" if q.get('preamble') else ""
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
-            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{'Epígrafe / Cuestión' if q.get('is_open') else 'Pregunta'} {i+1} | {stat['final_status']}</div>"
+            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{'Epígrafe' if q.get('tipo_abierta') == 'DESARROLLO' else ('Cuestión' if q.get('is_open') else 'Pregunta')} {i+1} | {stat['final_status']}</div>"
             f"{ph}"
-            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Enunciado:</b> {q['question_text']}</div>"
+            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>{'Epígrafe' if q.get('tipo_abierta') == 'DESARROLLO' else 'Pregunta'}:</b> {q['question_text']}</div>"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 6px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460 !important;'>{'Texto íntegro del Epígrafe:' if q.get('tipo_abierta') == 'DESARROLLO' else 'Explicación:'}</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
@@ -3223,4 +3223,5 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
 
