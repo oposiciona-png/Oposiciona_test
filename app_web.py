@@ -1406,7 +1406,8 @@ _D = "https://drive.google.com/uc?export=download&id="
 NUEVOS_HOY = [
     "✨ NOVEDADES RDL 31_2026 adm",
     "✨NOVEDADES RDL_31_2026 gestion",
-    "EXAMEN SABADO 01 NOVIEMBRE 2026",
+    "EXAMEN SABADO 31 OCTUBRE 2026",
+    "EXAMEN PRESENCIAL 01 NOV 2026",
 ]
 
 # Categorías exclusivas en GESTIÓN para el Administrador (Segundo y Tercer Ejercicio)
@@ -1460,7 +1461,7 @@ TESTS_DISPONIBLES = {
             "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
             "EXAMEN REPASO 1 TEMA 08 a 12 ESPECIFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1m06sF7_F_sZVlfRQq3Uv0egrvo44gcmX",
             "EXAMEN REPASO TEMA 2 COMPLETO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sixOo5p9R_WeuL_mg8LliJScO1ljnNV0",
-            "EXAMEN SABADO 01 NOVIEMBRE 2026": "https://drive.google.com/uc?export=download&id=1Yh_1mNSQNgQ6m-L-V2r6gaahKoWar0Oi",
+            "EXAMEN SABADO 31 OCTUBRE 2026": "https://drive.google.com/uc?export=download&id=1Yh_1mNSQNgQ6m-L-V2r6gaahKoWar0Oi",
             "SABADO 10 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qtDZt9e2KsrnvElHWkSaN3wYnI1gT9Eq",
             "SABADO 5 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17KWYOcGCSQR49cR7KMwqOKFi6QDsPkbh",
         },
@@ -1534,6 +1535,7 @@ TESTS_DISPONIBLES = {
             "DOMINGO 11 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1cQ9aPHfcpZmJrP3nOv52GNaY3ag9KVZ0",
             "DOMINGO 6 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17Sn2tH9MnBKs4waafXN5NvLEJW8Dieq4",
             "Examen oficial 17 de mayo de 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sZT_v_KQE1R0kyKxojAbpxMssu9vkdnG",
+            "EXAMEN PRESENCIAL 01 NOV 2026": "https://drive.google.com/uc?export=download&id=1H6gXzNqQlleHzWOq_4N32wiGR7sZPHWP",
             "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1h_08kcGUlybuOk-VXUA6Ca6h11UFWBT2",
             "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1jwafdNNaw4H9IgkjW7-TJgzcSaUkKFHm",
             "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1QT7rmZPvuuNr7SradBQGCk3ieIi8n9V0",
@@ -1592,6 +1594,8 @@ TESTS_DISPONIBLES_INVITADO = {
     },
 }
 # === FIN SECCIÓN 3 ===
+
+
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
