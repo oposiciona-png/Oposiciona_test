@@ -611,6 +611,7 @@ class PDFQuizParser:
     def parse_abiertas_gestion(pdf_bytes, modo="TODOS"):
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         raw_lines = []
+        all_clean_lines = []
         in_abiertas = False
 
         for page in doc:
@@ -629,149 +630,213 @@ class PDFQuizParser:
                         tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
                         tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
 
+                        lt_proc = PDFQuizParser.traducir_ingles_no_rae(lt)
+                        lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
+                        lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
+                        lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
+                        all_clean_lines.append(lt_proc)
+
                         if not in_abiertas:
                             if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
                                 if lt.isupper() or len(tl_clean) < 95:
                                     in_abiertas = True
                         if in_abiertas:
-                            lt = PDFQuizParser.traducir_ingles_no_rae(lt)
-                            lt = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt)
-                            lt = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt)
-                            lt = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt)
-                            raw_lines.append(lt)
-
-        if not raw_lines:
-            return []
+                            raw_lines.append(lt_proc)
 
         desarrollo_qs = []
         supuestos_qs = []
-        idx = 0
-        current_context = ""
-        current_q = None
 
-        while idx < len(raw_lines):
-            line = raw_lines[idx].strip()
+        if raw_lines:
+            idx = 0
+            current_context = ""
+            current_q = None
 
-            # 1. Detectar PREGUNTA DE DESARROLLO (uniendo todas las líneas en mayúsculas del título para que no se corte)
-            if re.match(r'^PREGUNTAS?\s+DE\s+DESARROLLO\b', line, re.IGNORECASE):
-                if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                    supuestos_qs.append(current_q)
-                    current_q = None
-                partes_titulo = []
-                t_ini = re.sub(r'^PREGUNTAS?\s+DE\s+DESARROLLO\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
-                if t_ini:
-                    partes_titulo.append(t_ini)
-                idx += 1
-                while idx < len(raw_lines):
-                    cand_t = raw_lines[idx].strip()
-                    if cand_t.isupper() and not re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', cand_t, re.IGNORECASE):
-                        partes_titulo.append(cand_t)
-                        idx += 1
-                    else:
-                        break
-                titulo_des = " ".join(partes_titulo).strip()
+            while idx < len(raw_lines):
+                line = raw_lines[idx].strip()
 
-                cuerpo_des = []
-                while idx < len(raw_lines):
-                    l_next = raw_lines[idx].strip()
-                    if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|PREGUNTAS?\s+DE\s+DESARROLLO)\b', l_next, re.IGNORECASE) and (l_next.isupper() or len(l_next) < 85):
-                        break
-                    cuerpo_des.append(l_next)
+                # 1. Detectar PREGUNTA DE DESARROLLO
+                if re.match(r'^PREGUNTAS?\s+DE\s+DESARROLLO\b', line, re.IGNORECASE):
+                    if current_q and (current_q["answer_text"] or current_q["explanation"]):
+                        supuestos_qs.append(current_q)
+                        current_q = None
+                    partes_titulo = []
+                    t_ini = re.sub(r'^PREGUNTAS?\s+DE\s+DESARROLLO\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
+                    if t_ini:
+                        partes_titulo.append(t_ini)
                     idx += 1
-                texto_oficial = PDFQuizParser._unir_lineas_en_parrafos(cuerpo_des)
-                if texto_oficial:
+                    while idx < len(raw_lines):
+                        cand_t = raw_lines[idx].strip()
+                        if cand_t.isupper() and not re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', cand_t, re.IGNORECASE):
+                            partes_titulo.append(cand_t)
+                            idx += 1
+                        else:
+                            break
+                    titulo_des = " ".join(partes_titulo).strip()
+
+                    cuerpo_des = []
+                    while idx < len(raw_lines):
+                        l_next = raw_lines[idx].strip()
+                        if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|PREGUNTAS?\s+DE\s+DESARROLLO)\b', l_next, re.IGNORECASE) and (l_next.isupper() or len(l_next) < 85):
+                            break
+                        cuerpo_des.append(l_next)
+                        idx += 1
+                    texto_oficial = PDFQuizParser._unir_lineas_en_parrafos(cuerpo_des)
+                    if texto_oficial:
+                        desarrollo_qs.append({
+                            "is_open": True,
+                            "tipo_abierta": "DESARROLLO",
+                            "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
+                            "question_text": f"Desarrolla de forma completa y rigurosa el siguiente epígrafe conforme a la normativa vigente:\n\n« {titulo_des} »",
+                            "options": [],
+                            "answer": -1,
+                            "answer_text": "",
+                            "explanation": texto_oficial
+                        })
+                    continue
+
+                # 2. Detectar cabecera SUPUESTO PRÁCTICO
+                if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', line, re.IGNORECASE) and (line.isupper() or len(line) < 80):
+                    if current_q and (current_q["answer_text"] or current_q["explanation"]):
+                        supuestos_qs.append(current_q)
+                        current_q = None
+                    resto_cab = re.sub(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
+                    current_context = resto_cab if resto_cab else ""
+                    idx += 1
+                    continue
+
+                # 3. Detectar nuevo planteamiento narrativo intermedio
+                if current_q and current_q["state"] == "E" and not re.match(r'^\d+[\.\-\)]', line):
+                    if re.match(r'^(La\s+familia|La\s+empresa|La\s+mercantil|Don\s+|Doña\s+|El\s+trabajador|En\s+el\s+ejercicio)\b', line) and "?" not in line:
+                        hay_preg_despues = any(re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[k].strip()) for k in range(idx + 1, min(idx + 20, len(raw_lines))))
+                        if hay_preg_despues and len(current_q["explanation"]) > 120:
+                            supuestos_qs.append(current_q)
+                            current_q = None
+                            current_context = line
+                            idx += 1
+                            while idx < len(raw_lines) and not re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[idx].strip()):
+                                current_context += " " + raw_lines[idx].strip()
+                                idx += 1
+                            continue
+
+                # 4. Detectar pregunta numerada del supuesto
+                m_q = re.match(r'^(\d{1,2})[\.\-\)]\s+(.+)$', line)
+                if m_q:
+                    if current_q and (current_q["answer_text"] or current_q["explanation"]):
+                        supuestos_qs.append(current_q)
+                    q_txt = m_q.group(2).strip()
+                    ans_initial = ""
+                    if "?" in q_txt and not q_txt.endswith("?"):
+                        partes_q = q_txt.split("?", 1)
+                        q_txt = partes_q[0].strip() + "?"
+                        ans_initial = partes_q[1].strip()
+                    current_q = {
+                        "is_open": True,
+                        "tipo_abierta": "SUPUESTO",
+                        "preamble": f"📋 **PLANTEAMIENTO DEL SUPUESTO PRÁCTICO (TERCER EJERCICIO DE GESTIÓN):**\n\n{current_context.strip()}" if current_context.strip() else "📋 **SUPUESTO PRÁCTICO (TERCER EJERCICIO DE GESTIÓN)**",
+                        "question_text": f"Cuestión {m_q.group(1)}. {q_txt}",
+                        "options": [],
+                        "answer": -1,
+                        "answer_text": ans_initial,
+                        "explanation": "",
+                        "state": "A" if ans_initial else "Q"
+                    }
+                    idx += 1
+                    continue
+
+                if current_q is None:
+                    current_context = (current_context + " " + line).strip() if current_context else line
+                    idx += 1
+                    continue
+
+                if re.match(r'^(Explicaci[óo]n|Fundamentaci[óo]n|Soluci[óo]n|Respuesta)\s*[:\.]', line, re.IGNORECASE):
+                    exp_clean = re.sub(r'^(Explicaci[óo]n|Fundamentaci[óo]n|Soluci[óo]n|Respuesta)\s*[:\.]\s*', '', line, flags=re.IGNORECASE).strip()
+                    current_q["explanation"] = exp_clean
+                    current_q["state"] = "E"
+                    idx += 1
+                    continue
+
+                if current_q["state"] == "Q":
+                    if "?" in line:
+                        partes_q = line.split("?", 1)
+                        current_q["question_text"] += " " + partes_q[0].strip() + "?"
+                        resto_a = partes_q[1].strip()
+                        if resto_a:
+                            current_q["answer_text"] = resto_a
+                        current_q["state"] = "A"
+                    else:
+                        current_q["question_text"] += " " + line
+                elif current_q["state"] == "A":
+                    current_q["answer_text"] = (current_q["answer_text"] + " " + line).strip() if current_q["answer_text"] else line
+                elif current_q["state"] == "E":
+                    current_q["explanation"] = (current_q["explanation"] + " " + line).strip() if current_q["explanation"] else line
+
+                idx += 1
+
+            if current_q and (current_q["answer_text"] or current_q["explanation"]):
+                supuestos_qs.append(current_q)
+
+        # 5. NUEVO: Si es un PDF de Resumen de Epígrafes (ej. Tema_51_Resumen_Epigrafes o Tema_52_Resumen_Epigrafes)
+        if modo in ["DESARROLLO", "TODOS"] and not desarrollo_qs and all_clean_lines:
+            epigrafes_detectados = []
+            curr_ep_title = None
+            curr_ep_body = []
+            tema_cabecera = ""
+
+            for l in all_clean_lines:
+                l_s = l.strip()
+                if not tema_cabecera and re.match(r'^TEMA\s+\d+', l_s, re.IGNORECASE):
+                    tema_cabecera = l_s
+                    continue
+
+                es_cabecera_epigrafe = bool(
+                    re.match(r'^(?:EP[IÍ]GRAFE|APARTADO|PUNTO)\s+\d+[\.\-:\)]*\s*.+', l_s, re.IGNORECASE) or
+                    (re.match(r'^(?:\d{1,2}[\.\)]|[I|V|X]{1,4}[\.\-])\s+[A-ZÁÉÍÓÚÑ]', l_s) and (l_s.isupper() or len(l_s) < 130) and not l_s.endswith('.'))
+                )
+
+                if es_cabecera_epigrafe:
+                    if curr_ep_title and len(" ".join(curr_ep_body)) > 80:
+                        epigrafes_detectados.append((curr_ep_title, PDFQuizParser._unir_lineas_en_parrafos(curr_ep_body)))
+                        curr_ep_body = []
+                    curr_ep_title = l_s
+                else:
+                    if curr_ep_title is None:
+                        if l_s.isupper() and 10 < len(l_s) < 120:
+                            curr_ep_title = l_s
+                        else:
+                            curr_ep_title = tema_cabecera or "Desarrollo íntegro del Tema"
+                            curr_ep_body.append(l_s)
+                    else:
+                        curr_ep_body.append(l_s)
+
+            if curr_ep_title and curr_ep_body:
+                epigrafes_detectados.append((curr_ep_title, PDFQuizParser._unir_lineas_en_parrafos(curr_ep_body)))
+
+            if epigrafes_detectados:
+                for i_ep, (tit_ep, txt_ep) in enumerate(epigrafes_detectados, 1):
+                    enc_tema = f" ({tema_cabecera})" if tema_cabecera and tema_cabecera not in tit_ep else ""
                     desarrollo_qs.append({
                         "is_open": True,
                         "tipo_abierta": "DESARROLLO",
-                        "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
-                        "question_text": f"Desarrolla de forma completa y rigurosa el siguiente epígrafe conforme a la normativa vigente:\n\n« {titulo_des} »",
+                        "preamble": f"📝 **PREGUNTA DE DESARROLLO — EPÍGRAFE {i_ep}{enc_tema} (2.º EJERCICIO GESTIÓN)**",
+                        "question_text": f"Desarrolla de forma completa y rigurosa el siguiente epígrafe conforme a la normativa vigente:\n\n« {tit_ep} »",
                         "options": [],
                         "answer": -1,
                         "answer_text": "",
-                        "explanation": texto_oficial
+                        "explanation": txt_ep
                     })
-                continue
-
-            # 2. Detectar cabecera SUPUESTO PRÁCTICO
-            if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', line, re.IGNORECASE) and (line.isupper() or len(line) < 80):
-                if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                    supuestos_qs.append(current_q)
-                    current_q = None
-                resto_cab = re.sub(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
-                current_context = resto_cab if resto_cab else ""
-                idx += 1
-                continue
-
-            # 3. Detectar nuevo planteamiento narrativo intermedio después de la explicación de una pregunta (ej. "La familia Montoro...")
-            if current_q and current_q["state"] == "E" and not re.match(r'^\d+[\.\-\)]', line):
-                if re.match(r'^(La\s+familia|La\s+empresa|La\s+mercantil|Don\s+|Doña\s+|El\s+trabajador|En\s+el\s+ejercicio)\b', line) and "?" not in line:
-                    hay_preg_despues = any(re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[k].strip()) for k in range(idx + 1, min(idx + 20, len(raw_lines))))
-                    if hay_preg_despues and len(current_q["explanation"]) > 120:
-                        supuestos_qs.append(current_q)
-                        current_q = None
-                        current_context = line
-                        idx += 1
-                        while idx < len(raw_lines) and not re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[idx].strip()):
-                            current_context += " " + raw_lines[idx].strip()
-                            idx += 1
-                        continue
-
-            # 4. Detectar pregunta numerada del supuesto (ej. "1. Doña Carmen...")
-            m_q = re.match(r'^(\d{1,2})[\.\-\)]\s+(.+)$', line)
-            if m_q:
-                if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                    supuestos_qs.append(current_q)
-                q_txt = m_q.group(2).strip()
-                ans_initial = ""
-                if "?" in q_txt and not q_txt.endswith("?"):
-                    partes_q = q_txt.split("?", 1)
-                    q_txt = partes_q[0].strip() + "?"
-                    ans_initial = partes_q[1].strip()
-                current_q = {
+            elif all_clean_lines:
+                texto_integro = PDFQuizParser._unir_lineas_en_parrafos(all_clean_lines)
+                tit_gen = tema_cabecera or all_clean_lines[0][:100]
+                desarrollo_qs.append({
                     "is_open": True,
-                    "tipo_abierta": "SUPUESTO",
-                    "preamble": f"📋 **PLANTEAMIENTO DEL SUPUESTO PRÁCTICO (TERCER EJERCICIO DE GESTIÓN):**\n\n{current_context.strip()}" if current_context.strip() else "📋 **SUPUESTO PRÁCTICO (TERCER EJERCICIO DE GESTIÓN)**",
-                    "question_text": f"Cuestión {m_q.group(1)}. {q_txt}",
+                    "tipo_abierta": "DESARROLLO",
+                    "preamble": "📝 **PREGUNTA DE DESARROLLO (SEGUNDO EJERCICIO DE LA OPOSICIÓN DE GESTIÓN)**",
+                    "question_text": f"Desarrolla de forma completa y rigurosa los epígrafes del tema conforme a la normativa vigente:\n\n« {tit_gen} »",
                     "options": [],
                     "answer": -1,
-                    "answer_text": ans_initial,
-                    "explanation": "",
-                    "state": "A" if ans_initial else "Q"
-                }
-                idx += 1
-                continue
-
-            if current_q is None:
-                current_context = (current_context + " " + line).strip() if current_context else line
-                idx += 1
-                continue
-
-            if re.match(r'^(Explicaci[óo]n|Fundamentaci[óo]n|Soluci[óo]n|Respuesta)\s*[:\.]', line, re.IGNORECASE):
-                exp_clean = re.sub(r'^(Explicaci[óo]n|Fundamentaci[óo]n|Soluci[óo]n|Respuesta)\s*[:\.]\s*', '', line, flags=re.IGNORECASE).strip()
-                current_q["explanation"] = exp_clean
-                current_q["state"] = "E"
-                idx += 1
-                continue
-
-            if current_q["state"] == "Q":
-                if "?" in line:
-                    partes_q = line.split("?", 1)
-                    current_q["question_text"] += " " + partes_q[0].strip() + "?"
-                    resto_a = partes_q[1].strip()
-                    if resto_a:
-                        current_q["answer_text"] = resto_a
-                    current_q["state"] = "A"
-                else:
-                    current_q["question_text"] += " " + line
-            elif current_q["state"] == "A":
-                current_q["answer_text"] = (current_q["answer_text"] + " " + line).strip() if current_q["answer_text"] else line
-            elif current_q["state"] == "E":
-                current_q["explanation"] = (current_q["explanation"] + " " + line).strip() if current_q["explanation"] else line
-
-            idx += 1
-
-        if current_q and (current_q["answer_text"] or current_q["explanation"]):
-            supuestos_qs.append(current_q)
+                    "answer_text": "",
+                    "explanation": texto_integro
+                })
 
         if modo == "DESARROLLO":
             return desarrollo_qs
@@ -843,8 +908,8 @@ class PDFQuizParser:
                             for pat in [
                                 r'^(La mercantil|La empresa)\s+["\'«][A-ZÁÉÍÓÚÑ]', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+son\s+',
                                 r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+(y\s+\d+\s+)?años', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+forma\s+una\s+familia',
-                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_nacid[ao]\s+el\s+\d+',
-                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_camarer[ao]\s+desde', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\_trabaja\s+en\s+la\s+empresa'
+                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+nacid[ao]\s+el\s+\d+',
+                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+camarer[ao]\s+desde', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+trabaja\s+en\s+la\s+empresa'
                             ]:
                                 if re.match(pat, line_text): ignoring_mode = entered_supuestos = True; break
                         if ignoring_mode: continue
