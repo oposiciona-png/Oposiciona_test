@@ -1517,6 +1517,10 @@ TESTS_DISPONIBLES_INVITADO = {
 # === FIN SECCIÓN 3 ===
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
+# Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
+if "TESTS_DISPONIBLES_COMPLETO" not in globals():
+    TESTS_DISPONIBLES_COMPLETO = globals().get("TESTS_DISPONIBLES", globals().get("ESTS_DISPONIBLES", {}))
+
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
     return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
@@ -1525,17 +1529,23 @@ def usuario_puede_reportar():
     return st.session_state.get('rol') != 'INVITADO'
 
 def obtener_tests_segun_rol():
+    catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
     if st.session_state.get('rol') == 'INVITADO':
         return TESTS_DISPONIBLES_INVITADO
     if usuario_es_admin():
         cat_admin = {
-            "ADMINISTRATIVOS": dict(TESTS_DISPONIBLES_COMPLETO["ADMINISTRATIVOS"]),
-            "GESTION": dict(TESTS_DISPONIBLES_COMPLETO["GESTION"]),
+            "ADMINISTRATIVOS": dict(catalogo_base.get("ADMINISTRATIVOS", {})),
+            "GESTION": dict(catalogo_base.get("GESTION", {})),
         }
-        cat_admin["GESTION"]["PREGUNTA DE DESARROLLO"] = DESARROLLO_GESTION_ADMIN
+        # Incorpora automáticamente los PDFs de la carpeta DESARROLLO de Drive
+        desarrollo_combinado = dict(DESARROLLO_GESTION_ADMIN)
+        for k_des, v_des in catalogo_base.get("GESTION", {}).get("DESARROLLO", {}).items():
+            if v_des is not None and k_des not in desarrollo_combinado and f"📝 {k_des}" not in desarrollo_combinado:
+                desarrollo_combinado[f"📝 {k_des}"] = v_des
+        cat_admin["GESTION"]["PREGUNTA DE DESARROLLO"] = desarrollo_combinado
         cat_admin["GESTION"]["SUPUESTOS PRÁCTICOS"] = SUPUESTOS_GESTION_ADMIN
         return cat_admin
-    return TESTS_DISPONIBLES_COMPLETO
+    return catalogo_base
 
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
@@ -1976,8 +1986,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     else:
         texto_sugerido = explicacion_oficial
 
-    # Cálculo conforme a los Criterios Oficiales del Tribunal (sobre 50 puntos y conversión a base 10):
-    # Criterio 1: Conocimiento, literalidad normativa y precisión práctica -> de 0 a 45 puntos
     total_eval = len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos)
     acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
     pts_criterio_1 = (acertados_eval / max(1, total_eval)) * 45.0
@@ -1988,8 +1996,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         pts_criterio_1 = max(0.0, pts_criterio_1 - 11.25)
     pts_criterio_1 = round(pts_criterio_1, 2)
 
-    # Criterios 2 (Orden de ideas: 0 a 3 ptos) y 3 (Calidad expresión escrita: 0 a 2 ptos)
-    # Solo se suman si alcanza al menos 20 puntos sobre 45 en el Criterio 1
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
         num_parrafos_al = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 20])
@@ -2373,9 +2379,9 @@ def coincide_busqueda(nombre_test, consulta):
 
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES": return "🏆 Exámenes y Simulacros Oficiales"
-    if categoria == "PREGUNTA DE DESARROLLO": return "📝 2.º Ejercicio (1.ª Parte) — Preguntas de Desarrollo"
-    if categoria == "SUPUESTOS PRÁCTICOS": return "📋 2.º Ejercicio (2.ª Parte) — Supuestos Prácticos"
-    m = re.match(r'^TEMAS?\s*[\.\-]?\s*(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
+    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]: return "📝 2.º Ejercicio (1.ª Parte) — Preguntas de Desarrollo"
+    if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]: return "📋 2.º Ejercicio (2.ª Parte) — Supuestos Prácticos"
+    m = re.match(r'^TEMAS?\s*[_\.\-]?\s*(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
     if m:
         b = m.group(1).upper().strip()
         nums = re.findall(r'\d+', b)
@@ -2393,13 +2399,13 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
         try:
             r = descargar_pdf_fresco(url_descarga)
             if r.status_code == 200:
-                if cat_actual == "PREGUNTA DE DESARROLLO":
+                if cat_actual in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
                     raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
                     if not raw_qs:
-                        st.error("No se encontraron preguntas de desarrollo en este PDF.")
+                        st.error("No se encontraron preguntas o epígrafes de desarrollo en este PDF.")
                     else:
                         procesar_preguntas(raw_qs, barajar=False)
-                elif cat_actual == "SUPUESTOS PRÁCTICOS":
+                elif cat_actual in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
                     raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
                     if not raw_qs:
                         st.error("No se encontraron supuestos prácticos en este PDF.")
