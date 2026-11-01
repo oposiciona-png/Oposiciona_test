@@ -1543,6 +1543,7 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
+
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -1559,20 +1560,48 @@ def obtener_tests_segun_rol():
     catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
     if st.session_state.get('rol') == 'INVITADO':
         return TESTS_DISPONIBLES_INVITADO
+
+    # Copiamos las categorías limpiando duplicados vacíos si existen
+    cat_adm = dict(catalogo_base.get("ADMINISTRATIVOS", {}))
+    cat_ges = dict(catalogo_base.get("GESTION", {}))
+
     if usuario_es_admin():
-        cat_admin = {
-            "ADMINISTRATIVOS": dict(catalogo_base.get("ADMINISTRATIVOS", {})),
-            "GESTION": dict(catalogo_base.get("GESTION", {})),
+        # 1. Unificar DESARROLLO y PREGUNTA DE DESARROLLO en una sola categoría ("DESARROLLO")
+        desarrollo_unificado = {"Elige un tema de desarrollo...": None}
+        for k_d, v_d in cat_ges.get("DESARROLLO", {}).items():
+            if v_d is not None:
+                desarrollo_unificado[k_d] = v_d
+        for k_d, v_d in DESARROLLO_GESTION_ADMIN.items():
+            if v_d is not None:
+                nombre_limpio = k_d.replace("📝 ", "").strip()
+                if nombre_limpio not in desarrollo_unificado and k_d not in desarrollo_unificado:
+                    desarrollo_unificado[k_d] = v_d
+
+        # 2. Unificar SUPUESTOS y SUPUESTOS PRÁCTICOS en una sola categoría ("SUPUESTOS")
+        supuestos_unificados = {"Elige un supuesto práctico...": None}
+        for k_s, v_s in cat_ges.get("SUPUESTOS", {}).items():
+            if v_s is not None:
+                supuestos_unificados[k_s] = v_s
+        for k_s, v_s in SUPUESTOS_GESTION_ADMIN.items():
+            if v_s is not None:
+                if k_s not in supuestos_unificados:
+                    supuestos_unificados[k_s] = v_s
+
+        # Eliminar posibles claves duplicadas y dejar solo DESARROLLO y SUPUESTOS
+        cat_ges.pop("PREGUNTA DE DESARROLLO", None)
+        cat_ges.pop("SUPUESTOS PRÁCTICOS", None)
+        cat_ges["DESARROLLO"] = desarrollo_unificado
+        cat_ges["SUPUESTOS"] = supuestos_unificados
+
+        return {
+            "ADMINISTRATIVOS": cat_adm,
+            "GESTION": cat_ges,
         }
-        # Incorpora automáticamente los PDFs de la carpeta DESARROLLO de Drive
-        desarrollo_combinado = dict(DESARROLLO_GESTION_ADMIN)
-        for k_des, v_des in catalogo_base.get("GESTION", {}).get("DESARROLLO", {}).items():
-            if v_des is not None and k_des not in desarrollo_combinado and f"📝 {k_des}" not in desarrollo_combinado:
-                desarrollo_combinado[f"📝 {k_des}"] = v_des
-        cat_admin["GESTION"]["PREGUNTA DE DESARROLLO"] = desarrollo_combinado
-        cat_admin["GESTION"]["SUPUESTOS PRÁCTICOS"] = SUPUESTOS_GESTION_ADMIN
-        return cat_admin
-    return catalogo_base
+
+    return {
+        "ADMINISTRATIVOS": cat_adm,
+        "GESTION": cat_ges,
+    }
 
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
@@ -2614,6 +2643,7 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
