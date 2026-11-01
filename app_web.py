@@ -1400,7 +1400,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 2 ===
 
-
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
@@ -1413,6 +1412,9 @@ NUEVOS_HOY = [
 # Categorías exclusivas en GESTIÓN para el Administrador (Segundo y Tercer Ejercicio)
 DESARROLLO_GESTION_ADMIN = {
     "Elige una pregunta de desarrollo...": None,
+    "📝 Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZMe2_3RnNyOvg4xv9cwb0QD-5jtX4SXB",
+    "📝 Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OBdM_hMExnQY40sfIQlCZdSZT3eFaMG8",
+    "📝 Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1JtyOjkCs0HNqaFnfCYvo5xDvZnaF2Dbi",
     "📝 TEMA 73 - PREGUNTA DE DESARROLLO: ACCIÓN PROTECTORA EN EL SISTEMA ESPECIAL DE EMPLEADOS DE HOGAR": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
 }
 
@@ -1421,9 +1423,6 @@ SUPUESTOS_GESTION_ADMIN = {
     "📋 TEMA 73 - SUPUESTOS PRÁCTICOS: FAMILIAS GARCÍA-VALENZUELA Y MONTORO (15 CUESTIONES)": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
 }
 
-# ==============================================================================
-# >>> INICIO DEL BLOQUE A SUSTITUIR: DICCIONARIO TESTS_DISPONIBLES
-# ==============================================================================
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -1496,6 +1495,7 @@ TESTS_DISPONIBLES = {
             "Elige un test de desarrollo...": None,
             "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZMe2_3RnNyOvg4xv9cwb0QD-5jtX4SXB",
             "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OBdM_hMExnQY40sfIQlCZdSZT3eFaMG8",
+            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1JtyOjkCs0HNqaFnfCYvo5xDvZnaF2Dbi",
         },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
@@ -1576,9 +1576,8 @@ TESTS_DISPONIBLES = {
         },
     },
 }
-# ==============================================================================
-# <<< FIN DEL BLOQUE A SUSTITUIR (Mantén intacto todo lo que va antes y después)
-# ==============================================================================
+
+TESTS_DISPONIBLES_COMPLETO = TESTS_DISPONIBLES
 
 TESTS_DISPONIBLES_INVITADO = {
     "ADMINISTRATIVOS": {
@@ -1593,7 +1592,6 @@ TESTS_DISPONIBLES_INVITADO = {
     },
 }
 # === FIN SECCIÓN 3 ===
-
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
@@ -1616,6 +1614,7 @@ def obtener_tests_segun_rol():
     cat_ges = dict(catalogo_base.get("GESTION", {}))
 
     if usuario_es_admin():
+        # El Administrador sí ve DESARROLLO y SUPUESTOS (unificados sin duplicar)
         desarrollo_unificado = {"Elige un tema de desarrollo...": None}
         for k_d, v_d in cat_ges.get("DESARROLLO", {}).items():
             if v_d is not None:
@@ -1644,6 +1643,11 @@ def obtener_tests_segun_rol():
             "ADMINISTRATIVOS": cat_adm,
             "GESTION": cat_ges,
         }
+
+    # Si NO es administrador: ocultamos DESARROLLO y SUPUESTOS tanto en ADMINISTRATIVOS como en GESTIÓN
+    for clave_oculta in ["DESARROLLO", "SUPUESTOS", "PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"]:
+        cat_adm.pop(clave_oculta, None)
+        cat_ges.pop(clave_oculta, None)
 
     return {
         "ADMINISTRATIVOS": cat_adm,
@@ -1742,16 +1746,13 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno):
     """
     orac_low = ''.join(c for c in unicodedata.normalize('NFD', (oracion_alumno or "").lower()) if unicodedata.category(c) != 'Mn')
 
-    # Verificación de rangos estructurales del TRLGSS (RD Legislativo 8/2015) y CE
     if k_tipo == "ART" and k_id.isdigit():
         num_art = int(k_id)
-        # Si habla de la Constitución Española (arts. 1 a 169)
         if any(w in orac_low for w in ["constitucion", "constitucional", "ce", "estado social", "competencia exclusiva", "principios rectores", "ciudadanos"]):
             if 1 <= num_art <= 169:
                 return True, f"{k_lbl} (verificado en fuentes: precepto constitucional bien aplicado)"
             return False, f"{k_lbl} (error normativo: la Constitución Española solo tiene 169 artículos)"
 
-        # Si habla del TRLGSS (Arts. 1 a 373) verificamos que el número corresponda al Título/materia que cita
         if 1 <= num_art <= 135:
             if any(w in orac_low for w in ["normas generales", "titulo i", "campo de aplicacion", "afiliacion", "cotizacion", "recaudacion", "accion protectora", "entidades gestoras", "tesoreria", "mutua", "prescripcion", "infracciones"]):
                 return True, f"{k_lbl} (verificado en fuentes: Título I TRLGSS - Normas generales del sistema)"
@@ -1773,7 +1774,6 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno):
         elif num_art > 373:
             return False, f"{k_lbl} (error en fuentes: el TRLGSS finaliza en el artículo 373)"
 
-        # Si está dentro del rango 1-373 y el contexto es jurídico de Seguridad Social sin contradicción de Título
         if 1 <= num_art <= 373 and len(orac_low) >= 30:
             return True, f"{k_lbl} (precepto adicional verificado en las fuentes legales)"
 
@@ -2142,7 +2142,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normativa.append(
             f"⚠️ **Preceptos de la respuesta oficial que te faltó citar:** {', '.join(ev['citas_faltan'])}."
         )
-    # SOLO mostramos verificación en fuentes externas si el alumno añadió artículos que no estaban en la respuesta oficial
     if ev.get("articulos_extra_detectados"):
         if ev["citas_complementarias"]:
             rev_normativa.append(
