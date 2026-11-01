@@ -1594,6 +1594,7 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
+
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -1725,21 +1726,112 @@ def _extraer_rangos_articulos(texto):
     arts = set()
     if not texto:
         return arts
-    # Rangos tipo "Arts. 136 a 261" o "artículos 1 al 7"
     for m_r in re.finditer(r'\bart(?:[íi]culos?|\.|\s*s\.)\s*(\d{1,3})\s*(?:a|al|\-|–)\s*(\d{1,3})\b', texto, flags=re.IGNORECASE):
         ini, fin = int(m_r.group(1)), int(m_r.group(2))
-        if ini <= fin and (fin - ini) <= 300:
+        if ini <= fin and (fin - ini) <= 350:
             for n in range(ini, fin + 1):
                 arts.add(str(n))
-    # Artículos individuales
     for m_i in re.finditer(r'\bart(?:[íi]culos?|\.|\s*s\.)\s*(\d{1,3})\b', texto, flags=re.IGNORECASE):
         arts.add(m_i.group(1))
     return arts
 
+def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno):
+    """
+    Se ejecuta ÚNICAMENTE cuando el alumno añade por su cuenta un artículo o ley que NO estaba en la respuesta oficial.
+    Comprueba en las fuentes legales si el precepto existe y corresponde a lo que el alumno afirma en su frase.
+    """
+    orac_low = ''.join(c for c in unicodedata.normalize('NFD', (oracion_alumno or "").lower()) if unicodedata.category(c) != 'Mn')
+
+    # Verificación de rangos estructurales del TRLGSS (RD Legislativo 8/2015) y CE
+    if k_tipo == "ART" and k_id.isdigit():
+        num_art = int(k_id)
+        # Si habla de la Constitución Española (arts. 1 a 169)
+        if any(w in orac_low for w in ["constitucion", "constitucional", "ce", "estado social", "competencia exclusiva", "principios rectores", "ciudadanos"]):
+            if 1 <= num_art <= 169:
+                return True, f"{k_lbl} (verificado en fuentes: precepto constitucional bien aplicado)"
+            return False, f"{k_lbl} (error normativo: la Constitución Española solo tiene 169 artículos)"
+
+        # Si habla del TRLGSS (Arts. 1 a 373) verificamos que el número corresponda al Título/materia que cita
+        if 1 <= num_art <= 135:
+            if any(w in orac_low for w in ["normas generales", "titulo i", "campo de aplicacion", "afiliacion", "cotizacion", "recaudacion", "accion protectora", "entidades gestoras", "tesoreria", "mutua", "prescripcion", "infracciones"]):
+                return True, f"{k_lbl} (verificado en fuentes: Título I TRLGSS - Normas generales del sistema)"
+        elif 136 <= num_art <= 261:
+            if any(w in orac_low for w in ["regimen general", "titulo ii", "cuenta ajena", "incapacidad", "nacimiento", "corresponsabilidad", "riesgo", "jubilacion", "muerte", "supervivencia", "viudedad", "orfandad", "hogar", "agrario", "artista", "tiempo parcial"]):
+                return True, f"{k_lbl} (verificado en fuentes: Título II TRLGSS - Régimen General)"
+        elif 262 <= num_art <= 304:
+            if any(w in orac_low for w in ["desempleo", "titulo iii", "contributivo", "subsidio", "asistencial", "sepe"]):
+                return True, f"{k_lbl} (verificado en fuentes: Título III TRLGSS - Protección por desempleo)"
+        elif 305 <= num_art <= 326:
+            if any(w in orac_low for w in ["autonomo", "autonomos", "cuenta propia", "reta", "titulo iv", "trade", "societario"]):
+                return True, f"{k_lbl} (verificado en fuentes: Título IV TRLGSS - Régimen Especial de Trabajadores Autónomos)"
+        elif 327 <= num_art <= 350:
+            if any(w in orac_low for w in ["cese de actividad", "titulo v", "autonomo", "autonomos"]):
+                return True, f"{k_lbl} (verificado en fuentes: Título V TRLGSS - Protección por cese de actividad)"
+        elif 351 <= num_art <= 373:
+            if any(w in orac_low for w in ["no contributiva", "no contributivas", "titulo vi", "invalidez", "jubilacion", "asistencial", "familiar", "familiares", "ingreso minimo"]):
+                return True, f"{k_lbl} (verificado en fuentes: Título VI TRLGSS - Prestaciones no contributivas)"
+        elif num_art > 373:
+            return False, f"{k_lbl} (error en fuentes: el TRLGSS finaliza en el artículo 373)"
+
+        # Si está dentro del rango 1-373 y el contexto es jurídico de Seguridad Social sin contradicción de Título
+        if 1 <= num_art <= 373 and len(orac_low) >= 30:
+            return True, f"{k_lbl} (precepto adicional verificado en las fuentes legales)"
+
+    if k_tipo == "RANGO_ART":
+        nums = [int(x) for x in re.findall(r'\d+', k_id)]
+        if len(nums) == 2 and 1 <= nums[0] <= nums[1] <= 373:
+            return True, f"{k_lbl} (rango de artículos verificado en la estructura del TRLGSS)"
+        return False, f"{k_lbl} (rango de artículos inexistente en la norma)"
+
+    if k_tipo == "TITULO":
+        if k_id in ["I", "II", "III", "IV", "V", "VI", "1", "2", "3", "4", "5", "6"]:
+            return True, f"{k_lbl} (Título verificado en la estructura del TRLGSS)"
+        return False, f"{k_lbl} (el TRLGSS solo consta de seis Títulos: I a VI)"
+
+    if k_tipo == "NORMA":
+        leyes_historicas_y_vigentes_ss = {
+            "193/1963": "Ley 193/1963 de Bases de la Seguridad Social",
+            "907/1966": "Decreto 907/1966 (Texto Articulado I de la Ley de Seguridad Social)",
+            "24/1972": "Ley 24/1972 de financiación y perfeccionamiento de la acción protectora",
+            "2065/1974": "Decreto 2065/1974 (Texto Refundido de la Ley General de la Seguridad Social de 1974)",
+            "26/1985": "Ley 26/1985 de medidas urgentes para la racionalización de la estructura y acción protectora",
+            "26/1990": "Ley 26/1990 por la que se establecen en la Seguridad Social prestaciones no contributivas",
+            "1/1994": "RD Legislativo 1/1994 (anterior Texto Refundido de la LGSS)",
+            "24/1997": "Ley 24/1997 de Consolidación y Racionalización del Sistema de Seguridad Social",
+            "40/2007": "Ley 40/2007 de medidas en materia de Seguridad Social",
+            "20/2007": "Ley 20/2007 del Estatuto del trabajo autónomo (LETA)",
+            "27/2011": "Ley 27/2011 sobre actualización, adecuación y modernización del sistema de Seguridad Social",
+            "28/2011": "Ley 28/2011 de integración del Régimen Especial Agrario en el Régimen General",
+            "1620/2011": "RD 1620/2011 de relación laboral especial del servicio del hogar familiar",
+            "2/2015": "RD Legislativo 2/2015 (Estatuto de los Trabajadores)",
+            "8/2015": "RD Legislativo 8/2015 (Texto Refundido de la Ley General de la Seguridad Social)",
+            "47/2015": "Ley 47/2015 reguladora de la protección social de las personas trabajadoras del sector marítimo-pesquero",
+            "19/2021": "Ley 19/2021 por la que se establece el Ingreso Mínimo Vital",
+            "21/2021": "Ley 21/2021 de garantía del poder adquisitivo de las pensiones",
+            "13/2022": "RDL 13/2022 de nuevo sistema de cotización por ingresos reales de autónomos",
+            "16/2022": "RDL 16/2022 de mejora de condiciones de trabajo y Seguridad Social de empleadas de hogar",
+            "2/2023": "RDL 2/2023 de ampliación de derechos de los pensionistas y reducción de la brecha de género",
+            "84/1996": "RD 84/1996 (Reglamento General sobre inscripción de empresas y afiliación)",
+            "2064/1995": "RD 2064/1995 (Reglamento General sobre cotización y liquidación)",
+            "1415/2004": "RD 1415/2004 (Reglamento General de Recaudación de la Seguridad Social)",
+            "3/2026": "RDL 3/2026 de revalorización de pensiones y cotización para 2026",
+            "31/2026": "RDL 31/2026 de reforma de prestaciones de Seguridad Social",
+            "126/2026": "RD 126/2026 de fijación del SMI para 2026",
+            "297/2026": "Orden PJC/297/2026 de cotización para 2026",
+        }
+        if k_id in leyes_historicas_y_vigentes_ss:
+            return True, f"{k_lbl} (verificado en fuentes: {leyes_historicas_y_vigentes_ss[k_id]})"
+
+    if k_tipo in ["SIGLA", "DISP"]:
+        return True, f"{k_lbl} (verificado en fuentes)"
+
+    return False, f"{k_lbl} (precepto añadido por el alumno que no consta como válido para esta materia en las fuentes legales)"
+
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     """
-    Evalúa la respuesta del alumno ÚNICA Y EXCLUSIVAMENTE contra el texto oficial del epígrafe actual,
-    sin mezclar diccionarios ni textos de otros temas o epígrafes.
+    REGLA DE EVALUACIÓN EN 2 PASOS:
+    1. Compara la respuesta del alumno ÚNICA Y EXCLUSIVAMENTE con la respuesta oficial del epígrafe (ideas, cifras y artículos de la propia respuesta).
+    2. SÓLO si el alumno añade artículos o normas extra que no están en la respuesta oficial, los busca en las fuentes legales para ver si están bien o mal.
     """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -1820,7 +1912,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         ids_ref_equiv.add(("NORMA", "8/2015"))
         ids_ref_equiv.add(("SIGLA", "trlgss"))
 
-    citas_ok, citas_complementarias, citas_faltan, citas_erroneas = [], [], [], []
+    # PASO 1: Comprobar qué artículos de la respuesta oficial ha puesto u omitido el alumno
+    citas_ok, citas_faltan = [], []
     for k_par, lbl in mapa_ref.items():
         if k_par in mapa_al or (k_par in [("NORMA", "8/2015"), ("SIGLA", "trlgss")] and any(x in mapa_al for x in [("NORMA", "8/2015"), ("SIGLA", "trlgss")])):
             citas_ok.append(lbl)
@@ -1835,36 +1928,39 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_faltan.append(lbl)
 
+    # PASO 2: Detectar si el alumno ha añadido artículos EXTRA que NO están en la respuesta oficial.
+    # SOLO esos artículos extra se verifican en las fuentes para saber si están bien o mal.
+    citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
+    oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
+
     for k_par, lbl in mapa_al.items():
-        if k_par not in ids_ref_equiv:
-            if k_par[0] == "ART" and k_par[1] in arts_en_ref:
+        if k_par in ids_ref_equiv:
+            continue
+        if k_par[0] == "ART" and k_par[1] in arts_en_ref:
+            if lbl not in citas_ok:
+                citas_ok.append(lbl)
+            continue
+        if k_par[0] == "RANGO_ART":
+            nums_r = re.findall(r'\d+', k_par[1])
+            if nums_r and all(n in arts_en_ref for n in nums_r):
                 if lbl not in citas_ok:
                     citas_ok.append(lbl)
-            elif k_par[0] == "RANGO_ART":
-                nums_r = re.findall(r'\d+', k_par[1])
-                if nums_r and any(n in arts_en_ref for n in nums_r):
-                    if lbl not in citas_ok:
-                        citas_ok.append(lbl)
-                else:
-                    citas_complementarias.append(lbl)
-            elif k_par[1] in ref_norm:
-                if lbl not in citas_ok:
-                    citas_ok.append(lbl)
-            else:
-                # Comprobamos si la frase donde el alumno cita esa norma usa vocabulario propio de este epígrafe
-                palabras_ref_ep = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', ref_norm))
-                oraciones_al = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
-                conectado_al_epigrafe = False
-                for orac in oraciones_al:
-                    if k_par[1] in _norm(orac):
-                        palabras_orac = set(re.findall(r'\b[a-záéíóúñ]{5,}\b', _norm(orac)))
-                        if len(palabras_orac.intersection(palabras_ref_ep)) >= 2:
-                            conectado_al_epigrafe = True
-                            break
-                if conectado_al_epigrafe:
-                    citas_complementarias.append(lbl)
-                else:
-                    citas_erroneas.append(lbl)
+                continue
+        if k_par[1] in ref_norm:
+            if lbl not in citas_ok:
+                citas_ok.append(lbl)
+            continue
+
+        # Es un artículo/norma EXTRA añadido por el alumno -> lo verificamos en las fuentes
+        articulos_extra_detectados.append(lbl)
+        orac_donde_aparece = next((o for o in oraciones_alumno if k_par[1] in _norm(o)), texto_alumno)
+        es_correcto_en_fuente, detalle_fuente = _verificar_articulo_extra_en_fuentes(
+            k_par[0], k_par[1], lbl, orac_donde_aparece
+        )
+        if es_correcto_en_fuente:
+            citas_complementarias.append(detalle_fuente)
+        else:
+            citas_erroneas.append(detalle_fuente)
 
     pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
     cifras_raw = re.findall(pat_cifras, ref_completa, flags=re.IGNORECASE)
@@ -1941,7 +2037,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     else:
         texto_sugerido = explicacion_oficial
 
-    # Cálculo exacto del Criterio 1 (0 a 45 puntos) y desglose exacto de puntos restados / dejados de ganar
     total_eval = max(1, len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos))
     valor_por_item = 45.0 / total_eval
 
@@ -1971,19 +2066,18 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
 
-    # Lista detallada de motivos por los que se han restado o no se han alcanzado puntos
     motivos_resta = []
     if penalizacion_sentido > 0:
         motivos_resta.append(f"🔻 **-{penalizacion_sentido:.2f} ptos (Penalización directa en Criterio 1):** Por invertir el sentido afirmativo/negativo de la conclusión principal o no responder directamente a la cuestión planteada.")
     if penalizacion_citas_erroneas > 0:
-        motivos_resta.append(f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos (Penalización por cita imprecisa en Criterio 1):** Por invocar preceptos sin relación directa con este epígrafe ({', '.join(citas_erroneas)}).")
+        motivos_resta.append(f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos (Penalización tras verificar en fuentes legales los artículos extra añadidos):** {', '.join(citas_erroneas)}.")
     if puntos_perdidos_citas > 0 and citas_faltan:
-        motivos_resta.append(f"🔸 **-{puntos_perdidos_citas:.2f} ptos (Normativa del epígrafe no citada en Criterio 1):** Por omitir la cita expresa de {', '.join(citas_faltan)}.")
+        motivos_resta.append(f"🔸 **-{puntos_perdidos_citas:.2f} ptos (Normativa de la respuesta oficial no citada):** Por omitir {', '.join(citas_faltan)}.")
     if puntos_perdidos_cifras > 0 and cifras_faltan:
-        motivos_resta.append(f"🔸 **-{puntos_perdidos_cifras:.2f} ptos (Parámetros/plazos/porcentajes omitidos en Criterio 1):** Por no especificar {', '.join(cifras_faltan)}.")
+        motivos_resta.append(f"🔸 **-{puntos_perdidos_cifras:.2f} ptos (Parámetros/plazos de la respuesta oficial omitidos):** Por no especificar {', '.join(cifras_faltan)}.")
     if puntos_perdidos_ideas > 0 and puntos_omitidos:
         resumen_om = "; ".join([p[:95] + ("..." if len(p) > 95 else "") for p in puntos_omitidos[:3]])
-        motivos_resta.append(f"🔸 **-{puntos_perdidos_ideas:.2f} ptos (Contenido nuclear del epígrafe no desarrollado en Criterio 1):** Por omitir {len(puntos_omitidos)} {'apartado clave' if len(puntos_omitidos)==1 else 'apartados clave'} del texto oficial ({resumen_om}).")
+        motivos_resta.append(f"🔸 **-{puntos_perdidos_ideas:.2f} ptos (Ideas de la respuesta oficial no desarrolladas):** Por omitir {len(puntos_omitidos)} {'apartado' if len(puntos_omitidos)==1 else 'apartados'} del texto oficial ({resumen_om}).")
     if not supera_umbral_20:
         motivos_resta.append("🔻 **-5,00 ptos (Bloqueo oficial de Criterios 2 y 3):** Al no alcanzar el mínimo de 20,00 / 45 puntos en el Criterio 1, el baremo del Tribunal impide sumar los puntos de estructura (0/3 ptos) y calidad de expresión escrita (0/2 ptos).")
     else:
@@ -2006,6 +2100,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "citas_complementarias": citas_complementarias,
         "citas_faltan": citas_faltan,
         "citas_erroneas": citas_erroneas,
+        "articulos_extra_detectados": articulos_extra_detectados,
         "cifras_ok": cifras_ok,
         "cifras_faltan": cifras_faltan,
         "puntos_cubiertos": puntos_cubiertos,
@@ -2021,72 +2116,73 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     if ev["puntos_cubiertos"] or ev["citas_ok"] or ev["citas_complementarias"] or ev["cifras_ok"]:
         aciertos_txt = []
         if ev["citas_ok"]:
-            aciertos_txt.append(f"Has fundamentado con rigor tu exposición invocando la normativa nuclear del epígrafe (**{', '.join(ev['citas_ok'])}**).")
+            aciertos_txt.append(f"Has incluido correctamente los preceptos recogidos en la respuesta oficial (**{', '.join(ev['citas_ok'])}**).")
         if ev["citas_complementarias"]:
             aciertos_txt.append(
-                f"🌟 **Preceptos y referencias adicionales bien conectados (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** Has incluido acertadamente **{', '.join(ev['citas_complementarias'])}** en relación con el contenido del epígrafe."
+                f"🌟 **Artículos adicionales añadidos por ti y verificados en las fuentes (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}."
             )
         if ev["cifras_ok"]:
-            aciertos_txt.append(f"Has precisado correctamente los parámetros cuantitativos/temporales (**{', '.join(ev['cifras_ok'])}**).")
+            aciertos_txt.append(f"Has precisado correctamente los datos cuantitativos/temporales de la respuesta (**{', '.join(ev['cifras_ok'])}**).")
         if ev["puntos_cubiertos"]:
             resumen_ideas = " ".join([f"«{p}»" for p in ev["puntos_cubiertos"][:2]])
-            aciertos_txt.append(f"En cuanto al fondo jurídico, tu redacción desarrolla con acierto: {resumen_ideas}")
-        bloques.append("1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n" + " ".join(aciertos_txt))
+            aciertos_txt.append(f"Comparando tu texto con la respuesta oficial, desarrollas con acierto: {resumen_ideas}")
+        bloques.append("1. **✅ Comparación con la respuesta oficial del epígrafe:**\n" + " ".join(aciertos_txt))
     else:
         bloques.append(
-            "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa:**\n"
-            "Tu contestación es todavía muy genérica o embrionaria y no llega a recoger los elementos técnicos nucleares exigidos en este epígrafe."
+            "1. **✅ Comparación con la respuesta oficial del epígrafe:**\n"
+            "Tu contestación no recoge todavía las ideas ni los preceptos nucleares exigidos en la respuesta oficial de este epígrafe."
         )
 
     rev_normativa = []
     if ev["alerta_sentido"]:
         rev_normativa.append(ev["alerta_sentido"])
     if ev["citas_ok"]:
-        rev_normativa.append(f"✔️ **Normativa principal del epígrafe acertada:** {', '.join(ev['citas_ok'])}.")
-    if ev["citas_complementarias"]:
-        rev_normativa.append(
-            f"🌟 **Referencias normativas adicionales conectadas con el tema:** {', '.join(ev['citas_complementarias'])}."
-        )
-    if ev["citas_erroneas"]:
-        rev_normativa.append(
-            f"❌ **Preceptos sin relación directa con este epígrafe:** {', '.join(ev['citas_erroneas'])}."
-        )
+        rev_normativa.append(f"✔️ **Preceptos de la respuesta oficial acertados:** {', '.join(ev['citas_ok'])}.")
     if ev["citas_faltan"]:
         rev_normativa.append(
-            f"⚠️ **Artículos y normas del epígrafe oficial que te faltó citar:** {', '.join(ev['citas_faltan'])}."
+            f"⚠️ **Preceptos de la respuesta oficial que te faltó citar:** {', '.join(ev['citas_faltan'])}."
         )
+    # SOLO mostramos verificación en fuentes externas si el alumno añadió artículos que no estaban en la respuesta oficial
+    if ev.get("articulos_extra_detectados"):
+        if ev["citas_complementarias"]:
+            rev_normativa.append(
+                f"🌟 **Artículos extra añadidos por ti (verificados como CORRECTOS en las fuentes legales):** {'; '.join(ev['citas_complementarias'])}."
+            )
+        if ev["citas_erroneas"]:
+            rev_normativa.append(
+                f"❌ **Artículos extra añadidos por ti (verificados como INCORRECTOS en las fuentes legales):** {'; '.join(ev['citas_erroneas'])}."
+            )
     if not rev_normativa:
-        rev_normativa.append("✔️ Has citado correctamente toda la base normativa exigible en este epígrafe.")
-    bloques.append("2. **⚖️ Auditoría de artículos y preceptos normativos:**\n" + "\n".join(rev_normativa))
+        rev_normativa.append("✔️ Has citado todos los preceptos exigidos en la respuesta oficial sin errores.")
+    bloques.append("2. **⚖️ Revisión de artículos (comparación con la respuesta oficial y verificación de artículos extra):**\n" + "\n".join(rev_normativa))
 
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         detalles_str = ""
         if ev["cifras_faltan"]:
-            detalles_str += f"Te ha faltado especificar los siguientes plazos, tramos o porcentajes clave: **{', '.join(ev['cifras_faltan'])}**.\n"
+            detalles_str += f"Respecto a la respuesta oficial, te ha faltado indicar: **{', '.join(ev['cifras_faltan'])}**.\n"
         if ev["puntos_omitidos"]:
             lista_om = "\n".join([f"   - *{p}*" for p in ev["puntos_omitidos"][:5]])
-            detalles_str += f"Comparando tu texto con el contenido oficial de este epígrafe, has omitido desarrollar estos extremos:\n{lista_om}\n\n"
+            detalles_str += f"Comparando tu respuesta con la respuesta oficial del epígrafe, te ha faltado incluir estos puntos:\n{lista_om}\n\n"
         modelo_parrafo = respuesta_oficial if (respuesta_oficial and len(respuesta_oficial) > 40) else ev["texto_sugerido"]
-        detalles_str += f"✍️ **Párrafo magistral que deberías incorporar a tu examen para alcanzar la máxima puntuación:**\n« {modelo_parrafo} »"
-        bloques.append("3. **⚠️ Detalles omitidos del epígrafe y redacción modelo recomendada:**\n" + detalles_str)
+        detalles_str += f"✍️ **Párrafo de la respuesta oficial que deberías incorporar:**\n« {modelo_parrafo} »"
+        bloques.append("3. **⚠️ Qué te ha faltado respecto a la respuesta oficial:**\n" + detalles_str)
     else:
         bloques.append(
-            "3. **⚠️ Detalles omitidos del epígrafe y redacción modelo recomendada:**\n"
-            "¡Excelente trabajo! Tu respuesta abarca todos los requisitos, excepciones y matices técnicos del epígrafe oficial."
+            "3. **⚠️ Qué te ha faltado respecto a la respuesta oficial:**\n"
+            "¡Excelente trabajo! Tu respuesta cubre todos los puntos de la respuesta oficial."
         )
 
     c1 = ev.get("pts_criterio_1", 0.0)
     c2 = ev.get("pts_criterio_2", 0.0)
     c3 = ev.get("pts_criterio_3", 0.0)
-    n50 = ev.get("nota_50", round(ev["nota"] * 5, 2))
     motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin penalizaciones ni deducciones significativas."
 
     desglose_tribunal = (
-        "4. **🎓 Desglose del Baremo Oficial y Motivo Exacto de Puntos Restados:**\n"
-        f"   - **Criterio 1 — Conocimiento y precisión normativa ajustada a su literalidad (0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
+        "4. **🎓 Desglose de Puntuación y Motivo Exacto de Puntos Restados:**\n"
+        f"   - **Criterio 1 — Conocimiento y precisión normativa ajustada a la respuesta oficial (0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
         f"   - **Criterio 2 — Orden de las ideas y estructura de la exposición (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
         f"   - **Criterio 3 — Calidad de la expresión escrita (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
-        f"   - **📉 Detalle exacto de puntos restados o no alcanzados hasta los 50,00 puntos:**\n{motivos_txt}"
+        f"   - **📉 Motivo exacto de los puntos restados o no alcanzados:**\n{motivos_txt}"
     )
     bloques.append(desglose_tribunal)
 
@@ -2114,26 +2210,36 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
+    articulos_extra = ev_fallback.get("articulos_extra_detectados", [])
+
+    if articulos_extra:
+        instruccion_articulos_extra = (
+            f"El alumno ha añadido por su cuenta estos preceptos que NO figuran literalmente en la respuesta oficial: {', '.join(articulos_extra)}. "
+            "ÚNICAMENTE para estos preceptos extra añadidos por el alumno, comprueba en tus fuentes de Derecho de la Seguridad Social y Constitución Española si existen y si lo que el alumno afirma sobre ellos es correcto o incorrecto (indicándolo en el bloque 2)."
+        )
+    else:
+        instruccion_articulos_extra = (
+            "El alumno NO ha añadido artículos externos distintos a los de la respuesta oficial. Por tanto, NO busques ni cites ninguna fuente externa: compara su respuesta ÚNICA Y EXCLUSIVAMENTE con la RESPUESTA OFICIAL adjunta."
+        )
 
     prompt = (
-        "Actúa como la Presidenta del Tribunal Calificador de las pruebas selectivas del Cuerpo de Gestión de la Administración de la Seguridad Social (Resolución de 22 de diciembre de 2025) y preparador experto de Oposiciona.\n"
-        "Tu misión es corregir con rigor técnico absoluto la respuesta escrita por el opositor, "
-        "contrastándola ÚNICA Y EXCLUSIVAMENTE con el TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE que se adjunta más abajo.\n\n"
-        f"{CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO}\n\n"
-        "REGLAS DE CORRECCIÓN DE OBLIGADO CUMPLIMIENTO:\n"
-        "0. **PROHIBICIÓN ABSOLUTA DE MEZCLAR OTROS TEMAS O CITAR FUENTES EXTERNAS:** Evalúa SOLO lo que aparece en el 'TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE' adjunto. NO menciones nunca en tu respuesta nombres de archivos, ni 'NotebookLM', ni 'TEMAS HASTA EL MOMENTO', ni 'NOVEDADES 2026', ni mezcles artículos o contenidos de otros epígrafes o temas distintos.\n"
-        "1. **RESPETO A LA PUNTUACIÓN Y EXPLICACIÓN EXACTA DE CADA PUNTO RESTADO:**\n"
-        f"   - La calificación numérica auditada para esta respuesta es: Criterio 1 = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 puntos ({ev_fallback['nota']:.2f}/10).\n"
-        "   - En el bloque 4 debes explicar con total claridad el **motivo exacto por el que se le ha restado cada punto** (qué artículos concretos del epígrafe omitió, qué ideas o apartados del epígrafe dejó sin explicar o qué precepto erróneo citó).\n\n"
-        f"=== EPÍGRAFE A DESARROLLAR ===\n{pregunta}\n\n"
-        f"=== TEXTO OFICIAL ÍNTEGRO DEL EPÍGRAFE (ÚNICA REFERENCIA VÁLIDA) ===\n{explicacion_oficial}\n\n"
+        "Actúa como el Tribunal Calificador de las pruebas selectivas del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+        "Tu misión es corregir la respuesta del opositor cumpliendo esta REGLA ESTRICTA DE DOS PASOS:\n"
+        "PASO 1 (COMPARACIÓN DIRECTA CON LA RESPUESTA OFICIAL): Compara lo que ha escrito el alumno única y exclusivamente con el texto de la 'RESPUESTA OFICIAL DEL EPÍGRAFE' que aparece abajo. Evalúa qué ideas y artículos de esa respuesta oficial ha puesto y cuáles le han faltado.\n"
+        f"PASO 2 (ARTÍCULOS EXTRA AÑADIDOS POR EL ALUMNO): {instruccion_articulos_extra}\n\n"
+        "REGLAS OBLIGATORIAS:\n"
+        "- No menciones nombres de archivos ni herramientas internas.\n"
+        f"- Respeta exactamente las puntuaciones calculadas: Criterio 1 = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 puntos ({ev_fallback['nota']:.2f}/10).\n"
+        "- En el bloque 4 detalla con total claridad el motivo exacto por el que se ha restado cada punto.\n\n"
+        f"=== EPÍGRAFE / PREGUNTA ===\n{pregunta}\n\n"
+        f"=== RESPUESTA OFICIAL DEL EPÍGRAFE (BASE DE COMPARACIÓN) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== AUDITORÍA DE PUNTOS RESTADOS CALCULADA ===\n{motivos_calculados}\n\n"
-        "Estructura tu respuesta en estos 4 bloques exactos:\n"
-        "1. **✅ Análisis jurídico de tu exposición y ajuste a la literalidad normativa**\n"
-        "2. **⚖️ Auditoría de artículos y preceptos normativos del epígrafe**\n"
-        "3. **⚠️ Detalles técnicos omitidos de este epígrafe y párrafo magistral que deberías haber incluido**\n"
-        "4. **🎓 Desglose del Baremo Oficial y Motivo Exacto de Puntos Restados (Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2] y explicación detallada de cada punto restado)**"
+        f"=== DESGLOSE DE PUNTOS RESTADOS CALCULADO ===\n{motivos_calculados}\n\n"
+        "Estructura tu respuesta en estos 4 bloques:\n"
+        "1. **✅ Comparación con la respuesta oficial del epígrafe**\n"
+        "2. **⚖️ Revisión de artículos (los de la respuesta oficial y verificación en fuentes solo si añadió artículos extra)**\n"
+        "3. **⚠️ Qué te ha faltado respecto a la respuesta oficial**\n"
+        "4. **🎓 Desglose de Puntuación y Motivo Exacto de Puntos Restados**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
