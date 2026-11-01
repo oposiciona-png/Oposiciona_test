@@ -1690,7 +1690,7 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
     m = re.search(r'tema[_\s\-]*(\d+)', nt, re.IGNORECASE)
     if m:
         num_t = int(m.group(1))
-         titulos_conocidos = {
+        titulos_conocidos = {
             51: "TEMA 51: LA SEGURIDAD SOCIAL EN LA CONSTITUCIÓN ESPAÑOLA DE 1978 Y EL TRLGSS",
             52: "TEMA 52: CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA DE LA SEGURIDAD SOCIAL",
             53: "TEMA 53: AFILIACIÓN, ALTAS, BAJAS, CONVENIO ESPECIAL E INSCRIPCIÓN DE EMPRESAS",
@@ -1864,7 +1864,6 @@ def auditar_siglas_sin_definir_previa(texto_alumno):
         m_sigla = re.search(pat_regex, t_norm)
         if m_sigla:
             pos_sigla = m_sigla.start()
-            # La descripción completa debe aparecer ANTES de la primera vez que se usa la sigla (o justo pegada a ella entre paréntesis)
             ventana_previa = t_low[:pos_sigla + 65]
             definida_antes = any(frase in ventana_previa for frase in frases_completas)
             if not definida_antes:
@@ -1896,7 +1895,6 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, co
     orac_low = _norm(oracion_alumno)
     ep_low = _norm(contexto_epigrafe)
 
-    # Comprobamos si la oración donde cita el artículo extra trata realmente de la misma materia del epígrafe
     palabras_ep = set(re.findall(r'\b[a-z]{5,}\b', ep_low))
     palabras_orac = set(re.findall(r'\b[a-z]{5,}\b', orac_low))
     coincidencias_materia = len(palabras_ep.intersection(palabras_orac))
@@ -1905,15 +1903,12 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, co
         num_art = int(k_id)
         literal_art = obtener_literal_articulo(k_id)
 
-        # Si el artículo es > 373 no existe en el TRLGSS
         if num_art > 373:
             return False, f"**{k_lbl}** no tiene relación alguna: {literal_art}"
 
-        # Si el artículo pertenece a otro bloque temático ajeno al epígrafe, mostramos su literal
         if k_id in LITERALES_ARTICULOS_REFERENCIA:
             lit_norm = _norm(LITERALES_ARTICULOS_REFERENCIA[k_id])
             palabras_lit = set(re.findall(r'\b[a-z]{5,}\b', lit_norm))
-            # Si ni el literal del artículo ni la frase del alumno conectan con el epígrafe actual -> es ajeno
             if len(palabras_lit.intersection(palabras_ep)) == 0 and coincidencias_materia < 2:
                 return False, f"**{k_lbl}** no guarda relación con este epígrafe. Su texto literal establece: {literal_art}"
 
@@ -2186,7 +2181,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
     pts_criterio_1_base = (acertados_eval / total_eval) * 45.0
     pts_criterio_1 = min(45.0, pts_criterio_1_base + bonificacion_complementarias)
-    # Si no alcanza 20/45, la penalización de siglas se resta directamente en Criterio 1 para que siempre tenga efecto real
     pts_criterio_1 = max(0.0, pts_criterio_1 - penalizacion_citas_erroneas - penalizacion_sentido)
     pts_criterio_1 = round(pts_criterio_1, 2)
 
@@ -2251,7 +2245,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     """Genera un resumen conciso, directo y claro de la corrección."""
     bloques = []
 
-    # 1. Resumen breve de lo acertado
     aciertos_resumen = []
     if ev["citas_ok"]:
         aciertos_resumen.append(f"**Preceptos acertados:** {', '.join(ev['citas_ok'])}.")
@@ -2263,7 +2256,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         aciertos_resumen.append("Tu respuesta no recoge todavía los puntos esenciales ni los artículos de este epígrafe.")
     bloques.append("1. **✅ Resumen de aciertos frente a la respuesta oficial:**\n" + " ".join(aciertos_resumen))
 
-    # 2. Artículos y siglas
     rev_normas = []
     if ev["citas_faltan"]:
         rev_normas.append(f"- ⚠️ **Artículos del epígrafe omitidos:** {', '.join(ev['citas_faltan'])}.")
@@ -2279,7 +2271,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normas.append("- ✔️ Todos los artículos y siglas están correctamente empleados.")
     bloques.append("2. **⚖️ Revisión de artículos y uso formal de siglas:**\n" + "\n".join(rev_normas))
 
-    # 3. Lo que falta (resumido)
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         faltantes_txt = []
         if ev["cifras_faltan"]:
@@ -2759,7 +2750,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
