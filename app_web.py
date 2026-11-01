@@ -1410,20 +1410,6 @@ NUEVOS_HOY = [
     "EXAMEN PRESENCIAL 01 NOV 2026",
 ]
 
-# Categorías exclusivas en GESTIÓN para el Administrador (Segundo y Tercer Ejercicio)
-DESARROLLO_GESTION_ADMIN = {
-    "Elige una pregunta de desarrollo...": None,
-    "📝 Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZMe2_3RnNyOvg4xv9cwb0QD-5jtX4SXB",
-    "📝 Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OBdM_hMExnQY40sfIQlCZdSZT3eFaMG8",
-    "📝 Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1JtyOjkCs0HNqaFnfCYvo5xDvZnaF2Dbi",
-    "📝 TEMA 73 - PREGUNTA DE DESARROLLO: ACCIÓN PROTECTORA EN EL SISTEMA ESPECIAL DE EMPLEADOS DE HOGAR": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
-}
-
-SUPUESTOS_GESTION_ADMIN = {
-    "Elige un supuesto práctico...": None,
-    "📋 TEMA 73 - SUPUESTOS PRÁCTICOS: FAMILIAS GARCÍA-VALENZUELA Y MONTORO (15 CUESTIONES)": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
-}
-
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -1492,12 +1478,6 @@ TESTS_DISPONIBLES = {
         },
     },
     "GESTION": {
-        "DESARROLLO": {
-            "Elige un test de desarrollo...": None,
-            "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZMe2_3RnNyOvg4xv9cwb0QD-5jtX4SXB",
-            "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OBdM_hMExnQY40sfIQlCZdSZT3eFaMG8",
-            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1JtyOjkCs0HNqaFnfCYvo5xDvZnaF2Dbi",
-        },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
             "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
@@ -1576,6 +1556,23 @@ TESTS_DISPONIBLES = {
         "SUPUESTOS": {
             "Elige un test de supuestos...": None,
         },
+        "DESARROLLO": {
+            "Elige un test de desarrollo...": None,
+            "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1lUW922MB74NdBEEGXPRvl_VzmKjZW_Xk",
+            "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1R-ozziKg_JvDJrYcmC5_eUkqWAyMv1cq",
+            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1HKjFtZhTUbpbb7uXRLW_Iperw4LVbSdL",
+            "Tema_55_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1iUdlMOsXRLLOb2maIikYVjv0_Uun9N2e",
+            "Tema_56_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=15r6H3xWUnNyaKpmnJLBvaes9-Gnsg1ya",
+            "Tema_57_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=19kBm1fnaLUuNLdoodyb9bHhvgIQ_Z5uG",
+            "Tema_58_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=14KTwK4tde-b0TcrvBFSKHOWBNAfxxG3p",
+            "Tema_60_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1jQZurCVpmfWn3aIs8JDSMFTZ1Vw8cTPj",
+            "Tema_61_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1lGYN8_iP1qL6v6qhio-IySAYupz_tM8p",
+            "Tema_62_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1Wao8sy2CSSACCC4jmTrmBzUnoD2Ks72i",
+            "Tema_67_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1dGQ4h6vjTTGLP4FsUVTvom44-IdHL12I",
+            "Tema_73_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1fT0mKFaNHwBg8UaVn9kq5nJHQoaD1-FY",
+            "Tema_74_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=18C8gpeaeJg6HoKdEZwa7GYHHneIgnDSS",
+            "Tema_75_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1b-2P8ekEeqO5NUvsCNMv9JHAtzzrHAzy",
+        },
     },
 }
 
@@ -1595,8 +1592,6 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
-
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -1614,49 +1609,22 @@ def obtener_tests_segun_rol():
     if st.session_state.get('rol') == 'INVITADO':
         return TESTS_DISPONIBLES_INVITADO
 
-    cat_adm = dict(catalogo_base.get("ADMINISTRATIVOS", {}))
-    cat_ges = dict(catalogo_base.get("GESTION", {}))
+    es_adm = usuario_es_admin()
+    # Orden estricto:
+    # Línea 1: ESPECIFICO, EXAMENES, GENERAL
+    # Línea 2 (solo Admin): SUPUESTOS, DESARROLLO
+    orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
 
-    if usuario_es_admin():
-        # El Administrador sí ve DESARROLLO y SUPUESTOS (unificados sin duplicar)
-        desarrollo_unificado = {"Elige un tema de desarrollo...": None}
-        for k_d, v_d in cat_ges.get("DESARROLLO", {}).items():
-            if v_d is not None:
-                desarrollo_unificado[k_d] = v_d
-        for k_d, v_d in DESARROLLO_GESTION_ADMIN.items():
-            if v_d is not None:
-                nombre_limpio = k_d.replace("📝 ", "").strip()
-                if nombre_limpio not in desarrollo_unificado and k_d not in desarrollo_unificado:
-                    desarrollo_unificado[k_d] = v_d
+    resultado = {}
+    for esp in ["ADMINISTRATIVOS", "GESTION"]:
+        origen_esp = catalogo_base.get(esp, {})
+        esp_ordenado = {}
+        for cat in orden_categorias:
+            if cat in origen_esp:
+                esp_ordenado[cat] = dict(origen_esp[cat])
+        resultado[esp] = esp_ordenado
 
-        supuestos_unificados = {"Elige un supuesto práctico...": None}
-        for k_s, v_s in cat_ges.get("SUPUESTOS", {}).items():
-            if v_s is not None:
-                supuestos_unificados[k_s] = v_s
-        for k_s, v_s in SUPUESTOS_GESTION_ADMIN.items():
-            if v_s is not None:
-                if k_s not in supuestos_unificados:
-                    supuestos_unificados[k_s] = v_s
-
-        cat_ges.pop("PREGUNTA DE DESARROLLO", None)
-        cat_ges.pop("SUPUESTOS PRÁCTICOS", None)
-        cat_ges["DESARROLLO"] = desarrollo_unificado
-        cat_ges["SUPUESTOS"] = supuestos_unificados
-
-        return {
-            "ADMINISTRATIVOS": cat_adm,
-            "GESTION": cat_ges,
-        }
-
-    # Si NO es administrador: ocultamos DESARROLLO y SUPUESTOS tanto en ADMINISTRATIVOS como en GESTIÓN
-    for clave_oculta in ["DESARROLLO", "SUPUESTOS", "PREGUNTA DE DESARROLLO", "SUPUESTOS PRÁCTICOS"]:
-        cat_adm.pop(clave_oculta, None)
-        cat_ges.pop(clave_oculta, None)
-
-    return {
-        "ADMINISTRATIVOS": cat_adm,
-        "GESTION": cat_ges,
-    }
+    return resultado
 
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
@@ -1933,7 +1901,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             citas_faltan.append(lbl)
 
     # PASO 2: Detectar si el alumno ha añadido artículos EXTRA que NO están en la respuesta oficial.
-    # SOLO esos artículos extra se verifican en las fuentes para saber si están bien o mal.
     citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
     oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
 
@@ -1955,7 +1922,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
                 citas_ok.append(lbl)
             continue
 
-        # Es un artículo/norma EXTRA añadido por el alumno -> lo verificamos en las fuentes
         articulos_extra_detectados.append(lbl)
         orac_donde_aparece = next((o for o in oraciones_alumno if k_par[1] in _norm(o)), texto_alumno)
         es_correcto_en_fuente, detalle_fuente = _verificar_articulo_extra_en_fuentes(
@@ -2665,7 +2631,21 @@ def action_finalizar_sesion():
 sincronizar_progreso_navegador()
 
 if not st.session_state.questions:
-    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
+    st.markdown("""<style>
+    :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
+    html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
+    /* Fuerza que en 2. Categoría salgan 3 opciones en la primera línea (ESPECIFICO, EXAMENES, GENERAL) y en la segunda línea SUPUESTOS y DESARROLLO */
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-grid) div[role="radiogroup"] {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        max-width: 470px !important;
+        row-gap: 6px !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-grid) div[role="radiogroup"] > label {
+        min-width: 135px !important;
+        margin-right: 12px !important;
+    }
+    </style>""", unsafe_allow_html=True)
     es_admin = usuario_es_admin()
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -2688,11 +2668,12 @@ if not st.session_state.questions:
         else:
             st.error("Error en los permisos de usuario."); st.stop()
 
-        st.markdown("<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>2. Categoría</div>", unsafe_allow_html=True)
-        l_cat = list(TESTS_DISPONIBLES[especialidad].keys())
-        i_cat = l_cat.index(st.session_state.saved_cat) if st.session_state.get("saved_cat") in l_cat else 0
-        categoria = st.radio("Selecciona el tipo de test:", l_cat, index=i_cat, horizontal=True, key="radio_categoria", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad)
-        st.session_state.saved_cat = categoria
+        with st.container():
+            st.markdown("<div class='marcador-cat-grid'></div><div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>2. Categoría</div>", unsafe_allow_html=True)
+            l_cat = list(TESTS_DISPONIBLES[especialidad].keys())
+            i_cat = l_cat.index(st.session_state.saved_cat) if st.session_state.get("saved_cat") in l_cat else 0
+            categoria = st.radio("Selecciona el tipo de test:", l_cat, index=i_cat, horizontal=True, key="radio_categoria", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad)
+            st.session_state.saved_cat = categoria
 
     st.markdown("<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>3. Modo de avance</div>", unsafe_allow_html=True)
     op_av = [
@@ -2957,7 +2938,6 @@ elif not st.session_state.finished:
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
 
-                    # TARJETA RESALTADA DE CALIFICACIÓN DE LA PREGUNTA Y DESGLOSE DE PUNTOS RESTADOS
                     n50_q = ev.get("nota_50", 0.0)
                     n10_q = ev.get("nota", 0.0)
                     c1_q = ev.get("pts_criterio_1", 0.0)
