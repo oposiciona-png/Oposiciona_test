@@ -1278,7 +1278,10 @@ SUPUESTOS_GESTION_ADMIN = {
     "📋 TEMA 73 - SUPUESTOS PRÁCTICOS: FAMILIAS GARCÍA-VALENZUELA Y MONTORO (15 CUESTIONES)": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
 }
 
-TESTS_DISPONIBLES_COMPLETO = {
+# ==============================================================================
+# >>> INICIO DEL BLOQUE A SUSTITUIR: DICCIONARIO TESTS_DISPONIBLES
+# ==============================================================================
+TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
@@ -1315,7 +1318,7 @@ TESTS_DISPONIBLES_COMPLETO = {
             "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
             "EXAMEN REPASO 1 TEMA 08 a 12 ESPECIFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1m06sF7_F_sZVlfRQq3Uv0egrvo44gcmX",
             "EXAMEN REPASO TEMA 2 COMPLETO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sixOo5p9R_WeuL_mg8LliJScO1ljnNV0",
-            "EXAMEN SABADO 01 NOVIEMBRE 2026": "https://drive.google.com/uc?export=download&id=1BBP15fBozr5LWH4Gq3MY9knfNvwDF4kr",
+            "EXAMEN SABADO 01 NOVIEMBRE 2026": "https://drive.google.com/uc?export=download&id=1Yh_1mNSQNgQ6m-L-V2r6gaahKoWar0Oi",
             "SABADO 10 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qtDZt9e2KsrnvElHWkSaN3wYnI1gT9Eq",
             "SABADO 5 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17KWYOcGCSQR49cR7KMwqOKFi6QDsPkbh",
         },
@@ -1341,8 +1344,16 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
             "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
         },
+        "SUPUESTOS": {
+            "Elige un test de supuestos...": None,
+        },
     },
     "GESTION": {
+        "DESARROLLO": {
+            "Elige un test de desarrollo...": None,
+            "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZMe2_3RnNyOvg4xv9cwb0QD-5jtX4SXB",
+            "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OBdM_hMExnQY40sfIQlCZdSZT3eFaMG8",
+        },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
             "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
@@ -1417,8 +1428,14 @@ TESTS_DISPONIBLES_COMPLETO = {
             "TEMA 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
             "TEMA 50 REPASO CONFLICTOS COLECTIVOS GENERAL": "https://drive.google.com/uc?export=download&id=10A9Fx_wO7Y-_Mw27YxR153ketgZ3WUB_",
         },
+        "SUPUESTOS": {
+            "Elige un test de supuestos...": None,
+        },
     },
 }
+# ==============================================================================
+# <<< FIN DEL BLOQUE A SUSTITUIR (Mantén intacto todo lo que va antes y después)
+# ==============================================================================
 
 TESTS_DISPONIBLES_INVITADO = {
     "ADMINISTRATIVOS": {
