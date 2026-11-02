@@ -1824,14 +1824,24 @@ TESTS_DISPONIBLES_COMPLETO = TESTS_DISPONIBLES
 
 TESTS_DISPONIBLES_INVITADO = {
     "ADMINISTRATIVOS": {
-        "ESPECIFICO": {"Elige un test de especifico...": None, "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML"},
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML"
+        },
         "EXAMENES": {"Elige un test de examenes...": None},
         "GENERAL": {"Elige un test de general...": None},
     },
     "GESTION": {
-        "ESPECIFICO": {"Elige un test de especifico...": None, "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf"},
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf"
+        },
         "EXAMENES": {"Elige un test de examenes...": None},
         "GENERAL": {"Elige un test de general...": None},
+        "DESARROLLO": {
+            "Elige un test de desarrollo...": None,
+            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=18p3luvJxXbMoyGX8x5ypR11V4hpC8eYI"
+        },
     },
 }
 # === FIN SECCIÓN 3 ===
@@ -1854,16 +1864,22 @@ def obtener_tests_segun_rol():
         return TESTS_DISPONIBLES_INVITADO
 
     es_adm = usuario_es_admin()
-    orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
+    # En ADMINISTRATIVOS: SUPUESTOS solo visible para Admin
+    orden_adm = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
+    # En GESTION: DESARROLLO abierto para todos los usuarios con acceso a Gestión (GESTION y ACCESO TOTAL); SUPUESTOS solo para Admin
+    orden_ges = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL", "DESARROLLO"]
 
-    resultado = {}
-    for esp in ["ADMINISTRATIVOS", "GESTION"]:
-        origen_esp = catalogo_base.get(esp, {})
-        esp_ordenado = {}
-        for cat in orden_categorias:
-            if cat in origen_esp:
-                esp_ordenado[cat] = dict(origen_esp[cat])
-        resultado[esp] = esp_ordenado
+    resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
+
+    origen_adm = catalogo_base.get("ADMINISTRATIVOS", {})
+    for cat in orden_adm:
+        if cat in origen_adm:
+            resultado["ADMINISTRATIVOS"][cat] = dict(origen_adm[cat])
+
+    origen_ges = catalogo_base.get("GESTION", {})
+    for cat in orden_ges:
+        if cat in origen_ges:
+            resultado["GESTION"][cat] = dict(origen_ges[cat])
 
     return resultado
 
@@ -1929,11 +1945,6 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     return None
 
 def _dividir_en_oraciones_juridicas(texto):
-    """
-    Divide el resumen oficial en bloques o apartados principales (párrafos y viñetas con entidad propia),
-    evitando fragmentar un mismo apartado en demasiadas micro-frases para que la penalización de -1,00 punto
-    se aplique por apartado/idea omitida de forma justa y equilibrada.
-    """
     if not texto:
         return []
 
@@ -3370,15 +3381,19 @@ if not st.session_state.questions:
         titulo_paso_4 = "4. Selección de Test"
 
     st.markdown(f"<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
-    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
+    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
         ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
-        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Corrección con IA aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
+        st.info(f"📝 **{ej_txt}:** Corrección asistida con IA aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
     if rol == "INVITADO":
-        if not tests_reales: st.warning("⚠️ CATEGORÍA NO DISPONIBLE PARA USUARIOS INVITADOS")
-        else: st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
+        if not tests_reales:
+            st.warning("⚠️ CATEGORÍA NO DISPONIBLE PARA USUARIOS INVITADOS")
+        elif categoria == "DESARROLLO":
+            st.info("ℹ️ TEMA DE DEMOSTRACIÓN DE DESARROLLO (TEMA 53) DISPONIBLE PARA USUARIO INVITADO")
+        else:
+            st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
 
     if tests_reales:
         mostrar_filtro = (categoria not in ["EXAMENES", "DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"]) and any("repaso" in n.lower() for n in tests_reales)
@@ -4049,5 +4064,8 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
+
+
 
 
