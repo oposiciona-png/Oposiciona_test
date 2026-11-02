@@ -585,17 +585,15 @@ class PDFQuizParser:
 
     @staticmethod
     def _limpiar_cabeceras_incrustadas(texto, tema_cabecera=""):
-        """Elimina cualquier cabecera o pie de página incluso si se ha colado en mitad de un párrafo por salto de página."""
         if not texto:
             return ""
         t = texto
         if tema_cabecera:
             t = re.sub(re.escape(tema_cabecera), ' ', t, flags=re.IGNORECASE)
-        # Eliminar cabeceras en mayúsculas tipo "TEMA 53: AFILIACIÓN, ALTAS, BAJAS, CONVENIO ESPECIAL E INSCRIPCIÓN" incrustadas en frases
         t = re.sub(r'\bTEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/]{6,95}?(?=\s+[a-záéíóúñ]|\s+[•\*■▪]|\s*$)', ' ', t)
         t = re.sub(r'[■▪▫◆●]\s*S[IÍ]NTESIS\s+DE[L\s]+[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/\-–]{4,95}?(?=\s+[A-ZÁÉÍÓÚÑa-záéíóúñ•\*]|\s*$)', ' ', t)
         t = re.sub(r'\bRESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES\b', ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', ' ', t, flags=re.IGNORECASE)
+        t = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', ' ', t, flags=re.IGNORECASE)
         t = re.sub(r'\s{2,}', ' ', t).strip()
         return t
 
@@ -610,7 +608,8 @@ class PDFQuizParser:
             return True
         if re.match(r'^(?:P[aá]g(?:ina)?\.?\s*)?\d{1,3}(?:\s*(?:de|/)\s*\d{1,3})?$', s, re.IGNORECASE):
             return True
-        # Cabecera completa en mayúsculas que empieza por TEMA X
+        if re.match(r'^TEMA\s+\d+$', s, re.IGNORECASE):
+            return True
         if re.match(r'^TEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\-–\(\)\/]+$', s) and s.isupper():
             return True
         patrones_cabecera = [
@@ -634,42 +633,81 @@ class PDFQuizParser:
     @staticmethod
     def _formatear_explicacion_estructurada(lista_lineas, tema_cabecera=""):
         """
-        Une las líneas partidas por el PDF (incluso a través de saltos de página) y formatea
-        limpiamente cada viñeta (•, ▪, -), apartado numerado y párrafo con saltos de línea claros.
+        Reconstruye la estructura visual exacta del PDF original:
+        - Une viñetas sueltas ('•') con la línea siguiente.
+        - Separa como títulos independientes los apartados numerados ('1. Concepto y...', '2. Modalidades de Alta').
+        - Separa en punto y aparte cada definición tipo 'Pluriempleo: ...' o '• Alta real u ordinaria: ...'.
         """
         if not lista_lineas:
             return ""
+
+        # Paso 1: Limpiar cabeceras y unir viñetas solitarias ('•' en una línea y texto en la siguiente)
         lineas_limpias = []
+        pendiente_bullet = False
         for l in lista_lineas:
             l_s = l.strip()
             if not l_s or PDFQuizParser._es_basura_cabecera_o_pie(l_s, tema_cabecera):
                 continue
             l_s = PDFQuizParser._limpiar_cabeceras_incrustadas(l_s, tema_cabecera)
-            if l_s and not PDFQuizParser._es_basura_cabecera_o_pie(l_s, tema_cabecera):
-                lineas_limpias.append(l_s)
+            if not l_s or PDFQuizParser._es_basura_cabecera_o_pie(l_s, tema_cabecera):
+                continue
+            if re.match(r'^[•\*▪◆\-–]$', l_s):
+                pendiente_bullet = True
+                continue
+            if pendiente_bullet:
+                l_s = f"• {l_s}"
+                pendiente_bullet = False
+            lineas_limpias.append(l_s)
 
         if not lineas_limpias:
             return ""
 
+        # Paso 2: Clasificar cada línea para respetar títulos, subapartados con dos puntos y párrafos
         parrafos = []
         actual = ""
+
         for l_str in lineas_limpias:
-            # Si dentro de una misma línea vienen viñetas pegadas tras punto ("...empleadores. • Pluriactividad:"), las separamos
-            partes_internas = re.split(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s+)', l_str)
-            for p_int in partes_internas:
+            # Si dentro de una misma línea se coló un '• ' o un apartado '2. Modalidades...', lo separamos
+            sub_partes = re.split(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s+|\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s,]{3,65}$)', l_str)
+            for p_int in sub_partes:
                 p_int = p_int.strip()
                 if not p_int:
                     continue
-                es_bullet_o_apartado = bool(
-                    re.match(r'^([•\*▪◆\-–]|\d{1,2}[\.\)]|[a-e][\)\.\-])\s+', p_int) or
+
+                # ¿Es un título numerado de sección como "1. Concepto y Encuadramiento Múltiple" o "2. Modalidades de Alta"?
+                es_titulo_seccion = bool(
+                    re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', p_int)
+                    and len(p_int) < 95
+                    and not p_int.endswith('.')
+                )
+
+                # ¿Es una viñeta o definición con etiqueta e inicio en mayúscula ("• Pluriempleo: ..." o "Obligatoriedad imperativa: ...")?
+                es_definicion_viñeta = bool(
+                    re.match(r'^[•\*▪◆\-–]\s+', p_int) or
+                    re.match(r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s,\(\)\/]{2,52}:\s+[A-ZÁÉÍÓÚÑ]', p_int) or
                     re.match(r'^(Título\s+[IVX0-9]+|Capítulo\s+[IVX0-9]+|Sección\s+\d+|Disposiciones\s+)', p_int, re.IGNORECASE)
                 )
+
+                if es_titulo_seccion:
+                    if actual:
+                        parrafos.append(actual.strip())
+                        actual = ""
+                    # Guardamos el título de sección directamente como bloque independiente y pasamos al siguiente párrafo
+                    parrafos.append(p_int)
+                    continue
+
+                if es_definicion_viñeta:
+                    if actual:
+                        parrafos.append(actual.strip())
+                    # Si es una definición tipo "Pluriempleo: Situación..." que perdió el símbolo '•' en el PDF, le añadimos '• ' para que quede uniforme
+                    if not re.match(r'^[•\*▪◆\-–]\s+', p_int) and not re.match(r'^(Título|Capítulo|Sección|Disposiciones)\b', p_int, re.IGNORECASE):
+                        p_int = f"• {p_int}"
+                    actual = p_int
+                    continue
+
                 if not actual:
                     actual = p_int
-                elif es_bullet_o_apartado:
-                    parrafos.append(actual.strip())
-                    actual = p_int
-                elif actual.endswith(('.', ':', '»', '"')) and p_int[0].isupper() and len(actual) > 95:
+                elif actual.endswith(('.', ':', '»', '"')) and p_int[0].isupper() and len(actual) > 140 and not re.match(r'^[•\*]', actual):
                     parrafos.append(actual.strip())
                     actual = p_int
                 else:
@@ -678,7 +716,6 @@ class PDFQuizParser:
         if actual:
             parrafos.append(actual.strip())
 
-        # Limpieza final de cualquier resto de cabecera que haya quedado al unir dos páginas
         parrafos_finales = []
         for p in parrafos:
             p_clean = PDFQuizParser._limpiar_cabeceras_incrustadas(p, tema_cabecera)
@@ -686,6 +723,81 @@ class PDFQuizParser:
                 parrafos_finales.append(p_clean)
 
         return "\n\n".join(parrafos_finales)
+
+    @staticmethod
+    def renderizar_explicacion_html(texto_explicacion, etiqueta_tema=""):
+        """
+        Convierte el texto estructurado del epígrafe en HTML idéntico al formato del documento original:
+        - Títulos numerados ('1. Concepto...') en negrita con margen superior.
+        - Viñetas ('• Término: explicación') con sangría y el término inicial en negrita.
+        - Párrafos normales justificados con separación limpia.
+        """
+        if not texto_explicacion:
+            return ""
+        t_limpio = PDFQuizParser._limpiar_cabeceras_incrustadas(texto_explicacion, etiqueta_tema)
+        bloques_raw = [b.strip() for b in t_limpio.split('\n') if b.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(b.strip(), etiqueta_tema)]
+
+        # Si el texto viene de caché antigua en un solo bloque corrido, lo separamos al vuelo antes de pintarlo
+        bloques_expandidos = []
+        for b in bloques_raw:
+            b_split = re.sub(
+                r'(?:(?<=^)|(?<=[\.\:\;\)\»]))\s*(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ\s,]{3,65}?(?=\s+[A-ZÁÉÍÓÚÑ•]))',
+                '\n',
+                b
+            )
+            b_split = re.sub(r'\s*(?=[•\*▪◆]\s+)', '\n', b_split)
+            for sb in b_split.split('\n'):
+                sb = sb.strip()
+                if not sb:
+                    continue
+                # Si un título numerado quedó pegado al inicio de la frase siguiente ("1. Concepto y Encuadramiento Múltiple El alta es el acto..."), lo dividimos
+                m_pegado = re.match(
+                    r'^(\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ\s,yúóíéá]{3,60}?)\s+((?:El|La|Los|Las|En|Con|Si|Por|Se|Para|Entre|Durante|Cuando)\s+[a-záéíóúñ].*)$',
+                    sb
+                )
+                if m_pegado:
+                    bloques_expandidos.append(m_pegado.group(1).strip())
+                    bloques_expandidos.append(m_pegado.group(2).strip())
+                else:
+                    bloques_expandidos.append(sb)
+
+        html_partes = []
+        for blq in bloques_expandidos:
+            # 1. Título de sección numerado ("1. Concepto y Naturaleza Jurídica")
+            if re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq) and len(blq) < 95 and not blq.endswith('.'):
+                html_partes.append(
+                    f"<div style='font-size:15.5px; font-weight:800; color:#0A3641 !important; margin-top:14px; margin-bottom:6px;'>{blq}</div>"
+                )
+                continue
+
+            # 2. Viñeta con definición ("• Pluriempleo: Situación...")
+            m_bullet_def = re.match(r'^([•\*▪◆\-–])\s*([^:]{2,60}):\s*(.+)$', blq)
+            if m_bullet_def:
+                term = m_bullet_def.group(2).strip()
+                resto = m_bullet_def.group(3).strip()
+                html_partes.append(
+                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:14px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"• <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
+                )
+                continue
+
+            # 3. Definición sin símbolo de viñeta ("Pluriempleo: Situación...")
+            m_def_sola = re.match(r'^([A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s,\(\)\/]{2,52}):\s+(.+)$', blq)
+            if m_def_sola:
+                term = m_def_sola.group(1).strip()
+                resto = m_def_sola.group(2).strip()
+                html_partes.append(
+                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:14px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"• <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
+                )
+                continue
+
+            # 4. Párrafo ordinario
+            html_partes.append(
+                f"<div style='margin-top:6px; margin-bottom:8px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>{blq}</div>"
+            )
+
+        return "".join(html_partes)
 
     @staticmethod
     def _limpiar_titulo_epigrafe(titulo):
@@ -718,12 +830,11 @@ class PDFQuizParser:
                         lt = re.sub(r'<{2,}', '«', lt)
                         lt = re.sub(r'>{2,}', '»', lt)
                         lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
-                        lt = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', lt, flags=re.IGNORECASE).strip()
+                        lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
 
-                        # Detectar el nombre del TEMA en la primera aparición para mostrarlo siempre y filtrarlo si se repite en cabeceras de otras páginas
-                        if not tema_detectado and re.match(r'^TEMA\s+\d+\b', lt, re.IGNORECASE):
+                        if not tema_detectado and re.match(r'^TEMA\s+\d+\s*[:\-–]\s*\S+', lt, re.IGNORECASE):
                             t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
-                            if t_cand:
+                            if t_cand and len(t_cand) > 8:
                                 tema_detectado = t_cand
 
                         lt = PDFQuizParser._limpiar_cabeceras_incrustadas(lt, tema_detectado)
@@ -922,7 +1033,7 @@ class PDFQuizParser:
                         if PDFQuizParser._es_basura_cabecera_o_pie(cand, tema_detectado):
                             idx_l += 1
                             continue
-                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Aprobaci[óo]n\b|El\s+art[íi]culo\b|La\s+Constituci[óo]n\b|Regula\b|Concepto\b|Obligaci[óo]n\b| Sujetos\b)', cand, re.IGNORECASE):
+                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Aprobaci[óo]n\b|El\s+art[íi]culo\b|La\s+Constituci[óo]n\b|Regula\b|Concepto\b|Obligaci[óo]n\b|Sujetos\b)', cand, re.IGNORECASE):
                             break
                         if not partes_tit[-1].endswith('.') and len(cand) < 95 and len(" ".join(partes_tit)) < 160:
                             partes_tit.append(cand)
@@ -1458,6 +1569,7 @@ class PDFQuizParser:
 # === FIN SECCIÓN 2 ===
 
 
+
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
@@ -1650,7 +1762,6 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -1693,7 +1804,7 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
         titulos_conocidos = {
             51: "TEMA 51: LA SEGURIDAD SOCIAL EN LA CONSTITUCIÓN ESPAÑOLA DE 1978 Y EL TRLGSS",
             52: "TEMA 52: CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA DE LA SEGURIDAD SOCIAL",
-            53: "TEMA 53: AFILIACIÓN, ALTAS, BAJAS, CONVENIO ESPECIAL E INSCRIPCIÓN DE EMPRESAS",
+            53: "TEMA 53: AFILIACIÓN, ALTAS, BAJAS, CONVENIO ESPECIAL E INSCRIPCIÓN",
             55: "TEMA 55: ACCIÓN PROTECTORA: CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
             56: "TEMA 56: REQUISITOS GENERALES DEL DERECHO A LAS PRESTACIONES Y RESPONSABILIDAD",
             57: "TEMA 57: INCAPACIDAD TEMPORAL",
@@ -1770,7 +1881,6 @@ CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCI
 - Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y uso formal de siglas previa denominación íntegra (solo puntúa si alcanza al menos 20/45 en Criterio 1).
 """
 
-# Diccionario de contenido literal de artículos frecuentes para mostrar al alumno cuando cita un artículo que no tiene nada que ver
 LITERALES_ARTICULOS_REFERENCIA = {
     "1": "«Art. 1 TRLGSS: El derecho de los españoles a la Seguridad Social, establecido en el artículo 41 de la Constitución, se ajustará a lo dispuesto en la presente ley.» / «Art. 1 CE: España se constituye en un Estado social y democrático de Derecho...»",
     "2": "«Art. 2 TRLGSS: El sistema de la Seguridad Social, configurado por la acción protectora en sus modalidades contributiva y no contributiva, se fundamenta en los principios de universalidad, unidad, solidaridad e igualdad.»",
@@ -1827,10 +1937,6 @@ def obtener_literal_articulo(num_art_str):
     return "«Precepto ajeno al contenido normativo de este epígrafe.»"
 
 def auditar_siglas_sin_definir_previa(texto_alumno):
-    """
-    Comprueba si el alumno utiliza siglas o iniciales (ej. TRLGSS, TGSS, CE, ET...)
-    sin haber escrito ANTES en el texto su denominación completa.
-    """
     if not texto_alumno:
         return []
     t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
@@ -1853,10 +1959,13 @@ def auditar_siglas_sin_definir_previa(texto_alumno):
         ("SETA", r'\bSETA\b', ["sistema especial para trabajadores por cuenta propia agrarios"], "Sistema Especial para Trabajadores por Cuenta Propia Agrarios (en adelante, SETA)"),
         ("CCC", r'\bCCC\b', ["codigo de cuenta de cotizacion"], "Código de Cuenta de Cotización (en adelante, CCC)"),
         ("NAF", r'\bNAF\b', ["numero de afiliacion", "numero de la seguridad social"], "Número de Afiliación (en adelante, NAF)"),
+        ("NSS", r'\bNSS\b', ["numero de la seguridad social"], "Número de la Seguridad Social (en adelante, NSS)"),
+        ("SEDESS", r'\bSEDESS\b', ["sede electronica de la seguridad social"], "Sede Electrónica de la Seguridad Social (en adelante, SEDESS)"),
+        ("CNAE", r'\bCNAE\b', ["clasificacion nacional de actividades economicas"], "Clasificación Nacional de Actividades Económicas (en adelante, CNAE)"),
+        ("ERE", r'\bERE\b', ["expediente de regulacion de empleo", "expedientes de regulacion de empleo"], "Expediente de Regulación de Empleo (en adelante, ERE)"),
         ("SMI", r'\bSMI\b', ["salario minimo interprofesional"], "Salario Mínimo Interprofesional (en adelante, SMI)"),
         ("IMV", r'\bIMV\b', ["ingreso minimo vital"], "Ingreso Mínimo Vital (en adelante, IMV)"),
         ("FOGASA", r'\bFOGASA\b', ["fondo de garantia salarial"], "Fondo de Garantía Salarial (en adelante, FOGASA)"),
-        ("TA", r'\bTA\.\d+\b', ["modelo oficial", "solicitud de afiliacion"], "modelo oficial de solicitud"),
     ]
 
     siglas_sin_definir = []
@@ -1885,10 +1994,6 @@ def _extraer_rangos_articulos(texto):
     return arts
 
 def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, contexto_epigrafe):
-    """
-    Se ejecuta SOLO cuando el alumno añade un artículo que NO está en la respuesta oficial.
-    Si no tiene relación con la materia del epígrafe, devuelve False junto con el TEXTO LITERAL del artículo.
-    """
     def _norm(s):
         return ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
 
@@ -2045,7 +2150,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         ids_ref_equiv.add(("NORMA", "8/2015"))
         ids_ref_equiv.add(("SIGLA", "trlgss"))
 
-    # PASO 1: Comparar artículos con los de la respuesta oficial
     citas_ok, citas_faltan = [], []
     for k_par, lbl in mapa_ref.items():
         if k_par in mapa_al or (k_par in [("NORMA", "8/2015"), ("SIGLA", "trlgss")] and any(x in mapa_al for x in [("NORMA", "8/2015"), ("SIGLA", "trlgss")])):
@@ -2061,7 +2165,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_faltan.append(lbl)
 
-    # PASO 2: Solo si el alumno añade artículos extra, se verifican y si son ajenos se muestra su literal
     citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
     oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
 
@@ -2093,7 +2196,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_erroneas.append(detalle_fuente)
 
-    # PASO 3: Auditoría de siglas usadas sin haber escrito antes su denominación completa
     siglas_sin_definir = auditar_siglas_sin_definir_previa(texto_alumno)
 
     pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
@@ -2242,7 +2344,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
-    """Genera un resumen conciso, directo y claro de la corrección."""
+    """Genera un resumen conciso con los 3 Criterios Oficiales y su puntuación."""
     bloques = []
 
     aciertos_resumen = []
@@ -2280,6 +2382,22 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         bloques.append("3. **⚠️ Puntos clave omitidos de la respuesta oficial:**\n" + "\n".join(faltantes_txt))
     else:
         bloques.append("3. **⚠️ Puntos clave omitidos de la respuesta oficial:**\n¡Ninguno! Has cubierto todos los apartados del epígrafe.")
+
+    c1 = ev.get("pts_criterio_1", 0.0)
+    c2 = ev.get("pts_criterio_2", 0.0)
+    c3 = ev.get("pts_criterio_3", 0.0)
+    n50 = ev.get("nota_50", 0.0)
+    n10 = ev.get("nota", 0.0)
+    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin deducciones."
+
+    bloques.append(
+        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Puntos Restados:**\n"
+        f"   - **Criterio 1 (Conocimiento y precisión normativa ajustada a su literalidad):** `{c1:.2f} / 45,00 puntos`\n"
+        f"   - **Criterio 2 (Orden de las ideas y exposición estructurada):** `{c2:.2f} / 3,00 puntos`\n"
+        f"   - **Criterio 3 (Calidad de la expresión escrita y uso formal de siglas):** `{c3:.2f} / 2,00 puntos`\n"
+        f"   - 🏆 **PUNTUACIÓN TOTAL DE LA PREGUNTA:** **`{n50:.2f} / 50,00 puntos`** *(Nota sobre 10: **`{n10:.2f} / 10`**)*\n"
+        f"   - **📉 Motivo exacto de los puntos restados:**\n{motivos_txt}"
+    )
 
     return "\n\n".join(bloques)
 
@@ -2322,17 +2440,18 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     prompt = (
         "Actúa como el Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Haz una corrección BREVE, DIRECTA Y ESQUEMÁTICA (máximo 180 palabras en total) comparando la respuesta del alumno ÚNICAMENTE con la RESPUESTA OFICIAL adjunta:\n"
-        f"- Respeta las notas ya auditadas: Criterio 1 = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
+        "Haz una corrección BREVE, DIRECTA Y ESQUEMÁTICA (máximo 210 palabras en total) comparando la respuesta del alumno ÚNICAMENTE con la RESPUESTA OFICIAL adjunta:\n"
+        f"- Incluye obligatoriamente en el apartado 4 estas puntuaciones exactas por criterio: Criterio 1 (Conocimiento y literalidad) = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 (Estructura y orden de ideas) = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 (Calidad de expresión escrita y siglas) = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10), junto con el motivo exacto de cada punto restado."
         f"{instruccion_extra}\n\n"
         f"=== EPÍGRAFE ===\n{pregunta}\n\n"
         f"=== RESPUESTA OFICIAL ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
         f"=== PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
-        "Responde solo con estos 3 apartados muy breves:\n"
+        "Responde con estos 4 apartados breves:\n"
         "1. **✅ Resumen de aciertos frente a la respuesta oficial**\n"
         "2. **⚖️ Revisión de artículos (con el texto literal si puso alguno improcedente) y uso de siglas**\n"
-        "3. **⚠️ Puntos clave omitidos de la respuesta oficial**"
+        "3. **⚠️ Puntos clave omitidos de la respuesta oficial**\n"
+        "4. **🎓 Valoración por Criterios Oficiales del Tribunal (Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2], Total sobre 50 y motivos exactos de resta)**"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
@@ -2751,6 +2870,7 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
+
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -2977,7 +3097,6 @@ elif not st.session_state.finished:
     puede_rep = usuario_puede_reportar()
     es_abierta = bool(q.get("is_open", False))
 
-    # BANDA SUPERIOR VISIBLE EN TODO MOMENTO CON EL TEMA ACTUAL Y EL NÚMERO DE EPÍGRAFE/PREGUNTA
     etiqueta_tema = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), q)
     tipo_item_lbl = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if es_abierta else "Pregunta")
     st.markdown(
@@ -3108,7 +3227,7 @@ elif not st.session_state.finished:
 
                     st.markdown(
                         "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS RESUMIDO DE TU RESPUESTA</div>"
+                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS RESUMIDO Y VALORACIÓN POR CRITERIOS</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -3122,20 +3241,12 @@ elif not st.session_state.finished:
                             unsafe_allow_html=True
                         )
                     if exp_of:
-                        exp_limpia_mostrar = PDFQuizParser._limpiar_cabeceras_incrustadas(exp_of, etiqueta_tema)
-                        parrafos_exp = [
-                            p.strip() for p in exp_limpia_mostrar.split('\n')
-                            if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip(), etiqueta_tema)
-                        ]
-                        eh = "".join([
-                            f"<div style='margin-top: 8px; margin-bottom: 6px; line-height: 1.5; color: #0c5460 !important; text-align: justify;'>{p}</div>"
-                            for p in parrafos_exp
-                        ])
+                        eh = PDFQuizParser.renderizar_explicacion_html(exp_of, etiqueta_tema)
                         titulo_exp = f"📖 Texto Oficial del Epígrafe ({etiqueta_tema}):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal:"
                         st.markdown(
-                            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px; border-radius: 6px; margin-top: 10px;'>"
-                            f"<div style='font-size: 14.5px; font-weight: 700; margin-bottom: 6px; color: #0c5460 !important;'>{titulo_exp}</div>"
-                            f"<div style='font-size: 14px; color: #0c5460 !important;'>{eh}</div></div>",
+                            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 16px 18px; border-radius: 6px; margin-top: 10px;'>"
+                            f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{titulo_exp}</div>"
+                            f"<div style='font-size: 14.5px; color: #0c5460 !important;'>{eh}</div></div>",
                             unsafe_allow_html=True
                         )
         else:
@@ -3366,12 +3477,15 @@ else:
         co = (q.get('answer_text') or "Ver texto íntegro del epígrafe debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
-        et_limpia = PDFQuizParser._limpiar_cabeceras_incrustadas(et, etiqueta_tema_fin)
-        lineas_res_limpias = [
-            p.strip() for p in et_limpia.split('\n')
-            if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip(), etiqueta_tema_fin)
-        ]
-        eh = "".join([f"<div style='margin-top: 6px; margin-bottom: 4px; line-height: 1.45; color: #0c5460 !important;'>{p}</div>" for p in lineas_res_limpias])
+        if q.get("tipo_abierta") == "DESARROLLO":
+            eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema_fin)
+        else:
+            et_limpia = PDFQuizParser._limpiar_cabeceras_incrustadas(et, etiqueta_tema_fin)
+            lineas_res_limpias = [
+                p.strip() for p in et_limpia.split('\n')
+                if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip(), etiqueta_tema_fin)
+            ]
+            eh = "".join([f"<div style='margin-top: 6px; margin-bottom: 4px; line-height: 1.45; color: #0c5460 !important;'>{p}</div>" for p in lineas_res_limpias])
         ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>" if q.get('preamble') else ""
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
@@ -3380,7 +3494,7 @@ else:
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>{'Epígrafe' if q.get('tipo_abierta') == 'DESARROLLO' else 'Pregunta'}:</b> {q['question_text']}</div>"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
-            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 10px; border-radius: 4px; margin-bottom: 6px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 2px; color: #0c5460 !important;'>{'Texto íntegro del Epígrafe:' if q.get('tipo_abierta') == 'DESARROLLO' else 'Explicación:'}</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px 16px; border-radius: 6px; margin-bottom: 6px;'><div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>{'Texto íntegro del Epígrafe:' if q.get('tipo_abierta') == 'DESARROLLO' else 'Explicación:'}</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
             f"</div>",
             unsafe_allow_html=True
         )
@@ -3400,5 +3514,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
-
-
