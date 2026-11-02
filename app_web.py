@@ -1914,6 +1914,12 @@ def usuario_es_admin():
 def usuario_puede_reportar():
     return st.session_state.get('rol') != 'INVITADO'
 
+def limpiar_estados_reportes_error():
+    """Cierra y limpia cualquier cuadro o texto de reporte de error abierto previamente."""
+    for k in list(st.session_state.keys()):
+        if k.startswith(("rep_open_", "txt_rep_", "rep_ok_msg_")):
+            del st.session_state[k]
+
 def activar_proteccion_antirecortes_alumno():
     """
     Activa el desenfoque automático en tiempo real cuando el navegador pierde el foco
@@ -1988,7 +1994,6 @@ def activar_proteccion_antirecortes_alumno():
                 if (ov) ov.style.display = 'none';
             };
 
-            // Vigilancia continua de foco cada 150 ms (detecta al instante Win+Shift+S y Herramienta Recortes)
             if (pw.__oposiciona_focus_timer) clearInterval(pw.__oposiciona_focus_timer);
             pw.__oposiciona_focus_timer = setInterval(function() {
                 if (pw.__oposiciona_blur_disabled) return;
@@ -2048,7 +2053,6 @@ def obtener_tests_segun_rol():
         return TESTS_DISPONIBLES_INVITADO
 
     es_adm = usuario_es_admin()
-    # SUPUESTOS y DESARROLLO únicamente visibles para el Administrador; para el resto de alumnos quedan desactivados
     orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
 
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
@@ -3083,13 +3087,16 @@ def descargar_pdf_fresco(url):
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     """
     Cuadro de reporte de error o consulta tanto para preguntas Tipo Test como para Epígrafes de DESARROLLO y SUPUESTOS.
-    En DESARROLLO envía a info@oposiciona.es una ficha específica con el Tema, el Epígrafe,
-    la Respuesta escrita por el alumno, el Dictamen de corrección generado y el Texto mínimo oficial del epígrafe.
+    Vincula sus claves al test_name actual para que nunca persista al cambiar de test, y se cierra automáticamente al enviar.
     """
+    if not usuario_puede_reportar():
+        return
+
     es_desarrollo = bool(q.get("tipo_abierta") == "DESARROLLO")
     es_abierta = bool(q.get("is_open", False))
     tipo_lbl = "Epígrafe" if es_desarrollo else ("Cuestión" if es_abierta else "Pregunta")
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
+    id_test_limpio = re.sub(r'\W+', '_', nombre_pdf)
     tema_vis = obtener_etiqueta_tema_visible(nombre_pdf, q)
     usuario_rep = (st.session_state.get('email') or "Alumno Oposiciona").strip()
     preamble_txt = re.sub(r'\*\*|\🏷️', '', q.get('preamble', '')).strip()
@@ -3110,13 +3117,23 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         "Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta debería ser la b), o se ha cortado una frase..."
     )
 
+    key_txt_area = f"txt_rep_{id_test_limpio}_{ubicacion_key}_{num_pregunta}"
     motivo = st.text_area(
         f"Explica brevemente el error o incidencia encontrada en este {tipo_lbl.lower()}:",
-        key=f"txt_rep_{ubicacion_key}_{num_pregunta}",
+        key=key_txt_area,
         placeholder=placeholder_txt
     )
 
-    if st.button(f"📨 Enviar reporte de {tipo_lbl} {num_pregunta} a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
+    col_env, col_cer = st.columns([3, 1])
+    with col_cer:
+        if st.button("✖ Cerrar", key=f"btn_close_{id_test_limpio}_{ubicacion_key}_{num_pregunta}", use_container_width=True):
+            limpiar_estados_reportes_error()
+            st.rerun()
+
+    with col_env:
+        enviar_pulsado = st.button(f"📨 Enviar reporte de {tipo_lbl} {num_pregunta} a info@oposiciona.es", key=f"btn_send_{id_test_limpio}_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True)
+
+    if enviar_pulsado:
         if not motivo.strip():
             st.warning("⚠️ Escribe brevemente en qué consiste el error o incidencia antes de enviarlo.")
         else:
@@ -3179,7 +3196,10 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                 enviado_servidor = False
 
             if enviado_servidor:
-                st.success("✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.")
+                # Cerrar el cuadro automáticamente y mostrar confirmación limpia
+                limpiar_estados_reportes_error()
+                st.session_state[f"rep_ok_msg_{id_test_limpio}_{num_pregunta}"] = True
+                st.rerun()
             else:
                 payload_json = json.dumps(payload)
                 components.html(f"""
@@ -3260,6 +3280,7 @@ def obtener_grupo_tema(nombre_test, categoria):
     return "📁 Otros Tests"
 
 def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", categoria_sel=""):
+    limpiar_estados_reportes_error()
     st.session_state.test_name = nombre_test
     st.session_state.test_esp = especialidad_sel or st.session_state.get('saved_esp', '')
     cat_limpia = categoria_sel or st.session_state.get('saved_cat', '')
@@ -3386,7 +3407,6 @@ if 'questions' not in st.session_state:
     st.session_state.update(questions=[], current_index=0, stats={}, finished=False, checked=False, test_name=None)
 
 def _diagnosticar_extension_respuesta_desarrollo(texto):
-    """Evalúa si el alumno no escribió nada, escribió solo 1 o 2 líneas breves, o cumplimentó el epígrafe."""
     t = (texto or "").strip()
     if not t:
         return "⚠️ No cumplimentó nada en el texto"
@@ -3462,6 +3482,7 @@ def handle_radio_change():
     selected = st.session_state.get(f"radio_{idx}")
     save_answer(selected)
     if "metralleta" in st.session_state.modo_avance.lower() and selected:
+        limpiar_estados_reportes_error()
         if idx < len(st.session_state.questions) - 1:
             st.session_state.current_index += 1
             st.session_state.checked = False
@@ -3470,6 +3491,7 @@ def handle_radio_change():
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
 
 def procesar_preguntas(raw_qs, barajar=True):
+    limpiar_estados_reportes_error()
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
         r'todas\s+las\s+respuestas?\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -3505,6 +3527,7 @@ def procesar_preguntas(raw_qs, barajar=True):
     st.rerun()
 
 def action_repetir_test():
+    limpiar_estados_reportes_error()
     st.session_state.update(
         current_index=0,
         stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'last_evaluated_text': None} for i in range(len(st.session_state.questions))},
@@ -3513,6 +3536,7 @@ def action_repetir_test():
     iniciar_cronometro_test()
 
 def action_subir_otro():
+    limpiar_estados_reportes_error()
     st.session_state.update(
         questions=[], current_index=0, stats={}, finished=False, checked=False,
         test_name=None, mostrar_opciones_simulacro=False, celebracion_mostrada=False,
