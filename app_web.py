@@ -1878,65 +1878,126 @@ CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCI
 - Cada parte se califica de 0 a 50 puntos (mínimo 25 puntos directos para superar sin compensación).
 - Criterio 1 (0 a 45 puntos): Conocimiento manifestado y precisión de la normativa ajustada a su literalidad.
 - Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura (solo puntúa si alcanza al menos 20/45 en Criterio 1).
-- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y uso formal de siglas previa denominación íntegra (solo puntúa si alcanza al menos 20/45 en Criterio 1).
+- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y uso formal de siglas/abreviaturas previa denominación íntegra (solo puntúa si alcanza al menos 20/45 en Criterio 1).
 """
 
-LITERALES_ARTICULOS_REFERENCIA = {
-    "1": "«Art. 1 TRLGSS: El derecho de los españoles a la Seguridad Social, establecido en el artículo 41 de la Constitución, se ajustará a lo dispuesto en la presente ley.» / «Art. 1 CE: España se constituye en un Estado social y democrático de Derecho...»",
-    "2": "«Art. 2 TRLGSS: El sistema de la Seguridad Social, configurado por la acción protectora en sus modalidades contributiva y no contributiva, se fundamenta en los principios de universalidad, unidad, solidaridad e igualdad.»",
-    "3": "«Art. 3 TRLGSS: Será nulo todo pacto, individual o colectivo, por el cual el trabajador renuncie a los derechos que le confiere la presente ley.»",
-    "7": "«Art. 7 TRLGSS: Estarán comprendidos en el sistema de la Seguridad Social, a efectos de las prestaciones contributivas, cualquiera que sea su sexo, estado civil y profesión, los españoles que residan en España y los extranjeros que residan o se encuentren legalmente en España, siempre que ejerzan su actividad en territorio nacional...»",
-    "8": "«Art. 8 TRLGSS: Las personas comprendidas en el campo de aplicación del sistema de la Seguridad Social no podrán estar incluidas por el mismo trabajo, con carácter obligatorio, en otros regímenes de previsión distintos de los que integran dicho sistema.»",
-    "9": "«Art. 9 TRLGSS: El sistema de la Seguridad Social viene integrado por los siguientes regímenes: a) El Régimen General y b) Los Regímenes Especiales.»",
-    "12": "«Art. 12 TRLGSS: No tendrán la consideración de trabajadores por cuenta ajena, salvo prueba en contrario: el cónyuge, los descendientes, ascendientes y demás parientes del empresario, por consanguinidad o afinidad hasta el segundo grado inclusive y, en su caso, por adopción, ocupados en su centro o centros de trabajo, cuando convivan en su hogar y estén a su cargo.»",
-    "14": "«Art. 14 CE: Los españoles son iguales ante la ley, sin que pueda prevalecer discriminación alguna por razón de nacimiento, raza, sexo, religión, opinión o cualquier otra condición o circunstancia personal o social.»",
-    "15": "«Art. 15 TRLGSS: La afiliación a la Seguridad Social es obligatoria para las personas a que se refiere el artículo 7.1 y única para la vida de las mismas y para todo el sistema, sin perjuicio de las altas y bajas en los distintos regímenes que lo integran.»",
-    "16": "«Art. 16 TRLGSS: La afiliación podrá practicarse a petición de las personas y entidades obligadas, a instancia de los interesados o de oficio por la Administración de la Seguridad Social.»",
-    "18": "«Art. 18 TRLGSS: La cotización a la Seguridad Social es obligatoria en los regímenes General y Especiales.»",
-    "21": "«Art. 21 TRLGSS: La Tesorería General de la Seguridad Social es el servicio común con personalidad jurídica propia en el que, por aplicación de los principios de solidaridad financiera y caja única, se unifican todos los recursos financieros del sistema.»",
-    "41": "«Art. 41 CE: Los poderes públicos mantendrán un régimen público de Seguridad Social para todos los ciudadanos, que garantice la asistencia y prestaciones sociales suficientes ante situaciones de necesidad, especialmente en caso de desempleo. La asistencia y prestaciones complementarias serán libres.»",
-    "42": "«Art. 42 TRLGSS: La acción protectora del sistema de la Seguridad Social comprenderá la asistencia sanitaria, recuperación profesional y prestaciones económicas en las situaciones de incapacidad temporal, nacimiento y cuidado de menor, riesgo durante el embarazo, riesgo durante la lactancia natural, ejercicio corresponsable del cuidado del lactante, cuidado de menores afectados por cáncer u otra enfermedad grave, incapacidad permanente, jubilación, desempleo, protección familiar y muerte y supervivencia.»",
-    "50": "«Art. 50 CE: Los poderes públicos garantizarán, mediante pensiones adecuadas y periódicamente actualizadas, la suficiencia económica a los ciudadanos durante la tercera edad.»",
-    "53": "«Art. 53 CE: Los derechos y libertades reconocidos en el Capítulo segundo del presente Título vinculan a todos los poderes públicos... El reconocimiento, el respeto y la protección de los principios reconocidos en el Capítulo tercero informarán la legislación positiva, la práctica judicial y la actuación de los poderes públicos.»",
-    "58": "«Art. 58 TRLGSS: Las pensiones contributivas de la Seguridad Social mantendrán su poder adquisitivo en los términos previstos en esta ley, revalorizándose al comienzo de cada año en función del IPC medio anual.»",
-    "136": "«Art. 136 TRLGSS: Estarán obligatoriamente incluidos en el campo de aplicación del Régimen General de la Seguridad Social los trabajadores por cuenta ajena y los asimilados a los que se refiere el artículo 7.1.a) de esta ley.»",
-    "137": "«Art. 137 TRLGSS: No darán lugar a inclusión en este Régimen General los trabajos que se ejecuten ocasionalmente mediante los llamados servicios amistosos, benévolos o de buena vecindad, ni los que den lugar a la inclusión en alguno de los regímenes especiales.»",
-    "138": "«Art. 138 TRLGSS: Por el empresario se solicitará la inscripción de su empresa antes del inicio de actividades y se comunicarán las altas, bajas y variaciones de datos de los trabajadores que ingresen o cesen a su servicio.»",
-    "139": "«Art. 139 TRLGSS: Los empresarios, como requisito previo e indispensable a la iniciación de sus actividades, solicitarán su inscripción en el Régimen General de la Seguridad Social.»",
-    "140": "«Art. 140 TRLGSS: Las altas y bajas de los trabajadores solicitadas fuera del plazo reglamentario solo tendrán efecto desde el día en que se formule la solicitud, salvo que se haya ingresado las cuotas en plazo o concurra error subsanado de oficio.»",
-    "147": "«Art. 147 TRLGSS: La base de cotización para todas las contingencias y situaciones amparadas por la acción protectora del Régimen General estará constituida por la remuneración total, cualquiera que sea su forma o denominación, que con carácter mensual tenga derecho a percibir el trabajador.»",
-    "149": "«Art. 149.1.17.ª CE: El Estado tiene competencia exclusiva sobre la legislación básica y régimen económico de la Seguridad Social, sin perjuicio de la ejecución de sus servicios por las Comunidades Autónomas.»",
-    "165": "«Art. 165 TRLGSS: Para causar derecho a las prestaciones del Régimen General, las personas incluidas en su campo de aplicación habrán de estar afiliadas y en alta o en situación asimilada a la de alta al sobrevenir la contingencia o situación protegida.»",
-    "166": "«Art. 166 TRLGSS: Tendrán la consideración de situaciones asimiladas a la de alta la situación legal de desempleo total durante la que el trabajador perciba prestación, la excedencia forzosa y la suscripción de convenio especial, entre otras.»",
-    "169": "«Art. 169 TRLGSS: Tendrán la consideración de situaciones determinantes de incapacidad temporal las debidas a enfermedad común o profesional y a accidente, sea o no de trabajo, mientras el trabajador reciba asistencia sanitaria de la Seguridad Social y esté impedido para el trabajo.»",
-    "193": "«Art. 193 TRLGSS: La incapacidad permanente contributiva es la situación del trabajador que, después de haber estado sometido al tratamiento prescrito, presenta reducciones anatómicas o funcionales graves, susceptibles de determinación objetiva y previsiblemente definitivas, que disminuyan o anulen su capacidad laboral.»",
-    "205": "«Art. 205 TRLGSS: Tendrán derecho a la pensión de jubilación, en su modalidad contributiva, las personas incluidas en el Régimen General que, además de la general exigida en el artículo 165.1, reúnan las condiciones de edad y período mínimo de cotización.»",
-    "250": "«Art. 250 TRLGSS: El Sistema Especial para Empleados de Hogar será de aplicación a los trabajadores sujetos a la relación laboral especial del servicio del hogar familiar.»",
-    "252": "«Art. 252 TRLGSS: El Sistema Especial para Trabajadores por Cuenta Ajena Agrarios será de aplicación a quienes realicen labores agrarias, sean propiamente agrícolas, forestales o pecuarias.»",
-    "305": "«Art. 305 TRLGSS: Estarán obligatoriamente incluidas en el campo de aplicación del Régimen Especial de la Seguridad Social de los Trabajadores por Cuenta Propia o Autónomos las personas físicas mayores de dieciocho años que realicen de forma habitual, personal, directa, por cuenta propia y fuera del ámbito de dirección y organización de otra persona, una actividad económica o profesional a título lucrativo.»",
-}
+# Mapa de artículos válidos por materia/tema (para que cuando el resumen del PDF no cite el número de artículo,
+# pero el alumno sí lo ponga correctamente, como Art. 166 TRLGSS o Art. 36 RD 84/1996 en el Tema 53, se dé por VÁLIDO)
+ARTICULOS_CONEXOS_POR_MATERIA = [
+    {
+        "keywords": ["afiliacion", "altas", "bajas", "convenio especial", "inscripcion", "pluriempleo", "pluriactividad", "asimilada", "cuenta de cotizacion", "mutua"],
+        "articulos_validos": {
+            "7", "8", "12", "15", "16", "17", "21", "29", "30", "31", "32", "33", "35", "36", "37", "38",
+            "136", "138", "139", "140", "144", "165", "166", "250", "252", "253", "305"
+        }
+    },
+    {
+        "keywords": ["constitucion", "refundido", "estructura", "41", "149", "toledo", "fuentes"],
+        "articulos_validos": {
+            "1", "2", "3", "4", "5", "6", "7", "9", "10", "14", "39", "41", "42", "43", "49", "50", "53",
+            "82", "86", "129", "136", "149", "262", "305", "327", "351", "373"
+        }
+    },
+    {
+        "keywords": ["campo de aplicacion", "composicion", "regimen general", "regimenes especiales", "exclusiones", "familiares"],
+        "articulos_validos": {
+            "1", "2", "7", "8", "9", "10", "11", "12", "136", "137", "250", "252", "305", "306"
+        }
+    },
+    {
+        "keywords": ["accion protectora", "prestaciones", "requisitos", "responsabilidad", "revalorizacion", "incompatibilidad", "prescripcion", "caducidad"],
+        "articulos_validos": {
+            "42", "43", "44", "45", "46", "47", "53", "54", "55", "56", "57", "58", "59", "60",
+            "163", "164", "165", "166", "167", "168"
+        }
+    },
+    {
+        "keywords": ["incapacidad temporal", "nacimiento", "cuidado de menor", "corresponsabilidad", "riesgo", "embarazo", "lactancia", "incapacidad permanente", "jubilacion", "muerte", "supervivencia", "viudedad", "orfandad"],
+        "articulos_validos": {
+            "169", "170", "171", "172", "173", "174", "175", "176", "177", "178", "179", "180", "181", "182",
+            "183", "184", "185", "186", "187", "188", "189", "190", "191", "192", "193", "194", "195", "196",
+            "197", "198", "199", "200", "201", "202", "203", "204", "205", "206", "207", "208", "209", "210",
+            "211", "212", "213", "214", "215", "216", "217", "218", "219", "220", "221", "222", "223", "224",
+            "225", "226", "227", "228", "229", "230", "231", "232", "233", "234"
+        }
+    },
+    {
+        "keywords": ["cotizacion", "base de cotizacion", "topes", "recaudacion", "aplazamiento", "recargo", "cuota"],
+        "articulos_validos": {
+            "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34",
+            "141", "142", "143", "144", "145", "146", "147", "148", "149", "150", "151", "152", "153"
+        }
+    }
+]
 
-def obtener_literal_articulo(num_art_str):
-    if num_art_str in LITERALES_ARTICULOS_REFERENCIA:
-        return LITERALES_ARTICULOS_REFERENCIA[num_art_str]
-    if num_art_str.isdigit():
-        n = int(num_art_str)
-        if 1 <= n <= 135:
-            return f"«El artículo {n} del TRLGSS se ubica en el Título I (Normas generales del sistema de la Seguridad Social: arts. 1 a 135) y regula una materia distinta a la de este epígrafe.»"
-        if 136 <= n <= 261:
-            return f"«El artículo {n} del TRLGSS se ubica en el Título II (Régimen General de la Seguridad Social: arts. 136 a 261) y regula un precepto distinto a los de este epígrafe.»"
-        if 262 <= n <= 304:
-            return f"«El artículo {n} del TRLGSS se ubica en el Título III (Protección por desempleo: arts. 262 a 304).»"
-        if 305 <= n <= 326:
-            return f"«El artículo {n} del TRLGSS se ubica en el Título IV (Régimen Especial de Trabajadores por Cuenta Propia o Autónomos: arts. 305 a 326).»"
-        if 327 <= n <= 350:
-            return f"«El artículo {n} del TRLGSS se ubica en el Título V (Protección por cese de actividad: arts. 327 a 350).»"
-        if 351 <= n <= 373:
-            return f"«El artículo {n} del TRLGSS se ubica en el Título VI (Prestaciones no contributivas: arts. 351 a 373).»"
-        return f"«El artículo {n} no existe en el TRLGSS (que solo consta de 373 artículos).»"
-    return "«Precepto ajeno al contenido normativo de este epígrafe.»"
+@st.cache_data(ttl=86400, show_spinner=False)
+def consultar_literal_boe_o_fuentes(num_art_str, id_boe="BOE-A-2015-11724"):
+    """
+    Consulta en la API de Datos Abiertos del BOE (o en el repositorio local de respaldo)
+    la literalidad exacta del artículo citado indebidamente por el alumno.
+    Por defecto consulta el TRLGSS (BOE-A-2015-11724).
+    """
+    num_limpio = str(num_art_str).strip()
+    # 1. Intentar obtener el bloque oficial en tiempo real desde la API de Datos Abiertos del BOE
+    try:
+        url_boe = f"https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/{id_boe}/texto/bloque/a{num_limpio}"
+        headers_boe = {"Accept": "application/xml"}
+        r_boe = requests.get(url_boe, headers=headers_boe, timeout=4)
+        if r_boe.status_code == 200 and "<p" in r_boe.text:
+            parrafos_xml = re.findall(r'<p[^>]*>(.*?)</p>', r_boe.text, flags=re.DOTALL)
+            texto_limpio = " ".join(re.sub(r'<[^>]+>', '', p).strip() for p in parrafos_xml if p.strip())
+            if len(texto_limpio) > 25:
+                if len(texto_limpio) > 420:
+                    texto_limpio = texto_limpio[:420].rsplit(" ", 1)[0] + "...»"
+                else:
+                    texto_limpio = texto_limpio + "»"
+                return f"«{texto_limpio}"
+    except Exception:
+        pass
+
+    # 2. Respaldo de artículos en las fuentes oficiales si la API del BOE no responde o el artículo no existe
+    respaldo_literales = {
+        "1": "«Artículo 1 TRLGSS (Derecho de los españoles a la Seguridad Social): El derecho de los españoles a la Seguridad Social, establecido en el artículo 41 de la Constitución, se ajustará a lo dispuesto en la presente ley.»",
+        "2": "«Artículo 2 TRLGSS (Principios y fines de la Seguridad Social): 1. El sistema de la Seguridad Social, configurado por la acción protectora en sus modalidades contributiva y no contributiva, se fundamenta en los principios de universalidad, unidad, solidaridad e igualdad.»",
+        "3": "«Artículo 3 TRLGSS (Irrenunciabilidad de los derechos de la Seguridad Social): Será nulo todo pacto, individual o colectivo, por el cual el trabajador renuncie a los derechos que le confiere la presente ley.»",
+        "7": "«Artículo 7 TRLGSS (Extensión del campo de aplicación): 1. Estarán comprendidos en el sistema de la Seguridad Social, a efectos de las prestaciones contributivas, cualquiera que sea su sexo, estado civil y profesión, los españoles que residan en España y los extranjeros que residan o se encuentren legalmente en España...»",
+        "8": "«Artículo 8 TRLGSS (Prohibición de inclusión múltiple obligatoria): Las personas comprendidas en el campo de aplicación del sistema de la Seguridad Social no podrán estar incluidas por el mismo trabajo, con carácter obligatorio, en otros regímenes de previsión distintos de los que integran dicho sistema.»",
+        "9": "«Artículo 9 TRLGSS (Estructura del sistema de la Seguridad Social): 1. El sistema de la Seguridad Social viene integrado por los siguientes regímenes: a) El Régimen General... b) Los Regímenes Especiales...»",
+        "12": "«Artículo 12 TRLGSS (Familiares): 1. A efectos de lo dispuesto en el artículo 7.1, no tendrán la consideración de trabajadores por cuenta ajena, salvo prueba en contrario: el cónyuge, los descendientes, ascendientes y demás parientes del empresario, por consanguinidad o afinidad hasta el segundo grado inclusive...»",
+        "15": "«Artículo 15 TRLGSS (Obligatoriedad y alcance de la afiliación): La afiliación a la Seguridad Social es obligatoria para las personas a que se refiere el artículo 7.1 y única para la vida de las mismas y para todo el sistema, sin perjuicio de las altas y bajas en los distintos regímenes que lo integran.»",
+        "16": "«Artículo 16 TRLGSS (Formas de practicarla): 1. La afiliación podrá practicarse a petición de las personas y entidades obligadas a dicho acto, a instancia de los interesados o de oficio por la Administración de la Seguridad Social.»",
+        "18": "«Artículo 18 TRLGSS (Obligatoriedad): 1. La cotización a la Seguridad Social es obligatoria en los regímenes General y Especiales.»",
+        "21": "«Artículo 21 TRLGSS (Tesorería General de la Seguridad Social): 1. La Tesorería General de la Seguridad Social es un servicio común de la Seguridad Social, tutelado por el Ministerio de Inclusión, Seguridad Social y Migraciones, con personalidad jurídica propia, en el que, por aplicación de los principios de solidaridad financiera y caja única, se unifican todos los recursos financieros.»",
+        "36": "«Artículo 36 TRLGSS (Comprobación del cumplimiento de las obligaciones por la Tesorería General): La Tesorería General de la Seguridad Social podrá comprobar el cumplimiento de las obligaciones en materia de liquidación e ingreso de cuotas y demás recursos del sistema.»",
+        "41": "«Artículo 41 CE: Los poderes públicos mantendrán un régimen público de Seguridad Social para todos los ciudadanos, que garantice la asistencia y prestaciones sociales suficientes ante situaciones de necesidad, especialmente en caso de desempleo.»",
+        "42": "«Artículo 42 TRLGSS (Acción protectora del sistema de la Seguridad Social): 1. La acción protectora del sistema de la Seguridad Social comprenderá: a) La asistencia sanitaria... b) La recuperación profesional... c) Prestaciones económicas en las situaciones de incapacidad temporal, nacimiento y cuidado de menor, riesgo durante el embarazo, incapacidad permanente, jubilación, desempleo, protección familiar y muerte y supervivencia.»",
+        "58": "«Artículo 58 TRLGSS (Revalorización y garantía de mantenimiento del poder adquisitivo de las pensiones): 1. Las pensiones contributivas de la Seguridad Social mantendrán su poder adquisitivo en los términos previstos en esta ley...»",
+        "136": "«Artículo 136 TRLGSS (Extensión del Régimen General): 1. Estarán obligatoriamente incluidos en el campo de aplicación del Régimen General de la Seguridad Social los trabajadores por cuenta ajena y los asimilados a los que se refiere el artículo 7.1.a) de esta ley.»",
+        "137": "«Artículo 137 TRLGSS (Exclusiones): No darán lugar a inclusión en este Régimen General los siguientes trabajos: a) Los que se ejecuten ocasionalmente mediante los llamados servicios amistosos, benévolos o de buena vecindad. b) Los que den lugar a la inclusión en alguno de los regímenes especiales.»",
+        "138": "«Artículo 138 TRLGSS (Inscripción de empresas y normas sobre afiliación, altas y bajas): 1. Los empresarios, como requisito previo e indispensable a la iniciación de sus actividades, solicitarán su inscripción en el Régimen General de la Seguridad Social...»",
+        "165": "«Artículo 165 TRLGSS (Condiciones del derecho a las prestaciones): 1. Para causar derecho a las prestaciones del Régimen General, las personas incluidas en su campo de aplicación habrán de cumplir, además de los requisitos particulares exigidos para acceder a cada una de ellas, el requisito general de estar afiliadas y en alta en dicho Régimen o en situación asimilada a la de alta.»",
+        "166": "«Artículo 166 TRLGSS (Situaciones asimiladas a la de alta): 1. A los efectos indicados en el artículo 165.1, la situación legal de desempleo total durante la que el trabajador perciba prestación por dicha contingencia será asimilada a la de alta. 2. También tendrá la consideración de situación asimilada a la de alta, con cotización, salvo en lo que respecta a los subsidios por riesgo durante el embarazo y por riesgo durante la lactancia natural, la situación del trabajador durante el período correspondiente a vacaciones anuales retribuidas que no hayan sido disfrutadas con anterioridad a la finalización del contrato...»",
+        "169": "«Artículo 169 TRLGSS (Concepto de incapacidad temporal): 1. Tendrán la consideración de situaciones determinantes de incapacidad temporal: a) Las debidas a enfermedad común o profesional y a accidente, sea o no de trabajo, mientras el trabajador reciba asistencia sanitaria de la Seguridad Social y esté impedido para el trabajo...»",
+        "193": "«Artículo 193 TRLGSS (Concepto de incapacidad permanente): 1. La incapacidad permanente contributiva es la situación del trabajador que, después de haber estado sometido al tratamiento prescrito, presenta reducciones anatómicas o funcionales graves, susceptibles de determinación objetiva y previsiblemente definitivas, que disminuyan o anulen su capacidad laboral.»",
+        "205": "«Artículo 205 TRLGSS (Beneficiarios de la pensión de jubilación): 1. Tendrán derecho a la pensión de jubilación regulada en este capítulo, en su modalidad contributiva, las personas incluidas en el Régimen General que, además de la general exigida en el artículo 165.1, reúnan las siguientes condiciones: a) Tener cumplida en la fecha del hecho causante la edad de 67 años, o 65 años cuando se acrediten 38 años y 6 meses de cotización...»",
+        "250": "«Artículo 250 TRLGSS (Objeto del Sistema Especial para Empleados de Hogar): El Sistema Especial para Empleados de Hogar, establecido en el Régimen General de la Seguridad Social, será de aplicación a los trabajadores sujetos a la relación laboral especial del servicio del hogar familiar.»",
+        "252": "«Artículo 252 TRLGSS (Ámbito de aplicación del Sistema Especial para Trabajadores por Cuenta Ajena Agrarios): 1. El Sistema Especial para Trabajadores por Cuenta Ajena Agrarios, establecido en el Régimen General de la Seguridad Social, será de aplicación a quienes realicen labores agrarias, sean propiamente agrícolas, forestales o pecuarias...»",
+        "305": "«Artículo 305 TRLGSS (Extensión del Régimen Especial de los Trabajadores por Cuenta Propia o Autónomos): 1. Estarán obligatoriamente incluidas en el campo de aplicación del Régimen Especial de la Seguridad Social de los Trabajadores por Cuenta Propia o Autónomos las personas físicas mayores de dieciocho años que realicen de forma habitual, personal, directa, por cuenta propia y fuera del ámbito de dirección y organización de otra persona, una actividad económica o profesional a título lucrativo...»",
+    }
+    if num_limpio in respaldo_literales:
+        return respaldo_literales[num_limpio]
+    if num_limpio.isdigit():
+        n = int(num_limpio)
+        if n > 373:
+            return f"«El artículo {n} no existe en el Texto Refundido de la Ley General de la Seguridad Social (que consta de 373 artículos).»"
+    return f"«El artículo {num_limpio} regula un precepto distinto a los contenidos en este epígrafe.»"
 
 def auditar_siglas_sin_definir_previa(texto_alumno):
+    """
+    Detecta si el alumno escribe siglas o abreviaturas normativas (como RDL, RD, Real Decreto L., TRLGSS, CE, ET, TGSS, INSS...)
+    sin haber escrito previamente la denominación completa seguida de 'en adelante, XXXX'.
+    Nota: Esto NO invalida la norma citada (la norma se da por buena en contenido), pero resta puntos formales en Criterio 3.
+    """
     if not texto_alumno:
         return []
     t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
@@ -1945,6 +2006,9 @@ def auditar_siglas_sin_definir_previa(texto_alumno):
     catalogo_siglas = [
         ("TRLGSS", r'\bTRLGSS\b', ["texto refundido de la ley general de la seguridad social"], "Texto Refundido de la Ley General de la Seguridad Social (en adelante, TRLGSS)"),
         ("LGSS", r'\bLGSS\b', ["ley general de la seguridad social"], "Ley General de la Seguridad Social (en adelante, LGSS)"),
+        ("RDL", r'\bRDL\b', ["real decreto-ley", "real decreto ley"], "Real Decreto-ley (en adelante, RDL)"),
+        ("RD Legislativo", r'\b(?:RD\s+Legislativo|Real\s+Decreto\s+L\.?)\b', ["real decreto legislativo"], "Real Decreto Legislativo (en adelante, RD Legislativo)"),
+        ("RD", r'\bRD\b(?!\s*Legislativo|\s*\-?\s*ley)', ["real decreto"], "Real Decreto (en adelante, RD)"),
         ("CE", r'\bCE\b', ["constitucion espanola", "constitucion de 1978"], "Constitución Española (en adelante, CE)"),
         ("ET", r'\bET\b', ["estatuto de los trabajadores"], "Estatuto de los Trabajadores (en adelante, ET)"),
         ("LETA", r'\bLETA\b', ["estatuto del trabajo autonomo"], "Estatuto del Trabajo Autónomo (en adelante, LETA)"),
@@ -1994,81 +2058,95 @@ def _extraer_rangos_articulos(texto):
     return arts
 
 def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, contexto_epigrafe):
+    """
+    Verifica si un artículo o norma adicional citada por el alumno es correcta.
+    - Las normas troncales del sistema (TRLGSS, RD Legislativo 8/2015, CE, ET, RD 84/1996, RD 2064/1995, RD 1415/2004, etc.)
+      SIEMPRE se consideran referencias legales VÁLIDAS aunque el alumno haya usado abreviaturas como RDL, RD, Real Decreto L. o TRLGSS.
+    - Si el alumno añade un número de artículo que realmente NO guarda relación con el epígrafe, se busca su literal en el BOE/fuentes y se muestra.
+    """
     def _norm(s):
         return ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
 
     orac_low = _norm(oracion_alumno)
     ep_low = _norm(contexto_epigrafe)
 
-    palabras_ep = set(re.findall(r'\b[a-z]{5,}\b', ep_low))
-    palabras_orac = set(re.findall(r'\b[a-z]{5,}\b', orac_low))
-    coincidencias_materia = len(palabras_ep.intersection(palabras_orac))
-
-    if k_tipo == "ART" and k_id.isdigit():
-        num_art = int(k_id)
-        literal_art = obtener_literal_articulo(k_id)
-
-        if num_art > 373:
-            return False, f"**{k_lbl}** no tiene relación alguna: {literal_art}"
-
-        if k_id in LITERALES_ARTICULOS_REFERENCIA:
-            lit_norm = _norm(LITERALES_ARTICULOS_REFERENCIA[k_id])
-            palabras_lit = set(re.findall(r'\b[a-z]{5,}\b', lit_norm))
-            if len(palabras_lit.intersection(palabras_ep)) == 0 and coincidencias_materia < 2:
-                return False, f"**{k_lbl}** no guarda relación con este epígrafe. Su texto literal establece: {literal_art}"
-
-        if coincidencias_materia >= 2 and 1 <= num_art <= 373:
-            return True, f"**{k_lbl}** (precepto conexo bien aplicado a la materia)"
-        else:
-            return False, f"**{k_lbl}** no guarda relación directa con este epígrafe. Su contenido real es: {literal_art}"
-
-    if k_tipo == "RANGO_ART":
-        nums = [int(x) for x in re.findall(r'\d+', k_id)]
-        if len(nums) == 2 and 1 <= nums[0] <= nums[1] <= 373 and coincidencias_materia >= 1:
-            return True, f"**{k_lbl}** (rango de artículos verificado en el TRLGSS)"
-        return False, f"**{k_lbl}** (rango de artículos que no se corresponde con el epígrafe)"
-
-    if k_tipo == "TITULO":
-        if k_id in ["I", "II", "III", "IV", "V", "VI", "1", "2", "3", "4", "5", "6"]:
-            return True, f"**{k_lbl}** (Título verificado en la estructura del TRLGSS)"
-        return False, f"**{k_lbl}** (el TRLGSS solo consta de seis Títulos: I a VI)"
-
-    if k_tipo == "NORMA":
-        leyes_ss = {
+    # 1. Las normas troncales o abreviadas (TRLGSS, RD Legislativo 8/2015, RD 84/1996, etc.) NUNCA están mal como referencia legal
+    if k_tipo in ["NORMA", "SIGLA", "TITULO", "DISP"]:
+        leyes_ss_validas = {
+            "8/2015": "Real Decreto Legislativo 8/2015 (TRLGSS)",
+            "2/2015": "Real Decreto Legislativo 2/2015 (Estatuto de los Trabajadores)",
+            "84/1996": "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas)",
+            "2064/1995": "Real Decreto 2064/1995 (Reglamento General sobre cotización y liquidación)",
+            "1415/2004": "Real Decreto 1415/2004 (Reglamento General de Recaudación de la Seguridad Social)",
             "193/1963": "Ley 193/1963 de Bases de la Seguridad Social",
             "907/1966": "Decreto 907/1966 (Texto Articulado I de la Ley de Seguridad Social)",
             "24/1972": "Ley 24/1972 de financiación y perfeccionamiento de la acción protectora",
             "2065/1974": "Decreto 2065/1974 (Texto Refundido de la LGSS de 1974)",
             "26/1990": "Ley 26/1990 de prestaciones no contributivas",
-            "1/1994": "RD Legislativo 1/1994 (anterior TRLGSS)",
+            "1/1994": "Real Decreto Legislativo 1/1994 (anterior TRLGSS)",
             "24/1997": "Ley 24/1997 de Consolidación y Racionalización del Sistema",
             "20/2007": "Ley 20/2007 del Estatuto del trabajo autónomo",
             "27/2011": "Ley 27/2011 de actualización y modernización del sistema de Seguridad Social",
             "28/2011": "Ley 28/2011 de integración del Régimen Especial Agrario",
-            "1620/2011": "RD 1620/2011 del servicio del hogar familiar",
-            "2/2015": "RD Legislativo 2/2015 (Estatuto de los Trabajadores)",
-            "8/2015": "RD Legislativo 8/2015 (TRLGSS)",
+            "1620/2011": "Real Decreto 1620/2011 del servicio del hogar familiar",
             "47/2015": "Ley 47/2015 de protección social del sector marítimo-pesquero",
             "19/2021": "Ley 19/2021 del Ingreso Mínimo Vital",
             "21/2021": "Ley 21/2021 de garantía del poder adquisitivo de las pensiones",
-            "13/2022": "RDL 13/2022 de cotización por ingresos reales de autónomos",
-            "16/2022": "RDL 16/2022 de personas trabajadoras al servicio del hogar",
-            "2/2023": "RDL 2/2023 de ampliación de derechos de los pensionistas",
-            "84/1996": "RD 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas)",
-            "2064/1995": "RD 2064/1995 (Reglamento General sobre cotización y liquidación)",
-            "1415/2004": "RD 1415/2004 (Reglamento General de Recaudación de la Seguridad Social)",
-            "3/2026": "RDL 3/2026 de revalorización de pensiones y cotización para 2026",
-            "31/2026": "RDL 31/2026 de reforma de prestaciones de Seguridad Social",
-            "126/2026": "RD 126/2026 de fijación del SMI para 2026",
+            "13/2022": "Real Decreto-ley 13/2022 de cotización por ingresos reales de autónomos",
+            "16/2022": "Real Decreto-ley 16/2022 de personas trabajadoras al servicio del hogar",
+            "2/2023": "Real Decreto-ley 2/2023 de ampliación de derechos de los pensionistas",
+            "3/2026": "Real Decreto-ley 3/2026 de revalorización de pensiones y cotización para 2026",
+            "31/2026": "Real Decreto-ley 31/2026 de reforma de prestaciones de Seguridad Social",
+            "126/2026": "Real Decreto 126/2026 de fijación del SMI para 2026",
             "297/2026": "Orden PJC/297/2026 de cotización para 2026",
+            "2908/2003": "Orden TAS/2865/2003 reguladora del Convenio Especial en la Seguridad Social",
+            "2865/2003": "Orden TAS/2865/2003 reguladora del Convenio Especial en la Seguridad Social",
         }
-        if k_id in leyes_ss and coincidencias_materia >= 1:
-            return True, f"**{k_lbl}** ({leyes_ss[k_id]})"
+        if k_tipo == "SIGLA":
+            return True, f"**{k_lbl}** (referencia a la norma válida)"
+        if k_tipo == "NORMA" and k_id in leyes_ss_validas:
+            return True, f"**{k_lbl}** ({leyes_ss_validas[k_id]})"
+        if k_tipo == "TITULO":
+            if k_id in ["I", "II", "III", "IV", "V", "VI", "1", "2", "3", "4", "5", "6"]:
+                return True, f"**{k_lbl}** (Título verificado en la estructura del TRLGSS)"
+            return False, f"**{k_lbl}** (el TRLGSS solo consta de seis Títulos: I a VI)"
+        if k_tipo == "DISP":
+            return True, f"**{k_lbl}**"
 
-    if k_tipo in ["SIGLA", "DISP"] and coincidencias_materia >= 1:
-        return True, f"**{k_lbl}**"
+    if k_tipo == "RANGO_ART":
+        nums = [int(x) for x in re.findall(r'\d+', k_id)]
+        if len(nums) == 2 and 1 <= nums[0] <= nums[1] <= 373:
+            return True, f"**{k_lbl}** (rango de artículos verificado en el TRLGSS)"
+        return False, f"**{k_lbl}** (rango de artículos inexistente en el TRLGSS)"
 
-    return False, f"**{k_lbl}** (norma sin relación con el contenido de este epígrafe)"
+    # 2. Verificación de artículos numéricos concretos (ej. Art. 166, Art. 36, Art. 58...)
+    if k_tipo == "ART" and k_id.isdigit():
+        num_art = int(k_id)
+        if num_art > 373:
+            literal_boe = consultar_literal_boe_o_fuentes(k_id)
+            return False, f"**{k_lbl}** es inexistente: {literal_boe}"
+
+        # Comprobar si el artículo pertenece a los artículos válidos de la materia que trata este epígrafe
+        for bloque_mat in ARTICULOS_CONEXOS_POR_MATERIA:
+            if any(kw in ep_low for kw in bloque_mat["keywords"]):
+                if k_id in bloque_mat["articulos_validos"]:
+                    return True, f"**{k_lbl}** (precepto aplicable a esta materia)"
+
+        # Comprobar si la literalidad del artículo en el BOE comparte vocabulario jurídico con el epígrafe actual
+        literal_boe = consultar_literal_boe_o_fuentes(k_id)
+        lit_norm = _norm(literal_boe)
+        stopwords_lit = {"articulo", "seguridad", "social", "regimen", "general", "sistema", "presente", "dispuesto", "establecido", "efectos", "cuando", "mismo", "dicho", "todos", "todas", "trabajador", "trabajadores"}
+        palabras_lit = {w for w in re.findall(r'\b[a-z]{5,}\b', lit_norm) if w not in stopwords_lit}
+        palabras_ep = {w for w in re.findall(r'\b[a-z]{5,}\b', ep_low) if w not in stopwords_lit}
+        palabras_orac = {w for w in re.findall(r'\b[a-z]{5,}\b', orac_low) if w not in stopwords_lit}
+
+        if len(palabras_lit.intersection(palabras_ep)) >= 2 or len(palabras_orac.intersection(palabras_ep)) >= 3:
+            return True, f"**{k_lbl}** (precepto conexo bien interrelacionado con el epígrafe)"
+
+        # Si NO guarda relación con el epígrafe, devolvemos False con la LITERALIDAD extraída del BOE/fuentes
+        return False, f"**{k_lbl}** no guarda relación con este epígrafe. Su literalidad oficial en el BOE establece: {literal_boe}"
+
+    return False, f"**{k_lbl}** (referencia sin conexión con este epígrafe)"
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     def _norm(s):
@@ -2087,7 +2165,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
     ref_norm = _norm(ref_completa)
 
-    pat_normas = r'\b(?:arts?(?:[íi]culos?|\.)\s*\d+(?:\s*(?:a|al|\-|–)\s*\d+)?(?:\.\d+)?(?:\.[a-z])?|t[íi]tulo\s+(?:[ivx]+|\d+)|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\-ley|\s+legislativo)?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|estatuto\s+de\s+los\s+trabajadores|constituci[óo]n\s+espa[ñn]ola|orden\s+[a-z]+/\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria|final)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
+    # Reconoce cualquier variante que escriba el alumno: RDL, RD, Real Decreto L., Real Decreto Legislativo, TRLGSS, etc.
+    pat_normas = r'\b(?:arts?(?:[íi]culos?|\.)\s*\d+(?:\s*(?:a|al|\-|–)\s*\d+)?(?:\.\d+)?(?:\.[a-z])?|t[íi]tulo\s+(?:[ivx]+|\d+)|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\s+legislativo|\s+l\.?|\-ley|\s+ley)?\s+\d+/\d{4}|rd\s+legislativo\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|lgss|estatuto\s+de\s+los\s+trabajadores|constituci[óo]n\s+espa[ñn]ola|orden\s+(?:[a-z]+\/)?\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria|final)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
 
     def _clave_norma(texto_cita):
         cn = _norm(texto_cita)
@@ -2101,13 +2180,15 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         m_tit = re.match(r'^titulo\s+([ivx0-9]+)', cn)
         if m_tit:
             return ("TITULO", m_tit.group(1).upper(), f"Título {m_tit.group(1).upper()}")
-        m_ley = re.search(r'(ley(?:\s+organica)?|real\s+decreto(?:\-ley|\s+legislativo)?|rdl|rd[\-\s]*ley|rd|decreto|orden(?:\s+[a-z]+)?)\s+(\d+/\d{4})', cn)
+        m_ley = re.search(r'(ley(?:\s+organica)?|real\s+decreto(?:\s+legislativo|\s+l\.?|\-ley|\s+ley)?|rd\s+legislativo|rdl|rd[\-\s]*ley|rd|decreto|orden(?:\s+[a-z]+)?)\s+(\d+/\d{4})', cn)
         if m_ley:
             tipo = m_ley.group(1).upper()
             num = m_ley.group(2)
-            if "LEGISLATIVO" in tipo:
+            if num == "8/2015":
+                return ("NORMA", "8/2015", "RD Legislativo 8/2015 (TRLGSS)")
+            if "LEGISLATIVO" in tipo or re.search(r'DECRETO\s+L\.?$', tipo):
                 etiqueta = f"RD Legislativo {num}"
-            elif "LEY" in tipo and ("RD" in tipo or "DECRETO" in tipo):
+            elif "LEY" in tipo or tipo == "RDL":
                 etiqueta = f"RD-ley {num}"
             elif "REAL DECRETO" in tipo or tipo == "RD":
                 etiqueta = f"Real Decreto {num}"
@@ -2116,10 +2197,10 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             else:
                 etiqueta = f"Ley {num}"
             return ("NORMA", num, etiqueta)
-        if "trlgss" in cn:
-            return ("SIGLA", "trlgss", "TRLGSS (RD Legislativo 8/2015)")
+        if "trlgss" in cn or "lgss" in cn:
+            return ("NORMA", "8/2015", "TRLGSS (RD Legislativo 8/2015)")
         if "estatuto de los trabajadores" in cn:
-            return ("SIGLA", "et", "Estatuto de los Trabajadores")
+            return ("NORMA", "2/2015", "Estatuto de los Trabajadores (RD Legislativo 2/2015)")
         if "constitucion espanola" in cn:
             return ("SIGLA", "ce", "Constitución Española")
         m_da = re.match(r'^disposicion\s+(adicional|transitoria|final)\s+(.+)$', cn)
@@ -2146,13 +2227,11 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     arts_en_alumno = _extraer_rangos_articulos(texto_alumno)
 
     ids_ref_equiv = set(mapa_ref.keys())
-    if ("NORMA", "8/2015") in ids_ref_equiv or ("SIGLA", "trlgss") in ids_ref_equiv:
-        ids_ref_equiv.add(("NORMA", "8/2015"))
-        ids_ref_equiv.add(("SIGLA", "trlgss"))
 
+    # PASO 1: Comparar artículos con los de la respuesta oficial
     citas_ok, citas_faltan = [], []
     for k_par, lbl in mapa_ref.items():
-        if k_par in mapa_al or (k_par in [("NORMA", "8/2015"), ("SIGLA", "trlgss")] and any(x in mapa_al for x in [("NORMA", "8/2015"), ("SIGLA", "trlgss")])):
+        if k_par in mapa_al:
             citas_ok.append(lbl)
         elif k_par[0] == "ART" and k_par[1] in arts_en_alumno:
             citas_ok.append(lbl)
@@ -2165,6 +2244,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_faltan.append(lbl)
 
+    # PASO 2: Solo si el alumno añade artículos extra, se verifican y si son indebidos se muestra su literal del BOE
     citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
     oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
 
@@ -2196,6 +2276,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_erroneas.append(detalle_fuente)
 
+    # PASO 3: Auditoría de siglas/abreviaturas usadas sin haber escrito antes su denominación completa
     siglas_sin_definir = auditar_siglas_sin_definir_previa(texto_alumno)
 
     pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
@@ -2304,10 +2385,10 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     motivos_resta = []
     if penalizacion_siglas > 0:
-        lista_siglas_txt = ", ".join([f"**{s}** (debiste escribir antes *«{ej}»*)" for s, ej in siglas_sin_definir])
-        motivos_resta.append(f"🔻 **-{penalizacion_siglas:.2f} ptos (Uso de siglas sin definir previamente):** Has utilizado iniciales sin escribir antes su denominación íntegra: {lista_siglas_txt}.")
+        lista_siglas_txt = ", ".join([f"**{s}** (la referencia a la norma es válida, pero debiste escribir antes *«{ej}»*)" for s, ej in siglas_sin_definir])
+        motivos_resta.append(f"🔻 **-{penalizacion_siglas:.2f} ptos (Uso de siglas/abreviaturas sin definir previamente):** {lista_siglas_txt}.")
     if penalizacion_citas_erroneas > 0:
-        motivos_resta.append(f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos (Artículo añadido que no guarda relación con el epígrafe):** {' | '.join(citas_erroneas)}")
+        motivos_resta.append(f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos (Artículo indebido sin relación con el epígrafe):** {' | '.join(citas_erroneas)}")
     if penalizacion_sentido > 0:
         motivos_resta.append(f"🔻 **-{penalizacion_sentido:.2f} ptos (Conclusión invertida):** {alerta_sentido}")
     if puntos_perdidos_citas > 0 and citas_faltan:
@@ -2344,7 +2425,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
-    """Genera un resumen conciso con los 3 Criterios Oficiales y su puntuación."""
+    """Genera un resumen conciso con una única relación de criterios y puntos restados."""
     bloques = []
 
     aciertos_resumen = []
@@ -2362,13 +2443,13 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     if ev["citas_faltan"]:
         rev_normas.append(f"- ⚠️ **Artículos del epígrafe omitidos:** {', '.join(ev['citas_faltan'])}.")
     if ev["citas_complementarias"]:
-        rev_normas.append(f"- 🌟 **Artículos extra añadidos y válidos (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
+        rev_normas.append(f"- 🌟 **Normativa y preceptos adicionales válidos (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
     if ev["citas_erroneas"]:
         for err_art in ev["citas_erroneas"]:
-            rev_normas.append(f"- ❌ **Artículo improcedente (resta puntos):** {err_art}")
+            rev_normas.append(f"- ❌ **Artículo indebido (con su literal en el BOE):** {err_art}")
     if ev.get("siglas_sin_definir"):
-        sig_str = ", ".join([f"**{s}** (debes escribir antes *«{ej}»*)" for s, ej in ev["siglas_sin_definir"]])
-        rev_normas.append(f"- ❌ **Siglas sin definir previamente (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos):** {sig_str}.")
+        sig_str = ", ".join([f"**{s}** (la norma citada es correcta, pero debiste escribir antes *«{ej}»*)" for s, ej in ev["siglas_sin_definir"]])
+        rev_normas.append(f"- ⚠️ **Uso de siglas/abreviaturas sin definir antes (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos):** {sig_str}.")
     if not rev_normas:
         rev_normas.append("- ✔️ Todos los artículos y siglas están correctamente empleados.")
     bloques.append("2. **⚖️ Revisión de artículos y uso formal de siglas:**\n" + "\n".join(rev_normas))
@@ -2423,33 +2504,35 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
-    articulos_extra = ev_fallback.get("articulos_extra_detectados", [])
+    citas_erroneas_boe = "\n".join(ev_fallback.get("citas_erroneas", []))
     siglas_mal = ev_fallback.get("siglas_sin_definir", [])
 
-    instruccion_extra = ""
-    if articulos_extra:
+    instruccion_extra = (
+        "\n- MUY IMPORTANTE SOBRE SIGLAS Y NORMAS: Si el alumno escribe abreviaturas como 'RDL', 'RD', 'Real Decreto L.', 'RD Legislativo 8/2015' o 'TRLGSS', "
+        "la referencia a la Ley ES VÁLIDA (NUNCA digas que el TRLGSS o el RD Legislativo 8/2015 no guarda relación con el epígrafe). "
+        "Únicamente advierte en el punto 2 y en el punto 4 que usar la sigla sin haber escrito antes la denominación completa ('Real Decreto Legislativo..., en adelante...') resta puntos de forma en el Criterio 3."
+    )
+    if citas_erroneas_boe:
         instruccion_extra += (
-            f"\n- El alumno añadió por su cuenta estos artículos: {', '.join(articulos_extra)}. "
-            "Si alguno NO tiene que ver con el epígrafe, pon entre comillas el TEXTO LITERAL de ese artículo para que el alumno vea por qué no tiene relación."
+            f"\n- ARTÍCULOS INDEBIDOS DETECTADOS CON SU LITERAL DEL BOE (incluye obligatoriamente su literalidad exacta en el apartado 2 para que el alumno vea por qué no tienen relación):\n{citas_erroneas_boe}"
         )
     if siglas_mal:
         instruccion_extra += (
-            f"\n- El alumno usó sin definir antes estas siglas: {', '.join(s for s, _ in siglas_mal)}. "
-            f"Indica que se le han restado {ev_fallback.get('penalizacion_siglas', 0.0):.2f} puntos por no escribir primero el nombre completo de la ley o entidad seguido de 'en adelante, [SIGLA]'."
+            f"\n- SIGLAS USADAS SIN DEFINIR ANTES: {', '.join(s for s, _ in siglas_mal)} (penalización formal de -{ev_fallback.get('penalizacion_siglas', 0.0):.2f} ptos, aclarando que la ley citada sí es correcta)."
         )
 
     prompt = (
         "Actúa como el Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Haz una corrección BREVE, DIRECTA Y ESQUEMÁTICA (máximo 210 palabras en total) comparando la respuesta del alumno ÚNICAMENTE con la RESPUESTA OFICIAL adjunta:\n"
-        f"- Incluye obligatoriamente en el apartado 4 estas puntuaciones exactas por criterio: Criterio 1 (Conocimiento y literalidad) = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 (Estructura y orden de ideas) = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 (Calidad de expresión escrita y siglas) = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10), junto con el motivo exacto de cada punto restado."
+        "Haz una corrección BREVE, DIRECTA Y ESQUEMÁTICA (máximo 220 palabras en total) comparando la respuesta del alumno con la RESPUESTA OFICIAL adjunta:\n"
+        f"- Incluye en el apartado 4 estas puntuaciones exactas por criterio: Criterio 1 (Conocimiento y literalidad) = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 (Estructura y orden de ideas) = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 (Calidad de expresión escrita y siglas) = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10), y detalla una sola vez los puntos restados."
         f"{instruccion_extra}\n\n"
         f"=== EPÍGRAFE ===\n{pregunta}\n\n"
         f"=== RESPUESTA OFICIAL ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
-        "Responde con estos 4 apartados breves:\n"
+        f"=== DESGLOSE AUDITADO DE PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
+        "Responde únicamente con estos 4 apartados breves:\n"
         "1. **✅ Resumen de aciertos frente a la respuesta oficial**\n"
-        "2. **⚖️ Revisión de artículos (con el texto literal si puso alguno improcedente) y uso de siglas**\n"
+        "2. **⚖️ Revisión de artículos (incluyendo la literalidad del BOE de los artículos indebidos si los hay) y uso de siglas**\n"
         "3. **⚠️ Puntos clave omitidos de la respuesta oficial**\n"
         "4. **🎓 Valoración por Criterios Oficiales del Tribunal (Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2], Total sobre 50 y motivos exactos de resta)**"
     )
@@ -2870,7 +2953,6 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -3190,6 +3272,7 @@ elif not st.session_state.finished:
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
 
+                    # TARJETA SUPERIOR RESALTADA CON LA NOTA (SIN REPETIR LA LISTA DE PUNTOS RESTADOS QUE YA VA EN EL PUNTO 4)
                     n50_q = ev.get("nota_50", 0.0)
                     n10_q = ev.get("nota", 0.0)
                     c1_q = ev.get("pts_criterio_1", 0.0)
@@ -3201,17 +3284,8 @@ elif not st.session_state.finished:
                     color_nota = "#15803d" if aprobado_q else "#c2410c"
                     badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
 
-                    motivos_html = ""
-                    if ev.get("motivos_resta"):
-                        items_m = "".join([f"<div style='margin-top:4px; font-size:13.5px; color:#7c2d12 !important;'>{m}</div>" for m in ev["motivos_resta"]])
-                        motivos_html = (
-                            f"<div style='background-color:#ffffff; border-left:4px solid {border_card}; padding:10px 12px; border-radius:6px; margin-top:10px; text-align:left;'>"
-                            f"<div style='font-size:14px; font-weight:700; color:#9a3412 !important; margin-bottom:4px;'>📉 Motivo exacto de los puntos restados / no alcanzados ({50.0 - n50_q:.2f} ptos hasta 50):</div>"
-                            f"{items_m}</div>"
-                        )
-
                     st.markdown(
-                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:16px; margin-top:12px; margin-bottom:12px; text-align:center;'>"
+                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:12px; text-align:center;'>"
                         f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OBTENIDA EN ESTE EPÍGRAFE</div>"
                         f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
                         f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
@@ -3220,7 +3294,6 @@ elif not st.session_state.finished:
                         f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
                         f"<b>Criterio 3 (Expresión y siglas):</b> {c3_q:.2f} / 2,00 ptos"
                         f"</div>"
-                        f"{motivos_html}"
                         f"</div>",
                         unsafe_allow_html=True
                     )
