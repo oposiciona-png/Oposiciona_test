@@ -1279,7 +1279,7 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-d][\)\.-]|[A-D][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # Unir números de pregunta sueltos, pero NUNCA si terminan en coma (ej. "39,")
+        # Unir números de pregunta sueltos, pero NUNCA si son el número de un artículo al final de una frase ("...del artículo" + "149.")
         cleaned_num_lines, k = [], 0
         while k < len(lines):
             curr = lines[k]
@@ -1288,13 +1288,21 @@ class PDFQuizParser:
                 m = k + 1
                 while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
                     m += 1
+                prev_idx = len(cleaned_num_lines) - 1
+                while prev_idx >= 0 and cleaned_num_lines[prev_idx]["text"] == "<NEW_BLOCK>":
+                    prev_idx -= 1
+                prev_termina_en_art = bool(
+                    prev_idx >= 0 and re.search(
+                        r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|cap[íi]tulo|t[íi]tulo|apartado|ordinal|disposici[óo]n)\s*$',
+                        cleaned_num_lines[prev_idx]["text"].strip(),
+                        re.IGNORECASE
+                    )
+                )
                 if cleaned_num_lines and (
+                    prev_termina_en_art or
                     ")" in txt and "(" not in txt and cleaned_num_lines[-1]["text"].count("(") > cleaned_num_lines[-1]["text"].count(")") or
                     (m < len(lines) and re.match(r'^[a-d][\)\.\-](\s|$)', lines[m]["text"].strip(), re.IGNORECASE))
                 ):
-                    prev_idx = len(cleaned_num_lines) - 1
-                    while prev_idx >= 0 and cleaned_num_lines[prev_idx]["text"] == "<NEW_BLOCK>":
-                        prev_idx -= 1
                     if prev_idx >= 0:
                         cleaned_num_lines[prev_idx]["text"] = cleaned_num_lines[prev_idx]["text"].rstrip() + " " + txt
                         k += 1
@@ -1402,7 +1410,7 @@ class PDFQuizParser:
             r_idx += 1
         lines = reordered_lines
 
-        # Unir referencias legales o enumeraciones de artículos ("(artículos 41," + "39, 43, 49, 50)...") partidas entre dos líneas
+        # Unir referencias legales partidas entre dos líneas SOLO si la siguiente línea NO es el enunciado de una nueva pregunta ("3. En el análisis...")
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
@@ -1413,10 +1421,14 @@ class PDFQuizParser:
             ):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
-                if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
-                    curr["text"] = txt + " " + lines[j]["text"].strip()
-                    curr["bold"] = curr["bold"] or lines[j]["bold"]
-                    merged_lines.append(curr); i = j + 1; continue
+                if j < len(lines):
+                    nxt_s = lines[j]["text"].strip()
+                    # Si la línea siguiente tiene formato de nueva pregunta ("3. En el análisis...", "4.- De acuerdo..."), NO unirla jamás
+                    es_inicio_nueva_pregunta = bool(re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', nxt_s))
+                    if re.match(r'^\d+', nxt_s) and not es_inicio_nueva_pregunta:
+                        curr["text"] = txt + " " + nxt_s
+                        curr["bold"] = curr["bold"] or lines[j]["bold"]
+                        merged_lines.append(curr); i = j + 1; continue
             merged_lines.append(curr); i += 1
         lines = merged_lines
 
@@ -1438,14 +1450,12 @@ class PDFQuizParser:
             )
 
         def match_q_num(s):
-            # Si empieza por una lista de números separados por comas ("39, 43, 49, 50)...") NUNCA es un número de pregunta
             if re.match(r'^\s*\d{1,3}\s*,\s*\d{1,3}\b', s):
                 return None
             if re.match(r'^\s*\d{1,4}[\.\-\),\s]+(?:de\s+enero|de\s+febrero|de\s+marzo|de\s+abril|de\s+mayo|de\s+junio|de\s+julio|de\s+agosto|de\s+septiembre|de\s+octubre|de\s+noviembre|de\s+diciembre|meses|años|días|horas|euros|por\s+ciento|y\s+\d+|del\s+t[íi]tulo|del\s+art[íi]culo|del\s+real|de\s+la\s+ley)\b', s, re.IGNORECASE):
                 return None
             if re.match(r'^\s*(?:19\d\d|20\d\d)\b', s):
                 return None
-            # NUNCA permitir la coma ',' como separador de número de pregunta (solo '.', '-', ')', ':')
             return (
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)[\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
@@ -1498,12 +1508,15 @@ class PDFQuizParser:
 
             if m_num and current_q and current_q["state"] == "E":
                 exp_so_far = current_q["explanation"].strip()
-                if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', exp_so_far[-60:], re.IGNORECASE):
+                # Solo anular m_num si NO empieza como un enunciado de pregunta real ("3. En el análisis...", "4.- De acuerdo...")
+                parece_enunciado_real = bool(re.match(r'^\s*(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', text))
+                if not parece_enunciado_real and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', exp_so_far[-60:], re.IGNORECASE):
                     m_num = None
-                elif exp_so_far.endswith(','):
+                elif exp_so_far.endswith(',') and not parece_enunciado_real:
                     m_num = None
                 elif (
-                    exp_so_far.count("«") > exp_so_far.count("»")
+                    not parece_enunciado_real
+                    and exp_so_far.count("«") > exp_so_far.count("»")
                     and not exp_so_far.endswith('.')
                     and not re.search(r'\(p[aá]ginas?\s+\d+', exp_so_far[-80:], re.IGNORECASE)
                 ):
