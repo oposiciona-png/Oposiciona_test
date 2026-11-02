@@ -1889,7 +1889,7 @@ def _dividir_en_oraciones_juridicas(texto):
     return unidades
 
 NOTA_METODOLOGICA_PREPARADORES = (
-    "ℹ️ *Nota metodológica sobre la calificación:* Aunque los bloques de valoración (Conocimiento y normativa [0-45 ptos], "
+    "ℹ️ <b>Nota metodológica sobre la calificación:</b> Aunque los bloques de valoración (Conocimiento y normativa [0-45 ptos], "
     "Orden de ideas [0-3 ptos] y Expresión escrita [0-2 ptos]) responden íntegramente a los criterios oficiales publicados por el Tribunal Calificador, "
     "el baremo interno de ponderación y las deducciones por omisión son una metodología propia y exclusiva de tus preparadores de Oposiciona "
     "diseñada para entrenarte con el máximo nivel de exigencia, por lo que la puntuación aquí obtenida puede diferir de la calificación final que otorgue el Tribunal."
@@ -2613,10 +2613,10 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
     """
-    Genera una evaluación ágil y directa sin enumerar los apartados acertados,
-    incluyendo el aviso metodológico inicial y la orientación de los preparadores.
+    Genera una evaluación ágil y directa sin enumerar los apartados acertados
+    y con la orientación final de los preparadores (la nota metodológica se pinta aparte en su recuadro gris).
     """
-    bloques = [NOTA_METODOLOGICA_PREPARADORES]
+    bloques = []
     tot_ideas = len(ev["puntos_cubiertos"]) + len(ev["puntos_omitidos"])
 
     # 1. Balance sintético de cobertura (sin listar los apartados acertados para no alargar)
@@ -2742,8 +2742,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         f"=== APARTADOS DEL RESUMEN OMITIDOS (-1,00 PTO C/U) ===\n{omitidos_lista}\n\n"
         f"=== REFERENCIAS NORMATIVAS OBLIGATORIAS OMITIDAS (-0,50 PTOS C/U) ===\n{citas_faltan_lista}\n\n"
         f"=== DESGLOSE DE PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
-        "Estructura tu respuesta comenzando con la nota metodológica en cursiva y luego estos 4 apartados exactos:\n"
-        f"{NOTA_METODOLOGICA_PREPARADORES}\n\n"
+        "Estructura tu respuesta únicamente con estos 4 apartados exactos (NO incluyas nota metodológica previa porque ya se muestra en un recuadro aparte):\n"
         "1. **✅ Balance de cobertura del resumen oficial** (solo 1 frase indicando cuántos apartados de los totales ha cubierto, SIN listar los apartados acertados)\n"
         "2. **⚠️ Apartados y datos del resumen omitidos (-1,00 pto por apartado)**\n"
         "3. **⚖️ Auditoría de referencias legales (-0,50 ptos si se omiten), artículos indebidos (con literal del BOE) y siglas (-0,25 ptos c/u)**\n"
@@ -2758,8 +2757,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             if r.status_code == 200:
                 data = r.json()
                 texto_ia = data["candidates"][0]["content"]["parts"][0]["text"]
-                if "Nota metodológica" not in texto_ia:
-                    texto_ia = NOTA_METODOLOGICA_PREPARADORES + "\n\n" + texto_ia
+                texto_ia = re.sub(r'^ℹ️\s*\*?Nota metodológica.*?\n+', '', texto_ia.strip(), flags=re.IGNORECASE)
                 return texto_ia
         except Exception:
             continue
@@ -3466,7 +3464,7 @@ elif not st.session_state.finished:
             exp_of = (q.get("explanation") or "").strip()
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
             if not txt_alumno:
-                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que el Tribunal Evaluador analice qué te falta.")
+                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que tus preparadores analicen qué te falta.")
             else:
                 aviso_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(txt_alumno)
                 if aviso_inapropiado:
@@ -3489,7 +3487,6 @@ elif not st.session_state.finished:
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
 
-                    # TARJETA SUPERIOR RESALTADA CON LA NOTA (SIN REPETIR LA LISTA DE PUNTOS RESTADOS QUE YA VA EN EL PUNTO 4)
                     n50_q = ev.get("nota_50", 0.0)
                     n10_q = ev.get("nota", 0.0)
                     c1_q = ev.get("pts_criterio_1", 0.0)
@@ -3502,7 +3499,7 @@ elif not st.session_state.finished:
                     badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
 
                     st.markdown(
-                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:12px; text-align:center;'>"
+                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
                         f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OBTENIDA EN ESTE EPÍGRAFE</div>"
                         f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
                         f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
@@ -3511,6 +3508,14 @@ elif not st.session_state.finished:
                         f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
                         f"<b>Criterio 3 (Expresión y siglas):</b> {c3_q:.2f} / 2,00 ptos"
                         f"</div>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    # CUADRO GRIS CON LETRA MÁS PEQUEÑA PARA LA NOTA METODOLÓGICA INTRODUCTORIA
+                    st.markdown(
+                        f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
+                        f"{NOTA_METODOLOGICA_PREPARADORES}"
                         f"</div>",
                         unsafe_allow_html=True
                     )
@@ -3532,10 +3537,18 @@ elif not st.session_state.finished:
                         )
                     if exp_of:
                         eh = PDFQuizParser.renderizar_explicacion_html(exp_of, etiqueta_tema)
-                        titulo_exp = f"📖 Texto Oficial del Epígrafe ({etiqueta_tema}):" if q.get("tipo_abierta") == "DESARROLLO" else "📖 Explicación y Fundamentación Legal:"
+                        if q.get("tipo_abierta") == "DESARROLLO":
+                            cabecera_exp_html = (
+                                f"<div style='font-size: 15.5px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
+                                f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 8px; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{etiqueta_tema}</div>"
+                            )
+                        else:
+                            cabecera_exp_html = (
+                                f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>📖 Explicación y Fundamentación Legal:</div>"
+                            )
                         st.markdown(
                             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 16px 18px; border-radius: 6px; margin-top: 10px;'>"
-                            f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{titulo_exp}</div>"
+                            f"{cabecera_exp_html}"
                             f"<div style='font-size: 14.5px; color: #0c5460 !important;'>{eh}</div></div>",
                             unsafe_allow_html=True
                         )
@@ -3764,11 +3777,15 @@ else:
 
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
-        co = (q.get('answer_text') or "Ver texto íntegro del epígrafe debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
+        co = (q.get('answer_text') or "Ver texto mínimo del epígrafe debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
         if q.get("tipo_abierta") == "DESARROLLO":
             eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema_fin)
+            cabecera_res_html = (
+                f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
+                f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
+            )
         else:
             et_limpia = PDFQuizParser._limpiar_cabeceras_incrustadas(et, etiqueta_tema_fin)
             lineas_res_limpias = [
@@ -3776,6 +3793,7 @@ else:
                 if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip(), etiqueta_tema_fin)
             ]
             eh = "".join([f"<div style='margin-top: 6px; margin-bottom: 4px; line-height: 1.45; color: #0c5460 !important;'>{p}</div>" for p in lineas_res_limpias])
+            cabecera_res_html = "<div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>📖 Explicación:</div>"
         ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>" if q.get('preamble') else ""
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
@@ -3784,7 +3802,7 @@ else:
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>{'Epígrafe' if q.get('tipo_abierta') == 'DESARROLLO' else 'Pregunta'}:</b> {q['question_text']}</div>"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
-            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px 16px; border-radius: 6px; margin-bottom: 6px;'><div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>{'Texto íntegro del Epígrafe:' if q.get('tipo_abierta') == 'DESARROLLO' else 'Explicación:'}</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
+            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px 16px; border-radius: 6px; margin-bottom: 6px;'>{cabecera_res_html}<div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
             f"</div>",
             unsafe_allow_html=True
         )
@@ -3804,3 +3822,4 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
