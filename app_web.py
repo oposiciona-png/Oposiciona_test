@@ -1205,7 +1205,6 @@ class PDFQuizParser:
                                     detected_gestion_header = True
                             line_text = re.sub(r'<{2,}', '«', line_text)
                             line_text = re.sub(r'>{2,}', '»', line_text)
-                            # Evitar transformar signos matemáticos como (<65%) en comillas « sin cierre
                             line_text = re.sub(r'<(?=[A-ZÁÉÍÓÚÑa-záéíóúñ"«])', '«', line_text)
                             line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z])>', '»', line_text)
                             line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
@@ -1280,11 +1279,12 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-d][\)\.-]|[A-D][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
+        # Unir números de pregunta sueltos, pero NUNCA si terminan en coma (ej. "39,")
         cleaned_num_lines, k = [], 0
         while k < len(lines):
             curr = lines[k]
             txt = curr["text"].strip()
-            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\):]+$', txt, re.IGNORECASE):
+            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+$', txt, re.IGNORECASE):
                 m = k + 1
                 while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
                     m += 1
@@ -1301,7 +1301,7 @@ class PDFQuizParser:
                         continue
                 if m < len(lines):
                     next_txt = lines[m]["text"].strip()
-                    if re.match(r'^(?:Pregunta\s+)?\d{1,3}[,\.\-\):]+(\s|$)', next_txt, re.IGNORECASE):
+                    if re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+(\s|$)', next_txt, re.IGNORECASE):
                         k = m
                         continue
                     else:
@@ -1321,7 +1321,6 @@ class PDFQuizParser:
                 while n_b < len(lines) and lines[n_b]["text"] == "<NEW_BLOCK>":
                     n_b += 1
                 if n_b < len(lines) and re.match(r'^b[\)\.\-]\s*$', lines[n_b]["text"].strip(), re.IGNORECASE):
-                    # Comprobar si también hay una 'c)' suelta inmediatamente después (como en la pregunta 7 del Tema 02A)
                     n_c = n_b + 1
                     while n_c < len(lines) and lines[n_c]["text"] == "<NEW_BLOCK>":
                         n_c += 1
@@ -1403,11 +1402,15 @@ class PDFQuizParser:
             r_idx += 1
         lines = reordered_lines
 
+        # Unir referencias legales o enumeraciones de artículos ("(artículos 41," + "39, 43, 49, 50)...") partidas entre dos líneas
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', txt, re.IGNORECASE):
+            if txt != "<NEW_BLOCK>" and (
+                re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', txt, re.IGNORECASE) or
+                re.search(r'\b(?:art[íi]culos?|arts\.)\s+\d+(?:\s*,\s*\d+)*\s*,\s*$', txt, re.IGNORECASE)
+            ):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines) and re.match(r'^\d+', lines[j]["text"].strip()):
@@ -1435,14 +1438,18 @@ class PDFQuizParser:
             )
 
         def match_q_num(s):
+            # Si empieza por una lista de números separados por comas ("39, 43, 49, 50)...") NUNCA es un número de pregunta
+            if re.match(r'^\s*\d{1,3}\s*,\s*\d{1,3}\b', s):
+                return None
             if re.match(r'^\s*\d{1,4}[\.\-\),\s]+(?:de\s+enero|de\s+febrero|de\s+marzo|de\s+abril|de\s+mayo|de\s+junio|de\s+julio|de\s+agosto|de\s+septiembre|de\s+octubre|de\s+noviembre|de\s+diciembre|meses|años|días|horas|euros|por\s+ciento|y\s+\d+|del\s+t[íi]tulo|del\s+art[íi]culo|del\s+real|de\s+la\s+ley)\b', s, re.IGNORECASE):
                 return None
             if re.match(r'^\s*(?:19\d\d|20\d\d)\b', s):
                 return None
+            # NUNCA permitir la coma ',' como separador de número de pregunta (solo '.', '-', ')', ':')
             return (
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[,\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[,\.\-\):]+(?![\dºª°])\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'\[\(])', s) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
+                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[\.\-\):]+(?![\dºª°])\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'\[\(])', s) or
                 re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', s, re.IGNORECASE)
             )
 
@@ -1492,6 +1499,8 @@ class PDFQuizParser:
             if m_num and current_q and current_q["state"] == "E":
                 exp_so_far = current_q["explanation"].strip()
                 if re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', exp_so_far[-60:], re.IGNORECASE):
+                    m_num = None
+                elif exp_so_far.endswith(','):
                     m_num = None
                 elif (
                     exp_so_far.count("«") > exp_so_far.count("»")
@@ -1555,8 +1564,6 @@ class PDFQuizParser:
                         prev_closed_with_pageref = bool(current_q and current_q["state"] == "E" and re.search(r'\(p[aá]ginas?\s+\d+', current_q["explanation"], re.IGNORECASE))
                         if current_q is None:
                             is_new_q, expected_q_num = True, num + 1
-                        elif pdf_uses_explicit_exp and current_q["state"] in ["O", "E"] and 1 <= num <= 250:
-                            is_new_q, expected_q_num = True, num + 1
                         elif expected_q_num - 1 <= num <= expected_q_num + 15:
                             is_new_q, expected_q_num = True, num + 1
                         elif num in [1, 2] and current_q["state"] in ["O", "E"] and expected_q_num >= 5:
@@ -1567,12 +1574,12 @@ class PDFQuizParser:
                         is_new_q = True; expected_q_num += 1
 
             if is_new_q:
-                ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+\s*¿', '¿', re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\):]+\s*(-*\s*)?', '', text, flags=re.IGNORECASE), flags=re.IGNORECASE)
+                ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+\s*¿', '¿', re.sub(r'^\s*(?:Pregunta\s+)?\d+[\.\-\):]+\s*(-*\s*)?', '', text, flags=re.IGNORECASE), flags=re.IGNORECASE)
                 if m_rescue and current_q and current_q["state"] == "E" and current_q["explanation"]:
                     exp_parts = current_q["explanation"].rstrip().split("\n\n")
                     last_part = exp_parts[-1].strip()
                     if last_part.endswith(",") and len(last_part) < 180:
-                        ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+[,\.\-\):]*\s*', '', last_part, flags=re.IGNORECASE) + " " + ct
+                        ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+[\.\-\):]*\s*', '', last_part, flags=re.IGNORECASE) + " " + ct
                         current_q["explanation"] = "\n\n".join(exp_parts[:-1]).strip()
                 if current_q and current_q["options"]: questions.append(current_q)
                 current_q, preamble = {"preamble": preamble.strip(), "question_text": ct, "options": [], "answer": -1, "explanation": "", "state": "Q"}, ""
@@ -1680,7 +1687,6 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 2 ===
-
 
 
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
