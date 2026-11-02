@@ -1856,8 +1856,6 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
 def _dividir_en_oraciones_juridicas(texto):
     """
     Extrae todas las unidades conceptuales y proposiciones jurídicas del resumen oficial.
-    Dado que el texto del PDF es un resumen de alta densidad, cada viñeta, definición y oración
-    constituye un bloque esencial que el alumno debe cubrir (aunque sea con sus propias palabras).
     """
     if not texto:
         return []
@@ -1874,7 +1872,6 @@ def _dividir_en_oraciones_juridicas(texto):
         p_rest = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', p_rest).strip()
         if PDFQuizParser._es_basura_cabecera_o_pie(p_rest):
             continue
-        # Ignorar los simples títulos cortos de sección (ej. "1. Concepto y Naturaleza Jurídica") para evaluar las ideas reales
         if re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', p_rest) and len(p_rest) < 85 and not p_rest.endswith('.'):
             continue
         if len(p_rest) >= 25:
@@ -1884,65 +1881,218 @@ def _dividir_en_oraciones_juridicas(texto):
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 - Cada parte se califica de 0 a 50 puntos (mínimo 25 puntos directos para superar sin compensación).
-- Criterio 1 (0 a 45 puntos): Conocimiento completo de todos los puntos del epígrafe (el resumen oficial es el mínimo exigible, admitiéndose distinta redacción siempre que se recoja todo el contenido sustancial) e inclusión obligatoria de artículos y leyes de aplicación.
+- Criterio 1 (0 a 45 puntos): Conocimiento completo de todos los apartados del epígrafe e inclusión obligatoria de las leyes y artículos aplicables. Cada apartado del resumen omitido y cada referencia legal obligatoria omitida puntúan negativamente restando puntos de la nota alcanzada.
 - Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura (solo puntúa si alcanza al menos 20/45 en Criterio 1).
 - Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la introducción de siglas/abreviaturas ("...en adelante, XXXX").
 """
 
-# Mapa de artículos y normas recomendadas por materia (para guiar al opositor cuando no cita normativa suficiente
-# y para validar como correctos los preceptos conexos que añada)
-ARTICULOS_CONEXOS_POR_MATERIA = [
+# AUDITOR EXPERTO POR EPÍGRAFE CONCRETO:
+# Define para cada epígrafe qué leyes y artículos son de cita obligatoria ante el Tribunal (aunque el resumen del PDF no los mencione literalmente)
+# y qué artículos conexos son válidos. Omitir las referencias obligatorias del epígrafe resta puntos directamente.
+AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
     {
-        "keywords": ["afiliacion", "altas", "bajas", "convenio especial", "inscripcion", "pluriempleo", "pluriactividad", "asimilada", "cuenta de cotizacion", "mutua"],
-        "articulos_validos": {
-            "7", "8", "12", "15", "16", "17", "21", "29", "30", "31", "32", "33", "35", "36", "37", "38",
-            "136", "138", "139", "140", "144", "165", "166", "250", "252", "253", "305"
-        },
-        "normativa_exigible_sugerida": "arts. 15, 16, 17, 138, 139, 140 y 166 del Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015), Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas) y Orden TAS/2865/2003 (Convenio Especial)"
+        "nombre_epigrafe": "Constitución Española y Seguridad Social (Tema 51 - Ep. 1)",
+        "match_keywords": ["constitucion", "modelo constitucional", "pacto de toledo", "competencias"],
+        "obligatorios": [
+            ("ART_41", ["41"], "Artículo 41 de la Constitución Española (régimen público de Seguridad Social)"),
+            ("ART_149", ["149"], "Artículo 149.1.17.ª de la Constitución Española (competencia exclusiva del Estado en legislación básica y régimen económico)"),
+            ("NORMA_CE", ["constitucion", "ce"], "Constitución Española de 1978"),
+        ],
+        "articulos_validos": {"1", "2", "14", "39", "41", "42", "43", "49", "50", "53", "82", "86", "129", "149"}
     },
     {
-        "keywords": ["constitucion", "refundido", "estructura", "41", "149", "toledo", "fuentes"],
-        "articulos_validos": {
-            "1", "2", "3", "4", "5", "6", "7", "9", "10", "14", "39", "41", "42", "43", "49", "50", "53",
-            "82", "86", "129", "136", "149", "262", "305", "327", "351", "373"
-        },
-        "normativa_exigible_sugerida": "arts. 41, 50, 53, 129 y 149.1.17.ª de la Constitución Española y arts. 1, 2, 3 y estructura de los Títulos I a VI del Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015)"
+        "nombre_epigrafe": "El Texto Refundido de la Ley General de la Seguridad Social: estructura y contenido (Tema 51 - Ep. 2)",
+        "match_keywords": ["texto refundido", "estructura y contenido", "seis titulos", "titulo i", "titulo ii"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015, de 30 de octubre (TRLGSS)"),
+            ("ART_1_2", ["1", "2"], "Artículos 1 y 2 del TRLGSS (derecho y principios del sistema)"),
+            ("ESTRUCTURA_TITULOS", ["titulo i", "titulo ii", "titulo iii", "136", "262", "305"], "Estructura en Títulos del TRLGSS (Títulos I a VI)"),
+        ],
+        "articulos_validos": {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "82", "136", "261", "262", "304", "305", "326", "327", "350", "351", "373"}
     },
     {
-        "keywords": ["campo de aplicacion", "composicion", "regimen general", "regimenes especiales", "exclusiones", "familiares"],
-        "articulos_validos": {
-            "1", "2", "7", "8", "9", "10", "11", "12", "136", "137", "250", "252", "305", "306"
-        },
-        "normativa_exigible_sugerida": "arts. 7, 8, 9, 10, 12, 136 y 137 del Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015)"
+        "nombre_epigrafe": "Campo de aplicación y composición del Sistema de la Seguridad Social (Tema 52)",
+        "match_keywords": ["campo de aplicacion", "composicion del sistema", "universalidad", "modalidad contributiva", "regimen general y regimenes especiales", "familiares"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_7", ["7"], "Artículo 7 del TRLGSS (extensión del campo de aplicación)"),
+            ("ART_9_10", ["9", "10"], "Artículos 9 y 10 del TRLGSS (composición del sistema: Régimen General y Regímenes Especiales)"),
+            ("ART_12_136", ["12", "136", "137"], "Artículos 12 (familiares) o 136-137 (inclusiones y exclusiones del Régimen General) del TRLGSS"),
+        ],
+        "articulos_validos": {"1", "2", "7", "8", "9", "10", "11", "12", "136", "137", "250", "252", "305"}
     },
     {
-        "keywords": ["accion protectora", "prestaciones", "requisitos", "responsabilidad", "revalorizacion", "incompatibilidad", "prescripcion", "caducidad"],
-        "articulos_validos": {
-            "42", "43", "44", "45", "46", "47", "53", "54", "55", "56", "57", "58", "59", "60",
-            "163", "164", "165", "166", "167", "168"
-        },
-        "normativa_exigible_sugerida": "arts. 42 a 60 y arts. 163 a 168 del Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015)"
+        "nombre_epigrafe": "Normas sobre afiliación (Tema 53 - Ep. 1)",
+        "match_keywords": ["normas sobre afiliacion", "unicidad registral", "vitaliedad", "afiliaciones indebidas", "acto administrativo esencial e inicial"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("NORMA_RD84", ["84/1996"], "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas)"),
+            ("ART_15", ["15"], "Artículo 15 del TRLGSS (obligatoriedad y caracteres de la afiliación)"),
+            ("ART_16", ["16", "17"], "Artículos 16 y 17 del TRLGSS (formas de promover la afiliación: a instancia del empresario, del trabajador o de oficio)"),
+        ],
+        "articulos_validos": {"7", "8", "12", "15", "16", "17", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "136", "138", "139", "140"}
     },
     {
-        "keywords": ["incapacidad temporal", "nacimiento", "cuidado de menor", "corresponsabilidad", "riesgo", "embarazo", "lactancia", "incapacidad permanente", "jubilacion", "muerte", "supervivencia", "viudedad", "orfandad"],
-        "articulos_validos": {
-            "169", "170", "171", "172", "173", "174", "175", "176", "177", "178", "179", "180", "181", "182",
-            "183", "184", "185", "186", "187", "188", "189", "190", "191", "192", "193", "194", "195", "196",
-            "197", "198", "199", "200", "201", "202", "203", "204", "205", "206", "207", "208", "209", "210",
-            "211", "212", "213", "214", "215", "216", "217", "218", "219", "220", "221", "222", "223", "224",
-            "225", "226", "227", "228", "229", "230", "231", "232", "233", "234"
-        },
-        "normativa_exigible_sugerida": "preceptos reguladores de la prestación correspondiente en el Título II del Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015)"
+        "nombre_epigrafe": "Altas y bajas en el Régimen General: procedimiento y efectos (Tema 53 - Ep. 2)",
+        "match_keywords": ["altas y bajas en el regimen general", "pluriempleo", "pluriactividad", "modalidades de alta", "alta real", "alta especial", "sistema red"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("NORMA_RD84", ["84/1996"], "Real Decreto 84/1996 (Reglamento General de afiliación, altas y bajas)"),
+            ("ART_138_140", ["138", "139", "140"], "Artículos 138 a 140 del TRLGSS (altas, bajas y efectos en el Régimen General)"),
+            ("ART_7_16", ["7", "15", "16", "29", "30", "31", "32", "35"], "Preceptos concordantes del TRLGSS (arts. 7, 15, 16) o del RD 84/1996 (arts. 29 a 35 sobre procedimiento, plazos y efectos de altas/bajas)"),
+        ],
+        "articulos_validos": {"7", "8", "12", "15", "16", "17", "29", "30", "31", "32", "33", "35", "36", "37", "38", "136", "138", "139", "140", "144", "165", "166"}
     },
     {
-        "keywords": ["cotizacion", "base de cotizacion", "topes", "recaudacion", "aplazamiento", "recargo", "cuota"],
-        "articulos_validos": {
-            "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34",
-            "141", "142", "143", "144", "145", "146", "147", "148", "149", "150", "151", "152", "153"
-        },
-        "normativa_exigible_sugerida": "arts. 18 a 34 y arts. 141 a 153 del Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015), Real Decreto 2064/1995 y Real Decreto 1415/2004"
-    }
+        "nombre_epigrafe": "El Convenio Especial y otras situaciones asimiladas a la del alta (Tema 53 - Ep. 3)",
+        "match_keywords": ["convenio especial", "situaciones asimiladas", "situacion asimilada", "1.080", "1080", "0,94", "cuidadores no profesionales"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_165_166", ["165", "166"], "Artículos 165.1 y 166 del TRLGSS (requisito de alta y situaciones asimiladas a la de alta)"),
+            ("NORMA_CONVENIO", ["2865/2003", "84/1996", "36"], "Orden TAS/2865/2003 (reguladora del Convenio Especial) o art. 36 del Real Decreto 84/1996"),
+        ],
+        "articulos_validos": {"15", "16", "36", "51", "138", "139", "140", "165", "166", "267", "305"}
+    },
+    {
+        "nombre_epigrafe": "Encuadramiento e inscripción de empresas (Tema 53 - Ep. 4)",
+        "match_keywords": ["inscripcion de empresas", "codigo de cuenta de cotizacion", "documento de asociacion", "registro de empresarios", "mutua colaboradora"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("NORMA_RD84", ["84/1996"], "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas)"),
+            ("ART_138_139", ["138", "139", "10", "11", "14"], "Artículos 138 y 139 del TRLGSS (o arts. 5 y 10 a 19 del RD 84/1996 sobre inscripción de empresas, CCC y registro de empresarios)"),
+        ],
+        "articulos_validos": {"5", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "21", "80", "83", "136", "138", "139", "140"}
+    },
+    {
+        "nombre_epigrafe": "Acción protectora y requisitos generales de las prestaciones (Temas 55 y 56)",
+        "match_keywords": ["accion protectora", "clasificacion de las prestaciones", "requisitos generales", "revalorizacion", "prescripcion", "caducidad", "responsabilidad en orden a las prestaciones", "reintegro"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_42_60", ["42", "43", "44", "46", "53", "54", "55", "58"], "Artículos 42 a 60 del TRLGSS (acción protectora, caracteres de las prestaciones, prescripción, caducidad y revalorización)"),
+            ("ART_165_167", ["165", "166", "167", "168"], "Artículos 165 a 168 del TRLGSS (requisitos generales del derecho a las prestaciones y responsabilidad empresarial)"),
+        ],
+        "articulos_validos": {"42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "163", "164", "165", "166", "167", "168"}
+    },
+    {
+        "nombre_epigrafe": "Incapacidad Temporal (Tema 57)",
+        "match_keywords": ["incapacidad temporal", "situaciones determinantes", "365 dias", "180 dias", "carencia", "pago delegado", "parte medico"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_169_170", ["169", "170"], "Artículos 169 y 170 del TRLGSS (concepto, situaciones especiales y duración/prórroga de la IT)"),
+            ("ART_171_175", ["171", "172", "173", "174", "175"], "Artículos 171 a 175 del TRLGSS (cuantía, período de carencia de 180 días, nacimiento, pago y extinción del subsidio de IT)"),
+        ],
+        "articulos_validos": {"144", "165", "166", "169", "170", "171", "172", "173", "174", "175", "176"}
+    },
+    {
+        "nombre_epigrafe": "Nacimiento y cuidado de menor, corresponsabilidad y riesgo durante el embarazo/lactancia (Tema 58)",
+        "match_keywords": ["nacimiento y cuidado", "corresponsabilidad", "riesgo durante el embarazo", "riesgo durante la lactancia", "16 semanas", "progenitor", "lactante"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_177_182", ["177", "178", "179", "180", "181", "182"], "Artículos 177 a 182 del TRLGSS (nacimiento y cuidado de menor)"),
+            ("ART_183_189", ["183", "184", "185", "186", "187", "188", "189"], "Artículos 183 a 189 del TRLGSS (corresponsabilidad en el cuidado del lactante y riesgo durante el embarazo y la lactancia natural)"),
+        ],
+        "articulos_validos": {"165", "166", "177", "178", "179", "180", "181", "182", "183", "184", "185", "186", "187", "188", "189", "190", "191", "192"}
+    },
+    {
+        "nombre_epigrafe": "Incapacidad Permanente y Lesiones Permanentes No Invalidantes (Tema 60)",
+        "match_keywords": ["incapacidad permanente", "parcial", "total", "absoluta", "gran invalidez", "lesiones permanentes no invalidantes", "baremo", "calificacion y revision"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_193_194", ["193", "194"], "Artículos 193 y 194 del TRLGSS (concepto y grados de incapacidad permanente)"),
+            ("ART_195_200", ["195", "196", "197", "198", "200", "201", "202", "203"], "Artículos 195 a 203 del TRLGSS (beneficiarios, cuantía, base reguladora, compatibilidades, calificación/revisión y lesiones permanentes no invalidantes)"),
+        ],
+        "articulos_validos": {"165", "166", "193", "194", "195", "196", "197", "198", "199", "200", "201", "202", "203"}
+    },
+    {
+        "nombre_epigrafe": "Jubilación en el Régimen General (Tema 61)",
+        "match_keywords": ["jubilacion", "hecho causante", "15 años", "base reguladora", "jubilacion anticipada", "jubilacion parcial", "jubilacion activa", "demorada"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_204_206", ["204", "205", "206"], "Artículos 204 a 206 del TRLGSS (concepto, beneficiarios, edad ordinaria y coeficientes reductores)"),
+            ("ART_207_215", ["207", "208", "209", "210", "213", "214", "215"], "Artículos 207 a 215 del TRLGSS (jubilación anticipada, base reguladora, cuantía, incompatibilidades y jubilación activa/parcial)"),
+        ],
+        "articulos_validos": {"165", "166", "204", "205", "206", "207", "208", "209", "210", "211", "212", "213", "214", "215"}
+    },
+    {
+        "nombre_epigrafe": "Muerte y Supervivencia (Tema 62)",
+        "match_keywords": ["muerte y supervivencia", "auxilio por defuncion", "viudedad", "orfandad", "favor de familiares", "pareja de hecho", "sujetos causantes"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_216_217", ["216", "217"], "Artículos 216 y 217 del TRLGSS (prestaciones por muerte y supervivencia y sujetos causantes)"),
+            ("ART_219_226", ["219", "220", "221", "224", "225", "226", "227"], "Artículos 219 a 227 del TRLGSS (pensión de viudedad, pareja de hecho, orfandad, prestaciones en favor de familiares e indemnizaciones a tanto alzado)"),
+        ],
+        "articulos_validos": {"165", "166", "216", "217", "218", "219", "220", "221", "222", "223", "224", "225", "226", "227", "228", "229", "230", "231", "232", "233", "234"}
+    },
+    {
+        "nombre_epigrafe": "Cotización y Recaudación en el Régimen General (Tema 67)",
+        "match_keywords": ["cotizacion", "base de cotizacion", "topes maximo y minimo", "horas extraordinarias", "liquidacion", "recaudacion", "recargo"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("NORMA_RD2064", ["2064/1995", "297/2026"], "Real Decreto 2064/1995 (Reglamento General sobre Cotización y Liquidación) u Orden anual de cotización"),
+            ("ART_18_19", ["18", "19", "20"], "Artículos 18 a 20 del TRLGSS (obligatoriedad, bases, tipos y beneficios en la cotización)"),
+            ("ART_141_148", ["141", "142", "143", "144", "147", "148", "151"], "Artículos 141 a 151 del TRLGSS (sujetos obligados y responsables, duración de la obligación de cotizar, determinación de la base de cotización del art. 147 y topes del art. 148)"),
+        ],
+        "articulos_validos": {"18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "141", "142", "143", "144", "145", "146", "147", "148", "149", "150", "151", "152", "153"}
+    },
+    {
+        "nombre_epigrafe": "Sistemas Especiales Agrario (SEA) y Empleados de Hogar (SEEH) (Tema 73)",
+        "match_keywords": ["empleados de hogar", "hogar familiar", "trabajadores por cuenta ajena agrarios", "jornadas reales", "inactividad", "sistemas especiales"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_250_256", ["250", "251", "252", "253", "254", "255", "256", "136", "1620/2011", "28/2011", "27/2011"], "Artículos 250-251 (SEEH) o 252-256 (SEA) del TRLGSS y sus leyes de integración (Ley 27/2011, Ley 28/2011, RD 1620/2011)"),
+        ],
+        "articulos_validos": {"7", "10", "11", "12", "15", "16", "136", "151", "167", "169", "197", "209", "250", "251", "252", "253", "254", "255", "256", "267", "284"}
+    },
+    {
+        "nombre_epigrafe": "RETA, SETA y Régimen Especial de Trabajadores del Mar (Tema 74)",
+        "match_keywords": ["autonomos", "cuenta propia", "reta", "seta", "trabajadores del mar", "maritimo", "ingresos reales", "cese de actividad"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+            ("ART_305_326", ["305", "306", "307", "308", "313", "324", "327", "47/2015", "20/2007", "13/2022"], "Artículos 305 a 326 del TRLGSS (RETA y SETA), Ley 20/2007 (LETA), RDL 13/2022 o Ley 47/2015 (Régimen Especial del Mar)"),
+        ],
+        "articulos_validos": {"7", "10", "12", "305", "306", "307", "308", "309", "310", "311", "312", "313", "314", "315", "316", "317", "318", "319", "320", "321", "322", "323", "324", "325", "326", "327", "328", "329", "330"}
+    },
+    {
+        "nombre_epigrafe": "Minería del Carbón, Seguro Escolar y Regímenes Especiales de Funcionarios (Tema 75)",
+        "match_keywords": ["mineria del carbon", "seguro escolar", "clases pasivas", "muface", "isfas", "mugeju", "funcionarios"],
+        "obligatorios": [
+            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido", "29/1975", "670/1987", "298/1973"], "Real Decreto Legislativo 8/2015 (TRLGSS) y normativa específica del Régimen Especial (Decreto 298/1973 Minería del Carbón, Ley de 17/07/1953 Seguro Escolar, RDL 4/2000 MUFACE o RDL 670/1987 Clases Pasivas)"),
+        ],
+        "articulos_validos": {"7", "9", "10", "136"}
+    },
 ]
+
+def auditar_normativa_obligatoria_del_epigrafe(texto_alumno_norm, arts_en_alumno, contexto_epigrafe_norm, citas_ok_directas, citas_faltan_directas):
+    """
+    Actúa como auditor experto del epígrafe concreto:
+    Comprueba si el alumno ha citado los artículos y leyes troncales que el Tribunal exige en este epígrafe concreto,
+    devolviendo tanto los preceptos acertados como los preceptos obligatorios omitidos (que restan puntos).
+    """
+    acertados_oblig = list(citas_ok_directas)
+    omitidos_oblig = list(citas_faltan_directas)
+
+    for reg in AUDITORIA_NORMATIVA_POR_EPIGRAFE:
+        if any(kw in contexto_epigrafe_norm for kw in reg["match_keywords"]):
+            for cod_ob, tokens_validos, desc_ob in reg["obligatorios"]:
+                cumplido = False
+                for tk in tokens_validos:
+                    if tk.isdigit():
+                        if tk in arts_en_alumno or re.search(rf'\bart(?:iculos?|\.|s\.?)?\s*{tk}\b', texto_alumno_norm):
+                            cumplido = True
+                            break
+                    else:
+                        if tk in texto_alumno_norm:
+                            cumplido = True
+                            break
+                if cumplido:
+                    if not any(desc_ob[:18].lower() in x.lower() for x in acertados_oblig):
+                        acertados_oblig.append(desc_ob)
+                else:
+                    if not any(desc_ob[:18].lower() in x.lower() for x in omitidos_oblig):
+                        omitidos_oblig.append(desc_ob)
+            break
+
+    return acertados_oblig, omitidos_oblig
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_literal_boe_o_fuentes(num_art_str, id_boe="BOE-A-2015-11724"):
@@ -2000,11 +2150,6 @@ def consultar_literal_boe_o_fuentes(num_art_str, id_boe="BOE-A-2015-11724"):
     return f"«El artículo {num_limpio} regula un precepto distinto a los contenidos en este epígrafe.»"
 
 def auditar_siglas_sin_definir_previa(texto_alumno):
-    """
-    Detecta de forma estricta cualquier sigla o abreviatura normativa (RD, RDL, RD Leg., Real Decreto L.,
-    TRLGSS, LGSS, CE, ET, TGSS, INSS, RETA, SEA, SEEH, CCC, NAF, NSS, SEDESS, CNAE, ERE, SMI, IMV, FOGASA...)
-    que el alumno haya empleado sin introducir previamente su nombre completo ("...en adelante, XXXX").
-    """
     if not texto_alumno:
         return []
     t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
@@ -2131,10 +2276,10 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, co
             literal_boe = consultar_literal_boe_o_fuentes(k_id)
             return False, f"**{k_lbl}** es inexistente: {literal_boe}"
 
-        for bloque_mat in ARTICULOS_CONEXOS_POR_MATERIA:
-            if any(kw in ep_low for kw in bloque_mat["keywords"]):
-                if k_id in bloque_mat["articulos_validos"]:
-                    return True, f"**{k_lbl}** (precepto aplicable a la materia)"
+        for reg_ep in AUDITORIA_NORMATIVA_POR_EPIGRAFE:
+            if any(kw in ep_low for kw in reg_ep["match_keywords"]):
+                if k_id in reg_ep["articulos_validos"]:
+                    return True, f"**{k_lbl}** (precepto aplicable a este epígrafe)"
 
         literal_boe = consultar_literal_boe_o_fuentes(k_id)
         lit_norm = _norm(literal_boe)
@@ -2152,11 +2297,11 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, co
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     """
-    EVALUACIÓN EXHAUSTIVA DE ALTA EXIGENCIA:
-    Dado que la explicación del PDF es un RESUMEN muy concreto y exacto del epígrafe:
-    1. El resumen completo es el MÍNIMO que el opositor debe cubrir (permitiendo otra redacción/paráfrasis, pero sin obviar ideas).
-    2. Se exige obligatoriamente incluir artículos y leyes de aplicación en la exposición.
-    3. Cada sigla usada sin su introducción formal ("...en adelante, XXXX") resta puntos.
+    AUDITOR EXPERTO DEL EPÍGRAFE CON PUNTUACIÓN NEGATIVA POR OMISIONES:
+    1. Calcula la puntuación bruta sobre 45 por los apartados, cifras y artículos acertados.
+    2. Aplica RESTA NEGATIVA DIRECTA por cada apartado del resumen omitido (-1,50 ptos por apartado omitido).
+    3. Aplica RESTA NEGATIVA DIRECTA por cada referencia legal obligatoria del epígrafe omitida (-2,00 ptos por norma/artículo obligatorio omitido).
+    4. Aplica RESTA NEGATIVA DIRECTA por cada plazo/cifra omitido (-0,75 ptos), por cada artículo indebido (-2,25 ptos) y por cada sigla sin introducir (-0,50 ptos).
     """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -2237,23 +2382,28 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     ids_ref_equiv = set(mapa_ref.keys())
 
-    # PASO 1: Comparar artículos con los de la respuesta oficial
-    citas_ok, citas_faltan = [], []
+    # PASO 1: Comparar artículos con los que aparecen expresamente en el resumen
+    citas_ok_base, citas_faltan_base = [], []
     for k_par, lbl in mapa_ref.items():
         if k_par in mapa_al:
-            citas_ok.append(lbl)
+            citas_ok_base.append(lbl)
         elif k_par[0] == "ART" and k_par[1] in arts_en_alumno:
-            citas_ok.append(lbl)
+            citas_ok_base.append(lbl)
         elif k_par[0] == "RANGO_ART":
             nums_r = re.findall(r'\d+', k_par[1])
             if nums_r and all(n in arts_en_alumno for n in nums_r):
-                citas_ok.append(lbl)
+                citas_ok_base.append(lbl)
             else:
-                citas_faltan.append(lbl)
+                citas_faltan_base.append(lbl)
         else:
-            citas_faltan.append(lbl)
+            citas_faltan_base.append(lbl)
 
-    # PASO 2: Evaluar artículos y leyes aportados por el alumno (y buscar en BOE los indebidos)
+    # PASO 2: Auditoría experta de referencias legales obligatorias en este epígrafe concreto
+    citas_ok, citas_faltan = auditar_normativa_obligatoria_del_epigrafe(
+        alumno_norm, arts_en_alumno, ctx_completo_norm, citas_ok_base, citas_faltan_base
+    )
+
+    # PASO 3: Evaluar artículos adicionales aportados por el alumno y buscar en el BOE los indebidos
     citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
     oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
 
@@ -2261,18 +2411,12 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         if k_par in ids_ref_equiv:
             continue
         if k_par[0] == "ART" and k_par[1] in arts_en_ref:
-            if lbl not in citas_ok:
-                citas_ok.append(lbl)
             continue
         if k_par[0] == "RANGO_ART":
             nums_r = re.findall(r'\d+', k_par[1])
             if nums_r and all(n in arts_en_ref for n in nums_r):
-                if lbl not in citas_ok:
-                    citas_ok.append(lbl)
                 continue
         if k_par[1] in ref_norm:
-            if lbl not in citas_ok:
-                citas_ok.append(lbl)
             continue
 
         articulos_extra_detectados.append(lbl)
@@ -2284,30 +2428,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             citas_complementarias.append(detalle_fuente)
         else:
             citas_erroneas.append(detalle_fuente)
-
-    # PASO 3: EXIGENCIA DEL TRIBUNAL DE INCLUIR ARTÍCULOS Y LEYES DE APLICACIÓN
-    # Aunque el resumen del PDF sea conceptual y no enumere todos los artículos, el Tribunal exige citar artículos y leyes en la exposición.
-    total_normas_validas_alumno = len(citas_ok) + len(citas_complementarias)
-    normativa_sugerida_epigrafe = "Texto Refundido de la Ley General de la Seguridad Social (Real Decreto Legislativo 8/2015) y sus reglamentos de desarrollo"
-    for bloque_mat in ARTICULOS_CONEXOS_POR_MATERIA:
-        if any(kw in ctx_completo_norm for kw in bloque_mat["keywords"]):
-            normativa_sugerida_epigrafe = bloque_mat["normativa_exigible_sugerida"]
-            break
-
-    penalizacion_falta_normativa = 0.0
-    aviso_falta_normativa = ""
-    if total_normas_validas_alumno == 0:
-        penalizacion_falta_normativa = 6.00
-        aviso_falta_normativa = (
-            f"No has citado ningún artículo ni norma legal aplicable en tu exposición. "
-            f"El Tribunal exige fundamentar jurídicamente el desarrollo invocando los preceptos aplicables (en esta materia: {normativa_sugerida_epigrafe})."
-        )
-    elif total_normas_validas_alumno == 1 and not citas_faltan:
-        penalizacion_falta_normativa = 2.50
-        aviso_falta_normativa = (
-            f"El respaldo normativo es muy escaso (solo 1 referencia legal). "
-            f"Para alcanzar el nivel exigido por el Tribunal debes apoyar cada apartado con sus artículos y normas de aplicación ({normativa_sugerida_epigrafe})."
-        )
 
     # PASO 4: Auditoría estricta de siglas usadas sin su introducción formal ("...en adelante, XXXX")
     siglas_sin_definir = auditar_siglas_sin_definir_previa(texto_alumno)
@@ -2345,7 +2465,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "sintesis", "resumen", "analitico", "epigrafe", "epigrafes"
     }
 
-    # PASO 5: Comparación profunda unidad por unidad contra el resumen oficial (el resumen es el MÍNIMO exigible)
+    # PASO 5: Comparación unidad por unidad contra el resumen oficial
     texto_base_ideas = f"{respuesta_oficial}. {explicacion_oficial}" if respuesta_oficial else explicacion_oficial
     oraciones_completas = _dividir_en_oraciones_juridicas(texto_base_ideas)
     puntos_cubiertos = []
@@ -2364,7 +2484,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             continue
         aciertos_orac = sum(1 for w in palabras_orac if _raiz(w) in alumno_norm)
         ratio_orac = aciertos_orac / len(palabras_orac)
-        # Umbral de exigencia técnica (0.44): permite expresarlo con distinta redacción pero exige que estén los conceptos jurídicos clave de cada idea
         if ratio_orac >= 0.44 or (len(palabras_orac) <= 4 and aciertos_orac >= 2):
             puntos_cubiertos.append(orac_limpia)
         else:
@@ -2385,23 +2504,42 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     else:
         texto_sugerido = explicacion_oficial
 
-    total_eval = max(1, len(citas_ok) + len(citas_faltan) + len(cifras_ok) + len(cifras_faltan) + len(puntos_cubiertos) + len(puntos_omitidos))
-    valor_por_item = 45.0 / total_eval
+    # CÁLCULO CON PUNTUACIÓN NEGATIVA DIRECTA POR APARTADOS OMITIDOS Y POR REFERENCIAS LEGALES OMITIDAS:
+    total_unidades_ideas = max(1, len(puntos_cubiertos) + len(puntos_omitidos))
+    valor_unitario_idea = 35.0 / total_unidades_ideas
+    pts_brutos_ideas = round(len(puntos_cubiertos) * valor_unitario_idea, 2)
 
-    puntos_perdidos_citas = round(len(citas_faltan) * valor_por_item, 2)
-    puntos_perdidos_cifras = round(len(cifras_faltan) * valor_por_item, 2)
-    puntos_perdidos_ideas = round(len(puntos_omitidos) * valor_por_item, 2)
-    penalizacion_citas_erroneas = round(2.25 * len(citas_erroneas), 2)
+    total_unidades_legales = max(1, len(citas_ok) + len(citas_faltan))
+    valor_unitario_legal = 10.0 / total_unidades_legales
+    pts_brutos_legales = round(len(citas_ok) * valor_unitario_legal, 2)
+
+    bonificacion_complementarias = round(min(3.5, 0.75 * len(citas_complementarias)), 2)
+    pts_brutos_criterio_1 = round(min(45.0, pts_brutos_ideas + pts_brutos_legales + bonificacion_complementarias), 2)
+
+    # RESTAS NEGATIVAS DIRECTAS SOBRE LO ACERTADO:
+    # 1. Cada apartado del resumen omitido resta -1,50 ptos adicionales sobre los puntos ganados (además de no haber sumado su valor)
+    resta_negativa_apartados_omitidos = round(len(puntos_omitidos) * 1.50, 2)
+    # 2. Cada referencia legal obligatoria del epígrafe omitida resta -2,00 ptos directamente
+    resta_negativa_referencias_omitidas = round(len(citas_faltan) * 2.00, 2)
+    # 3. Cada plazo/cifra clave omitida resta -0,75 ptos directamente
+    resta_negativa_cifras_omitidas = round(len(cifras_faltan) * 0.75, 2)
+    # 4. Cada artículo indebido (ajeno al epígrafe) resta -2,25 ptos
+    penalizacion_citas_erroneas = round(len(citas_erroneas) * 2.25, 2)
+    # 5. Conclusión con sentido invertido resta -11,25 ptos
     penalizacion_sentido = 11.25 if alerta_sentido else 0.0
-    # Cada sigla sin introducir ("...en adelante, XXXX") resta 0,50 ptos (hasta 2,50 ptos)
-    penalizacion_siglas = round(min(2.50, 0.50 * len(siglas_sin_definir)), 2)
-    bonificacion_complementarias = round(min(4.5, 0.90 * len(citas_complementarias)), 2)
+    # 6. Cada sigla sin introducir ("...en adelante, XXXX") resta -0,50 ptos
+    penalizacion_siglas = round(min(2.50, len(siglas_sin_definir) * 0.50), 2)
 
-    acertados_eval = len(citas_ok) + len(cifras_ok) + len(puntos_cubiertos)
-    pts_criterio_1_base = (acertados_eval / total_eval) * 45.0
-    pts_criterio_1 = min(45.0, pts_criterio_1_base + bonificacion_complementarias)
-    pts_criterio_1 = max(0.0, pts_criterio_1 - penalizacion_citas_erroneas - penalizacion_sentido - penalizacion_falta_normativa)
-    pts_criterio_1 = round(pts_criterio_1, 2)
+    total_restas_c1 = round(
+        resta_negativa_apartados_omitidos
+        + resta_negativa_referencias_omitidas
+        + resta_negativa_cifras_omitidas
+        + penalizacion_citas_erroneas
+        + penalizacion_sentido,
+        2
+    )
+
+    pts_criterio_1 = round(max(0.0, pts_brutos_criterio_1 - total_restas_c1), 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
@@ -2425,35 +2563,32 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
 
     motivos_resta = []
-    if puntos_perdidos_ideas > 0 and puntos_omitidos:
+    if resta_negativa_apartados_omitidos > 0 and puntos_omitidos:
+        pts_no_sumados_id = round(len(puntos_omitidos) * valor_unitario_idea, 2)
         motivos_resta.append(
-            f"🔸 **-{puntos_perdidos_ideas:.2f} ptos (Contenido sustancial del resumen oficial omitido en Criterio 1):** "
-            f"Al tratarse de un resumen sintético de mínimos, haber omitido **{len(puntos_omitidos)} de los {len(puntos_cubiertos) + len(puntos_omitidos)} bloques conceptuales** deja incompleta la exposición."
+            f"🔻 **-{resta_negativa_apartados_omitidos:.2f} ptos de penalización negativa directa (más -{pts_no_sumados_id:.2f} ptos no devengados) por apartados del resumen omitidos:** "
+            f"Has dejado sin desarrollar **{len(puntos_omitidos)} de los {total_unidades_ideas} bloques esenciales** del epígrafe (-1,50 ptos de resta por cada bloque omitido)."
         )
-    if puntos_perdidos_cifras > 0 and cifras_faltan:
+    if resta_negativa_referencias_omitidas > 0 and citas_faltan:
+        pts_no_sumados_leg = round(len(citas_faltan) * valor_unitario_legal, 2)
         motivos_resta.append(
-            f"🔸 **-{puntos_perdidos_cifras:.2f} ptos (Plazos, porcentajes o cuantías omitidos en Criterio 1):** "
+            f"🔻 **-{resta_negativa_referencias_omitidas:.2f} ptos de penalización negativa directa (más -{pts_no_sumados_leg:.2f} ptos no devengados) por referencias legales obligatorias omitidas (-2,00 ptos c/u):** "
+            f"No has citado **{'; '.join(citas_faltan)}**."
+        )
+    if resta_negativa_cifras_omitidas > 0 and cifras_faltan:
+        motivos_resta.append(
+            f"🔻 **-{resta_negativa_cifras_omitidas:.2f} ptos de penalización negativa directa por plazos, porcentajes o cuantías omitidos (-0,75 ptos c/u):** "
             f"Faltó precisar **{', '.join(cifras_faltan)}**."
-        )
-    if puntos_perdidos_citas > 0 and citas_faltan:
-        motivos_resta.append(
-            f"🔸 **-{puntos_perdidos_citas:.2f} ptos (Preceptos expresos del epígrafe no citados en Criterio 1):** "
-            f"Faltó citar **{', '.join(citas_faltan)}**."
-        )
-    if penalizacion_falta_normativa > 0:
-        motivos_resta.append(
-            f"🔻 **-{penalizacion_falta_normativa:.2f} ptos (Insuficiencia de artículos y leyes de aplicación en Criterio 1):** "
-            f"{aviso_falta_normativa}"
         )
     if penalizacion_siglas > 0:
         lista_siglas_txt = ", ".join([f"**{s}** (debiste introducirlo previamente como *«{ej}»*)" for s, ej in siglas_sin_definir])
         motivos_resta.append(
-            f"🔻 **-{penalizacion_siglas:.2f} ptos (Uso de siglas/abreviaturas sin fórmula introductoria previa — 0,50 ptos c/u):** "
+            f"🔻 **-{penalizacion_siglas:.2f} ptos de penalización negativa por siglas/abreviaturas sin fórmula introductoria previa (-0,50 ptos c/u):** "
             f"{lista_siglas_txt}."
         )
     if penalizacion_citas_erroneas > 0:
         motivos_resta.append(
-            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos (Artículo indebido sin conexión con el epígrafe):** "
+            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos de penalización negativa por citar artículos indebidos (-2,25 ptos c/u):** "
             f"{' | '.join(citas_erroneas)}"
         )
     if penalizacion_sentido > 0:
@@ -2461,12 +2596,14 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     if not supera_umbral_20:
         motivos_resta.append(
             "🔻 **-5,00 ptos (Criterios 2 y 3 bloqueados por el baremo oficial):** "
-            "Al no alcanzar el mínimo de 20,00 / 45 puntos en el Criterio 1, no pueden computarse los puntos de orden de ideas (0/3) ni expresión escrita (0/2)."
+            "Al quedar el Criterio 1 por debajo de 20,00 / 45 puntos tras aplicar las penalizaciones por omisión, no puntúan estructura (0/3) ni expresión escrita (0/2)."
         )
 
     return {
         "nota": nota_10,
         "nota_50": nota_50,
+        "pts_brutos_criterio_1": pts_brutos_criterio_1,
+        "total_restas_c1": total_restas_c1,
         "pts_criterio_1": pts_criterio_1,
         "pts_criterio_2": pts_criterio_2,
         "pts_criterio_3": pts_criterio_3,
@@ -2478,9 +2615,9 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "citas_erroneas": citas_erroneas,
         "siglas_sin_definir": siglas_sin_definir,
         "penalizacion_siglas": penalizacion_siglas,
-        "penalizacion_falta_normativa": penalizacion_falta_normativa,
-        "aviso_falta_normativa": aviso_falta_normativa,
-        "normativa_sugerida_epigrafe": normativa_sugerida_epigrafe,
+        "resta_negativa_apartados_omitidos": resta_negativa_apartados_omitidos,
+        "resta_negativa_referencias_omitidas": resta_negativa_referencias_omitidas,
+        "resta_negativa_cifras_omitidas": resta_negativa_cifras_omitidas,
         "articulos_extra_detectados": articulos_extra_detectados,
         "cifras_ok": cifras_ok,
         "cifras_faltan": cifras_faltan,
@@ -2492,80 +2629,74 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
-    """
-    Genera una comparativa profunda, rigurosa y constructiva entre la respuesta del opositor
-    y el resumen oficial del epígrafe (que actúa como suelo mínimo exigible por el Tribunal).
-    """
     bloques = []
     tot_ideas = len(ev["puntos_cubiertos"]) + len(ev["puntos_omitidos"])
 
-    # 1. Comparativa profunda con los contenidos mínimos del resumen
     lineas_b1 = [
-        f"El resumen oficial de este epígrafe condensa **{tot_ideas} unidades conceptuales esenciales** que constituyen el mínimo exigible ante el Tribunal (admitiéndose su exposición con redacción propia). "
-        f"En tu desarrollo has cubierto **{len(ev['puntos_cubiertos'])} de {tot_ideas}** unidades conceptuales."
+        f"El resumen oficial de este epígrafe se compone de **{tot_ideas} unidades conceptuales mínimas** exigibles por el Tribunal (admitiéndose otra redacción equivalente). "
+        f"Has desarrollado **{len(ev['puntos_cubiertos'])} de {tot_ideas}** unidades conceptuales."
     ]
     if ev["puntos_cubiertos"]:
         incluidos_txt = "\n".join([f"   - ✔️ *{p}*" for p in ev["puntos_cubiertos"][:6]])
-        lineas_b1.append(f"**Contenidos del resumen oficial correctamente recogidos en tu exposición:**\n{incluidos_txt}")
+        lineas_b1.append(f"**Apartados del resumen correctamente recogidos:**\n{incluidos_txt}")
     else:
-        lineas_b1.append("⚠️ Tu exposición aún no recoge ninguno de los bloques técnicos nucleares del resumen oficial.")
-    bloques.append("1. **✅ Análisis comparativo de contenidos cubiertos frente al resumen oficial:**\n" + "\n\n".join(lineas_b1))
+        lineas_b1.append("⚠️ Tu exposición no desarrolla ninguno de los apartados esenciales del resumen oficial.")
+    bloques.append("1. **✅ Auditoría de apartados cubiertos frente al resumen oficial:**\n" + "\n\n".join(lineas_b1))
 
-    # 2. Contenidos del resumen oficial omitidos (que debilitan la exposición)
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         lineas_b2 = [
-            "Al tratarse de un resumen muy sintético y exacto, omitir cualquiera de sus apartados debilita notablemente la solidez técnica del ejercicio ante el Tribunal. **Te ha faltado desarrollar los siguientes extremos del resumen:**"
+            f"Cada apartado o plazo del resumen que dejas en blanco **puntúa negativamente (-{ev.get('resta_negativa_apartados_omitidos', 0.0) + ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos restados directamente)** porque debilita sustancialmente la exposición ante el Tribunal:"
         ]
         if ev["cifras_faltan"]:
-            lineas_b2.append(f"   - 📌 **Plazos, cuantías o porcentajes exactos omitidos:** {', '.join(ev['cifras_faltan'])}.")
+            lineas_b2.append(f"   - 🔻 **Plazos, cuantías o porcentajes omitidos (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos):** {', '.join(ev['cifras_faltan'])}.")
         for idx_om, p_om in enumerate(ev["puntos_omitidos"], 1):
-            lineas_b2.append(f"   - ❌ **Apartado omitido {idx_om}:** *{p_om}*")
-        bloques.append("2. **⚠️ Contenidos esenciales del resumen que has obviado y debes incorporar:**\n" + "\n".join(lineas_b2))
+            lineas_b2.append(f"   - 🔻 **Apartado omitido {idx_om} (-1,50 ptos):** *{p_om}*")
+        bloques.append("2. **⚠️ Apartados y datos del resumen omitidos (puntúan negativamente):**\n" + "\n".join(lineas_b2))
     else:
         bloques.append(
-            "2. **⚠️ Contenidos esenciales del resumen que has obviado y debes incorporar:**\n"
-            "¡Excelente exhaustividad! No has dejado ningún apartado ni plazo del resumen oficial sin cubrir."
+            "2. **⚠️ Apartados y datos del resumen omitidos (puntúan negativamente):**\n"
+            "¡Excelente! No has omitido ningún apartado ni plazo del resumen oficial (0,00 puntos de penalización por omisión de contenido)."
         )
 
-    # 3. Auditoría de artículos, leyes de aplicación y rigor formal en siglas
     rev_normas = []
     if ev["citas_ok"]:
-        rev_normas.append(f"- ✔️ **Normativa del epígrafe acertada:** {', '.join(ev['citas_ok'])}.")
+        rev_normas.append(f"- ✔️ **Referencias legales obligatorias del epígrafe acertadas:** {'; '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
-        rev_normas.append(f"- 🌟 **Preceptos y leyes aplicables añadidos con acierto (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
+        rev_normas.append(f"- 🌟 **Preceptos adicionales conexos bien aplicados (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
     if ev["citas_faltan"]:
-        rev_normas.append(f"- ⚠️ **Preceptos expresos del resumen omitidos:** {', '.join(ev['citas_faltan'])}.")
-    if ev.get("aviso_falta_normativa"):
-        rev_normas.append(f"- ❌ **Falta de sustento legal en la exposición (-{ev.get('penalizacion_falta_normativa', 0.0):.2f} ptos):** {ev['aviso_falta_normativa']}")
+        for ref_om in ev["citas_faltan"]:
+            rev_normas.append(f"- 🔻 **Referencia legal obligatoria omitida (-2,00 ptos):** *{ref_om}*.")
     if ev["citas_erroneas"]:
         for err_art in ev["citas_erroneas"]:
-            rev_normas.append(f"- ❌ **Artículo indebido (contraste con su literal en el BOE):** {err_art}")
+            rev_normas.append(f"- ❌ **Artículo indebido (-2,25 ptos — contraste con su literal en el BOE):** {err_art}")
     if ev.get("siglas_sin_definir"):
-        sig_str = "; ".join([f"**{s}** → debiste escribir primero *«{ej}»*" for s, ej in ev["siglas_sin_definir"]])
+        sig_str = "; ".join([f"**{s}** → debiste introducirlo como *«{ej}»*" for s, ej in ev["siglas_sin_definir"]])
         rev_normas.append(
-            f"- ⚠️ **Penalización formal por uso de siglas sin introducción previa (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos):** "
-            f"Recuerda que ante el Tribunal la referencia a la norma es válida en cuanto al fondo, pero cada sigla empleada directamente sin su denominación previa (*«...en adelante, XXXX»*) resta puntuación: {sig_str}."
+            f"- 🔻 **Siglas/abreviaturas sin fórmula introductoria previa (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos):** {sig_str}."
         )
     if not rev_normas:
-        rev_normas.append("- ✔️ Fundamentación normativa y uso formal de siglas impecables.")
-    bloques.append("3. **⚖️ Auditoría de artículos, leyes de aplicación y rigor en el uso de siglas:**\n" + "\n".join(rev_normas))
+        rev_normas.append("- ✔️ Todas las referencias legales obligatorias del epígrafe y las siglas han sido correctamente introducidas.")
+    bloques.append("3. **⚖️ Auditoría de referencias legales obligatorias del epígrafe y rigor en siglas:**\n" + "\n".join(rev_normas))
 
-    # 4. Valoración por Criterios Oficiales y relación única de puntos restados
+    c1_bruto = ev.get("pts_brutos_criterio_1", 0.0)
+    restas_c1 = ev.get("total_restas_c1", 0.0)
     c1 = ev.get("pts_criterio_1", 0.0)
     c2 = ev.get("pts_criterio_2", 0.0)
     c3 = ev.get("pts_criterio_3", 0.0)
     n50 = ev.get("nota_50", 0.0)
     n10 = ev.get("nota", 0.0)
-    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin deducciones."
+    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin penalizaciones negativas."
 
     bloques.append(
-        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Desglose de Puntos Restados:**\n"
-        f"   - **Criterio 1 (Conocimiento exhaustivo del epígrafe y precisión de leyes/artículos de aplicación):** `{c1:.2f} / 45,00 puntos`\n"
-        f"   - **Criterio 2 (Orden de las ideas y exposición estructurada):** `{c2:.2f} / 3,00 puntos`\n"
-        f"   - **Criterio 3 (Calidad de la expresión escrita y presentación formal de siglas):** `{c3:.2f} / 2,00 puntos`\n"
+        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Liquidación de Puntos Restados:**\n"
+        f"   - **Criterio 1 — Puntuación bruta por contenidos y normas acertadas:** `{c1_bruto:.2f} / 45,00 puntos`\n"
+        f"   - **Criterio 1 — Penalizaciones negativas por apartados y normas omitidas:** `-{restas_c1:.2f} puntos`\n"
+        f"   - **Criterio 1 — Puntuación neta resultante (0 a 45 ptos):** **`{c1:.2f} / 45,00 puntos`**\n"
+        f"   - **Criterio 2 — Orden de las ideas y exposición estructurada (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
+        f"   - **Criterio 3 — Calidad de expresión escrita y siglas (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
         f"   - 🏆 **CALIFICACIÓN FINAL DEL EPÍGRAFE:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{n10:.2f} / 10`**)*\n"
-        f"   - **📉 Relación exacta de puntos restados o no alcanzados:**\n{motivos_txt}\n\n"
-        "💡 *Consejo constructivo del Tribunal:* Toma nota de los apartados omitidos en el punto 2 e intégralos con tus propias palabras junto con las citas legales del punto 3; tienes buena base y puliendo estos detalles tu exposición dará un salto de calidad decisivo el día del examen."
+        f"   - **📉 Desglose exacto de penalizaciones negativas aplicadas:**\n{motivos_txt}\n\n"
+        "💡 *Orientación del Tribunal:* En este segundo ejercicio la clave para superar con solvencia los 25 puntos eliminatorios es no dejar ningún bloque del resumen ni ningún artículo troncal en el tintero. Repasa los puntos señalados con 🔻 e incorpóralos a tu esquema mental: cada omisión corregida hoy son puntos directos asegurados el día del examen."
     )
 
     return "\n\n".join(bloques)
@@ -2593,41 +2724,42 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
     citas_erroneas_boe = "\n".join(ev_fallback.get("citas_erroneas", []))
+    citas_faltan_lista = "\n".join([f"- {c} (-2,00 ptos)" for c in ev_fallback.get("citas_faltan", [])]) or "Ninguna (ha citado todas las normas obligatorias)."
     siglas_mal = ev_fallback.get("siglas_sin_definir", [])
     tot_ideas = len(ev_fallback["puntos_cubiertos"]) + len(ev_fallback["puntos_omitidos"])
-    omitidos_lista = "\n".join([f"- {p}" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los puntos)."
+    omitidos_lista = "\n".join([f"- {p} (-1,50 ptos)" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
 
     instruccion_extra = (
-        "\n- EXIGENCIA DE CONTENIDO MÍNIMO: La RESPUESTA OFICIAL es un RESUMEN muy concreto y exacto del epígrafe. Por tanto, ese resumen es el MÍNIMO que el alumno debe desarrollar (se permite que lo redacte con otras palabras, pero obviar cualquier apartado o definición del resumen debilita gravemente la exposición y resta puntos). Haz un análisis comparativo profundo indicando qué apartados concretos del resumen ha recogido y enumerando UNO POR UNO todos los que ha obviado."
-        f"\n- EXIGENCIA DE ARTÍCULOS Y LEYES DE APLICACIÓN: El Tribunal exige que la exposición contenga artículos y leyes de aplicación ({ev_fallback.get('normativa_sugerida_epigrafe', '')}). Si no ha incluido artículos/leyes suficientes, señálalo como carencia importante."
-        "\n- REGLA SOBRE SIGLAS Y ABREVIATURAS (RD, RDL, TRLGSS, CE, TGSS, INSS, etc.): La referencia a la ley es válida en cuanto al fondo, pero CADA VEZ que el alumno utilice una sigla o abreviatura sin haber escrito antes su denominación completa seguida de 'en adelante, XXXX' resta puntos. Detállalo con claridad."
-        "\n- TONO DEL TRIBUNAL: Sé muy estricto y riguroso en lo técnico (no pases por alto ninguna omisión ni sigla sin definir), pero mantén siempre un tono constructivo, profesional y motivador que enseñe al alumno cómo perfeccionar su examen sin desmoralizarlo."
+        f"\n- AUDITORÍA CON PUNTUACIÓN NEGATIVA DIRECTA: El alumno obtuvo {ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos por lo acertado, pero se le han restado negativamente -{ev_fallback.get('total_restas_c1', 0.0):.2f} puntos por las omisiones, quedando en {ev_fallback['pts_criterio_1']:.2f}/45 en Criterio 1."
+        "\n- En el apartado 2 enumera UNO POR UNO todos los apartados del resumen omitidos indicando que cada uno resta -1,50 puntos directamente."
+        "\n- En el apartado 3 enumera UNA POR UNA todas las referencias legales obligatorias del epígrafe que ha omitido indicando que cada una resta -2,00 puntos directamente, así como las siglas sin fórmula introductoria previa ('...en adelante, XXXX') que restan -0,50 puntos cada una."
     )
     if citas_erroneas_boe:
         instruccion_extra += (
-            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye obligatoriamente su literalidad exacta en el apartado 3 para demostrar por qué no tienen relación):\n{citas_erroneas_boe}"
+            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye su literalidad exacta en el apartado 3 y su resta de -2,25 ptos):\n{citas_erroneas_boe}"
         )
     if siglas_mal:
         instruccion_extra += (
-            f"\n- SIGLAS USADAS SIN FÓRMULA INTRODUCTORIA PREVIA: {', '.join(f'{s} (debió poner «{ej}»)' for s, ej in siglas_mal)} -> penalización aplicada: -{ev_fallback.get('penalizacion_siglas', 0.0):.2f} ptos."
+            f"\n- SIGLAS SIN FÓRMULA INTRODUCTORIA PREVIA: {', '.join(f'{s} (debió poner «{ej}»)' for s, ej in siglas_mal)} -> resta aplicada: -{ev_fallback.get('penalizacion_siglas', 0.0):.2f} ptos."
         )
 
     prompt = (
-        "Actúa como el Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Realiza un ANÁLISIS COMPARATIVO PROFUNDO, ESTRICTO Y CONSTRUCTIVO entre la respuesta del alumno y el RESUMEN OFICIAL DEL EPÍGRAFE:\n"
-        f"- El alumno ha cubierto {len(ev_fallback['puntos_cubiertos'])} de las {tot_ideas} unidades conceptuales del resumen oficial.\n"
-        f"- Respeta exactamente las puntuaciones auditadas: Criterio 1 (Conocimiento completo del resumen y cita de leyes/artículos) = {ev_fallback['pts_criterio_1']:.2f}/45, Criterio 2 (Estructura y orden de ideas) = {ev_fallback['pts_criterio_2']:.2f}/3, Criterio 3 (Calidad de expresión escrita y siglas) = {ev_fallback['pts_criterio_3']:.2f}/2, TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
+        "Actúa como el Auditor Experto del Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+        "Realiza una AUDITORÍA ESTRICTA, RIGUROSA Y CONSTRUCTIVA del epígrafe aplicando puntuación negativa por cada apartado del resumen omitido y por cada referencia legal obligatoria omitida:\n"
+        f"- Apartados del resumen cubiertos: {len(ev_fallback['puntos_cubiertos'])} de {tot_ideas}.\n"
+        f"- Puntuaciones auditadas inamovibles: Criterio 1 Bruto = {ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Restas negativas en Criterio 1 = -{ev_fallback.get('total_restas_c1', 0.0):.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
         f"{instruccion_extra}\n\n"
         f"=== EPÍGRAFE ===\n{pregunta}\n\n"
-        f"=== RESUMEN OFICIAL DEL EPÍGRAFE (MÍNIMO EXIGIBLE POR EL TRIBUNAL) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+        f"=== RESUMEN OFICIAL DEL EPÍGRAFE ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== APARTADOS DEL RESUMEN QUE EL ALUMNO HA OBVIADO ===\n{omitidos_lista}\n\n"
-        f"=== DESGLOSE AUDITADO DE PUNTOS RESTADOS (INCLÚYELO UNA SOLA VEZ EN EL APARTADO 4) ===\n{motivos_calculados}\n\n"
+        f"=== APARTADOS DEL RESUMEN OMITIDOS (RESTAN -1,50 PTOS C/U) ===\n{omitidos_lista}\n\n"
+        f"=== REFERENCIAS LEGALES OBLIGATORIAS DEL EPÍGRAFE OMITIDAS (RESTAN -2,00 PTOS C/U) ===\n{citas_faltan_lista}\n\n"
+        f"=== LIQUIDACIÓN EXACTA DE PENALIZACIONES NEGATIVAS ===\n{motivos_calculados}\n\n"
         "Estructura tu dictamen en estos 4 apartados exactos:\n"
-        "1. **✅ Análisis comparativo de contenidos cubiertos frente al resumen oficial** (valorando lo que sí ha explicado aunque sea con sus palabras)\n"
-        "2. **⚠️ Contenidos esenciales del resumen que has obviado y debes incorporar** (detallando punto por punto qué partes del resumen omitió y por qué dejan floja la exposición)\n"
-        "3. **⚖️ Auditoría de artículos, leyes de aplicación y rigor en el uso de siglas** (exigencia de leyes/artículos aplicables, literal del BOE si puso algún artículo improcedente y revisión de siglas sin '...en adelante, XXXX')\n"
-        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Desglose de Puntos Restados** (incluyendo Criterio 1 [0-45], Criterio 2 [0-3], Criterio 3 [0-2], Total sobre 50, los motivos exactos de cada punto restado y un consejo final constructivo de ánimo)"
+        "1. **✅ Auditoría de apartados cubiertos frente al resumen oficial**\n"
+        "2. **⚠️ Apartados y datos del resumen omitidos (con su puntuación negativa exacta)**\n"
+        "3. **⚖️ Auditoría de referencias legales obligatorias del epígrafe (con su puntuación negativa si se omiten), artículos indebidos (con literal del BOE) y siglas**\n"
+        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Liquidación de Puntos Restados** (mostrando Criterio 1 Bruto, Restas negativas, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y orientación final constructiva)"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
