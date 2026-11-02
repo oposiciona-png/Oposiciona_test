@@ -1888,10 +1888,6 @@ TESTS_DISPONIBLES_INVITADO = {
         },
         "EXAMENES": {"Elige un test de examenes...": None},
         "GENERAL": {"Elige un test de general...": None},
-        "DESARROLLO": {
-            "Elige un test de desarrollo...": None,
-            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=18p3luvJxXbMoyGX8x5ypR11V4hpC8eYI"
-        },
     },
 }
 # === FIN SECCIÓN 3 ===
@@ -2043,20 +2039,16 @@ def obtener_tests_segun_rol():
         return TESTS_DISPONIBLES_INVITADO
 
     es_adm = usuario_es_admin()
-    orden_adm = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
-    orden_ges = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL", "DESARROLLO"]
+    # SUPUESTOS y DESARROLLO únicamente visibles para el Administrador; para el resto de alumnos quedan desactivados
+    orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
 
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
 
-    origen_adm = catalogo_base.get("ADMINISTRATIVOS", {})
-    for cat in orden_adm:
-        if cat in origen_adm:
-            resultado["ADMINISTRATIVOS"][cat] = dict(origen_adm[cat])
-
-    origen_ges = catalogo_base.get("GESTION", {})
-    for cat in orden_ges:
-        if cat in origen_ges:
-            resultado["GESTION"][cat] = dict(origen_ges[cat])
+    for esp in ["ADMINISTRATIVOS", "GESTION"]:
+        origen_esp = catalogo_base.get(esp, {})
+        for cat in orden_categorias:
+            if cat in origen_esp:
+                resultado[esp][cat] = dict(origen_esp[cat])
 
     return resultado
 
@@ -3523,6 +3515,7 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
