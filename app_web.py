@@ -2197,36 +2197,36 @@ def consultar_literal_boe_o_fuentes(num_art_str, id_boe="BOE-A-2015-11724"):
     except Exception:
         pass
 
-    respaldo_literales = {
-        "1": "«Artículo 1 TRLGSS (Derecho de los españoles a la Seguridad Social): El derecho de los españoles a la Seguridad Social, establecido en el artículo 41 de la Constitución, se ajustará a lo dispuesto en la presente ley.»",
-        "2": "«Artículo 2 TRLGSS (Principios y fines de la Seguridad Social): 1. El sistema de la Seguridad Social, configurado por la acción protectora en sus modalidades contributiva y no contributiva, se fundamenta en los principios de universalidad, unidad, solidaridad e igualdad.»",
-        "3": "«Artículo 3 TRLGSS (Irrenunciabilidad de los derechos de la Seguridad Social): Será nulo todo pacto, individual o colectivo, por el cual el trabajador renuncie a los derechos que le confiere la presente ley.»",
-        "7": "«Artículo 7 TRLGSS (Extensión del campo de aplicación): 1. Estarán comprendidos en el sistema de la Seguridad Social, a efectos de las prestaciones contributivas, cualquiera que sea su sexo, estado civil y profesión, los españoles que residan en España y los extranjeros que residan o se encuentren legalmente en España...»",
-        "8": "«Artículo 8 TRLGSS (Prohibición de inclusión múltiple obligatoria): Las personas comprendidas en el campo de aplicación del sistema de la Seguridad Social no podrán estar incluidas por el mismo trabajo, con carácter obligatorio, en otros regímenes de previsión distintos de los que integran dicho sistema.»",
-        "9": "«Artículo 9 TRLGSS (Estructura del sistema de la Seguridad Social): 1. El sistema de la Seguridad Social viene integrado por los siguientes regímenes: a) El Régimen General... b) Los Regímenes Especiales...»",
-        "12": "«Artículo 12 TRLGSS (Familiares): 1. A efectos de lo dispuesto en el artículo 7.1, no tendrán la consideración de trabajadores por cuenta ajena, salvo prueba en contrario: el cónyuge, los descendientes, ascendientes y demás parientes del empresario, por consanguinidad o afinidad hasta el segundo grado inclusive...»",
-        "15": "«Artículo 15 TRLGSS (Obligatoriedad y alcance de la afiliación): La afiliación a la Seguridad Social es obligatoria para las personas a que se refiere el artículo 7.1 y única para la vida de las mismas y para todo el sistema, sin perjuicio de las altas y bajas en los distintos regímenes que lo integran.»",
-        "16": "«Artículo 16 TRLGSS (Formas de practicarla): 1. La afiliación podrá practicarse a petición de las personas y entidades obligadas a dicho acto, a instancia de los interesados o de oficio por la Administración de la Seguridad Social.»",
-        "18": "«Artículo 18 TRLGSS (Obligatoriedad): 1. La cotización a la Seguridad Social es obligatoria en los regímenes General y Especiales.»",
-        "21": "«Artículo 21 TRLGSS (Tesorería General de la Seguridad Social): 1. La Tesorería General de la Seguridad Social es un servicio común de la Seguridad Social, tutelado por el Ministerio de Inclusión, Seguridad Social y Migraciones, con personalidad jurídica propia, en el que, por aplicación de los principios de solidaridad financiera y caja única, se unifican todos los recursos financieros.»",
-        "36": "«Artículo 36 TRLGSS (Comprobación del cumplimiento de las obligaciones por la Tesorería General): La Tesorería General de la Seguridad Social podrá comprobar el cumplimiento de las obligaciones en materia de liquidación e ingreso de cuotas y demás recursos del sistema.»",
-        "41": "«Artículo 41 CE: Los poderes públicos mantendrán un régimen público de Seguridad Social para todos los ciudadanos, que garantice la asistencia y prestaciones sociales suficientes ante situaciones de necesidad, especialmente en caso de desempleo.»",
-        "42": "«Artículo 42 TRLGSS (Acción protectora del sistema de la Seguridad Social): 1. La acción protectora del sistema de la Seguridad Social comprenderá: a) La asistencia sanitaria... b) La recuperación profesional... c) Prestaciones económicas en las situaciones de incapacidad temporal, nacimiento y cuidado de menor, riesgo durante el embarazo, incapacidad permanente, jubilación, desempleo, protección familiar y muerte y supervivencia.»",
-        "58": "«Artículo 58 TRLGSS (Revalorización y garantía de mantenimiento del poder adquisitivo de las pensiones): 1. Las pensiones contributivas de la Seguridad Social mantendrán su poder adquisitivo en los términos previstos en esta ley...»",
-        "136": "«Artículo 136 TRLGSS (Extensión del Régimen General): 1. Estarán obligatoriamente incluidos en el campo de aplicación del Régimen General de la Seguridad Social los trabajadores por cuenta ajena y los asimilados a los que se refiere el artículo 7.1.a) de esta ley.»",
-        "137": "«Artículo 137 TRLGSS (Exclusiones): No darán lugar a inclusión en este Régimen General los siguientes trabajos: a) Los que se ejecuten ocasionalmente mediante los llamados servicios amistosos, benévolos o de buena vecindad. b) Los que den lugar a la inclusión en alguno de los regímenes especiales.»",
-        "138": "«Artículo 138 TRLGSS (Inscripción de empresas y normas sobre afiliación, altas y bajas): 1. Los empresarios, como requisito previo e indispensable a la iniciación de sus actividades, solicitarán su inscripción en el Régimen General de la Seguridad Social...»",
-        "165": "«Artículo 165 TRLGSS (Condiciones del derecho a las prestaciones): 1. Para causar derecho a las prestaciones del Régimen General, las personas incluidas en su campo de aplicación habrán de cumplir, además de los requisitos particulares exigidos para acceder a cada una de ellas, el requisito general de estar afiliadas y en alta en dicho Régimen o en situación asimilada a la de alta.»",
-        "166": "«Artículo 166 TRLGSS (Situaciones asimiladas a la de alta): 1. A los efectos indicados en el artículo 165.1, la situación legal de desempleo total durante la que el trabajador perciba prestación por dicha contingencia será asimilada a la de alta...»",
-        "169": "«Artículo 169 TRLGSS (Concepto de incapacidad temporal): 1. Tendrán la consideración de situaciones determinantes de incapacidad temporal: a) Las debidas a enfermedad común o profesional y a accidente, sea o no de trabajo, mientras el trabajador reciba asistencia sanitaria de la Seguridad Social y esté impedido para el trabajo...»",
-        "193": "«Artículo 193 TRLGSS (Concepto de incapacidad permanente): 1. La incapacidad permanente contributiva es la situación del trabajador que, después de haber estado sometido al tratamiento prescrito, presenta reducciones anatómicas o funcionales graves, susceptibles de determinación objetiva y previsiblemente definitivas, que disminuyan o anulen su capacidad laboral.»",
-        "205": "«Artículo 205 TRLGSS (Beneficiarios de la pensión de jubilación): 1. Tendrán derecho a la pensión de jubilación regulada en este capítulo, en su modalidad contributiva, las personas incluidas en el Régimen General que, además de la general exigida en el artículo 165.1, reúnan las siguientes condiciones: a) Tener cumplida en la fecha del hecho causante la edad de 67 años, o 65 años cuando se acrediten 38 años y 6 meses de cotización...»",
-        "250": "«Artículo 250 TRLGSS (Objeto del Sistema Especial para Empleados de Hogar): El Sistema Especial para Empleados de Hogar, establecido en el Régimen General de la Seguridad Social, será de aplicación a los trabajadores sujetos a la relación laboral especial del servicio del hogar familiar.»",
-        "252": "«Artículo 252 TRLGSS (Ámbito de aplicación del Sistema Especial para Trabajadores por Cuenta Ajena Agrarios): 1. El Sistema Especial para Trabajadores por Cuenta Ajena Agrarios, establecido en el Régimen General de la Seguridad Social, será de aplicación a quienes realicen labores agrarias, sean propiamente agrícolas, forestales o pecuarias...»",
-        "305": "«Artículo 305 TRLGSS (Extensión del Régimen Especial de los Trabajadores por Cuenta Propia o Autónomos): 1. Estarán obligatoriamente incluidas en el campo de aplicación del Régimen Especial de la Seguridad Social de los Trabajadores por Cuenta Propia o Autónomos las personas físicas mayores de dieciocho años que realicen de forma habitual, personal, directa, por cuenta propia y fuera del ámbito de dirección y organización de otra persona, una actividad económica o profesional a título lucrativo...»",
+    respaldo_tematico = {
+        "1": "«Artículo 1 TRLGSS: Regula el alcance general del derecho de los españoles a la Seguridad Social conforme al artículo 41 de la Constitución.»",
+        "2": "«Artículo 2 TRLGSS: Establece los principios y fines rectores del sistema de la Seguridad Social (universalidad, unidad, solidaridad e igualdad).»",
+        "3": "«Artículo 3 TRLGSS: Dispone la irrenunciabilidad de los derechos reconocidos en materia de Seguridad Social.»",
+        "7": "«Artículo 7 TRLGSS: Delimita la extensión del campo de aplicación del sistema en sus modalidades contributiva y no contributiva.»",
+        "8": "«Artículo 8 TRLGSS: Establece la prohibición de inclusión múltiple obligatoria por un mismo trabajo.»",
+        "9": "«Artículo 9 TRLGSS: Determina la estructura del sistema de la Seguridad Social en Régimen General y Regímenes Especiales.»",
+        "12": "«Artículo 12 TRLGSS: Regula el encuadramiento y exclusión, salvo prueba en contrario, de los familiares del empresario.»",
+        "15": "«Artículo 15 TRLGSS: Regula la obligatoriedad, unicidad y alcance vitalicio de la afiliación al sistema.»",
+        "16": "«Artículo 16 TRLGSS: Establece las formas de promover la afiliación (a instancia del empresario, del trabajador o de oficio).»",
+        "18": "«Artículo 18 TRLGSS: Establece la obligatoriedad de la cotización en los regímenes General y Especiales.»",
+        "21": "«Artículo 21 TRLGSS: Configura la Tesorería General de la Seguridad Social como servicio común bajo los principios de solidaridad financiera y caja única.»",
+        "36": "«Artículo 36 TRLGSS: Regula las facultades de comprobación de la Tesorería General sobre liquidación e ingreso de cuotas.»",
+        "41": "«Artículo 41 CE: Garantiza el mantenimiento por los poderes públicos de un régimen público de Seguridad Social para todos los ciudadanos.»",
+        "42": "«Artículo 42 TRLGSS: Enumera el catálogo general de prestaciones que integran la acción protectora del sistema.»",
+        "58": "«Artículo 58 TRLGSS: Regula la revalorización anual de las pensiones contributivas conforme al IPC.»",
+        "136": "«Artículo 136 TRLGSS: Determina los colectivos incluidos obligatoriamente en el campo de aplicación del Régimen General.»",
+        "137": "«Artículo 137 TRLGSS: Establece los trabajos excluidos del Régimen General (servicios amistosos, benévolos o de buena vecindad).»",
+        "138": "«Artículo 138 TRLGSS: Regula la inscripción previa de empresas y las comunicaciones de altas, bajas y variaciones en el Régimen General.»",
+        "165": "«Artículo 165 TRLGSS: Establece los requisitos generales de afiliación y alta o situación asimilada para causar derecho a las prestaciones.»",
+        "166": "«Artículo 166 TRLGSS: Regula los supuestos legales de situaciones asimiladas a la de alta en el Régimen General.»",
+        "169": "«Artículo 169 TRLGSS: Define el concepto y las situaciones determinantes de la incapacidad temporal.»",
+        "193": "«Artículo 193 TRLGSS: Define el concepto de la incapacidad permanente contributiva.»",
+        "205": "«Artículo 205 TRLGSS: Establece los requisitos de edad y cotización para acceder a la pensión de jubilación contributiva.»",
+        "250": "«Artículo 250 TRLGSS: Regula el objeto y ámbito del Sistema Especial para Empleados de Hogar.»",
+        "252": "«Artículo 252 TRLGSS: Delimita el ámbito de aplicación del Sistema Especial para Trabajadores por Cuenta Ajena Agrarios.»",
+        "305": "«Artículo 305 TRLGSS: Delimita la extensión del campo de aplicación del Régimen Especial de Trabajadores por Cuenta Propia o Autónomos.»",
     }
-    if num_limpio in respaldo_literales:
-        return respaldo_literales[num_limpio]
+    if num_limpio in respaldo_tematico:
+        return respaldo_tematico[num_limpio]
     if num_limpio.isdigit():
         n = int(num_limpio)
         if n > 373:
@@ -3037,7 +3037,10 @@ def obtener_grupo_tema(nombre_test, categoria):
 def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", categoria_sel=""):
     st.session_state.test_name = nombre_test
     st.session_state.test_esp = especialidad_sel or st.session_state.get('saved_esp', '')
-    st.session_state.test_cat = categoria_sel or st.session_state.get('saved_cat', '')
+    cat_limpia = categoria_sel or st.session_state.get('saved_cat', '')
+    if cat_limpia in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
+        cat_limpia = "DESARROLLO"
+    st.session_state.test_cat = cat_limpia
     st.session_state.mostrar_opciones_simulacro = False
     cat_actual = st.session_state.test_cat
     max_op = 3 if "GESTI" in (st.session_state.test_esp or "").upper() else 4
@@ -3045,7 +3048,7 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
         try:
             r = descargar_pdf_fresco(url_descarga)
             if r.status_code == 200:
-                if cat_actual in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
+                if cat_actual == "DESARROLLO":
                     raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
                     if not raw_qs:
                         st.error("No se encontraron preguntas o epígrafes de desarrollo en este PDF.")
@@ -3157,14 +3160,83 @@ def generar_simulacro_aleatorio(especialidad, ambito_seleccionado, total_deseada
 if 'questions' not in st.session_state:
     st.session_state.update(questions=[], current_index=0, stats={}, finished=False, checked=False, test_name=None)
 
+def _diagnosticar_extension_respuesta_desarrollo(texto):
+    """Evalúa si el alumno no escribió nada, escribió solo 1 o 2 líneas breves, o cumplimentó el epígrafe."""
+    t = (texto or "").strip()
+    if not t:
+        return "⚠️ No cumplimentó nada en el texto"
+    lineas_no_vacias = [l.strip() for l in t.split('\n') if l.strip()]
+    palabras = re.findall(r'\S+', t)
+    if len(palabras) < 35 or (len(lineas_no_vacias) <= 2 and len(t) < 200):
+        num_lin = 1 if len(palabras) < 18 else 2
+        return f"⚠️ Solo escribió {num_lin} {'línea' if num_lin == 1 else 'líneas'} ({len(palabras)} palabras)"
+    return "✅ Cumplimentado"
+
+def construir_nombre_test_seguimiento_sheets(indice_actual=None):
+    """
+    Si el test es de DESARROLLO, construye el texto para la celda 'NOMBRE DEL TEST' en varias líneas:
+    Línea 1: Tema que está trabajando.
+    Línea 2+: Epígrafe(s) y aviso si no cumplimentó nada o si solo escribió 1 o 2 líneas.
+    Para el resto de tests devuelve el nombre normal del test.
+    """
+    qs = st.session_state.get("questions", [])
+    es_desarrollo = (
+        (st.session_state.get("test_cat") or "").upper() == "DESARROLLO"
+        or any(q.get("tipo_abierta") == "DESARROLLO" for q in qs)
+    )
+    if not es_desarrollo or not qs:
+        return st.session_state.get("test_name") or "Test"
+
+    st.session_state.test_cat = "DESARROLLO"
+    tema_lbl = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), qs[0])
+    stats = st.session_state.get("stats", {})
+
+    if indice_actual is not None and not st.session_state.get("finished", False):
+        q_act = qs[indice_actual]
+        ep_titulo = q_act.get("question_text", f"Epígrafe {indice_actual + 1}").strip()
+        txt_al = (stats.get(indice_actual, {}).get("selected") or "").strip()
+        estado_txt = _diagnosticar_extension_respuesta_desarrollo(txt_al)
+        return f"{tema_lbl}\n{ep_titulo} -> {estado_txt}"
+
+    detalles_epigrafes = []
+    alguno_tocado = False
+    for i_q, q_item in enumerate(qs):
+        ep_tit = q_item.get("question_text", f"Epígrafe {i_q + 1}").strip()
+        txt_i = (stats.get(i_q, {}).get("selected") or "").strip()
+        intentos_i = stats.get(i_q, {}).get("attempts", 0)
+        if txt_i or intentos_i > 0:
+            alguno_tocado = True
+            est_i = _diagnosticar_extension_respuesta_desarrollo(txt_i)
+            detalles_epigrafes.append(f"{ep_tit} -> {est_i}")
+
+    if not alguno_tocado:
+        idx_ref = st.session_state.get("current_index", 0)
+        ep_actual = qs[idx_ref].get("question_text", f"Epígrafe {idx_ref + 1}").strip() if idx_ref < len(qs) else "Todos los epígrafes"
+        detalles_epigrafes.append(f"{ep_actual} -> ⚠️ No cumplimentó nada en el texto")
+
+    return f"{tema_lbl}\n" + "\n".join(detalles_epigrafes)
+
 def save_answer(selected):
-    stat = st.session_state.stats[st.session_state.current_index]
+    idx_curr = st.session_state.current_index
+    stat = st.session_state.stats[idx_curr]
+    q_curr = st.session_state.questions[idx_curr] if st.session_state.get("questions") else {}
+    es_desarrollo_curr = bool(q_curr.get("tipo_abierta") == "DESARROLLO" or st.session_state.get("test_cat") == "DESARROLLO")
+
     if selected is not None and str(selected).strip() != "" and selected != stat['selected']:
         stat['selected'] = selected
         stat['attempts'] += 1
         if not st.session_state.get('inicio_registrado_sheets', False):
             st.session_state.inicio_registrado_sheets = True
-            registrar_actividad_sheets("🚀 En curso", nombre_test=st.session_state.get("test_name") or "Test", accion="nueva_fila")
+            if es_desarrollo_curr:
+                st.session_state.test_cat = "DESARROLLO"
+            nombre_celda = construir_nombre_test_seguimiento_sheets(indice_actual=idx_curr)
+            registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
+    elif es_desarrollo_curr and st.session_state.get("checked", False):
+        if not st.session_state.get('inicio_registrado_sheets', False):
+            st.session_state.inicio_registrado_sheets = True
+            st.session_state.test_cat = "DESARROLLO"
+            nombre_celda = construir_nombre_test_seguimiento_sheets(indice_actual=idx_curr)
+            registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
 
 def handle_radio_change():
     idx = st.session_state.current_index
@@ -3392,15 +3464,16 @@ if not st.session_state.questions:
         with st.expander("Opcional: Subir un PDF manualmente desde tu dispositivo"):
             uf = st.file_uploader("", type="pdf")
             if uf is not None:
-                st.session_state.update(modo_avance=modo_avance, test_name=uf.name, test_esp=especialidad, test_cat=categoria if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else "ARCHIVO LOCAL")
+                cat_local = "DESARROLLO" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else (categoria if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else "ARCHIVO LOCAL")
+                st.session_state.update(modo_avance=modo_avance, test_name=uf.name, test_esp=especialidad, test_cat=cat_local)
                 max_op_local = 3 if "GESTI" in especialidad.upper() else 4
                 with st.spinner("Procesando documento local..."):
                     pdf_bytes_local = uf.read()
-                    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
+                    if cat_local == "DESARROLLO":
                         rqs = PDFQuizParser.parse_abiertas_gestion(pdf_bytes_local, modo="DESARROLLO")
                         if not rqs: st.error("No se encontraron preguntas de desarrollo en este PDF.")
                         else: procesar_preguntas(rqs, barajar=False)
-                    elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+                    elif cat_local in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
                         rqs = PDFQuizParser.parse_abiertas_gestion(pdf_bytes_local, modo="SUPUESTOS")
                         if not rqs: st.error("No se encontraron supuestos prácticos en este PDF.")
                         else: procesar_preguntas(rqs, barajar=False)
@@ -3420,7 +3493,6 @@ if not st.session_state.questions:
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
                     max_op_adm = 3 if "GESTI" in esp.upper() else 4
 
-                    # 1. TABLA DE TESTS TIPO TEST (ESPECIFICO, EXAMENES, GENERAL)
                     st.markdown(f"### 📋 Catálogo de Tests Tipo Test: {esp}")
                     t_md = "| Categoría | Nombre del Test | Nº de Preguntas | Media Opciones |\n| :--- | :--- | :---: | :---: |\n"
                     for cat in ["ESPECIFICO", "EXAMENES", "GENERAL"]:
@@ -3451,7 +3523,6 @@ if not st.session_state.questions:
                     st.markdown(t_md)
                     txt_copiar += f"### 📋 Catálogo de Tests Tipo Test: {esp}\n\n" + t_md + "\n"
 
-                    # 2. APARTADO ESPECÍFICO DE SUPUESTOS PRÁCTICOS
                     supuestos_dict = {k: v for k, v in cats.get("SUPUESTOS", {}).items() if v is not None}
                     st.markdown(f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} {'tema incluido' if len(supuestos_dict)==1 else 'temas incluidos'})")
                     if supuestos_dict:
@@ -3481,7 +3552,6 @@ if not st.session_state.questions:
                     st.markdown(s_md)
                     txt_copiar += f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} incluidos)\n\n" + s_md + "\n"
 
-                    # 3. APARTADO ESPECÍFICO DE DESARROLLO (CON Nº DE EPÍGRAFES POR PDF)
                     if "DESARROLLO" in cats:
                         desarrollo_dict = {k: v for k, v in cats.get("DESARROLLO", {}).items() if v is not None}
                         st.markdown(f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} {'tema incluido' if len(desarrollo_dict)==1 else 'temas incluidos'})")
@@ -3568,6 +3638,14 @@ elif not st.session_state.finished:
         st.session_state.update(checked=False, current_index=idx - 1, do_scroll=True); st.rerun()
     if c2.button("Comprobar", use_container_width=True):
         save_answer(sel_opt)
+        if q.get("tipo_abierta") == "DESARROLLO":
+            st.session_state.test_cat = "DESARROLLO"
+            nombre_celda_des = construir_nombre_test_seguimiento_sheets(indice_actual=idx)
+            if not st.session_state.get('inicio_registrado_sheets', False):
+                st.session_state.inicio_registrado_sheets = True
+                registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda_des, aciertos="", fallos="", blancos="", accion="nueva_fila")
+            else:
+                registrar_actividad_sheets("✍️ Revisado", nombre_test=nombre_celda_des, aciertos="", fallos="", blancos="", accion="actualizar_fin")
         st.session_state.update(checked=True, do_scroll=True); st.rerun()
     if idx < len(st.session_state.questions) - 1:
         if c3.button("Siguiente ➔", use_container_width=True):
@@ -3786,24 +3864,43 @@ else:
     if not st.session_state.get('resultado_registrado', False):
         st.session_state.resultado_registrado = True
         sincronizar_progreso_navegador()
-        if aciertos > 0 and aciertos_por_intento:
-            max_intento = max(aciertos_por_intento.keys())
-            tope_mostrar = 1 if max_intento == 1 else max(3, max_intento)
-            desglose_str = ", ".join([f"{aciertos_por_intento.get(k, 0)}-{k}" for k in range(1, tope_mostrar + 1)])
-            aciertos_sheets_str = f"{aciertos} ({desglose_str})"
-        else:
-            aciertos_sheets_str = str(aciertos)
 
-        nota_sheets_str = f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
-        registrar_actividad_sheets(
-            evento="✅ Completado",
-            nombre_test=st.session_state.get("test_name") or "Test",
-            aciertos=aciertos_sheets_str,
-            fallos=fallos,
-            blancos=blancos,
-            nota=nota_sheets_str,
-            accion="actualizar_fin"
-        )
+        es_desarrollo_fin = any(q.get("tipo_abierta") == "DESARROLLO" for q in st.session_state.questions) or (st.session_state.get("test_cat") or "").upper() == "DESARROLLO"
+
+        if es_desarrollo_fin:
+            st.session_state.test_cat = "DESARROLLO"
+            nombre_test_final_sheets = construir_nombre_test_seguimiento_sheets()
+            nota_sheets_str = f"{nota_media_50:.2f}/50 ({nota_oposicion_10:.2f}/10)".replace(".", ",")
+            accion_sheets = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
+            st.session_state.inicio_registrado_sheets = True
+            registrar_actividad_sheets(
+                evento="✅ Completado",
+                nombre_test=nombre_test_final_sheets,
+                aciertos="",
+                fallos="",
+                blancos="",
+                nota=nota_sheets_str,
+                accion=accion_sheets
+            )
+        else:
+            if aciertos > 0 and aciertos_por_intento:
+                max_intento = max(aciertos_por_intento.keys())
+                tope_mostrar = 1 if max_intento == 1 else max(3, max_intento)
+                desglose_str = ", ".join([f"{aciertos_por_intento.get(k, 0)}-{k}" for k in range(1, tope_mostrar + 1)])
+                aciertos_sheets_str = f"{aciertos} ({desglose_str})"
+            else:
+                aciertos_sheets_str = str(aciertos)
+
+            nota_sheets_str = f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
+            registrar_actividad_sheets(
+                evento="✅ Completado",
+                nombre_test=st.session_state.get("test_name") or "Test",
+                aciertos=aciertos_sheets_str,
+                fallos=fallos,
+                blancos=blancos,
+                nota=nota_sheets_str,
+                accion="actualizar_fin"
+            )
 
     if nota_oposicion_10 >= 5.0:
         if not st.session_state.get('celebracion_mostrada', False):
@@ -3952,4 +4049,5 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
 
