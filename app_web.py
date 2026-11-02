@@ -1855,40 +1855,49 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
 
 def _dividir_en_oraciones_juridicas(texto):
     """
-    Extrae todas las unidades conceptuales y proposiciones jurídicas del resumen oficial.
+    Divide el resumen oficial en bloques o apartados principales (párrafos y viñetas con entidad propia),
+    evitando fragmentar un mismo apartado en demasiadas micro-frases para que la penalización de -1,00 punto
+    se aplique por apartado/idea omitida de forma justa y equilibrada.
     """
     if not texto:
         return []
-    t = re.sub(r'(?<![.?!:;»"\'])\n(?![a-e][\)\.\-]\s|\d+[\.\)]\s|[•\*\-–]\s)', ' ', texto)
-    t = re.sub(r'\b(art|arts|núm|num|cap|disp|ad|trans|apdo|párr|pág|rd|rdl|et|cc|lec)\.', r'\1<DOT>', t, flags=re.IGNORECASE)
-    t = re.sub(r'(\d)\.(\d)', r'\1<DOT>\2', t)
-    t = re.sub(r'(\d)\.([a-zA-Zºª°])', r'\1<DOT>\2', t)
-    t = re.sub(r'\.([a-e])\b', r'<DOT>\1', t)
 
-    partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[a-e][\)\.\-]\s|\d+[\.\)]\s|[•\*\-–]\s)|\n+', t)
-    oraciones = []
-    for p in partes:
-        p_rest = p.replace('<DOT>', '.').strip()
-        p_rest = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', p_rest).strip()
-        if PDFQuizParser._es_basura_cabecera_o_pie(p_rest):
+    bloques_brutos = [b.strip() for b in texto.split('\n') if b.strip()]
+    unidades = []
+
+    for blq in bloques_brutos:
+        blq_limpio = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', blq).strip()
+        if PDFQuizParser._es_basura_cabecera_o_pie(blq_limpio):
             continue
-        if re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', p_rest) and len(p_rest) < 85 and not p_rest.endswith('.'):
+        # Ignorar los encabezados cortos de numeración (ej. "1. Concepto y Naturaleza Jurídica")
+        if re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_limpio) and len(blq_limpio) < 90 and not blq_limpio.endswith('.'):
             continue
-        if len(p_rest) >= 25:
-            oraciones.append(p_rest)
-    return oraciones
+        if len(blq_limpio) >= 30:
+            unidades.append(blq_limpio)
+
+    # Si algún PDF antiguo viniera en un único párrafo gigante sin saltos de línea, lo dividimos por oraciones principales
+    if len(unidades) <= 2 and len(texto) > 400:
+        t = re.sub(r'\b(art|arts|núm|num|cap|disp|ad|trans|apdo|párr|pág|rd|rdl|et|cc|lec)\.', r'\1<DOT>', texto, flags=re.IGNORECASE)
+        t = re.sub(r'(\d)\.(\d)', r'\1<DOT>\2', t)
+        t = re.sub(r'(\d)\.([a-zA-Zºª°])', r'\1<DOT>\2', t)
+        partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[•\*\-–]\s)', t)
+        unidades = []
+        for p in partes:
+            p_rest = p.replace('<DOT>', '.').strip()
+            p_rest = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', p_rest).strip()
+            if len(p_rest) >= 40 and not PDFQuizParser._es_basura_cabecera_o_pie(p_rest):
+                unidades.append(p_rest)
+
+    return unidades
 
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 - Cada parte se califica de 0 a 50 puntos (mínimo 25 puntos directos para superar sin compensación).
-- Criterio 1 (0 a 45 puntos): Conocimiento completo de todos los apartados del epígrafe e inclusión obligatoria de las leyes y artículos aplicables. Cada apartado del resumen omitido y cada referencia legal obligatoria omitida puntúan negativamente restando puntos de la nota alcanzada.
+- Criterio 1 (0 a 45 puntos): Conocimiento completo de los apartados del epígrafe e inclusión de leyes y artículos de aplicación. Penalizaciones ponderadas: obviar un apartado del resumen resta -1,00 punto; omitir una referencia normativa obligatoria del epígrafe resta -0,50 puntos.
 - Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura (solo puntúa si alcanza al menos 20/45 en Criterio 1).
-- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la introducción de siglas/abreviaturas ("...en adelante, XXXX").
+- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la introducción de siglas/abreviaturas ("...en adelante, XXXX", -0,25 ptos por sigla sin introducir).
 """
 
-# AUDITOR EXPERTO POR EPÍGRAFE CONCRETO:
-# Define para cada epígrafe qué leyes y artículos son de cita obligatoria ante el Tribunal (aunque el resumen del PDF no los mencione literalmente)
-# y qué artículos conexos son válidos. Omitir las referencias obligatorias del epígrafe resta puntos directamente.
 AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
     {
         "nombre_epigrafe": "Constitución Española y Seguridad Social (Tema 51 - Ep. 1)",
@@ -1959,7 +1968,7 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
         "obligatorios": [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
             ("NORMA_RD84", ["84/1996"], "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas)"),
-            ("ART_138_139", ["138", "139", "10", "11", "14"], "Artículos 138 y 139 del TRLGSS (o arts. 5 y 10 a 19 del RD 84/1996 sobre inscripción de empresas, CCC y registro de empresarios)"),
+            ("ART_138_139", ["138", "139", "5", "10", "11", "14"], "Artículos 138 y 139 del TRLGSS (o arts. 5 y 10 a 19 del RD 84/1996 sobre inscripción de empresas, CCC y registro de empresarios)"),
         ],
         "articulos_validos": {"5", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "21", "80", "83", "136", "138", "139", "140"}
     },
@@ -2063,11 +2072,6 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
 ]
 
 def auditar_normativa_obligatoria_del_epigrafe(texto_alumno_norm, arts_en_alumno, contexto_epigrafe_norm, citas_ok_directas, citas_faltan_directas):
-    """
-    Actúa como auditor experto del epígrafe concreto:
-    Comprueba si el alumno ha citado los artículos y leyes troncales que el Tribunal exige en este epígrafe concreto,
-    devolviendo tanto los preceptos acertados como los preceptos obligatorios omitidos (que restan puntos).
-    """
     acertados_oblig = list(citas_ok_directas)
     omitidos_oblig = list(citas_faltan_directas)
 
@@ -2297,11 +2301,13 @@ def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, co
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     """
-    AUDITOR EXPERTO DEL EPÍGRAFE CON PUNTUACIÓN NEGATIVA POR OMISIONES:
-    1. Calcula la puntuación bruta sobre 45 por los apartados, cifras y artículos acertados.
-    2. Aplica RESTA NEGATIVA DIRECTA por cada apartado del resumen omitido (-1,50 ptos por apartado omitido).
-    3. Aplica RESTA NEGATIVA DIRECTA por cada referencia legal obligatoria del epígrafe omitida (-2,00 ptos por norma/artículo obligatorio omitido).
-    4. Aplica RESTA NEGATIVA DIRECTA por cada plazo/cifra omitido (-0,75 ptos), por cada artículo indebido (-2,25 ptos) y por cada sigla sin introducir (-0,50 ptos).
+    AUDITOR EXPERTO DEL EPÍGRAFE CON PENALIZACIONES PONDERADAS Y PROPORCIONALES:
+    - Obviar un apartado del resumen oficial: -1,00 punto.
+    - Omitir una referencia normativa obligatoria del epígrafe: -0,50 puntos.
+    - Omitir un plazo o dato cuantitativo: -0,25 puntos.
+    - Usar una sigla sin fórmula introductoria previa ("...en adelante, XXXX"): -0,25 puntos (tope -1,00).
+    - Citar un artículo improcedente ajeno al epígrafe: -1,00 punto.
+    - Suelo de justicia: Si el alumno ha escrito contenido acertado, las restas por omisión nunca rebajan su nota por debajo del 55 % de los puntos brutos que se ha ganado con sus aciertos.
     """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -2382,7 +2388,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     ids_ref_equiv = set(mapa_ref.keys())
 
-    # PASO 1: Comparar artículos con los que aparecen expresamente en el resumen
     citas_ok_base, citas_faltan_base = [], []
     for k_par, lbl in mapa_ref.items():
         if k_par in mapa_al:
@@ -2398,12 +2403,10 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_faltan_base.append(lbl)
 
-    # PASO 2: Auditoría experta de referencias legales obligatorias en este epígrafe concreto
     citas_ok, citas_faltan = auditar_normativa_obligatoria_del_epigrafe(
         alumno_norm, arts_en_alumno, ctx_completo_norm, citas_ok_base, citas_faltan_base
     )
 
-    # PASO 3: Evaluar artículos adicionales aportados por el alumno y buscar en el BOE los indebidos
     citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
     oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
 
@@ -2429,7 +2432,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         else:
             citas_erroneas.append(detalle_fuente)
 
-    # PASO 4: Auditoría estricta de siglas usadas sin su introducción formal ("...en adelante, XXXX")
     siglas_sin_definir = auditar_siglas_sin_definir_previa(texto_alumno)
 
     pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
@@ -2465,7 +2467,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "sintesis", "resumen", "analitico", "epigrafe", "epigrafes"
     }
 
-    # PASO 5: Comparación unidad por unidad contra el resumen oficial
     texto_base_ideas = f"{respuesta_oficial}. {explicacion_oficial}" if respuesta_oficial else explicacion_oficial
     oraciones_completas = _dividir_en_oraciones_juridicas(texto_base_ideas)
     puntos_cubiertos = []
@@ -2484,7 +2485,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             continue
         aciertos_orac = sum(1 for w in palabras_orac if _raiz(w) in alumno_norm)
         ratio_orac = aciertos_orac / len(palabras_orac)
-        if ratio_orac >= 0.44 or (len(palabras_orac) <= 4 and aciertos_orac >= 2):
+        # Permite redacción propia (38 % de raíces clave del apartado)
+        if ratio_orac >= 0.38 or (len(palabras_orac) <= 4 and aciertos_orac >= 2):
             puntos_cubiertos.append(orac_limpia)
         else:
             puntos_omitidos.append(orac_limpia)
@@ -2504,31 +2506,31 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     else:
         texto_sugerido = explicacion_oficial
 
-    # CÁLCULO CON PUNTUACIÓN NEGATIVA DIRECTA POR APARTADOS OMITIDOS Y POR REFERENCIAS LEGALES OMITIDAS:
+    # 1. PUNTUACIÓN BRUTA GANADA POR LO ACERTADO (sobre 45 puntos):
     total_unidades_ideas = max(1, len(puntos_cubiertos) + len(puntos_omitidos))
-    valor_unitario_idea = 35.0 / total_unidades_ideas
+    valor_unitario_idea = 36.0 / total_unidades_ideas
     pts_brutos_ideas = round(len(puntos_cubiertos) * valor_unitario_idea, 2)
 
     total_unidades_legales = max(1, len(citas_ok) + len(citas_faltan))
-    valor_unitario_legal = 10.0 / total_unidades_legales
+    valor_unitario_legal = 9.0 / total_unidades_legales
     pts_brutos_legales = round(len(citas_ok) * valor_unitario_legal, 2)
 
-    bonificacion_complementarias = round(min(3.5, 0.75 * len(citas_complementarias)), 2)
+    bonificacion_complementarias = round(min(3.0, 0.75 * len(citas_complementarias)), 2)
     pts_brutos_criterio_1 = round(min(45.0, pts_brutos_ideas + pts_brutos_legales + bonificacion_complementarias), 2)
 
-    # RESTAS NEGATIVAS DIRECTAS SOBRE LO ACERTADO:
-    # 1. Cada apartado del resumen omitido resta -1,50 ptos adicionales sobre los puntos ganados (además de no haber sumado su valor)
-    resta_negativa_apartados_omitidos = round(len(puntos_omitidos) * 1.50, 2)
-    # 2. Cada referencia legal obligatoria del epígrafe omitida resta -2,00 ptos directamente
-    resta_negativa_referencias_omitidas = round(len(citas_faltan) * 2.00, 2)
-    # 3. Cada plazo/cifra clave omitida resta -0,75 ptos directamente
-    resta_negativa_cifras_omitidas = round(len(cifras_faltan) * 0.75, 2)
-    # 4. Cada artículo indebido (ajeno al epígrafe) resta -2,25 ptos
-    penalizacion_citas_erroneas = round(len(citas_erroneas) * 2.25, 2)
-    # 5. Conclusión con sentido invertido resta -11,25 ptos
-    penalizacion_sentido = 11.25 if alerta_sentido else 0.0
-    # 6. Cada sigla sin introducir ("...en adelante, XXXX") resta -0,50 ptos
-    penalizacion_siglas = round(min(2.50, len(siglas_sin_definir) * 0.50), 2)
+    # 2. PENALIZACIONES NEGATIVAS MODERADAS Y JUSTAS:
+    # - Obviar un apartado/bloque del resumen: -1,00 punto por apartado omitido
+    resta_negativa_apartados_omitidos = round(len(puntos_omitidos) * 1.00, 2)
+    # - No poner una referencia normativa obligatoria del epígrafe: -0,50 puntos por referencia omitida
+    resta_negativa_referencias_omitidas = round(len(citas_faltan) * 0.50, 2)
+    # - Omitir un plazo o dato cuantitativo concreto: -0,25 puntos
+    resta_negativa_cifras_omitidas = round(len(cifras_faltan) * 0.25, 2)
+    # - Añadir un artículo erróneo que no guarda relación con el epígrafe: -1,00 punto
+    penalizacion_citas_erroneas = round(len(citas_erroneas) * 1.00, 2)
+    # - Conclusión con sentido invertido: -5,00 puntos
+    penalizacion_sentido = 5.00 if alerta_sentido else 0.0
+    # - Usar siglas sin introducir ("...en adelante, XXXX"): -0,25 puntos por sigla (máximo -1,00 pto)
+    penalizacion_siglas = round(min(1.00, len(siglas_sin_definir) * 0.25), 2)
 
     total_restas_c1 = round(
         resta_negativa_apartados_omitidos
@@ -2539,64 +2541,59 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         2
     )
 
-    pts_criterio_1 = round(max(0.0, pts_brutos_criterio_1 - total_restas_c1), 2)
+    # Suelo de justicia: quien ha escrito contenido acertado conserva al menos el 55 % de su puntuación bruta ganada
+    suelo_justicia_c1 = round(pts_brutos_criterio_1 * 0.55, 2) if len(puntos_cubiertos) > 0 else 0.0
+    pts_criterio_1 = round(max(suelo_justicia_c1, pts_brutos_criterio_1 - total_restas_c1), 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
         num_parrafos_al = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 20])
         usa_conectores = sum(1 for c in ["conforme", "virtud", "establece", "dispone", "asimismo", "obstante", "tanto", "articulo", "respecto", "titulo"] if c in alumno_norm)
         pts_criterio_2 = round(min(3.0, 1.8 + (0.6 if num_parrafos_al >= 2 else 0.0) + (0.6 if usa_conectores >= 2 else 0.0)), 2)
-        pts_criterio_3_base = min(2.0, 1.4 + (0.6 if len(texto_alumno.strip()) >= 180 and usa_conectores >= 1 else 0.2))
-        if penalizacion_siglas <= pts_criterio_3_base:
-            pts_criterio_3 = round(pts_criterio_3_base - penalizacion_siglas, 2)
-        else:
-            exceso_siglas = penalizacion_siglas - pts_criterio_3_base
-            pts_criterio_3 = 0.0
-            pts_criterio_1 = round(max(0.0, pts_criterio_1 - exceso_siglas), 2)
+        pts_criterio_3_base = min(2.0, 1.5 + (0.5 if len(texto_alumno.strip()) >= 150 and usa_conectores >= 1 else 0.2))
+        pts_criterio_3 = round(max(0.0, pts_criterio_3_base - penalizacion_siglas), 2)
     else:
         pts_criterio_2 = 0.0
         pts_criterio_3 = 0.0
         if penalizacion_siglas > 0:
-            pts_criterio_1 = round(max(0.0, pts_criterio_1 - penalizacion_siglas), 2)
+            pts_criterio_1 = round(max(suelo_justicia_c1, pts_criterio_1 - penalizacion_siglas), 2)
 
     nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
 
     motivos_resta = []
     if resta_negativa_apartados_omitidos > 0 and puntos_omitidos:
-        pts_no_sumados_id = round(len(puntos_omitidos) * valor_unitario_idea, 2)
         motivos_resta.append(
-            f"🔻 **-{resta_negativa_apartados_omitidos:.2f} ptos de penalización negativa directa (más -{pts_no_sumados_id:.2f} ptos no devengados) por apartados del resumen omitidos:** "
-            f"Has dejado sin desarrollar **{len(puntos_omitidos)} de los {total_unidades_ideas} bloques esenciales** del epígrafe (-1,50 ptos de resta por cada bloque omitido)."
+            f"🔸 **-{resta_negativa_apartados_omitidos:.2f} ptos por obviar contenido del resumen oficial (-1,00 pto c/u):** "
+            f"Has dejado sin desarrollar **{len(puntos_omitidos)} de los {total_unidades_ideas} apartados** del epígrafe."
         )
     if resta_negativa_referencias_omitidas > 0 and citas_faltan:
-        pts_no_sumados_leg = round(len(citas_faltan) * valor_unitario_legal, 2)
         motivos_resta.append(
-            f"🔻 **-{resta_negativa_referencias_omitidas:.2f} ptos de penalización negativa directa (más -{pts_no_sumados_leg:.2f} ptos no devengados) por referencias legales obligatorias omitidas (-2,00 ptos c/u):** "
+            f"🔸 **-{resta_negativa_referencias_omitidas:.2f} ptos por referencias normativas obligatorias omitidas (-0,50 ptos c/u):** "
             f"No has citado **{'; '.join(citas_faltan)}**."
         )
     if resta_negativa_cifras_omitidas > 0 and cifras_faltan:
         motivos_resta.append(
-            f"🔻 **-{resta_negativa_cifras_omitidas:.2f} ptos de penalización negativa directa por plazos, porcentajes o cuantías omitidos (-0,75 ptos c/u):** "
+            f"🔸 **-{resta_negativa_cifras_omitidas:.2f} ptos por plazos o cuantías omitidos (-0,25 ptos c/u):** "
             f"Faltó precisar **{', '.join(cifras_faltan)}**."
         )
     if penalizacion_siglas > 0:
         lista_siglas_txt = ", ".join([f"**{s}** (debiste introducirlo previamente como *«{ej}»*)" for s, ej in siglas_sin_definir])
         motivos_resta.append(
-            f"🔻 **-{penalizacion_siglas:.2f} ptos de penalización negativa por siglas/abreviaturas sin fórmula introductoria previa (-0,50 ptos c/u):** "
+            f"🔸 **-{penalizacion_siglas:.2f} ptos por siglas/abreviaturas sin fórmula introductoria previa (-0,25 ptos c/u):** "
             f"{lista_siglas_txt}."
         )
     if penalizacion_citas_erroneas > 0:
         motivos_resta.append(
-            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos de penalización negativa por citar artículos indebidos (-2,25 ptos c/u):** "
+            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos por citar artículos sin relación con el epígrafe (-1,00 pto c/u):** "
             f"{' | '.join(citas_erroneas)}"
         )
     if penalizacion_sentido > 0:
         motivos_resta.append(f"🔻 **-{penalizacion_sentido:.2f} ptos (Conclusión invertida):** {alerta_sentido}")
     if not supera_umbral_20:
         motivos_resta.append(
-            "🔻 **-5,00 ptos (Criterios 2 y 3 bloqueados por el baremo oficial):** "
-            "Al quedar el Criterio 1 por debajo de 20,00 / 45 puntos tras aplicar las penalizaciones por omisión, no puntúan estructura (0/3) ni expresión escrita (0/2)."
+            "ℹ️ **Criterios 2 y 3 condicionados al umbral de 20,00 / 45 ptos:** "
+            "Conforme al baremo del Tribunal, los puntos de estructura (hasta 3 ptos) y expresión escrita (hasta 2 ptos) se activan al alcanzar 20,00 puntos en el Criterio 1."
         )
 
     return {
@@ -2633,70 +2630,70 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     tot_ideas = len(ev["puntos_cubiertos"]) + len(ev["puntos_omitidos"])
 
     lineas_b1 = [
-        f"El resumen oficial de este epígrafe se compone de **{tot_ideas} unidades conceptuales mínimas** exigibles por el Tribunal (admitiéndose otra redacción equivalente). "
-        f"Has desarrollado **{len(ev['puntos_cubiertos'])} de {tot_ideas}** unidades conceptuales."
+        f"El resumen oficial de este epígrafe consta de **{tot_ideas} apartados esenciales** (admitiéndose su explicación con tus propias palabras). "
+        f"Has desarrollado con acierto **{len(ev['puntos_cubiertos'])} de {tot_ideas}** apartados (**+{ev.get('pts_brutos_criterio_1', 0.0):.2f} puntos brutos** ganados por tu exposición)."
     ]
     if ev["puntos_cubiertos"]:
         incluidos_txt = "\n".join([f"   - ✔️ *{p}*" for p in ev["puntos_cubiertos"][:6]])
         lineas_b1.append(f"**Apartados del resumen correctamente recogidos:**\n{incluidos_txt}")
     else:
-        lineas_b1.append("⚠️ Tu exposición no desarrolla ninguno de los apartados esenciales del resumen oficial.")
-    bloques.append("1. **✅ Auditoría de apartados cubiertos frente al resumen oficial:**\n" + "\n\n".join(lineas_b1))
+        lineas_b1.append("⚠️ Tu exposición aún no desarrolla los apartados nucleares del resumen oficial.")
+    bloques.append("1. **✅ Auditoría de apartados cubiertos con acierto:**\n" + "\n\n".join(lineas_b1))
 
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         lineas_b2 = [
-            f"Cada apartado o plazo del resumen que dejas en blanco **puntúa negativamente (-{ev.get('resta_negativa_apartados_omitidos', 0.0) + ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos restados directamente)** porque debilita sustancialmente la exposición ante el Tribunal:"
+            f"Obviar contenido esencial del resumen resta **-1,00 punto por apartado omitido** (y **-0,25 puntos** por plazo/dato omitido):"
         ]
         if ev["cifras_faltan"]:
-            lineas_b2.append(f"   - 🔻 **Plazos, cuantías o porcentajes omitidos (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos):** {', '.join(ev['cifras_faltan'])}.")
+            lineas_b2.append(f"   - 🔸 **Plazos, cuantías o porcentajes omitidos (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos):** {', '.join(ev['cifras_faltan'])}.")
         for idx_om, p_om in enumerate(ev["puntos_omitidos"], 1):
-            lineas_b2.append(f"   - 🔻 **Apartado omitido {idx_om} (-1,50 ptos):** *{p_om}*")
-        bloques.append("2. **⚠️ Apartados y datos del resumen omitidos (puntúan negativamente):**\n" + "\n".join(lineas_b2))
+            lineas_b2.append(f"   - 🔸 **Apartado omitido {idx_om} (-1,00 pto):** *{p_om}*")
+        bloques.append("2. **⚠️ Apartados y datos del resumen omitidos (-1,00 pto por apartado):**\n" + "\n".join(lineas_b2))
     else:
         bloques.append(
-            "2. **⚠️ Apartados y datos del resumen omitidos (puntúan negativamente):**\n"
-            "¡Excelente! No has omitido ningún apartado ni plazo del resumen oficial (0,00 puntos de penalización por omisión de contenido)."
+            "2. **⚠️ Apartados y datos del resumen omitidos (-1,00 pto por apartado):**\n"
+            "¡Excelente! No has omitido ningún apartado ni plazo del resumen oficial."
         )
 
     rev_normas = []
     if ev["citas_ok"]:
-        rev_normas.append(f"- ✔️ **Referencias legales obligatorias del epígrafe acertadas:** {'; '.join(ev['citas_ok'])}.")
+        rev_normas.append(f"- ✔️ **Referencias legales del epígrafe acertadas:** {'; '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
         rev_normas.append(f"- 🌟 **Preceptos adicionales conexos bien aplicados (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
     if ev["citas_faltan"]:
         for ref_om in ev["citas_faltan"]:
-            rev_normas.append(f"- 🔻 **Referencia legal obligatoria omitida (-2,00 ptos):** *{ref_om}*.")
+            rev_normas.append(f"- 🔸 **Referencia normativa obligatoria omitida (-0,50 ptos):** *{ref_om}*.")
     if ev["citas_erroneas"]:
         for err_art in ev["citas_erroneas"]:
-            rev_normas.append(f"- ❌ **Artículo indebido (-2,25 ptos — contraste con su literal en el BOE):** {err_art}")
+            rev_normas.append(f"- ❌ **Artículo improcedente (-1,00 pto — contraste con su literal en el BOE):** {err_art}")
     if ev.get("siglas_sin_definir"):
         sig_str = "; ".join([f"**{s}** → debiste introducirlo como *«{ej}»*" for s, ej in ev["siglas_sin_definir"]])
         rev_normas.append(
-            f"- 🔻 **Siglas/abreviaturas sin fórmula introductoria previa (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos):** {sig_str}."
+            f"- 🔸 **Siglas/abreviaturas sin fórmula introductoria previa (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos, a razón de -0,25 ptos c/u):** {sig_str}."
         )
     if not rev_normas:
-        rev_normas.append("- ✔️ Todas las referencias legales obligatorias del epígrafe y las siglas han sido correctamente introducidas.")
-    bloques.append("3. **⚖️ Auditoría de referencias legales obligatorias del epígrafe y rigor en siglas:**\n" + "\n".join(rev_normas))
+        rev_normas.append("- ✔️ Todas las referencias legales del epígrafe y las siglas han sido correctamente introducidas.")
+    bloques.append("3. **⚖️ Auditoría de referencias legales (-0,50 ptos si se omiten) y rigor en siglas:**\n" + "\n".join(rev_normas))
 
     c1_bruto = ev.get("pts_brutos_criterio_1", 0.0)
-    restas_c1 = ev.get("total_restas_c1", 0.0)
     c1 = ev.get("pts_criterio_1", 0.0)
+    resta_efectiva = round(max(0.0, c1_bruto - c1), 2)
     c2 = ev.get("pts_criterio_2", 0.0)
     c3 = ev.get("pts_criterio_3", 0.0)
     n50 = ev.get("nota_50", 0.0)
     n10 = ev.get("nota", 0.0)
-    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin penalizaciones negativas."
+    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin deducciones."
 
     bloques.append(
-        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Liquidación de Puntos Restados:**\n"
-        f"   - **Criterio 1 — Puntuación bruta por contenidos y normas acertadas:** `{c1_bruto:.2f} / 45,00 puntos`\n"
-        f"   - **Criterio 1 — Penalizaciones negativas por apartados y normas omitidas:** `-{restas_c1:.2f} puntos`\n"
+        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Liquidación de Puntos:**\n"
+        f"   - **Criterio 1 — Puntuación ganada por tus aciertos:** `+{c1_bruto:.2f} / 45,00 puntos`\n"
+        f"   - **Criterio 1 — Deducción aplicada por omisiones (-1,00 pto/apartado y -0,50 ptos/norma):** `-{resta_efectiva:.2f} puntos`\n"
         f"   - **Criterio 1 — Puntuación neta resultante (0 a 45 ptos):** **`{c1:.2f} / 45,00 puntos`**\n"
         f"   - **Criterio 2 — Orden de las ideas y exposición estructurada (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
         f"   - **Criterio 3 — Calidad de expresión escrita y siglas (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
         f"   - 🏆 **CALIFICACIÓN FINAL DEL EPÍGRAFE:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{n10:.2f} / 10`**)*\n"
-        f"   - **📉 Desglose exacto de penalizaciones negativas aplicadas:**\n{motivos_txt}\n\n"
-        "💡 *Orientación del Tribunal:* En este segundo ejercicio la clave para superar con solvencia los 25 puntos eliminatorios es no dejar ningún bloque del resumen ni ningún artículo troncal en el tintero. Repasa los puntos señalados con 🔻 e incorpóralos a tu esquema mental: cada omisión corregida hoy son puntos directos asegurados el día del examen."
+        f"   - **📉 Desglose de puntos restados:**\n{motivos_txt}\n\n"
+        "💡 *Orientación del Tribunal:* Has sumado una buena base con los apartados acertados. Si incorporas los puntos del apartado 2 (+1,00 pto cada uno) y citas las normas del apartado 3 (+0,50 ptos cada una), tu nota subirá rápidamente en la siguiente vuelta."
     )
 
     return "\n\n".join(bloques)
@@ -2724,19 +2721,20 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
     citas_erroneas_boe = "\n".join(ev_fallback.get("citas_erroneas", []))
-    citas_faltan_lista = "\n".join([f"- {c} (-2,00 ptos)" for c in ev_fallback.get("citas_faltan", [])]) or "Ninguna (ha citado todas las normas obligatorias)."
+    citas_faltan_lista = "\n".join([f"- {c} (-0,50 ptos)" for c in ev_fallback.get("citas_faltan", [])]) or "Ninguna (ha citado todas las normas obligatorias)."
     siglas_mal = ev_fallback.get("siglas_sin_definir", [])
     tot_ideas = len(ev_fallback["puntos_cubiertos"]) + len(ev_fallback["puntos_omitidos"])
-    omitidos_lista = "\n".join([f"- {p} (-1,50 ptos)" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
+    omitidos_lista = "\n".join([f"- {p} (-1,00 pto)" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
+    resta_efectiva = round(max(0.0, ev_fallback.get('pts_brutos_criterio_1', 0.0) - ev_fallback['pts_criterio_1']), 2)
 
     instruccion_extra = (
-        f"\n- AUDITORÍA CON PUNTUACIÓN NEGATIVA DIRECTA: El alumno obtuvo {ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos por lo acertado, pero se le han restado negativamente -{ev_fallback.get('total_restas_c1', 0.0):.2f} puntos por las omisiones, quedando en {ev_fallback['pts_criterio_1']:.2f}/45 en Criterio 1."
-        "\n- En el apartado 2 enumera UNO POR UNO todos los apartados del resumen omitidos indicando que cada uno resta -1,50 puntos directamente."
-        "\n- En el apartado 3 enumera UNA POR UNA todas las referencias legales obligatorias del epígrafe que ha omitido indicando que cada una resta -2,00 puntos directamente, así como las siglas sin fórmula introductoria previa ('...en adelante, XXXX') que restan -0,50 puntos cada una."
+        f"\n- BAREMO DE AUDITORÍA EQUILIBRADO: El alumno ha ganado +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos por todo lo que ha escrito con acierto, y tras restar -{resta_efectiva:.2f} puntos por las omisiones queda en {ev_fallback['pts_criterio_1']:.2f}/45 puntos netos en el Criterio 1."
+        "\n- En el apartado 2 enumera los apartados del resumen que ha obviado indicando que cada apartado omitido resta -1,00 punto."
+        "\n- En el apartado 3 enumera las referencias normativas obligatorias del epígrafe omitidas indicando que cada una resta -0,50 puntos, y las siglas sin fórmula introductoria previa ('...en adelante, XXXX') que restan -0,25 puntos cada una."
     )
     if citas_erroneas_boe:
         instruccion_extra += (
-            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye su literalidad exacta en el apartado 3 y su resta de -2,25 ptos):\n{citas_erroneas_boe}"
+            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye su literalidad exacta en el apartado 3 y su resta de -1,00 pto):\n{citas_erroneas_boe}"
         )
     if siglas_mal:
         instruccion_extra += (
@@ -2745,21 +2743,21 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     prompt = (
         "Actúa como el Auditor Experto del Tribunal Calificador del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Realiza una AUDITORÍA ESTRICTA, RIGUROSA Y CONSTRUCTIVA del epígrafe aplicando puntuación negativa por cada apartado del resumen omitido y por cada referencia legal obligatoria omitida:\n"
-        f"- Apartados del resumen cubiertos: {len(ev_fallback['puntos_cubiertos'])} de {tot_ideas}.\n"
-        f"- Puntuaciones auditadas inamovibles: Criterio 1 Bruto = {ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Restas negativas en Criterio 1 = -{ev_fallback.get('total_restas_c1', 0.0):.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
+        "Realiza una AUDITORÍA RIGUROSA, JUSTA Y CONSTRUCTIVA valorando positivamente lo acertado y aplicando estas penalizaciones moderadas por omisión (-1,00 punto por apartado del resumen omitido y -0,50 puntos por referencia normativa omitida):\n"
+        f"- Apartados del resumen cubiertos con acierto: {len(ev_fallback['puntos_cubiertos'])} de {tot_ideas}.\n"
+        f"- Puntuaciones auditadas inamovibles: Criterio 1 Ganado por aciertos = +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Deducción por omisiones = -{resta_efectiva:.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
         f"{instruccion_extra}\n\n"
         f"=== EPÍGRAFE ===\n{pregunta}\n\n"
         f"=== RESUMEN OFICIAL DEL EPÍGRAFE ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== APARTADOS DEL RESUMEN OMITIDOS (RESTAN -1,50 PTOS C/U) ===\n{omitidos_lista}\n\n"
-        f"=== REFERENCIAS LEGALES OBLIGATORIAS DEL EPÍGRAFE OMITIDAS (RESTAN -2,00 PTOS C/U) ===\n{citas_faltan_lista}\n\n"
-        f"=== LIQUIDACIÓN EXACTA DE PENALIZACIONES NEGATIVAS ===\n{motivos_calculados}\n\n"
+        f"=== APARTADOS DEL RESUMEN OMITIDOS (-1,00 PTO C/U) ===\n{omitidos_lista}\n\n"
+        f"=== REFERENCIAS NORMATIVAS OBLIGATORIAS OMITIDAS (-0,50 PTOS C/U) ===\n{citas_faltan_lista}\n\n"
+        f"=== DESGLOSE DE PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
         "Estructura tu dictamen en estos 4 apartados exactos:\n"
-        "1. **✅ Auditoría de apartados cubiertos frente al resumen oficial**\n"
-        "2. **⚠️ Apartados y datos del resumen omitidos (con su puntuación negativa exacta)**\n"
-        "3. **⚖️ Auditoría de referencias legales obligatorias del epígrafe (con su puntuación negativa si se omiten), artículos indebidos (con literal del BOE) y siglas**\n"
-        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Liquidación de Puntos Restados** (mostrando Criterio 1 Bruto, Restas negativas, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y orientación final constructiva)"
+        "1. **✅ Auditoría de apartados cubiertos con acierto** (reconociendo el valor de lo que ha explicado bien)\n"
+        "2. **⚠️ Apartados y datos del resumen omitidos (-1,00 pto por apartado)**\n"
+        "3. **⚖️ Auditoría de referencias legales (-0,50 ptos si se omiten), artículos indebidos (con literal del BOE) y siglas (-0,25 ptos c/u)**\n"
+        "4. **🎓 Valoración por Criterios Oficiales del Tribunal y Liquidación de Puntos** (mostrando Puntos ganados en Criterio 1, Deducción por omisiones, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y mensaje constructivo)"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
@@ -3177,6 +3175,7 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
