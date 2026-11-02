@@ -431,7 +431,6 @@ if not st.session_state.autenticado:
 
 
 
-
 # === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
 class PDFQuizParser:
     REEMPLAZOS_INGLES_RAE = [
@@ -587,16 +586,20 @@ class PDFQuizParser:
 
     @staticmethod
     def _limpiar_cabeceras_incrustadas(texto, tema_cabecera=""):
+        """Limpia cabeceras y pies de página respetando siempre los saltos de línea (\n)."""
         if not texto:
             return ""
         t = texto
         if tema_cabecera:
             t = re.sub(re.escape(tema_cabecera), ' ', t, flags=re.IGNORECASE)
+        t = re.sub(r'CUERPO\s+DE\s+GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s*\|\s*TEMA\s+\d+', ' ', t, flags=re.IGNORECASE)
         t = re.sub(r'\bTEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/]{6,95}?(?=\s+[a-záéíóúñ]|\s+[•\*■▪]|\s*$)', ' ', t)
         t = re.sub(r'[■▪▫◆●]\s*S[IÍ]NTESIS\s+DE[L\s]+[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/\-–]{4,95}?(?=\s+[A-ZÁÉÍÓÚÑa-záéíóúñ•\*]|\s*$)', ' ', t)
         t = re.sub(r'\bRESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES\b', ' ', t, flags=re.IGNORECASE)
         t = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'\s{2,}', ' ', t).strip()
+        # MUY IMPORTANTE: compactar solo espacios horizontales [ \t], NUNCA borrar los saltos de línea (\n)
+        t = re.sub(r'[ \t]{2,}', ' ', t)
+        t = re.sub(r' *\n *', '\n', t).strip()
         return t
 
     @staticmethod
@@ -611,6 +614,8 @@ class PDFQuizParser:
         if re.match(r'^(?:P[aá]g(?:ina)?\.?\s*)?\d{1,3}(?:\s*(?:de|/)\s*\d{1,3})?$', s, re.IGNORECASE):
             return True
         if re.match(r'^TEMA\s+\d+$', s, re.IGNORECASE):
+            return True
+        if re.match(r'^CUERPO\s+DE\s+GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', s, re.IGNORECASE):
             return True
         if re.match(r'^TEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\-–\(\)\/]+$', s) and s.isupper():
             return True
@@ -635,9 +640,8 @@ class PDFQuizParser:
     @staticmethod
     def _separar_titulo_numerado_pegado(texto):
         """
-        Si un título numerado (como '1. Concepto y Delimitación Jurídica de Altas, Bajas y Variaciones de Datos')
-        se ha pegado en la misma cadena al inicio del párrafo explicativo ('El alta es el acto...'),
-        los separa limpiamente en (titulo, resto_parrafo).
+        Detecta cualquier cabecera numerada ('1. ...', '2. ...', '3. ...', '4. ...', '5. ...')
+        y si viene pegada a una viñeta ('•') o a la primera oración explicativa, las separa en (titulo, resto).
         """
         if not texto:
             return None, texto
@@ -645,33 +649,73 @@ class PDFQuizParser:
         if not re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', s):
             return None, texto
 
-        # Caso A: toda la línea es únicamente el título numerado (sin punto final o < 130 caracteres sin verbos de oración larga)
-        if len(s) < 135 and not s.endswith('.'):
+        # Caso 1: El título numerado va seguido en la misma cadena por una viñeta '•'
+        # Ej: "2. Situaciones de Encuadramiento Múltiple: Pluriempleo y Pluriactividad • Pluriempleo: ..."
+        m_bullet = re.match(r'^(\d{1,2}[\.\)]\s+[^•\*▪◆]{4,135}?)\s*([•\*▪◆].*)$', s)
+        if m_bullet:
+            return m_bullet.group(1).strip(), m_bullet.group(2).strip()
+
+        # Caso 2: Toda la línea es únicamente el título numerado (sin punto final y < 140 caracteres)
+        if len(s) < 140 and not s.endswith('.'):
             return s, ""
 
-        # Caso B: el título numerado está pegado al comienzo de la primera oración explicativa
+        # Caso 3: El título numerado está pegado al comienzo de una definición con dos puntos ("Pluriempleo: ...")
+        m_def = re.match(
+            r'^(\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ][^\.?!]{4,120}?)\s+([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ\s,\(\)\/]{2,55}:\s+[A-ZÁÉÍÓÚÑ].*)$',
+            s
+        )
+        if m_def:
+            cand_t = m_def.group(1).strip()
+            if not cand_t.endswith(':'):
+                return cand_t, m_def.group(2).strip()
+
+        # Caso 4: El título numerado está pegado a la primera oración del párrafo
+        # Ej: "4. Elección de Entidad Protectora y Documento de Asociación con Mutuas Colaboradoras En el propio acto..."
         inicios_oracion = (
-            r'(?:El|La|Los|Las|Un|Una|En|Con|Por|Para|Seg[úu]n|Conforme|Mediante|Durante|Cuando|Si|Toda|Todo|Existe|Existen|Se\s+[a-záéíóúñ]+|Constituye|Supone|Consiste|Comprende)\s+'
-            r'(?:alta|baja|afiliaci[óo]n|inscripci[óo]n|cotizaci[óo]n|variaci[óo]n|convenio|situaci[óo]n|procedimiento|tramitaci[óo]n|solicitud|solicitudes|empresario|trabajador|tesorer[íi]a|administraci[óo]n|sistema|ordenamiento|ámbito|acto|plazo|normativa|art[íi]culo|ley|real|prestaci[óo]n|protecci[óo]n|obligaci[óo]n|derecho|reconocimiento|extinci[óo]n|efecto|efectos|car[áa]cter|propio|propia|[a-záéíóúñ]{4,}\s+(?:es|son|se|constituye|supone|tiene|debe|deben|puede|pueden))'
+            r'(?:El|La|Los|Las|Un|Una|En|De\s+conformidad|Con|Por|Para|Seg[úu]n|Conforme|Mediante|Durante|Cuando|Si|Toda|Todo|Existe|Existen|Se\s+[a-záéíóúñ]+|Constituye|Supone|Consiste|Comprende|Regulado|Ostenta|A\s+efectos)\b'
         )
         m_peg = re.match(
-            rf'^(\d{{1,2}}[\.\)]\s+[A-ZÁÉÍÓÚÑ][^\.?!]{{4,125}}?)\s+({inicios_oracion}\b.*)$',
+            rf'^(\d{{1,2}}[\.\)]\s+[A-ZÁÉÍÓÚÑ][^\.?!]{{4,125}}?)\s+({inicios_oracion}\s+[a-záéíóúñA-ZÁÉÍÓÚÑ].*)$',
             s
         )
         if m_peg:
             cand_tit = m_peg.group(1).strip()
             resto = m_peg.group(2).strip()
-            # Evitar cortar si el candidato a título termina en preposición o artículo ('de', 'del', 'en', 'la', 'el', 'y')
             if not re.search(r'\b(de|del|en|con|por|para|a|al|la|las|el|los|un|una|y|o|e|u)$', cand_tit, re.IGNORECASE):
                 return cand_tit, resto
 
         return None, texto
 
     @staticmethod
+    def _dividir_definiciones_internas(linea):
+        """
+        Separa dentro de una misma línea:
+        1) Viñetas explícitas ('...empresa. • Unicidad e indivisibilidad: ...').
+        2) Viñetas que en el PDF perdieron el símbolo '•' pero tienen formato 'Etiqueta en negrita: Texto' tras un punto
+           (ej. '...conozca el cese. Devolución de cuotas por variaciones extemporáneas: Conforme...'
+            o '...fallecimiento. Altas indebidas (Artículo 60 del RIA): Las altas...').
+        """
+        if not linea:
+            return []
+        # 1. Separar antes de cualquier símbolo de viñeta '•'
+        s = re.sub(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s*)', '\n', linea)
+        # 2. Separar antes de un título numerado '1. ', '2. ', '3. ', '4. ', '5. ' que haya quedado tras un punto
+        s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])', '\n', s)
+        # 3. Separar definiciones tipo "Devolución de cuotas por variaciones extemporáneas: Conforme..." o "Altas indebidas (Artículo 60 del RIA): Las..."
+        # que aparezcan después de un punto '.' sin el símbolo '•'
+        s = re.sub(
+            r'(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-]{2,58}:\s+[A-ZÁÉÍÓÚÑ])',
+            '\n• ',
+            s
+        )
+        return [p.strip() for p in s.split('\n') if p.strip()]
+
+    @staticmethod
     def _formatear_explicacion_estructurada(lista_lineas, tema_cabecera=""):
         if not lista_lineas:
             return ""
 
+        # Paso 1: Limpiar cabeceras y unir los símbolos '•' que vienen solos en una línea con la línea siguiente
         lineas_limpias = []
         pendiente_bullet = False
         for l in lista_lineas:
@@ -683,18 +727,21 @@ class PDFQuizParser:
             l_sin_marca = PDFQuizParser._limpiar_cabeceras_incrustadas(l_sin_marca, tema_cabecera)
             if not l_sin_marca or PDFQuizParser._es_basura_cabecera_o_pie(l_sin_marca, tema_cabecera):
                 continue
-            if re.match(r'^[•\*▪◆\-–]$', l_sin_marca):
+            # Si una línea contiene solo uno o varios símbolos '•' (ej. "•" o "• •"), activamos pendiente_bullet
+            if re.match(r'^(?:[•\*▪◆\-–]\s*)+$', l_sin_marca):
                 pendiente_bullet = True
                 continue
             if pendiente_bullet:
-                l_sin_marca = f"• {l_sin_marca}"
+                if not re.match(r'^[•\*▪◆\-–]', l_sin_marca) and not re.match(r'^\d{1,2}[\.\)]\s+', l_sin_marca):
+                    l_sin_marca = f"• {l_sin_marca}"
+                    es_bold_header = False
                 pendiente_bullet = False
-                es_bold_header = False
             lineas_limpias.append(("[[H]]" + l_sin_marca) if es_bold_header else l_sin_marca)
 
         if not lineas_limpias:
             return ""
 
+        # Paso 2: Reconstruir bloques respetando títulos numerados, viñetas y párrafos
         parrafos = []
         actual = ""
 
@@ -702,7 +749,6 @@ class PDFQuizParser:
             forzada_cabecera = l_raw.startswith("[[H]]")
             l_str = l_raw.replace("[[H]]", "").strip()
 
-            # Si una línea marcada como cabecera numerada en negrita se partió en 2 líneas en el PDF, las unimos como cabecera
             if forzada_cabecera:
                 if actual:
                     parrafos.append(actual.strip())
@@ -710,19 +756,15 @@ class PDFQuizParser:
                 tit_sep, resto_sep = PDFQuizParser._separar_titulo_numerado_pegado(l_str)
                 if tit_sep and resto_sep:
                     parrafos.append(f"[[H]]{tit_sep}")
-                    actual = resto_sep
+                    for sub_r in PDFQuizParser._dividir_definiciones_internas(resto_sep):
+                        actual = (actual + " " + sub_r).strip() if actual else sub_r
                 elif parrafos and parrafos[-1].startswith("[[H]]") and not re.match(r'^\d{1,2}[\.\)]', l_str):
                     parrafos[-1] = parrafos[-1] + " " + l_str
                 else:
                     parrafos.append(f"[[H]]{l_str}")
                 continue
 
-            sub_partes = re.split(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s+|\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])', l_str)
-            for p_int in sub_partes:
-                p_int = p_int.strip()
-                if not p_int:
-                    continue
-
+            for p_int in PDFQuizParser._dividir_definiciones_internas(l_str):
                 tit_detectado, resto_parrafo = PDFQuizParser._separar_titulo_numerado_pegado(p_int)
                 if tit_detectado:
                     if actual:
@@ -734,22 +776,24 @@ class PDFQuizParser:
                     continue
 
                 es_definicion_viñeta = bool(
-                    re.match(r'^[•\*▪◆\-–]\s+', p_int) or
-                    re.match(r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s,\(\)\/]{2,55}:\s+[A-ZÁÉÍÓÚÑ]', p_int) or
+                    re.match(r'^[•\*▪◆\-–]\s*', p_int) or
+                    re.match(r'^[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-]{2,58}:\s+[A-ZÁÉÍÓÚÑ]', p_int) or
                     re.match(r'^(Título\s+[IVX0-9]+|Capítulo\s+[IVX0-9]+|Sección\s+\d+|Disposiciones\s+)', p_int, re.IGNORECASE)
                 )
 
                 if es_definicion_viñeta:
                     if actual:
                         parrafos.append(actual.strip())
-                    if not re.match(r'^[•\*▪◆\-–]\s+', p_int) and not re.match(r'^(Título|Capítulo|Sección|Disposiciones)\b', p_int, re.IGNORECASE):
+                    if not re.match(r'^[•\*▪◆\-–]\s*', p_int) and not re.match(r'^(Título|Capítulo|Sección|Disposiciones)\b', p_int, re.IGNORECASE):
                         p_int = f"• {p_int}"
+                    else:
+                        p_int = re.sub(r'^[•\*▪◆\-–]\s*', '• ', p_int)
                     actual = p_int
                     continue
 
                 if not actual:
                     actual = p_int
-                elif actual.endswith(('.', ':', '»', '"')) and p_int[0].isupper() and len(actual) > 140 and not re.match(r'^[•\*]', actual):
+                elif actual.endswith(('.', ':', '»', '"', ')')) and p_int[0].isupper() and len(actual) > 120 and not re.match(r'^[•\*]', actual):
                     parrafos.append(actual.strip())
                     actual = p_int
                 else:
@@ -770,79 +814,85 @@ class PDFQuizParser:
     @staticmethod
     def renderizar_explicacion_html(texto_explicacion, etiqueta_tema=""):
         """
-        Convierte el texto estructurado del epígrafe en HTML con todos los títulos numerados ('1. ...', '2. ...')
-        en negrita y en su propia línea con salto de párrafo inferior garantizado.
+        Renderiza el contenido del epígrafe exactamente con la misma jerarquía visual del PDF original:
+        - Cabeceras numeradas ('1. ...', '2. ...', '3. ...', '4. ...', '5. ...') en negrita, tamaño 15.5px y margen propio.
+        - Viñetas ('• Pluriempleo: ...') con sangría, símbolo '•' y el concepto antes de ':' en negrita.
+        - Párrafos introductorios o de cierre con espaciado limpio.
         """
         if not texto_explicacion:
             return ""
-        t_limpio = PDFQuizParser._limpiar_cabeceras_incrustadas(texto_explicacion, etiqueta_tema)
-        bloques_raw = [b.strip() for b in t_limpio.split('\n') if b.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(b.strip(), etiqueta_tema)]
 
+        # Limpiar posibles restos de cabeceras SIN eliminar los saltos de línea \n
+        t_limpio = PDFQuizParser._limpiar_cabeceras_incrustadas(texto_explicacion, etiqueta_tema)
+        lineas_entrada = [b.strip() for b in t_limpio.split('\n') if b.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(b.strip(), etiqueta_tema)]
+
+        # Re-expandir cualquier bloque que pudiera venir unido en una sola línea
         bloques_expandidos = []
-        for b in bloques_raw:
+        for b in lineas_entrada:
             es_h_forzado = b.startswith("[[H]]")
             b_sin_h = b.replace("[[H]]", "").strip()
-            if es_h_forzado:
-                tit_s, resto_s = PDFQuizParser._separar_titulo_numerado_pegado(b_sin_h)
-                if tit_s and resto_s:
-                    bloques_expandidos.append(f"[[H]]{tit_s}")
-                    bloques_expandidos.append(resto_s)
-                else:
-                    bloques_expandidos.append(f"[[H]]{b_sin_h}")
-                continue
 
-            # Separar puntos numerados o viñetas que vinieran en mitad de bloque
-            b_split = re.sub(
-                r'(?:(?<=^)|(?<=[\.\:\;\)\»]))\s*(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])',
-                '\n',
+            # Separar primero si hay títulos numerados intermedios ("...cuenta propia). 3. Tipología de Altas...")
+            partes_num = re.split(
+                r'(?:(?<=^)|(?<=[\.\:\;\)\»]))\s+(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])',
                 b_sin_h
             )
-            b_split = re.sub(r'\s*(?=[•\*▪◆]\s+)', '\n', b_split)
-
-            for sb in b_split.split('\n'):
-                sb = sb.strip()
-                if not sb:
+            for pn in partes_num:
+                pn = pn.strip()
+                if not pn:
                     continue
-                tit_sep, resto_sep = PDFQuizParser._separar_titulo_numerado_pegado(sb)
-                if tit_sep:
-                    bloques_expandidos.append(f"[[H]]{tit_sep}")
-                    if resto_sep:
-                        bloques_expandidos.append(resto_sep)
+                tit_s, resto_s = PDFQuizParser._separar_titulo_numerado_pegado(pn)
+                if tit_s:
+                    bloques_expandidos.append(f"[[H]]{tit_s}")
+                    if resto_s:
+                        for sub_def in PDFQuizParser._dividir_definiciones_internas(resto_s):
+                            bloques_expandidos.append(sub_def)
+                elif es_h_forzado and len(partes_num) == 1:
+                    bloques_expandidos.append(f"[[H]]{pn}")
                 else:
-                    bloques_expandidos.append(sb)
+                    for sub_def in PDFQuizParser._dividir_definiciones_internas(pn):
+                        tit_s2, resto_s2 = PDFQuizParser._separar_titulo_numerado_pegado(sub_def)
+                        if tit_s2:
+                            bloques_expandidos.append(f"[[H]]{tit_s2}")
+                            if resto_s2:
+                                bloques_expandidos.append(resto_s2)
+                        else:
+                            bloques_expandidos.append(sub_def)
 
         html_partes = []
         for blq in bloques_expandidos:
             es_cabecera_num = blq.startswith("[[H]]")
             blq_txt = blq.replace("[[H]]", "").strip()
-            if not es_cabecera_num and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_txt) and len(blq_txt) < 135 and not blq_txt.endswith('.'):
+            if not blq_txt:
+                continue
+            if not es_cabecera_num and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_txt) and len(blq_txt) < 140 and not blq_txt.endswith('.'):
                 es_cabecera_num = True
 
-            # 1. Título numerado de apartado ("1. Concepto y Delimitación...", "2. Situaciones de Encuadramiento...")
+            # 1. Título numerado de apartado ("1. Concepto...", "2. Situaciones...", "3. Tipología...", "4. Procedimiento...", "5. Efectos...")
             if es_cabecera_num:
                 html_partes.append(
-                    f"<div style='font-size:15.5px; font-weight:800; color:#0A3641 !important; margin-top:14px; margin-bottom:8px; line-height:1.35;'>{blq_txt}</div>"
+                    f"<div style='font-size:15.5px; font-weight:800; color:#0A3641 !important; margin-top:14px; margin-bottom:6px; line-height:1.35;'>{blq_txt}</div>"
                 )
                 continue
 
             # 2. Viñeta con definición ("• Pluriempleo: Situación...")
-            m_bullet_def = re.match(r'^([•\*▪◆\-–])\s*([^:]{2,65}):\s*(.+)$', blq_txt)
+            m_bullet_def = re.match(r'^([•\*▪◆\-–])\s*([^:]{2,75}):\s*(.+)$', blq_txt)
             if m_bullet_def:
                 term = m_bullet_def.group(2).strip()
                 resto = m_bullet_def.group(3).strip()
                 html_partes.append(
-                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:14px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"<div style='margin-top:5px; margin-bottom:6px; padding-left:16px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
                     f"• <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
                 )
                 continue
 
-            # 3. Definición con etiqueta y dos puntos ("Pluriempleo: Situación...")
-            m_def_sola = re.match(r'^([A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s,\(\)\/]{2,55}):\s+(.+)$', blq_txt)
-            if m_def_sola:
+            # 3. Definición con etiqueta en negrita y dos puntos sin símbolo previo ("Pluriempleo: Situación...")
+            m_def_sola = re.match(r'^([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-]{2,68}):\s+(.+)$', blq_txt)
+            if m_def_sola and not re.match(r'^(Conforme|De\s+conformidad|Seg[úu]n|Por\s+tanto|No\s+obstante)\b', blq_txt, re.IGNORECASE):
                 term = m_def_sola.group(1).strip()
                 resto = m_def_sola.group(2).strip()
                 html_partes.append(
-                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:14px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"<div style='margin-top:5px; margin-bottom:6px; padding-left:16px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
                     f"• <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
                 )
                 continue
@@ -886,7 +936,6 @@ class PDFQuizParser:
                         lt = " ".join(s["text"].strip() for s in spans_validos).strip()
                         if not lt:
                             continue
-                        # Comprobar si toda la línea está en negrita en el PDF original
                         linea_es_bold = all(
                             ("bold" in s.get("font", "").lower()) or (s.get("flags", 0) & 2 != 0)
                             for s in spans_validos
@@ -920,12 +969,11 @@ class PDFQuizParser:
                             sub_l = sub_l.strip()
                             if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l, tema_detectado):
                                 continue
-                            # Si la línea del PDF está en negrita y es un título de apartado ("1. Concepto..."), le ponemos la marca [[H]]
                             es_cabecera_apartado_bold = (
                                 linea_es_bold
                                 and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', sub_l)
                                 and not re.match(r'^EP[IÍ]GRAFE\b', sub_l, re.IGNORECASE)
-                                and len(sub_l) < 135
+                                and len(sub_l) < 140
                             )
                             linea_guardar = f"[[H]]{sub_l}" if es_cabecera_apartado_bold else sub_l
                             all_clean_lines.append(linea_guardar)
@@ -1108,7 +1156,7 @@ class PDFQuizParser:
                         if PDFQuizParser._es_basura_cabecera_o_pie(cand, tema_detectado):
                             idx_l += 1
                             continue
-                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Aprobaci[óo]n\b|El\s+art[íi]culo\b|La\s+Constituci[óo]n\b|Regula\b|Concepto\b|Obligaci[óo]n\b|Sujetos\b)', cand, re.IGNORECASE):
+                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Aprobaci[óo]n\b|El\s+art[íi]culo\b|La\s+Constituci[óo]n\b|Regula\b|Concepto\b|Obligaci[óo]n\b|Sujetos\b|Mediante\b|De\s+conformidad\b)', cand, re.IGNORECASE):
                             break
                         if not partes_tit[-1].endswith('.') and len(cand) < 95 and len(" ".join(partes_tit)) < 160:
                             partes_tit.append(cand)
@@ -1642,6 +1690,8 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 2 ===
+
+
 
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
