@@ -1911,18 +1911,26 @@ def usuario_puede_reportar():
 
 def activar_proteccion_antirecortes_alumno():
     """
-    Activa el desenfoque automático al perder el foco de la ventana (Win+Shift+S, herramienta Recortes,
-    cambio de aplicación o tecla Impr Pant) ÚNICAMENTE para usuarios que NO sean administradores.
-    Si es administrador, desactiva cualquier desenfoque previo y no aplica ninguna restricción.
+    Activa el desenfoque automático en tiempo real cuando el navegador pierde el foco
+    (herramienta Recortes de Windows, Win+Shift+S, Alt+Tab, Impr Pant o cambio de ventana).
+    - NUNCA se aplica al Administrador (salvo que active expresamente el interruptor de prueba).
+    - Se aplica siempre a cualquier otro usuario (alumnos e invitados).
     """
-    if usuario_es_admin():
+    es_admin_real = usuario_es_admin()
+    modo_prueba_admin = bool(st.session_state.get("admin_test_blur", False))
+
+    if es_admin_real and not modo_prueba_admin:
         components.html("""<script>
         (function() {
             try {
                 var pw = window.parent;
                 var pd = pw.document;
-                pw.__oposiciona_is_admin = true;
-                var appEl = pd.querySelector('.stApp') || pd.body;
+                pw.__oposiciona_blur_disabled = true;
+                if (pw.__oposiciona_focus_timer) {
+                    clearInterval(pw.__oposiciona_focus_timer);
+                    pw.__oposiciona_focus_timer = null;
+                }
+                var appEl = pd.querySelector('[data-testid="stAppViewContainer"]') || pd.querySelector('.stApp') || pd.body;
                 if (appEl) {
                     appEl.style.filter = 'none';
                     appEl.style.webkitFilter = 'none';
@@ -1939,24 +1947,25 @@ def activar_proteccion_antirecortes_alumno():
         try {
             var pw = window.parent;
             var pd = pw.document;
-            pw.__oposiciona_is_admin = false;
+            pw.__oposiciona_blur_disabled = false;
 
             if (!pd.getElementById('oposiciona_blur_overlay')) {
                 var ov = pd.createElement('div');
                 ov.id = 'oposiciona_blur_overlay';
-                ov.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,23,42,0.55); z-index:999999; justify-content:center; align-items:center; text-align:center; color:#ffffff; font-family:sans-serif; padding:24px; cursor:pointer; user-select:none;';
-                ov.innerHTML = '<div style="background:#1E293B; border:2px solid #3B82F6; border-radius:12px; padding:24px 30px; max-width:480px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"><div style="font-size:32px; margin-bottom:10px;">🛡️</div><div style="font-size:18px; font-weight:800; margin-bottom:8px; color:#F8FAFC;">Contenido Protegido por Oposiciona</div><div style="font-size:14px; color:#CBD5E1; line-height:1.45;">La pantalla se desenfoca automáticamente al abrir herramientas de recorte o cambiar de ventana.<br><br><b style="color:#60A5FA;">Haz clic aquí dentro para continuar con tu ejercicio.</b></div></div>';
+                ov.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,23,42,0.72); z-index:2147483647; justify-content:center; align-items:center; text-align:center; color:#ffffff; font-family:sans-serif; padding:24px; cursor:pointer; user-select:none;';
+                ov.innerHTML = '<div style="background:#1E293B; border:2px solid #3B82F6; border-radius:12px; padding:24px 30px; max-width:480px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"><div style="font-size:34px; margin-bottom:10px;">🛡️</div><div style="font-size:18px; font-weight:800; margin-bottom:8px; color:#F8FAFC;">Contenido Protegido por Oposiciona</div><div style="font-size:14px; color:#CBD5E1; line-height:1.45;">La pantalla se desenfoca automáticamente al abrir herramientas de recorte o cambiar de ventana.<br><br><b style="color:#60A5FA;">Haz clic aquí dentro para continuar con tu ejercicio.</b></div></div>';
                 pd.body.appendChild(ov);
                 ov.addEventListener('click', function() {
+                    pw.__oposiciona_forzar_blur = false;
                     if (pw.oposicionaQuitarBlur) pw.oposicionaQuitarBlur();
                 });
             }
 
             pw.oposicionaAplicarBlur = function() {
-                if (pw.__oposiciona_is_admin) return;
-                var appEl = pd.querySelector('.stApp') || pd.body;
+                if (pw.__oposiciona_blur_disabled) return;
+                var appEl = pd.querySelector('[data-testid="stAppViewContainer"]') || pd.querySelector('.stApp') || pd.body;
                 if (appEl) {
-                    appEl.style.transition = 'filter 0.05s ease';
+                    appEl.style.transition = 'none';
                     appEl.style.filter = 'blur(22px)';
                     appEl.style.webkitFilter = 'blur(22px)';
                 }
@@ -1965,7 +1974,7 @@ def activar_proteccion_antirecortes_alumno():
             };
 
             pw.oposicionaQuitarBlur = function() {
-                var appEl = pd.querySelector('.stApp') || pd.body;
+                var appEl = pd.querySelector('[data-testid="stAppViewContainer"]') || pd.querySelector('.stApp') || pd.body;
                 if (appEl) {
                     appEl.style.filter = 'none';
                     appEl.style.webkitFilter = 'none';
@@ -1973,6 +1982,18 @@ def activar_proteccion_antirecortes_alumno():
                 var ov = pd.getElementById('oposiciona_blur_overlay');
                 if (ov) ov.style.display = 'none';
             };
+
+            // Vigilancia continua de foco cada 150 ms (detecta al instante Win+Shift+S y Herramienta Recortes)
+            if (pw.__oposiciona_focus_timer) clearInterval(pw.__oposiciona_focus_timer);
+            pw.__oposiciona_focus_timer = setInterval(function() {
+                if (pw.__oposiciona_blur_disabled) return;
+                var tieneFoco = pd.hasFocus();
+                if (!tieneFoco || pd.hidden || pw.__oposiciona_forzar_blur) {
+                    pw.oposicionaAplicarBlur();
+                } else {
+                    pw.oposicionaQuitarBlur();
+                }
+            }, 150);
 
             if (!pw.__oposiciona_blur_listeners_ready) {
                 pw.__oposiciona_blur_listeners_ready = true;
@@ -1982,6 +2003,7 @@ def activar_proteccion_antirecortes_alumno():
                 });
 
                 pw.addEventListener('focus', function() {
+                    pw.__oposiciona_forzar_blur = false;
                     pw.oposicionaQuitarBlur();
                 });
 
@@ -1989,21 +2011,24 @@ def activar_proteccion_antirecortes_alumno():
                     if (pd.hidden) {
                         pw.oposicionaAplicarBlur();
                     } else {
+                        pw.__oposiciona_forzar_blur = false;
                         pw.oposicionaQuitarBlur();
                     }
                 });
 
                 pd.addEventListener('keyup', function(e) {
-                    if (pw.__oposiciona_is_admin) return;
+                    if (pw.__oposiciona_blur_disabled) return;
                     if (e.key === 'PrintScreen' || e.keyCode === 44) {
+                        pw.__oposiciona_forzar_blur = true;
                         pw.oposicionaAplicarBlur();
                         try { pw.navigator.clipboard.writeText('Contenido protegido por Oposiciona.'); } catch(err) {}
                     }
                 });
 
                 pd.addEventListener('keydown', function(e) {
-                    if (pw.__oposiciona_is_admin) return;
+                    if (pw.__oposiciona_blur_disabled) return;
                     if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === '3' || e.key === '4')) {
+                        pw.__oposiciona_forzar_blur = true;
                         pw.oposicionaAplicarBlur();
                     }
                 });
@@ -3057,10 +3082,9 @@ def descargar_pdf_fresco(url):
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     """
     Cuadro de reporte de error o consulta tanto para preguntas Tipo Test como para Epígrafes de DESARROLLO y SUPUESTOS.
+    En DESARROLLO envía a info@oposiciona.es una ficha específica con el Tema, el Epígrafe,
+    la Respuesta escrita por el alumno, el Dictamen de corrección generado y el Texto mínimo oficial del epígrafe.
     """
-    if not usuario_puede_reportar():
-        return
-
     es_desarrollo = bool(q.get("tipo_abierta") == "DESARROLLO")
     es_abierta = bool(q.get("is_open", False))
     tipo_lbl = "Epígrafe" if es_desarrollo else ("Cuestión" if es_abierta else "Pregunta")
@@ -3073,8 +3097,8 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
 
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
-        f"<b style='color:#bf360c !important; font-size:15px;'>🛠️ Reportar error o duda en {tipo_lbl} {num_pregunta} a info@oposiciona.es</b><br>"
-        f"<span style='font-size:13px; color:#5d4037 !important;'>{'Se enviará tu observación junto con el epígrafe, tu respuesta escrita, el dictamen de corrección y el texto mínimo oficial para revisarlo al instante.' if es_abierta else 'Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.'}</span>"
+        f"<b style='color:#bf360c !important; font-size:15px;'>🛠️ Reportar Error en {tipo_lbl} {num_pregunta} a info@oposiciona.es</b><br>"
+        f"<span style='font-size:13px; color:#5d4037 !important;'>{'Se enviará una ficha específica con tu comentario, el Tema, el Epígrafe, tu Respuesta escrita, el Dictamen de corrección generado y el Texto mínimo oficial del epígrafe.' if es_abierta else 'Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.'}</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -3091,24 +3115,24 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         placeholder=placeholder_txt
     )
 
-    if st.button("📨 Enviar a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
+    if st.button(f"📨 Enviar reporte de {tipo_lbl} {num_pregunta} a info@oposiciona.es", key=f"btn_send_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True):
         if not motivo.strip():
             st.warning("⚠️ Escribe brevemente en qué consiste el error o incidencia antes de enviarlo.")
         else:
             stat_q = st.session_state.get("stats", {}).get(num_pregunta - 1, {})
             if es_abierta:
-                resp_alumno_env = (stat_q.get("selected") or "Sin respuesta escrita por el alumno").strip()
+                resp_alumno_env = (stat_q.get("selected") or st.session_state.get(f"open_txt_{num_pregunta - 1}") or "Sin respuesta escrita por el alumno").strip()
                 dictamen_env = (stat_q.get("ai_feedback") or "Aún no se había pulsado Comprobar").strip()
                 payload = {
                     "_subject": f"⚠️ Revisar {tipo_lbl} {num_pregunta} ({tema_vis}) | {nombre_pdf}",
                     "email": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
                     "_replyto": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
-                    "01_QUE_REPORTA_EL_ALUMNO": f"🚨 « {motivo.strip()} »",
-                    "02_ALUMNO_Y_TEMA": f"👤 Alumno: {usuario_rep}   |   Tema: {tema_vis} ({tipo_lbl} Nº {num_pregunta})",
-                    "03_EPIGRAFE_O_CUESTION": f"📝 {pregunta_txt}",
+                    "01_COMENTARIO_DEL_ALUMNO": f"🚨 « {motivo.strip()} »",
+                    "02_TEMA_Y_ALUMNO": f"📘 Tema: {tema_vis}   |   👤 Alumno: {usuario_rep}   |   Archivo: {nombre_pdf}",
+                    "03_EPIGRAFE": f"📝 {pregunta_txt}",
                     "04_RESPUESTA_ESCRITA_POR_EL_ALUMNO": f"✍️ {resp_alumno_env}",
-                    "05_DICTAMEN_DE_CORRECCION": f"🤖 {dictamen_env}",
-                    "06_TEXTO_MINIMO_OFICIAL_DEL_PDF": f"📖 {exp_limpia}",
+                    "05_DICTAMEN_DE_CORRECCION_GENERADO": f"🤖 {dictamen_env}",
+                    "06_TEXTO_MINIMO_OFICIAL_DEL_EPIGRAFE": f"📖 {exp_limpia}",
                     "_template": "box",
                     "_captcha": "false"
                 }
@@ -3684,6 +3708,10 @@ if not st.session_state.questions:
     if es_admin:
         with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas, Supuestos y Epígrafes de Desarrollo"):
             st.info("Esta herramienta es visible únicamente para el administrador. Incluye apartados específicos para SUPUESTOS y para DESARROLLO (indicando el Nº de epígrafes por PDF).")
+            st.checkbox(
+                "🧪 Probar desenfoque antirrecortes en mi sesión de Administrador (desmárcalo para trabajar sin desenfoque)",
+                key="admin_test_blur"
+            )
             if st.button("Contar preguntas, supuestos y epígrafes de todos los PDFs", use_container_width=True, type="primary"):
                 nuevos_hoy = globals().get("NUEVOS_HOY", [])
                 tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
@@ -3827,7 +3855,7 @@ elif not st.session_state.finished:
         sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
 
     if puede_rep:
-        c1, c2, c3, c4, c5 = st.columns([0.95, 1, 1, 1.15, 1.35])
+        c1, c2, c3, c4, c5 = st.columns([0.9, 0.95, 0.95, 1.1, 1.5])
     else:
         c1, c2, c3, c4 = st.columns(4)
         c5 = None
@@ -3861,10 +3889,14 @@ elif not st.session_state.finished:
     key_rep_test = f"rep_open_test_{idx + 1}"
     if key_rep_test not in st.session_state:
         st.session_state[key_rep_test] = False
-    lbl_btn_reporte_top = "⚠️ Reportar Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else "⚠️ Reportar Error"
+    lbl_btn_reporte_top = "⚠️ Reportar Error en Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else "⚠️ Reportar Error"
     if puede_rep and c5 is not None:
         if c5.button(lbl_btn_reporte_top, key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
             st.session_state[key_rep_test] = not st.session_state[key_rep_test]
+
+    # Mostrar el cuadro de reporte INMEDIATAMENTE debajo de los botones superiores cuando se pulsa
+    if puede_rep and st.session_state.get(key_rep_test, False):
+        render_cuadro_reporte_error(q, idx + 1, "test_activo_top")
 
     if st.session_state.checked:
         if es_abierta:
@@ -3961,11 +3993,10 @@ elif not st.session_state.finished:
                             unsafe_allow_html=True
                         )
 
-                    # Botón adicional de reporte justo al final de la explicación de Desarrollo para que no tengan que subir arriba
+                    # Expander directo al pie de la corrección de Desarrollo / Supuestos para reportar sin subir arriba
                     if puede_rep:
-                        st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
-                        if st.button(f"🛠️ ¿Alguna duda o error en la corrección de este {tipo_item_lbl}? Pulsa aquí para reportarlo a info@oposiciona.es", key=f"btn_err_bot_open_{idx + 1}", use_container_width=True):
-                            st.session_state[key_rep_test] = not st.session_state[key_rep_test]
+                        with st.expander(f"⚠️ Reportar Error en {tipo_item_lbl} {idx + 1} a info@oposiciona.es"):
+                            render_cuadro_reporte_error(q, idx + 1, "test_activo_bottom")
         else:
             if q['answer'] != -1:
                 co = q['options'][q['answer']]
@@ -3977,9 +4008,6 @@ elif not st.session_state.finished:
             et = re.sub(r'(?i)^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
             eh = "".join([f"<div style='margin-top: 5px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
             st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460 !important;'>Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
-
-    if puede_rep and st.session_state.get(key_rep_test, False):
-        render_cuadro_reporte_error(q, idx + 1, "test_activo")
 
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
@@ -4244,7 +4272,8 @@ else:
             key_rep_res = f"rep_open_res_{i + 1}"
             if key_rep_res not in st.session_state:
                 st.session_state[key_rep_res] = False
-            if st.button(f"⚠️ Reportar error o duda en {tipo_lbl_res} {i + 1}", key=f"btn_err_res_{i + 1}"):
+            lbl_btn_res = f"⚠️ Reportar Error en {tipo_lbl_res} {i + 1}"
+            if st.button(lbl_btn_res, key=f"btn_err_res_{i + 1}"):
                 st.session_state[key_rep_res] = not st.session_state[key_rep_res]
             if st.session_state[key_rep_res]:
                 render_cuadro_reporte_error(q, i + 1, "resumen_final")
