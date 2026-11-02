@@ -1643,7 +1643,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 2 ===
 
-
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
 _D = "https://drive.google.com/uc?export=download&id="
 
@@ -1802,20 +1801,21 @@ TESTS_DISPONIBLES = {
         },
         "DESARROLLO": {
             "Elige un test de desarrollo...": None,
-            "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1lUW922MB74NdBEEGXPRvl_VzmKjZW_Xk",
-            "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1R-ozziKg_JvDJrYcmC5_eUkqWAyMv1cq",
-            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1HKjFtZhTUbpbb7uXRLW_Iperw4LVbSdL",
-            "Tema_55_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1iUdlMOsXRLLOb2maIikYVjv0_Uun9N2e",
-            "Tema_56_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=15r6H3xWUnNyaKpmnJLBvaes9-Gnsg1ya",
-            "Tema_57_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=19kBm1fnaLUuNLdoodyb9bHhvgIQ_Z5uG",
-            "Tema_58_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=14KTwK4tde-b0TcrvBFSKHOWBNAfxxG3p",
-            "Tema_60_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1jQZurCVpmfWn3aIs8JDSMFTZ1Vw8cTPj",
-            "Tema_61_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1lGYN8_iP1qL6v6qhio-IySAYupz_tM8p",
-            "Tema_62_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1Wao8sy2CSSACCC4jmTrmBzUnoD2Ks72i",
-            "Tema_67_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1dGQ4h6vjTTGLP4FsUVTvom44-IdHL12I",
-            "Tema_73_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1fT0mKFaNHwBg8UaVn9kq5nJHQoaD1-FY",
-            "Tema_74_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=18C8gpeaeJg6HoKdEZwa7GYHHneIgnDSS",
-            "Tema_75_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1b-2P8ekEeqO5NUvsCNMv9JHAtzzrHAzy",
+            "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1yD2q1MNBBanTLp5eK0OP0OlnN4xfowYN",
+            "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1HJbA5m070nmE-cDSb96BF_sdMEPJu6sC",
+            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=18p3luvJxXbMoyGX8x5ypR11V4hpC8eYI",
+            "Tema_55_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1oIuFye_F4dcDmW_JnL0GCMx5Upm0zvk-",
+            "Tema_56_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OcnPPhEPSEp6hNHY3Wr9MGQU4UCZZ00i",
+            "Tema_57_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=17g1ipag1FbAWnA3YaQBQWeyOEInIWSuV",
+            "Tema_58_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZFuriqz3_WY8TePVeWyjCpm5mKfuRR9F",
+            "Tema_59_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1UlIEhMZaYgNjCuTrkEIF97OShMn7KpjS",
+            "Tema_60_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1UDtCGoV5FEbNNEYynyWULJHtQtC4TaqQ",
+            "Tema_61_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1TRbQbUXs-WRP_x947uyT2XvgXkkoBA6L",
+            "Tema_62_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1i3A9Q7wuhR_TQHiGWgWiLGmJH01ANjfF",
+            "Tema_67_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1v0Pv7CpvwExVhNRTKMaGLrdCui3Olk-K",
+            "Tema_73_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1YILNrT4KD_GmcvJtsRQj2vsXPS6FciRw",
+            "Tema_74_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1_8WXh1zc6qimkZAM0GZwbOyo9nltrulY",
+            "Tema_75_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=13KE0VQRVPMG8qcnG9F0E_ag3MQe4b_bP",
         },
     },
 }
@@ -1883,7 +1883,8 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
             56: "TEMA 56: REQUISITOS GENERALES DEL DERECHO A LAS PRESTACIONES Y RESPONSABILIDAD",
             57: "TEMA 57: INCAPACIDAD TEMPORAL",
             58: "TEMA 58: NACIMIENTO Y CUIDADO DE MENOR, CORRESPONSABILIDAD Y RIESGO DURANTE EL EMBARAZO/LACTANCIA",
-            60: "TEMA 60: INCAPACIDAD PERMANENTE Y LESIONES PERMANENTES NO INVALIDANTES",
+            59: "TEMA 59: INCAPACIDAD PERMANENTE EN EL RÉGIMEN GENERAL (CONCEPTO, GRADOS Y PRESTACIONES)",
+            60: "TEMA 60: CALIFICACIÓN Y REVISIÓN DE LA INCAPACIDAD PERMANENTE Y LESIONES PERMANENTES NO INVALIDANTES",
             61: "TEMA 61: JUBILACIÓN EN EL RÉGIMEN GENERAL",
             62: "TEMA 62: MUERTE Y SUPERVIVENCIA",
             67: "TEMA 67: COTIZACIÓN EN EL RÉGIMEN GENERAL DE LA SEGURIDAD SOCIAL",
@@ -1940,7 +1941,7 @@ def _dividir_en_oraciones_juridicas(texto):
     unidades = []
 
     for blq in bloques_brutos:
-        blq_limpio = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', blq).strip()
+        blq_limpio = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', blq.replace("[[H]]", "")).strip()
         if PDFQuizParser._es_basura_cabecera_o_pie(blq_limpio):
             continue
         if re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_limpio) and len(blq_limpio) < 90 and not blq_limpio.endswith('.'):
@@ -1955,7 +1956,7 @@ def _dividir_en_oraciones_juridicas(texto):
         partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[•\*\-–]\s)', t)
         unidades = []
         for p in partes:
-            p_rest = p.replace('<DOT>', '.').strip()
+            p_rest = p.replace('<DOT>', '.').replace("[[H]]", "").strip()
             p_rest = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', p_rest).strip()
             if len(p_rest) >= 40 and not PDFQuizParser._es_basura_cabecera_o_pie(p_rest):
                 unidades.append(p_rest)
@@ -2082,7 +2083,7 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
         "articulos_validos": {"165", "166", "177", "178", "179", "180", "181", "182", "183", "184", "185", "186", "187", "188", "189", "190", "191", "192"}
     },
     {
-        "nombre_epigrafe": "Incapacidad Permanente y Lesiones Permanentes No Invalidantes (Tema 60)",
+        "nombre_epigrafe": "Incapacidad Permanente y Lesiones Permanentes No Invalidantes (Temas 59 y 60)",
         "match_keywords": ["incapacidad permanente", "parcial", "total", "absoluta", "gran invalidez", "lesiones permanentes no invalidantes", "baremo", "calificacion y revision"],
         "obligatorios": [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
@@ -2686,21 +2687,15 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     }
 
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
-    """
-    Genera una evaluación ágil y directa sin enumerar los apartados acertados
-    y con la orientación final de los preparadores (la nota metodológica se pinta aparte en su recuadro gris).
-    """
     bloques = []
     tot_ideas = len(ev["puntos_cubiertos"]) + len(ev["puntos_omitidos"])
 
-    # 1. Balance sintético de cobertura (sin listar los apartados acertados para no alargar)
     bloques.append(
         "1. **✅ Balance de cobertura del resumen oficial:**\n"
         f"Has desarrollado con acierto **{len(ev['puntos_cubiertos'])} de los {tot_ideas} apartados esenciales** del epígrafe "
         f"(sumando **+{ev.get('pts_brutos_criterio_1', 0.0):.2f} puntos brutos** antes de deducciones)."
     )
 
-    # 2. Apartados y datos omitidos (-1,00 pto por apartado)
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         lineas_b2 = [
             "Obviar contenido esencial del resumen resta **-1,00 punto por apartado omitido** (y **-0,25 puntos** por plazo/dato omitido):"
@@ -2716,7 +2711,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
             "¡Excelente! No has omitido ningún apartado ni plazo del resumen oficial."
         )
 
-    # 3. Referencias legales y siglas
     rev_normas = []
     if ev["citas_ok"]:
         rev_normas.append(f"- ✔️ **Referencias legales del epígrafe acertadas:** {'; '.join(ev['citas_ok'])}.")
@@ -2737,7 +2731,6 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normas.append("- ✔️ Todas las referencias legales del epígrafe y las siglas han sido correctamente introducidas.")
     bloques.append("3. **⚖️ Auditoría de referencias legales (-0,50 ptos si se omiten) y rigor en siglas:**\n" + "\n".join(rev_normas))
 
-    # 4. Valoración y orientación de los preparadores
     c1_bruto = ev.get("pts_brutos_criterio_1", 0.0)
     c1 = ev.get("pts_criterio_1", 0.0)
     resta_efectiva = round(max(0.0, c1_bruto - c1), 2)
@@ -3241,7 +3234,6 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 
@@ -3418,35 +3410,36 @@ if not st.session_state.questions:
                         else: procesar_preguntas(rqs, barajar=True)
 
     if es_admin:
-        with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas"):
-            st.info("Esta herramienta es visible únicamente para el administrador.")
-            if st.button("Contar preguntas de todos los PDFs y crear tablas", use_container_width=True, type="primary"):
+        with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas, Supuestos y Epígrafes de Desarrollo"):
+            st.info("Esta herramienta es visible únicamente para el administrador. Incluye apartados específicos para SUPUESTOS y para DESARROLLO (indicando el Nº de epígrafes por PDF).")
+            if st.button("Contar preguntas, supuestos y epígrafes de todos los PDFs", use_container_width=True, type="primary"):
                 nuevos_hoy = globals().get("NUEVOS_HOY", [])
                 tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
                 bp, proc, txt_copiar = st.progress(0, text="Analizando PDFs..."), 0, ""
+
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
                     max_op_adm = 3 if "GESTI" in esp.upper() else 4
-                    st.markdown(f"### 📋 Catálogo de Tests: {esp}")
+
+                    # 1. TABLA DE TESTS TIPO TEST (ESPECIFICO, EXAMENES, GENERAL)
+                    st.markdown(f"### 📋 Catálogo de Tests Tipo Test: {esp}")
                     t_md = "| Categoría | Nombre del Test | Nº de Preguntas | Media Opciones |\n| :--- | :--- | :---: | :---: |\n"
-                    for cat, tests in cats.items():
+                    for cat in ["ESPECIFICO", "EXAMENES", "GENERAL"]:
+                        tests = cats.get(cat, {})
                         for nom, url in tests.items():
-                            if url is None: continue
+                            if url is None:
+                                continue
                             proc += 1
-                            bp.progress(proc / tot_pdfs, text=f"Analizando ({proc}/{tot_pdfs}): {nom}...")
+                            bp.progress(proc / max(1, tot_pdfs), text=f"Analizando Test ({proc}/{tot_pdfs}): {nom}...")
                             try:
                                 r = descargar_pdf_fresco(url)
                                 if r.status_code == 200:
-                                    if cat == "DESARROLLO":
-                                        qs_parsed = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
-                                        nq, media_op = len(qs_parsed), "Desarrollo"
+                                    qs_parsed = PDFQuizParser.parse(r.content, max_options=max_op_adm)
+                                    nq = len(qs_parsed)
+                                    if nq > 0:
+                                        avg_val = sum(len(q.get("options", [])) for q in qs_parsed) / nq
+                                        media_op = str(int(avg_val)) if avg_val.is_integer() else f"{avg_val:.2f}".replace(".", ",")
                                     else:
-                                        qs_parsed = PDFQuizParser.parse(r.content, max_options=max_op_adm)
-                                        nq = len(qs_parsed)
-                                        if nq > 0:
-                                            avg_val = sum(len(q.get("options", [])) for q in qs_parsed) / nq
-                                            media_op = str(int(avg_val)) if avg_val.is_integer() else f"{avg_val:.2f}".replace(".", ",")
-                                        else:
-                                            media_op = "0"
+                                        media_op = "0"
                                 else:
                                     nq, media_op = "Error", "-"
                             except Exception:
@@ -3456,9 +3449,73 @@ if not st.session_state.questions:
                             else:
                                 t_md += f"| {cat} | {nom} | {nq} preguntas | {media_op} |\n"
                     st.markdown(t_md)
-                    txt_copiar += f"### 📋 Catálogo de Tests: {esp}\n\n" + t_md + "\n---\n\n"
+                    txt_copiar += f"### 📋 Catálogo de Tests Tipo Test: {esp}\n\n" + t_md + "\n"
+
+                    # 2. APARTADO ESPECÍFICO DE SUPUESTOS PRÁCTICOS
+                    supuestos_dict = {k: v for k, v in cats.get("SUPUESTOS", {}).items() if v is not None}
+                    st.markdown(f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} {'tema incluido' if len(supuestos_dict)==1 else 'temas incluidos'})")
+                    if supuestos_dict:
+                        s_md = "| Categoría | Tema / Supuesto Incluido | Nº de Cuestiones en el PDF |\n| :--- | :--- | :---: |\n"
+                        tot_cuestiones_sup = 0
+                        for nom_s, url_s in supuestos_dict.items():
+                            proc += 1
+                            bp.progress(proc / max(1, tot_pdfs), text=f"Analizando Supuesto ({proc}/{tot_pdfs}): {nom_s}...")
+                            try:
+                                r = descargar_pdf_fresco(url_s)
+                                if r.status_code == 200:
+                                    qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
+                                    if not qs_sup:
+                                        qs_sup = PDFQuizParser.parse(r.content, max_options=max_op_adm)
+                                    n_sup = len(qs_sup)
+                                    tot_cuestiones_sup += n_sup
+                                    n_sup_str = f"{n_sup} cuestiones"
+                                else:
+                                    n_sup_str = "Error de descarga"
+                            except Exception:
+                                n_sup_str = "-"
+                            et_tema_s = obtener_etiqueta_tema_visible(nom_s)
+                            s_md += f"| **SUPUESTOS** | **{nom_s}** — *{et_tema_s}* | **{n_sup_str}** |\n"
+                        s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} PDFs incluidos** | **{tot_cuestiones_sup} cuestiones** |\n"
+                    else:
+                        s_md = "*Actualmente no hay ningún PDF cargado en la categoría SUPUESTOS de esta especialidad.*\n"
+                    st.markdown(s_md)
+                    txt_copiar += f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} incluidos)\n\n" + s_md + "\n"
+
+                    # 3. APARTADO ESPECÍFICO DE DESARROLLO (CON Nº DE EPÍGRAFES POR PDF)
+                    if "DESARROLLO" in cats:
+                        desarrollo_dict = {k: v for k, v in cats.get("DESARROLLO", {}).items() if v is not None}
+                        st.markdown(f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} {'tema incluido' if len(desarrollo_dict)==1 else 'temas incluidos'})")
+                        if desarrollo_dict:
+                            d_md = "| Categoría | PDF Incluido | Tema Correspondiente | Nº de Epígrafes en el PDF |\n| :--- | :--- | :--- | :---: |\n"
+                            tot_epigrafes_des = 0
+                            for nom_d, url_d in desarrollo_dict.items():
+                                proc += 1
+                                bp.progress(proc / max(1, tot_pdfs), text=f"Contando epígrafes de Desarrollo ({proc}/{tot_pdfs}): {nom_d}...")
+                                et_tema_d = obtener_etiqueta_tema_visible(nom_d)
+                                try:
+                                    r = descargar_pdf_fresco(url_d)
+                                    if r.status_code == 200:
+                                        qs_des = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
+                                        n_ep = len(qs_des)
+                                        tot_epigrafes_des += n_ep
+                                        if qs_des and qs_des[0].get("tema_titulo"):
+                                            et_tema_d = qs_des[0]["tema_titulo"]
+                                        n_ep_str = f"{n_ep} {'epígrafe' if n_ep == 1 else 'epígrafes'}"
+                                    else:
+                                        n_ep_str = "Error"
+                                except Exception:
+                                    n_ep_str = "-"
+                                d_md += f"| **DESARROLLO** | **{nom_d}** | {et_tema_d} | **{n_ep_str}** |\n"
+                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} PDFs incluidos** | **Relación completa de temas de desarrollo** | **{tot_epigrafes_des} epígrafes en total** |\n"
+                        else:
+                            d_md = "*Actualmente no hay ningún PDF cargado en la categoría DESARROLLO de esta especialidad.*\n"
+                        st.markdown(d_md)
+                        txt_copiar += f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} temas incluidos)\n\n" + d_md + "\n"
+
+                    txt_copiar += "---\n\n"
+
                 bp.empty()
-                st.success("✅ ¡Recuento completado con éxito!")
+                st.success("✅ ¡Recuento de Tests, Supuestos y Epígrafes de Desarrollo completado con éxito!")
                 st.code(txt_copiar, language="markdown")
 
 elif not st.session_state.finished:
@@ -3586,7 +3643,6 @@ elif not st.session_state.finished:
                         unsafe_allow_html=True
                     )
 
-                    # CUADRO GRIS CON LETRA MÁS PEQUEÑA PARA LA NOTA METODOLÓGICA INTRODUCTORIA
                     st.markdown(
                         f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
                         f"{NOTA_METODOLOGICA_PREPARADORES}"
