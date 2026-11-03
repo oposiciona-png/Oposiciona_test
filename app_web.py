@@ -591,6 +591,7 @@ class PDFQuizParser:
         if tema_cabecera:
             t = re.sub(re.escape(tema_cabecera), ' ', t, flags=re.IGNORECASE)
         t = re.sub(r'CUERPO\s+DE\s+GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s*\|\s*TEMA\s+\d+', ' ', t, flags=re.IGNORECASE)
+        t = re.sub(r'Tema\s+\d+\s*[\-–—]?\s*Oposiciones\s+Gesti[oó]n\s+de\s+la\s+Seguridad\s+Social\s*\|?(?:\s*P[aá]gina\s+\d+)?', ' ', t, flags=re.IGNORECASE)
         t = re.sub(r'\bTEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/]{6,95}?(?=\s+[a-záéíóúñ]|\s+[•\*■▪]|\s*$)', ' ', t)
         t = re.sub(r'[■▪▫◆●]\s*S[IÍ]NTESIS\s+DE[L\s]+[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/\-–]{4,95}?(?=\s+[A-ZÁÉÍÓÚÑa-záéíóúñ•\*]|\s*$)', ' ', t)
         t = re.sub(r'\bRESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES\b', ' ', t, flags=re.IGNORECASE)
@@ -612,9 +613,15 @@ class PDFQuizParser:
             return True
         if re.match(r'^TEMA\s+\d+$', s, re.IGNORECASE):
             return True
+        if re.match(r'^Tema\s+\d+\s*[\-–—]?\s*Oposiciones\s+Gesti[oó]n\s+de\s+la\s+Seguridad\s+Social\b', s, re.IGNORECASE):
+            return True
         if re.match(r'^CUERPO\s+DE\s+GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', s, re.IGNORECASE):
             return True
-        if re.match(r'^TEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\-–\(\)\/]+$', s) and s.isupper():
+        if re.match(r'^PROGRAMA\s+OFICIAL\s+BLOQUE\b', s, re.IGNORECASE):
+            return True
+        if re.match(r'^DESGLOSE\s+OFICIAL\s+DE\s+EP[IÍ]GRAFES\b', s, re.IGNORECASE):
+            return True
+        if re.match(r'^TEMA\s+\d+[\.\:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\-–\(\)\/]+$', s) and s.isupper():
             return True
         patrones_cabecera = [
             r'^OPOSICIONA\b',
@@ -640,6 +647,10 @@ class PDFQuizParser:
             return None, texto
         s = texto.replace("[[H]]", "").strip()
         if not re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', s):
+            return None, texto
+
+        # Si es un ítem de lista numerada con dos puntos ("1) Pluriempleo: Es la situación..."), no es una cabecera general sino un ítem de lista
+        if re.match(r'^\d{1,2}\)\s+[^:]{2,85}:\s+', s):
             return None, texto
 
         m_bullet = re.match(r'^(\d{1,2}[\.\)]\s+[^•\*▪◆]{4,135}?)\s*([•\*▪◆].*)$', s)
@@ -675,12 +686,24 @@ class PDFQuizParser:
 
     @staticmethod
     def _dividir_definiciones_internas(linea):
+        """
+        Divide una línea o párrafo en sub-bloques cuando detecta:
+        - Viñetas (•, *, ▪)
+        - Enumeraciones numéricas con paréntesis o punto: 1) ..., 2) ..., 3) ... o 1. ..., 2. ...
+        - Enumeraciones por letras: a) ..., b) ..., c) ..., d) ...
+        - Definiciones con título en negrita + dos puntos tras punto.
+        """
         if not linea:
             return []
         s = re.sub(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s*)', '\n', linea)
+        # Separar enumeraciones "1) ...", "2) ...", "3) ..." precedidas de '.', ':', ';' o ')'
+        s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\)\s+[A-ZÁÉÍÓÚÑ¿¡])', '\n', s)
+        # Separar enumeraciones por letras "a) ...", "b) ...", "c) ...", "d) ..." precedidas de '.', ':', ';' o ')'
+        s = re.sub(r'(?<=[.?!:;\)])\s+(?=[a-g]\)\s+[A-ZÁÉÍÓÚÑ¿¡])', '\n', s)
         s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])', '\n', s)
+        # Separar nuevos epígrafes internos tras punto ("...obligación de cotizar. Situaciones de encuadramiento múltiple: ...")
         s = re.sub(
-            r'(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-]{2,58}:\s+[A-ZÁÉÍÓÚÑ])',
+            r'(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-–—]{3,85}:\s+[A-ZÁÉÍÓÚÑ])',
             '\n• ',
             s
         )
@@ -693,6 +716,7 @@ class PDFQuizParser:
 
         lineas_limpias = []
         pendiente_bullet = False
+        pendiente_num_item = ""
         for l in lista_lineas:
             l_s = l.strip()
             es_bold_header = l_s.startswith("[[H]]")
@@ -702,6 +726,21 @@ class PDFQuizParser:
             l_sin_marca = PDFQuizParser._limpiar_cabeceras_incrustadas(l_sin_marca, tema_cabecera)
             if not l_sin_marca or PDFQuizParser._es_basura_cabecera_o_pie(l_sin_marca, tema_cabecera):
                 continue
+            # Si una línea termina en ": 1)" o ": a)" al final de línea, pasar ese "1)" al principio de la siguiente línea
+            m_trail_enum = re.search(r'(?<=[.?!:;\)])\s+(\d{1,2}\)|[a-g]\))\s*$', l_sin_marca)
+            if m_trail_enum:
+                token_enum = m_trail_enum.group(1)
+                l_sin_marca = l_sin_marca[:m_trail_enum.start()].strip()
+                if l_sin_marca:
+                    lineas_limpias.append(("[[H]]" + l_sin_marca) if es_bold_header else l_sin_marca)
+                pendiente_num_item = token_enum
+                continue
+
+            if pendiente_num_item:
+                l_sin_marca = f"{pendiente_num_item} {l_sin_marca}"
+                pendiente_num_item = ""
+                es_bold_header = False
+
             if re.match(r'^(?:[•\*▪◆\-–]\s*)+$', l_sin_marca):
                 pendiente_bullet = True
                 continue
@@ -715,65 +754,40 @@ class PDFQuizParser:
         if not lineas_limpias:
             return ""
 
-        parrafos = []
-        actual = ""
-
+        # Primero unimos las líneas continuas del PDF para recomponer las oraciones partidas a mitad de línea,
+        # y luego dividimos por apartados, definiciones y enumeraciones 1), 2), a), b)
+        texto_corrido = ""
+        bloques_pre = []
         for l_raw in lineas_limpias:
             forzada_cabecera = l_raw.startswith("[[H]]")
             l_str = l_raw.replace("[[H]]", "").strip()
-
             if forzada_cabecera:
-                if actual:
-                    parrafos.append(actual.strip())
-                    actual = ""
-                tit_sep, resto_sep = PDFQuizParser._separar_titulo_numerado_pegado(l_str)
-                if tit_sep and resto_sep:
-                    parrafos.append(f"[[H]]{tit_sep}")
-                    for sub_r in PDFQuizParser._dividir_definiciones_internas(resto_sep):
-                        actual = (actual + " " + sub_r).strip() if actual else sub_r
-                elif parrafos and parrafos[-1].startswith("[[H]]") and not re.match(r'^\d{1,2}[\.\)]', l_str):
-                    parrafos[-1] = parrafos[-1] + " " + l_str
+                if texto_corrido:
+                    bloques_pre.append(texto_corrido.strip())
+                    texto_corrido = ""
+                bloques_pre.append(f"[[H]]{l_str}")
+            else:
+                if not texto_corrido:
+                    texto_corrido = l_str
                 else:
-                    parrafos.append(f"[[H]]{l_str}")
-                continue
+                    texto_corrido += " " + l_str
+        if texto_corrido:
+            bloques_pre.append(texto_corrido.strip())
 
-            for p_int in PDFQuizParser._dividir_definiciones_internas(l_str):
-                tit_detectado, resto_parrafo = PDFQuizParser._separar_titulo_numerado_pegado(p_int)
+        parrafos = []
+        for b_raw in bloques_pre:
+            if b_raw.startswith("[[H]]"):
+                parrafos.append(b_raw)
+                continue
+            for sub_p in PDFQuizParser._dividir_definiciones_internas(b_raw):
+                tit_detectado, resto_parrafo = PDFQuizParser._separar_titulo_numerado_pegado(sub_p)
                 if tit_detectado:
-                    if actual:
-                        parrafos.append(actual.strip())
-                        actual = ""
                     parrafos.append(f"[[H]]{tit_detectado}")
                     if resto_parrafo:
-                        actual = resto_parrafo
-                    continue
-
-                es_definicion_viñeta = bool(
-                    re.match(r'^[•\*▪◆\-–]\s*', p_int) or
-                    re.match(r'^[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-]{2,58}:\s+[A-ZÁÉÍÓÚÑ]', p_int) or
-                    re.match(r'^(Título\s+[IVX0-9]+|Capítulo\s+[IVX0-9]+|Sección\s+\d+|Disposiciones\s+)', p_int, re.IGNORECASE)
-                )
-
-                if es_definicion_viñeta:
-                    if actual:
-                        parrafos.append(actual.strip())
-                    if not re.match(r'^[•\*▪◆\-–]\s*', p_int) and not re.match(r'^(Título|Capítulo|Sección|Disposiciones)\b', p_int, re.IGNORECASE):
-                        p_int = f"• {p_int}"
-                    else:
-                        p_int = re.sub(r'^[•\*▪◆\-–]\s*', '• ', p_int)
-                    actual = p_int
-                    continue
-
-                if not actual:
-                    actual = p_int
-                elif actual.endswith(('.', ':', '»', '"', ')')) and p_int[0].isupper() and len(actual) > 120 and not re.match(r'^[•\*]', actual):
-                    parrafos.append(actual.strip())
-                    actual = p_int
+                        for sp2 in PDFQuizParser._dividir_definiciones_internas(resto_parrafo):
+                            parrafos.append(sp2)
                 else:
-                    actual += " " + p_int
-
-        if actual:
-            parrafos.append(actual.strip())
+                    parrafos.append(sub_p)
 
         parrafos_finales = []
         for p in parrafos:
@@ -829,7 +843,7 @@ class PDFQuizParser:
             blq_txt = blq.replace("[[H]]", "").strip()
             if not blq_txt:
                 continue
-            if not es_cabecera_num and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_txt) and len(blq_txt) < 140 and not blq_txt.endswith('.'):
+            if not es_cabecera_num and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_txt) and len(blq_txt) < 140 and not blq_txt.endswith('.') and ":" not in blq_txt:
                 es_cabecera_num = True
 
             if es_cabecera_num:
@@ -838,23 +852,45 @@ class PDFQuizParser:
                 )
                 continue
 
-            m_bullet_def = re.match(r'^([•\*▪◆\-–])\s*([^:]{2,75}):\s*(.+)$', blq_txt)
+            # Formato específico con salto de párrafo y sangría para ítems numerados "1) ...", "2) ..." o "a) ...", "b) ..."
+            m_enum_item = re.match(r'^(\d{1,2}\)|[a-g]\))\s*([^:]{2,90}):\s*(.+)$', blq_txt)
+            if m_enum_item:
+                num_lbl = m_enum_item.group(1).strip()
+                tit_lbl = m_enum_item.group(2).strip()
+                cuerpo_lbl = m_enum_item.group(3).strip()
+                html_partes.append(
+                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:22px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"<b style='color:#083B46 !important;'>{num_lbl} {tit_lbl}:</b> {cuerpo_lbl}</div>"
+                )
+                continue
+
+            m_enum_simple = re.match(r'^(\d{1,2}\)|[a-g]\))\s+(.+)$', blq_txt)
+            if m_enum_simple:
+                num_lbl = m_enum_simple.group(1).strip()
+                cuerpo_lbl = m_enum_simple.group(2).strip()
+                html_partes.append(
+                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:22px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"<b style='color:#083B46 !important;'>{num_lbl}</b> {cuerpo_lbl}</div>"
+                )
+                continue
+
+            m_bullet_def = re.match(r'^([•\*▪◆\-–])\s*([^:]{2,95}):\s*(.+)$', blq_txt)
             if m_bullet_def:
                 term = m_bullet_def.group(2).strip()
                 resto = m_bullet_def.group(3).strip()
                 html_partes.append(
-                    f"<div style='margin-top:5px; margin-bottom:6px; padding-left:16px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
-                    f"• <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
+                    f"<div style='margin-top:10px; margin-bottom:6px; padding-left:10px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"▪ <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
                 )
                 continue
 
-            m_def_sola = re.match(r'^([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-]{2,68}):\s+(.+)$', blq_txt)
-            if m_def_sola and not re.match(r'^(Conforme|De\s+conformidad|Seg[úu]n|Por\s+tanto|No\s+obstante)\b', blq_txt, re.IGNORECASE):
+            m_def_sola = re.match(r'^([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-–—]{2,88}):\s+(.+)$', blq_txt)
+            if m_def_sola and not re.match(r'^(Conforme|De\s+conformidad|Seg[úu]n|Por\s+tanto|No\s+obstante|Nota\s+metodol[óo]gica)\b', blq_txt, re.IGNORECASE):
                 term = m_def_sola.group(1).strip()
                 resto = m_def_sola.group(2).strip()
                 html_partes.append(
-                    f"<div style='margin-top:5px; margin-bottom:6px; padding-left:16px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
-                    f"• <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
+                    f"<div style='margin-top:10px; margin-bottom:6px; padding-left:10px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
+                    f"▪ <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
                 )
                 continue
 
@@ -869,9 +905,10 @@ class PDFQuizParser:
         if not titulo:
             return ""
         t = titulo.replace("[[H]]", "").strip()
+        t = re.sub(r'^[•\*■▪▫◆\-–]\s*', '', t).strip()
         t = re.sub(r'[■▪▫◆]\s*S[IÍ]NTESIS.*$', '', t, flags=re.IGNORECASE).strip()
         t = re.split(
-            r'\s+(?:S[IÍ]NTESIS\s+DEL?\b|RESUMEN\s+ANAL[IÍ]TICO\b|RESUMEN\s+DEL?\b|ESQUEMA\s+DEL?\b)',
+            r'\s+(?:S[IÍ]NTESIS\s+DEL?\b|RESUMEN\s+ANAL[IÍ]TICO\b|RESUMEN\s+DEL?\b|ESQUEMA\s+DEL?\b|Nota\s+metodol[óo]gica\b)',
             t,
             maxsplit=1,
             flags=re.IGNORECASE
@@ -906,7 +943,7 @@ class PDFQuizParser:
                         lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
                         lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
 
-                        if not tema_detectado and re.match(r'^TEMA\s+\d+\s*[:\-–]\s*\S+', lt, re.IGNORECASE):
+                        if not tema_detectado and re.match(r'^TEMA\s+\d+[\.\:\-–]\s*\S+', lt, re.IGNORECASE):
                             t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
                             if t_cand and len(t_cand) > 8:
                                 tema_detectado = t_cand
@@ -1080,20 +1117,28 @@ class PDFQuizParser:
             if current_q and (current_q["answer_text"] or current_q["explanation"]):
                 supuestos_qs.append(current_q)
 
-        # 5. EXTRACCIÓN LIMPIA Y BIEN FORMATEADA DE EPÍGRAFES PARA PDFs DE RESUMEN
+        # 5. EXTRACCIÓN LIMPIA, EN ORDEN NUMÉRICO Y SIN FALSOS POSITIVOS DE ÍNDICE PARA PDFs DE RESUMEN
         if modo in ["DESARROLLO", "TODOS"] and not desarrollo_qs and all_clean_lines:
             lineas_utiles = [
                 l.strip() for l in all_clean_lines
                 if l.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(l.strip(), tema_detectado)
             ]
 
-            tiene_palabra_epigrafe = any(
-                re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l.replace("[[H]]", ""), re.IGNORECASE)
+            # Comprobar si existen cabeceras de epígrafe reales sin viñeta inicial ("EPÍGRAFE 1: NORMAS SOBRE AFILIACIÓN.")
+            tiene_epigrafe_sin_bullet = any(
+                re.match(r'^(?:[■▪]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l.replace("[[H]]", "").strip(), re.IGNORECASE)
+                for l in lineas_utiles
+            )
+            tiene_palabra_epigrafe = tiene_epigrafe_sin_bullet or any(
+                re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l.replace("[[H]]", "").strip(), re.IGNORECASE)
                 for l in lineas_utiles
             )
 
             def _es_inicio_epigrafe(linea):
                 lin_clean = linea.replace("[[H]]", "").strip()
+                if tiene_epigrafe_sin_bullet:
+                    # Ignorar las líneas de índice que empiezan por viñeta "• EPÍGRAFE 1: ..."
+                    return bool(re.match(r'^(?:[■▪]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', lin_clean, re.IGNORECASE))
                 if tiene_palabra_epigrafe:
                     return bool(re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', lin_clean, re.IGNORECASE))
                 return bool(
@@ -1116,7 +1161,10 @@ class PDFQuizParser:
                         if PDFQuizParser._es_basura_cabecera_o_pie(cand, tema_detectado):
                             idx_l += 1
                             continue
-                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Aprobaci[óo]n\b|El\s+art[íi]culo\b|La\s+Constituci[óo]n\b|Regula\b|Concepto\b|Obligaci[óo]n\b|Sujetos\b|Mediante\b|De\s+conformidad\b)', cand, re.IGNORECASE):
+                        # Si la línea ya contiene ":" (es el primer apartado del cuerpo) o empieza por palabra normal con minúsculas, parar título
+                        if ":" in cand or not cand.isupper():
+                            break
+                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Nota\s+metodol[óo]gica\b)', cand, re.IGNORECASE):
                             break
                         if not partes_tit[-1].endswith('.') and len(cand) < 95 and len(" ".join(partes_tit)) < 160:
                             partes_tit.append(cand)
@@ -1129,17 +1177,36 @@ class PDFQuizParser:
                     cuerpo_ep = []
                     while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
                         l_cuerpo = lineas_utiles[idx_l]
+                        l_cuerpo_clean = l_cuerpo.replace("[[H]]", "").strip()
+                        # Ignorar la Nota metodológica del índice si se coló antes del Epígrafe 1
+                        if re.match(r'^Nota\s+metodol[óo]gica\s*:', l_cuerpo_clean, re.IGNORECASE):
+                            idx_l += 1
+                            continue
                         if not PDFQuizParser._es_basura_cabecera_o_pie(l_cuerpo, tema_detectado):
                             cuerpo_ep.append(l_cuerpo)
                         idx_l += 1
 
                     texto_ep = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_ep, tema_cabecera=tema_detectado)
-                    if texto_ep:
+                    # Solo guardar si tiene verdadero contenido de desarrollo (descarta líneas sueltas de índice)
+                    if texto_ep and len(texto_ep) >= 200:
                         epigrafes_detectados.append((titulo_ep, texto_ep))
                 else:
                     idx_l += 1
 
             if epigrafes_detectados:
+                # Ordenar siempre por el número de epígrafe (EPÍGRAFE 1, EPÍGRAFE 2, EPÍGRAFE 3, EPÍGRAFE 4...)
+                def _clave_orden_epigrafe(par_ep):
+                    tit = par_ep[0]
+                    m_n = re.search(r'EP[IÍ]GRAFE\s+(\d+)', tit, re.IGNORECASE)
+                    if m_n:
+                        return int(m_n.group(1))
+                    m_ini = re.match(r'^(\d+)', tit)
+                    if m_ini:
+                        return int(m_ini.group(1))
+                    return 999
+
+                epigrafes_detectados.sort(key=_clave_orden_epigrafe)
+
                 for i_ep, (tit_ep, txt_ep) in enumerate(epigrafes_detectados, 1):
                     desarrollo_qs.append({
                         "is_open": True,
@@ -1283,7 +1350,6 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-d][\)\.-]|[A-D][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # Unir números sueltos ("100.", "18).", "81.", "3.") cuando la línea anterior termina en "por", "de", "del", "Art." o tiene paréntesis abierto
         cleaned_num_lines, k = [], 0
         while k < len(lines):
             curr = lines[k]
@@ -1419,7 +1485,6 @@ class PDFQuizParser:
             r_idx += 1
         lines = reordered_lines
 
-        # Unir continuaciones numéricas partidas entre dos líneas ("...al 200 por" + "100. Además...", "...materias del" + "148...", "...(Art." + "18).")
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
@@ -1523,7 +1588,6 @@ class PDFQuizParser:
 
             if m_num and current_q and current_q["state"] == "E":
                 exp_so_far = current_q["explanation"].strip()
-                # Si la explicación acumulada termina en una palabra incompleta como "por", "de", "del", "Art.", "(Art.", NUNCA es una pregunta nueva
                 exp_termina_incompleta = bool(
                     re.search(r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|por|de|del|en|con|para|entre|hasta)\s*$', exp_so_far[-40:], re.IGNORECASE) or
                     exp_so_far.endswith(('(', ','))
@@ -1695,7 +1759,6 @@ class PDFQuizParser:
                     ib = bool(re.match(r'^[\s]*[•\*]', text_clean_e))
                     io = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica)[\s:]', text_clean_e, re.IGNORECASE))
                     ipr = bool(re.match(r'^\(p[aá]ginas?\s+\d+', text_clean_e, re.IGNORECASE))
-                    # No saltar de párrafo si la explicación previa termina en abreviatura como "Art." o "(Art."
                     termina_en_abrev = bool(re.search(r'(?:\bArt\.|\barts?\.|\bnúm\.|\bpág\.)\s*$', current_q["explanation"].strip(), re.IGNORECASE))
                     ins = (not termina_en_abrev) and lc in ['.', ':', '?', '!', '"', '”', '»'] and bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text_clean_e))
                     if ipr or ib or io or ins:
@@ -1705,7 +1768,6 @@ class PDFQuizParser:
 
         if current_q and current_q["options"]: questions.append(current_q)
 
-        # Rescate de seguridad: si alguna opción última se tragó "Explicación: ..." pegado (como P83 en DOMINGO 6 SEP), separarlo limpiamente
         for q in questions:
             if not q.get("explanation") and q.get("options"):
                 ult_opt = q["options"][-1]
@@ -1714,8 +1776,6 @@ class PDFQuizParser:
                     q["options"][-1] = ult_opt[:m_pegada.start()].strip()
                     q["explanation"] = m_pegada.group(2).strip()
 
-            # Solo limpiar un número suelto al final de la explicación si va detrás de cierre de comillas/paréntesis de página ("...quince días.» 27."),
-            # NUNCA detrás de "Art.", "por", "de", "del"
             if q.get("explanation"):
                 q["explanation"] = re.sub(r'(?<=[»”\)])\s+\d{1,3}\.\s*$', '', q["explanation"].strip())
 
@@ -1953,7 +2013,6 @@ TESTS_DISPONIBLES_INVITADO = {
     },
 }
 # === FIN SECCIÓN 3 ===
-
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
@@ -2212,7 +2271,7 @@ NOTA_METODOLOGICA_PREPARADORES = (
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 - Cada parte se califica de 0 a 50 puntos (mínimo 25 puntos directos para superar sin compensación).
-- Criterio 1 (0 a 45 puntos): Conocimiento completo de los apartados del epígrafe e inclusión de leyes y artículos de aplicación. Penalizaciones ponderadas por los preparadores: obviar un apartado del resumen resta -1,00 punto; omitir una Ley o Real Decreto obligatorio resta -0,15 puntos; omitir un artículo resta -0,10 puntos; omitir un plazo o cuantía resta -0,15 puntos.
+- Criterio 1 (0 a 45 puntos): Conocimiento completo de los apartados del epígrafe e inclusión de leyes y artículos de aplicación. Penalizaciones ponderadas por los preparadores: obviar un apartado del resumen resta -1,00 punto; omitir una Ley o Real Decreto obligatorio resta -0,15 puntos; omitir un artículo esencial del TRLGSS (RDL 8/2015) resta -0,15 puntos (-0,10 base + -0,05 por ser artículo esencial del TRLGSS); omitir otro artículo resta -0,10 puntos; omitir un plazo o cuantía resta -0,15 puntos.
 - Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura (solo puntúa si alcanza al menos 20/45 en Criterio 1).
 - Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la introducción de siglas/abreviaturas ("...en adelante, XXXX", -0,25 ptos por sigla sin introducir).
 """
@@ -2256,7 +2315,7 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
             ("NORMA_RD84", ["84/1996", "ria"], "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas - RIA)"),
             ("ART_15", ["15"], "Artículo 15 del TRLGSS (obligatoriedad y caracteres de la afiliación)"),
-            ("ART_16", ["16", "17", "27", "34", "59"], "Artículos 16-17 del TRLGSS o arts. 27, 34 y 59 del RD 84/1996 (formas de promover la afiliación, plazos y afiliaciones indebidas)"),
+            ("ART_16", ["16", "17", "27", "34", "59"], "Artículos 16-17 del TRLGSS (formas de promover la afiliación)"),
         ],
         "articulos_validos": {"7", "8", "12", "15", "16", "17", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "59", "136", "138", "139", "140"}
     },
@@ -2266,8 +2325,8 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
         "obligatorios": [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
             ("NORMA_RD84", ["84/1996", "ria", "643/2026"], "Real Decreto 84/1996 (RIA) / Real Decreto 643/2026"),
-            ("ART_138_166", ["138", "139", "140", "166"], "Artículos 138 a 140 o 166 del TRLGSS (altas, bajas, alta asimilada y alta especial)"),
-            ("ART_RIA", ["7", "15", "16", "29", "30", "31", "32", "33", "35", "36", "60"], "Artículos 29, 32, 33, 35, 36 y 60 del RD 84/1996 (alta de pleno derecho, plazos y efectos de altas/bajas)"),
+            ("ART_138_166", ["138", "139", "140", "166"], "Artículos 139, 140 y 166 del TRLGSS (altas, bajas, alta asimilada, pleno derecho y alta especial)"),
+            ("ART_RIA", ["7", "15", "16", "29", "30", "31", "32", "33", "35", "36", "60"], "Artículos 29, 32, 35, 36 y 60 del RD 84/1996 (plazos y efectos de altas y bajas)"),
         ],
         "articulos_validos": {"7", "8", "10", "12", "15", "16", "17", "29", "30", "31", "32", "33", "35", "36", "37", "38", "60", "136", "138", "139", "140", "144", "165", "166"}
     },
@@ -2287,7 +2346,7 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
         "obligatorios": [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
             ("NORMA_RD84", ["84/1996", "ria"], "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas - RIA)"),
-            ("ART_138_RIA", ["138", "139", "83", "5", "10", "11", "14", "16", "17", "19", "21", "57"], "Artículos 83 y 138 del TRLGSS o arts. 5, 10, 14, 16, 17, 19 y 57 del RD 84/1996 (inscripción, concepto de empresario, documento de asociación y registro)"),
+            ("ART_138_RIA", ["138", "139", "83", "5", "10", "11", "14", "16", "17", "19", "21", "57"], "Artículos 83 y 138 del TRLGSS (inscripción de empresas y opción de cobertura)"),
         ],
         "articulos_validos": {"5", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "21", "57", "80", "83", "136", "138", "139", "140"}
     },
@@ -2367,7 +2426,7 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
         "match_keywords": ["empleados de hogar", "hogar familiar", "trabajadores por cuenta ajena agrarios", "jornadas reales", "inactividad", "sistemas especiales"],
         "obligatorios": [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_250_256", ["250", "251", "252", "253", "254", "255", "256", "136", "1620/2011", "28/2011", "27/2011"], "Artículos 250-251 (SEEH) o 252-256 (SEA) del TRLGSS y sus leyes de integración (Ley 27/2011, Ley 28/2011, RD 1620/2011)"),
+            ("ART_250_256", ["250", "251", "252", "253", "254", "255", "256", "136", "1620/2011", "28/2011", "27/2011"], "Artículos 250-251 (SEEH) o 252-256 (SEA) del TRLGSS"),
         ],
         "articulos_validos": {"7", "10", "11", "12", "15", "16", "136", "151", "167", "169", "197", "209", "250", "251", "252", "253", "254", "255", "256", "267", "284"}
     },
@@ -2376,7 +2435,7 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
         "match_keywords": ["autonomos", "cuenta propia", "reta", "seta", "trabajadores del mar", "maritimo", "ingresos reales", "cese de actividad"],
         "obligatorios": [
             ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_305_326", ["305", "306", "307", "308", "313", "324", "327", "47/2015", "20/2007", "13/2022"], "Artículos 305 a 326 del TRLGSS (RETA y SETA), Ley 20/2007 (LETA), RDL 13/2022 o Ley 47/2015 (Régimen Especial del Mar)"),
+            ("ART_305_326", ["305", "306", "307", "308", "313", "324", "327", "47/2015", "20/2007", "13/2022"], "Artículos 305 a 326 del TRLGSS (RETA y SETA)"),
         ],
         "articulos_validos": {"7", "10", "12", "305", "306", "307", "308", "309", "310", "311", "312", "313", "314", "315", "316", "317", "318", "319", "320", "321", "322", "323", "324", "325", "326", "327", "328", "329", "330"}
     },
@@ -2392,11 +2451,37 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
 
 def es_cita_articulo_individual(etiqueta_cita):
     """
-    Devuelve True cuando la referencia omitida es un artículo o rango de artículos (-0,10 ptos),
+    Devuelve True cuando la referencia omitida es un artículo o rango de artículos,
     y False cuando es una Ley, Real Decreto, Decreto, Orden o Constitución (-0,15 ptos).
     """
     s = (etiqueta_cita or "").strip()
     return bool(re.match(r'^(?:Art[íi]culos?|Arts?\.|Disposici[óo]n|T[íi]tulo|Estructura\s+en\s+T[íi]tulos)\b', s, re.IGNORECASE))
+
+def es_articulo_esencial_trlgss(etiqueta_cita, ref_completa=""):
+    """
+    Determina si un artículo omitido pertenece al RDL 8/2015 (TRLGSS).
+    Cuando pertenece al TRLGSS resta -0,15 ptos (-0,10 base de artículo + -0,05 por ser artículo esencial del TRLGSS).
+    """
+    if not es_cita_articulo_individual(etiqueta_cita):
+        return False
+    s = (etiqueta_cita or "").strip()
+    # Si la propia etiqueta menciona otra norma distinta (RIA, RD 84/1996, CE, Constitución, ET, LISOS, etc.), no es del TRLGSS
+    if re.search(r'\b(Constituci[óo]n|CE|RD\s+84/1996|RIA|RGCL|RD\s+2064/1995|RGR|ET|TRET|Estatuto|LISOS|Orden|Ley\s+47/2015|RDL\s+670/1987|Clases\s+Pasivas)\b', s, re.IGNORECASE) and not re.search(r'\bTRLGSS\b', s, re.IGNORECASE):
+        return False
+    if re.search(r'\b(TRLGSS|LGSS|8/2015)\b', s, re.IGNORECASE):
+        return True
+    # Si es "Artículo X" genérico, verificamos en el texto de referencia si está asociado al TRLGSS o a otra ley
+    m_num = re.search(r'\b(\d{1,3})\b', s)
+    if m_num and ref_completa:
+        num = m_num.group(1)
+        # Si en el resumen aparece "artículo X del RIA / RD 84/1996 / CE / ET" y no del TRLGSS, no es TRLGSS
+        pat_otra_ley = rf'art(?:[íi]culos?|\.|s\.)\s*{num}(?:\.\d+)?\s*(?:del?\s+)?(?:RIA|RD\s*84/1996|RGCL|ET|TRET|CE|Constituci[óo]n|LISOS|Orden)'
+        pat_trlgss = rf'art(?:[íi]culos?|\.|s\.)\s*{num}(?:\.\d+)?\s*(?:del?\s+)?(?:TRLGSS|LGSS|Texto\s+Refundido)'
+        if re.search(pat_trlgss, ref_completa, re.IGNORECASE):
+            return True
+        if re.search(pat_otra_ley, ref_completa, re.IGNORECASE):
+            return False
+    return True
 
 def auditar_normativa_obligatoria_del_epigrafe(texto_alumno_norm, arts_en_alumno, contexto_epigrafe_norm, citas_ok_directas, citas_faltan_directas):
     acertados_oblig = list(citas_ok_directas)
@@ -2842,13 +2927,26 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     bonificacion_complementarias = round(min(3.0, 0.75 * len(citas_complementarias)), 2)
     pts_brutos_criterio_1 = round(min(45.0, pts_brutos_ideas + pts_brutos_legales + bonificacion_complementarias), 2)
 
-    # Separar las citas omitidas entre Leyes/RD (-0,15 ptos c/u) y Artículos (-0,10 ptos c/u)
-    articulos_omitidos_lista = [c for c in citas_faltan if es_cita_articulo_individual(c)]
+    # Clasificación en 3 niveles de las referencias normativas omitidas:
+    # 1) Leyes o Reales Decretos omitidos (-0,15 ptos c/u)
+    # 2) Artículos esenciales del RDL 8/2015 - TRLGSS omitidos (-0,15 ptos c/u: -0,10 base + -0,05 suplemento TRLGSS)
+    # 3) Otros artículos omitidos (-0,10 ptos c/u)
     leyes_rd_omitidos_lista = [c for c in citas_faltan if not es_cita_articulo_individual(c)]
+    articulos_trlgss_omitidos_lista = [
+        c if "TRLGSS" in c.upper() else f"{c} del TRLGSS (RDL 8/2015)"
+        for c in citas_faltan
+        if es_cita_articulo_individual(c) and es_articulo_esencial_trlgss(c, ref_completa)
+    ]
+    articulos_otros_omitidos_lista = [
+        c for c in citas_faltan
+        if es_cita_articulo_individual(c) and not es_articulo_esencial_trlgss(c, ref_completa)
+    ]
 
     resta_negativa_apartados_omitidos = round(len(puntos_omitidos) * 1.00, 2)
     resta_negativa_leyes_omitidas = round(len(leyes_rd_omitidos_lista) * 0.15, 2)
-    resta_negativa_articulos_omitidos = round(len(articulos_omitidos_lista) * 0.10, 2)
+    resta_negativa_articulos_trlgss_omitidos = round(len(articulos_trlgss_omitidos_lista) * 0.15, 2)
+    resta_negativa_articulos_otros_omitidos = round(len(articulos_otros_omitidos_lista) * 0.10, 2)
+    resta_negativa_articulos_omitidos = round(resta_negativa_articulos_trlgss_omitidos + resta_negativa_articulos_otros_omitidos, 2)
     resta_negativa_referencias_omitidas = round(resta_negativa_leyes_omitidas + resta_negativa_articulos_omitidos, 2)
     resta_negativa_cifras_omitidas = round(len(cifras_faltan) * 0.15, 2)
     penalizacion_citas_erroneas = round(len(citas_erroneas) * 1.00, 2)
@@ -2894,10 +2992,15 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             f"🔸 **-{resta_negativa_leyes_omitidas:.2f} ptos por Leyes o Reales Decretos omitidos (-0,15 ptos c/u):** "
             f"No has citado **{'; '.join(leyes_rd_omitidos_lista)}**."
         )
-    if resta_negativa_articulos_omitidos > 0 and articulos_omitidos_lista:
+    if resta_negativa_articulos_trlgss_omitidos > 0 and articulos_trlgss_omitidos_lista:
         motivos_resta.append(
-            f"🔸 **-{resta_negativa_articulos_omitidos:.2f} ptos por artículos omitidos (-0,10 ptos c/u):** "
-            f"No has citado **{'; '.join(articulos_omitidos_lista)}**."
+            f"🔸 **-{resta_negativa_articulos_trlgss_omitidos:.2f} ptos por artículos esenciales del RDL 8/2015 (TRLGSS) omitidos (-0,15 ptos c/u: -0,10 base + -0,05 suplemento TRLGSS):** "
+            f"No has citado **{'; '.join(articulos_trlgss_omitidos_lista)}**."
+        )
+    if resta_negativa_articulos_otros_omitidos > 0 and articulos_otros_omitidos_lista:
+        motivos_resta.append(
+            f"🔸 **-{resta_negativa_articulos_otros_omitidos:.2f} ptos por otros artículos reglamentarios o legales omitidos (-0,10 ptos c/u):** "
+            f"No has citado **{'; '.join(articulos_otros_omitidos_lista)}**."
         )
     if resta_negativa_cifras_omitidas > 0 and cifras_faltan:
         motivos_resta.append(
@@ -2936,13 +3039,17 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "citas_ok": citas_ok,
         "citas_complementarias": citas_complementarias,
         "citas_faltan": citas_faltan,
-        "articulos_omitidos_lista": articulos_omitidos_lista,
+        "articulos_trlgss_omitidos_lista": articulos_trlgss_omitidos_lista,
+        "articulos_otros_omitidos_lista": articulos_otros_omitidos_lista,
+        "articulos_omitidos_lista": articulos_trlgss_omitidos_lista + articulos_otros_omitidos_lista,
         "leyes_rd_omitidos_lista": leyes_rd_omitidos_lista,
         "citas_erroneas": citas_erroneas,
         "siglas_sin_definir": siglas_sin_definir,
         "penalizacion_siglas": penalizacion_siglas,
         "resta_negativa_apartados_omitidos": resta_negativa_apartados_omitidos,
         "resta_negativa_leyes_omitidas": resta_negativa_leyes_omitidas,
+        "resta_negativa_articulos_trlgss_omitidos": resta_negativa_articulos_trlgss_omitidos,
+        "resta_negativa_articulos_otros_omitidos": resta_negativa_articulos_otros_omitidos,
         "resta_negativa_articulos_omitidos": resta_negativa_articulos_omitidos,
         "resta_negativa_referencias_omitidas": resta_negativa_referencias_omitidas,
         "resta_negativa_cifras_omitidas": resta_negativa_cifras_omitidas,
@@ -2988,8 +3095,10 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         rev_normas.append(f"- 🌟 **Preceptos adicionales conexos bien aplicados (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
     for ref_ley in ev.get("leyes_rd_omitidos_lista", []):
         rev_normas.append(f"- 🔸 **Ley o Real Decreto omitido (-0,15 ptos):** *{ref_ley}*.")
-    for ref_art in ev.get("articulos_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Artículo omitido (-0,10 ptos):** *{ref_art}*.")
+    for ref_art_trlgss in ev.get("articulos_trlgss_omitidos_lista", []):
+        rev_normas.append(f"- 🔸 **Artículo esencial del RDL 8/2015 (TRLGSS) omitido (-0,15 ptos: -0,10 base + -0,05 suplemento TRLGSS):** *{ref_art_trlgss}*.")
+    for ref_art_otro in ev.get("articulos_otros_omitidos_lista", []):
+        rev_normas.append(f"- 🔸 **Artículo reglamentario/legal omitido (-0,10 ptos):** *{ref_art_otro}*.")
     if ev["citas_erroneas"]:
         for err_art in ev["citas_erroneas"]:
             rev_normas.append(f"- ❌ **Artículo improcedente (-1,00 pto — contraste con su literal en el BOE):** {err_art}")
@@ -3000,7 +3109,7 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         )
     if not rev_normas:
         rev_normas.append("- ✔️ Todas las referencias legales del epígrafe y las siglas han sido correctamente introducidas.")
-    bloques.append("3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,10 ptos Artículo) y rigor en siglas:**\n" + "\n".join(rev_normas))
+    bloques.append("3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos) y rigor en siglas:**\n" + "\n".join(rev_normas))
 
     c1_bruto = ev.get("pts_brutos_criterio_1", 0.0)
     c1 = ev.get("pts_criterio_1", 0.0)
@@ -3014,13 +3123,13 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     bloques.append(
         "4. **🎓 Valoración por Criterios y Liquidación de Puntos:**\n"
         f"   - **Criterio 1 — Puntuación ganada por tus aciertos:** `+{c1_bruto:.2f} / 45,00 puntos`\n"
-        f"   - **Criterio 1 — Deducción aplicada por omisiones (-1,00 pto/apartado; -0,15 ptos/Ley o RD; -0,10 ptos/artículo; -0,15 ptos/plazo):** `-{resta_efectiva:.2f} puntos`\n"
+        f"   - **Criterio 1 — Deducción aplicada por omisiones (-1,00 pto/apartado; -0,15 ptos/Ley o RD; -0,15 ptos/art. esencial TRLGSS; -0,10 ptos/otro art.; -0,15 ptos/plazo):** `-{resta_efectiva:.2f} puntos`\n"
         f"   - **Criterio 1 — Puntuación neta resultante (0 a 45 ptos):** **`{c1:.2f} / 45,00 puntos`**\n"
         f"   - **Criterio 2 — Orden de las ideas y exposición estructurada (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
         f"   - **Criterio 3 — Calidad de expresión escrita y siglas (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
         f"   - 🏆 **CALIFICACIÓN FINAL DEL EPÍGRAFE:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{n10:.2f} / 10`**)*\n"
         f"   - **📉 Desglose de puntos restados:**\n{motivos_txt}\n\n"
-        "💡 **Orientación de tus preparadores:** Tienes una buena base con los apartados acertados; céntrate ahora únicamente en incorporar a tu esquema los puntos señalados en el apartado 2 y las citas legales del apartado 3 para consolidar tu nota por encima del corte."
+        "💡 **Orientación de tus preparadores:** Tienes una buena base con los apartados acertados; céntrate ahora únicamente en incorporar a tu esquema los puntos señalados en el apartado 2 y los artículos esenciales del TRLGSS y normas del apartado 3 para consolidar tu nota por encima del corte."
     )
 
     return "\n\n".join(bloques)
@@ -3048,10 +3157,15 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
     citas_erroneas_boe = "\n".join(ev_fallback.get("citas_erroneas", []))
-    citas_faltan_lista = "\n".join([
-        f"- {c} ({'-0,10 ptos' if es_cita_articulo_individual(c) else '-0,15 ptos'})"
-        for c in ev_fallback.get("citas_faltan", [])
-    ]) or "Ninguna (ha citado todas las normas y artículos obligatorios)."
+    citas_faltan_items = []
+    for c_ley in ev_fallback.get("leyes_rd_omitidos_lista", []):
+        citas_faltan_items.append(f"- {c_ley} (Ley/RD omitido: -0,15 ptos)")
+    for c_trlgss in ev_fallback.get("articulos_trlgss_omitidos_lista", []):
+        citas_faltan_items.append(f"- {c_trlgss} (Artículo esencial del RDL 8/2015 - TRLGSS omitido: -0,15 ptos [-0,10 base + -0,05 suplemento TRLGSS])")
+    for c_otro in ev_fallback.get("articulos_otros_omitidos_lista", []):
+        citas_faltan_items.append(f"- {c_otro} (Artículo reglamentario/legal omitido: -0,10 ptos)")
+    citas_faltan_lista = "\n".join(citas_faltan_items) or "Ninguna (ha citado todas las normas y artículos obligatorios)."
+
     siglas_mal = ev_fallback.get("siglas_sin_definir", [])
     tot_ideas = len(ev_fallback["puntos_cubiertos"]) + len(ev_fallback["puntos_omitidos"])
     omitidos_lista = "\n".join([f"- {p} (-1,00 pto)" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
@@ -3060,7 +3174,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     instruccion_extra = (
         f"\n- REGLA DE BREVEDAD EN EL APARTADO 1: NO enumeres ni listes los apartados del resumen que el alumno ha recogido bien para no alargar el análisis; di únicamente en 1 línea cuántos apartados de {tot_ideas} ha cubierto con acierto (+{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos)."
         "\n- En el apartado 2 enumera los apartados del resumen que ha obviado indicando que cada apartado omitido resta -1,00 punto, y los plazos/cuantías omitidos indicando que cada uno resta -0,15 puntos."
-        "\n- En el apartado 3 enumera las Leyes o Reales Decretos omitidos indicando que restan -0,15 puntos cada uno, los artículos omitidos indicando que restan -0,10 puntos cada uno, y las siglas sin fórmula introductoria previa ('...en adelante, XXXX') que restan -0,25 puntos cada una."
+        "\n- En el apartado 3 enumera las Leyes o Reales Decretos omitidos indicando que restan -0,15 puntos cada uno, los artículos esenciales del RDL 8/2015 (TRLGSS) omitidos indicando expresamente que son 'artículos esenciales del TRLGSS (RDL 8/2015)' y que restan -0,15 puntos cada uno (-0,10 base + -0,05 adicional por ser del RDL 8/2015), los demás artículos omitidos indicando que restan -0,10 puntos cada uno, y las siglas sin fórmula introductoria previa ('...en adelante, XXXX') que restan -0,25 puntos cada una."
         "\n- PROHIBIDO usar la expresión 'Orientación del Tribunal' o 'Consejo del Tribunal': cierra siempre el apartado 4 con '💡 **Orientación de tus preparadores:**' seguido de un consejo breve y constructivo."
     )
     if citas_erroneas_boe:
@@ -3081,12 +3195,12 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         f"=== RESUMEN OFICIAL DEL EPÍGRAFE ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
         f"=== APARTADOS DEL RESUMEN OMITIDOS (-1,00 PTO C/U) ===\n{omitidos_lista}\n\n"
-        f"=== REFERENCIAS NORMATIVAS OBLIGATORIAS OMITIDAS (-0,15 PTOS LEY/RD; -0,10 PTOS ARTÍCULO) ===\n{citas_faltan_lista}\n\n"
+        f"=== REFERENCIAS NORMATIVAS OBLIGATORIAS OMITIDAS ===\n{citas_faltan_lista}\n\n"
         f"=== DESGLOSE DE PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
         "Estructura tu respuesta únicamente con estos 4 apartados exactos (NO incluyas nota metodológica previa porque ya se muestra en un recuadro aparte):\n"
         "1. **✅ Balance de cobertura del resumen oficial** (solo 1 frase indicando cuántos apartados de los totales ha cubierto, SIN listar los apartados acertados)\n"
         "2. **⚠️ Apartados y plazos del resumen omitidos (-1,00 pto/apartado y -0,15 ptos/plazo)**\n"
-        "3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,10 ptos Artículo), artículos indebidos (con literal del BOE) y siglas (-0,25 ptos c/u)**\n"
+        "3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos), artículos indebidos (con literal del BOE) y siglas (-0,25 ptos c/u)**\n"
         "4. **🎓 Valoración por Criterios y Liquidación de Puntos** (mostrando Puntos ganados en Criterio 1, Deducción por omisiones, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y cerrando con '💡 **Orientación de tus preparadores:**')"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
