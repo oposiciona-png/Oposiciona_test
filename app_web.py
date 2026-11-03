@@ -2019,6 +2019,35 @@ TESTS_DISPONIBLES_INVITADO = {
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
     TESTS_DISPONIBLES_COMPLETO = globals().get("TESTS_DISPONIBLES", globals().get("ESTS_DISPONIBLES", {}))
 
+# Baja efectiva e inmediata de correos revocados (bloqueo en memoria y cierre de sesión activa)
+USUARIOS_DADOS_DE_BAJA = {
+    "andreitalopeamor1@gmail.com",
+    "mfangela23@gmail.com",
+}
+
+def _aplicar_bajas_usuarios():
+    for nombre_var in ["USUARIOS_AUTORIZADOS", "ALUMNOS_AUTORIZADOS", "CORREOS_AUTORIZADOS", "USUARIOS_PERMITIDOS", "LISTA_ALUMNOS"]:
+        col = globals().get(nombre_var)
+        if isinstance(col, dict):
+            for c_baja in list(col.keys()):
+                if str(c_baja).lower().strip() in USUARIOS_DADOS_DE_BAJA:
+                    del col[c_baja]
+        elif isinstance(col, set):
+            for c_baja in list(col):
+                if str(c_baja).lower().strip() in USUARIOS_DADOS_DE_BAJA:
+                    col.discard(c_baja)
+        elif isinstance(col, list):
+            globals()[nombre_var] = [x for x in col if str(x).lower().strip() not in USUARIOS_DADOS_DE_BAJA]
+
+    email_sesion = (st.session_state.get("email") or "").lower().strip()
+    if email_sesion in USUARIOS_DADOS_DE_BAJA:
+        st.session_state.clear()
+        st.session_state.borrar_backup_ls = True
+        st.error("🚫 Tu acceso a la plataforma ha sido dado de baja. Si crees que se trata de un error, contacta con info@oposiciona.es.")
+        st.stop()
+
+_aplicar_bajas_usuarios()
+
 def usuario_es_admin():
     correo_act = (st.session_state.get('email') or "").lower().strip()
     return bool(st.session_state.get('es_admin', False) or correo_act in USUARIOS_ADMIN)
@@ -2275,18 +2304,18 @@ def _extraer_etiqueta_breve_apartado(oracion):
     return fragmento + ("..." if len(palabras) > 11 else "")
 
 NOTA_METODOLOGICA_PREPARADORES = (
-    "ℹ️ <b>Nota metodológica sobre la calificación:</b> Aunque los bloques de valoración (Conocimiento y normativa [0-45 ptos], "
-    "Orden de ideas [0-3 ptos] y Expresión escrita [0-2 ptos]) responden íntegramente a los criterios oficiales publicados por el Tribunal Calificador, "
-    "el baremo interno de ponderación y las deducciones por omisión son una metodología propia y exclusiva de tus preparadores de Oposiciona "
-    "diseñada para entrenarte con el máximo nivel de exigencia, por lo que la puntuación aquí obtenida puede diferir de la calificación final que otorgue el Tribunal."
+    "ℹ️ <b>Nota metodológica sobre la calificación:</b> Los bloques de valoración (Conocimiento y normativa [0-45 ptos], "
+    "Orden de ideas [0-3 ptos] y Expresión escrita [0-2 ptos]) siguen los criterios oficiales del Tribunal Calificador. "
+    "El sistema valora prioritariamente la comprensión y el desarrollo de las ideas jurídicas del epígrafe; los recordatorios de artículos o plazos "
+    "tienen una deducción muy moderada y acotada para ayudarte a perfeccionar tu esquema sin penalizar en exceso tu esfuerzo."
 )
 
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 - Cada parte se califica de 0 a 50 puntos (mínimo 25 puntos directos para superar sin compensación).
-- Criterio 1 (0 a 45 puntos): Conocimiento completo de los apartados del epígrafe e inclusión de leyes y artículos de aplicación. Penalizaciones ponderadas por los preparadores: obviar un apartado del resumen resta -1,00 punto; omitir una Ley o Real Decreto obligatorio resta -0,15 puntos; omitir un artículo esencial del TRLGSS (RDL 8/2015) resta -0,15 puntos (-0,10 base + -0,05 por ser artículo esencial del TRLGSS); omitir otro artículo resta -0,10 puntos; omitir un plazo o cuantía resta -0,15 puntos.
-- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura (solo puntúa si alcanza al menos 20/45 en Criterio 1).
-- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la introducción de siglas/abreviaturas ("...en adelante, XXXX", -0,25 ptos por sigla sin introducir).
+- Criterio 1 (0 a 45 puntos): Conocimiento de los apartados del epígrafe e inclusión de normativa de aplicación. Baremo equilibrado y motivador de los preparadores: si un apartado está bien planteado en su idea jurídica aunque falte citar expresamente algún precepto secundario, se puntúa favorablemente el contenido y solo se aplica un ajuste leve y topado por referencias principales pendientes (máximo -1,00 pto en todo el epígrafe por normativa/artículos omitidos y máximo -0,60 ptos por plazos).
+- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura (puntúa desde 16/45 en Criterio 1).
+- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y fórmula introductoria de siglas ("...en adelante, XXXX", ajuste leve de -0,15 ptos por sigla con tope de -0,45 ptos).
 """
 
 AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
@@ -2463,18 +2492,10 @@ AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
 ]
 
 def es_cita_articulo_individual(etiqueta_cita):
-    """
-    Devuelve True cuando la referencia omitida es un artículo o rango de artículos,
-    y False cuando es una Ley, Real Decreto, Decreto, Orden o Constitución (-0,15 ptos).
-    """
     s = (etiqueta_cita or "").strip()
     return bool(re.match(r'^(?:Art[íi]culos?|Arts?\.|Disposici[óo]n|T[íi]tulo|Estructura\s+en\s+T[íi]tulos)\b', s, re.IGNORECASE))
 
 def es_articulo_esencial_trlgss(etiqueta_cita, ref_completa=""):
-    """
-    Determina si un artículo omitido pertenece al RDL 8/2015 (TRLGSS).
-    Cuando pertenece al TRLGSS resta -0,15 ptos (-0,10 base de artículo + -0,05 por ser artículo esencial del TRLGSS).
-    """
     if not es_cita_articulo_individual(etiqueta_cita):
         return False
     s = (etiqueta_cita or "").strip()
@@ -2891,23 +2912,28 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     texto_base_ideas = f"{respuesta_oficial}. {explicacion_oficial}" if respuesta_oficial else explicacion_oficial
     oraciones_completas = _dividir_en_oraciones_juridicas(texto_base_ideas)
     puntos_cubiertos = []
+    puntos_parciales = []
     puntos_omitidos = []
 
     for orac_limpia in oraciones_completas:
         if PDFQuizParser._es_basura_cabecera_o_pie(orac_limpia):
             continue
-        if any(_norm(orac_limpia)[:55] == _norm(x)[:55] for x in (puntos_cubiertos + puntos_omitidos)):
+        if any(_norm(orac_limpia)[:55] == _norm(x)[:55] for x in (puntos_cubiertos + puntos_parciales + puntos_omitidos)):
             continue
+        # Ignorar las menciones puramente numéricas de artículos al evaluar si el alumno captó la IDEA del párrafo
+        orac_sin_arts = re.sub(r'\b(?:art[íi]culos?|arts?\.|real\s+decreto(?:\-ley|\s+legislativo)?|rdl|rd|orden|ley)\s+[0-9/\.\-a-zªº]+\b', '', _norm(orac_limpia))
         palabras_orac = [
-            w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b|\b\d+(?:[\.,]\d+)?\b', _norm(orac_limpia))
+            w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b', orac_sin_arts)
             if w not in stopwords
         ]
         if not palabras_orac:
             continue
         aciertos_orac = sum(1 for w in palabras_orac if _raiz(w) in alumno_norm)
         ratio_orac = aciertos_orac / len(palabras_orac)
-        if ratio_orac >= 0.38 or (len(palabras_orac) <= 4 and aciertos_orac >= 2):
+        if ratio_orac >= 0.28 or (len(palabras_orac) <= 5 and aciertos_orac >= 2):
             puntos_cubiertos.append(orac_limpia)
+        elif ratio_orac >= 0.16 or aciertos_orac >= 2:
+            puntos_parciales.append(orac_limpia)
         else:
             puntos_omitidos.append(orac_limpia)
 
@@ -2921,20 +2947,25 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     if puntos_omitidos:
         texto_sugerido = " ".join(puntos_omitidos[:3])
+    elif puntos_parciales:
+        texto_sugerido = " ".join(puntos_parciales[:2])
     elif respuesta_oficial:
         texto_sugerido = respuesta_oficial
     else:
         texto_sugerido = explicacion_oficial
 
-    total_unidades_ideas = max(1, len(puntos_cubiertos) + len(puntos_omitidos))
-    valor_unitario_idea = 36.0 / total_unidades_ideas
-    pts_brutos_ideas = round(len(puntos_cubiertos) * valor_unitario_idea, 2)
+    # BAREMO EQUILIBRADO Y MOTIVADOR (SIN DOBLE CASTIGO):
+    # - La base del Criterio 1 se calcula sobre 45 puntos según las ideas desarrolladas (100% por apartado cubierto, 65% por apartado parcialmente abordado).
+    # - Si el alumno explicó bien el contenido de los párrafos pero omitió normas o artículos, NO pierde dos veces: solo recibe un ajuste suave y topado.
+    total_unidades_ideas = max(1, len(puntos_cubiertos) + len(puntos_parciales) + len(puntos_omitidos))
+    unidades_equivalentes_acertadas = len(puntos_cubiertos) + (0.65 * len(puntos_parciales))
+    valor_unitario_idea = 42.0 / total_unidades_ideas
+    pts_brutos_ideas = round(unidades_equivalentes_acertadas * valor_unitario_idea, 2)
 
     total_unidades_legales = max(1, len(citas_ok) + len(citas_faltan))
-    valor_unitario_legal = 9.0 / total_unidades_legales
-    pts_brutos_legales = round(len(citas_ok) * valor_unitario_legal, 2)
+    pts_brutos_legales = round((len(citas_ok) / total_unidades_legales) * 3.0, 2)
 
-    bonificacion_complementarias = round(min(3.0, 0.75 * len(citas_complementarias)), 2)
+    bonificacion_complementarias = round(min(2.5, 0.50 * len(citas_complementarias)), 2)
     pts_brutos_criterio_1 = round(min(45.0, pts_brutos_ideas + pts_brutos_legales + bonificacion_complementarias), 2)
 
     leyes_rd_omitidos_lista = [c for c in citas_faltan if not es_cita_articulo_individual(c)]
@@ -2948,16 +2979,19 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         if es_cita_articulo_individual(c) and not es_articulo_esencial_trlgss(c, ref_completa)
     ]
 
-    resta_negativa_apartados_omitidos = round(len(puntos_omitidos) * 1.00, 2)
-    resta_negativa_leyes_omitidas = round(len(leyes_rd_omitidos_lista) * 0.15, 2)
-    resta_negativa_articulos_trlgss_omitidos = round(len(articulos_trlgss_omitidos_lista) * 0.15, 2)
-    resta_negativa_articulos_otros_omitidos = round(len(articulos_otros_omitidos_lista) * 0.10, 2)
-    resta_negativa_articulos_omitidos = round(resta_negativa_articulos_trlgss_omitidos + resta_negativa_articulos_otros_omitidos, 2)
-    resta_negativa_referencias_omitidas = round(resta_negativa_leyes_omitidas + resta_negativa_articulos_omitidos, 2)
-    resta_negativa_cifras_omitidas = round(len(cifras_faltan) * 0.15, 2)
-    penalizacion_citas_erroneas = round(len(citas_erroneas) * 1.00, 2)
-    penalizacion_sentido = 5.00 if alerta_sentido else 0.0
-    penalizacion_siglas = round(min(1.00, len(siglas_sin_definir) * 0.25), 2)
+    # Deducciones moderadas y con TOPE MÁXIMO (escudo motivador para no hundir un buen desarrollo):
+    resta_negativa_apartados_omitidos = round(min(3.00, len(puntos_omitidos) * 0.40), 2)
+    resta_negativa_leyes_omitidas = round(min(0.45, len(leyes_rd_omitidos_lista) * 0.10), 2)
+    resta_negativa_articulos_trlgss_omitidos = round(min(0.60, len(articulos_trlgss_omitidos_lista) * 0.10), 2)
+    resta_negativa_articulos_otros_omitidos = round(min(0.25, len(articulos_otros_omitidos_lista) * 0.05), 2)
+    # Tope conjunto máximo por no citar expresamente artículos/normas: nunca más de 1,00 punto en todo el epígrafe
+    resta_negativa_articulos_omitidos = round(min(0.75, resta_negativa_articulos_trlgss_omitidos + resta_negativa_articulos_otros_omitidos), 2)
+    resta_negativa_referencias_omitidas = round(min(1.00, resta_negativa_leyes_omitidas + resta_negativa_articulos_omitidos), 2)
+    # Tope máximo por plazos/cuantías omitidos: nunca más de 0,60 puntos en todo el epígrafe
+    resta_negativa_cifras_omitidas = round(min(0.60, len(cifras_faltan) * 0.10), 2)
+    penalizacion_citas_erroneas = round(min(1.50, len(citas_erroneas) * 0.50), 2)
+    penalizacion_sentido = 3.00 if alerta_sentido else 0.0
+    penalizacion_siglas = round(min(0.45, len(siglas_sin_definir) * 0.15), 2)
 
     total_restas_c1 = round(
         resta_negativa_apartados_omitidos
@@ -2968,21 +3002,19 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         2
     )
 
-    suelo_justicia_c1 = round(pts_brutos_criterio_1 * 0.55, 2) if len(puntos_cubiertos) > 0 else 0.0
+    suelo_justicia_c1 = round(pts_brutos_criterio_1 * 0.80, 2) if (len(puntos_cubiertos) + len(puntos_parciales)) > 0 else 0.0
     pts_criterio_1 = round(max(suelo_justicia_c1, pts_brutos_criterio_1 - total_restas_c1), 2)
 
-    supera_umbral_20 = pts_criterio_1 >= 20.0
+    supera_umbral_20 = pts_criterio_1 >= 16.0
     if supera_umbral_20:
         num_parrafos_al = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 20])
         usa_conectores = sum(1 for c in ["conforme", "virtud", "establece", "dispone", "asimismo", "obstante", "tanto", "articulo", "respecto", "titulo"] if c in alumno_norm)
-        pts_criterio_2 = round(min(3.0, 1.8 + (0.6 if num_parrafos_al >= 2 else 0.0) + (0.6 if usa_conectores >= 2 else 0.0)), 2)
-        pts_criterio_3_base = min(2.0, 1.5 + (0.5 if len(texto_alumno.strip()) >= 150 and usa_conectores >= 1 else 0.2))
-        pts_criterio_3 = round(max(0.0, pts_criterio_3_base - penalizacion_siglas), 2)
+        pts_criterio_2 = round(min(3.0, 2.0 + (0.5 if num_parrafos_al >= 2 else 0.2) + (0.5 if usa_conectores >= 2 else 0.2)), 2)
+        pts_criterio_3_base = min(2.0, 1.6 + (0.4 if len(texto_alumno.strip()) >= 120 else 0.2))
+        pts_criterio_3 = round(max(0.5, pts_criterio_3_base - penalizacion_siglas), 2)
     else:
         pts_criterio_2 = 0.0
         pts_criterio_3 = 0.0
-        if penalizacion_siglas > 0:
-            pts_criterio_1 = round(max(suelo_justicia_c1, pts_criterio_1 - penalizacion_siglas), 2)
 
     nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
@@ -2990,47 +3022,35 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     motivos_resta = []
     if resta_negativa_apartados_omitidos > 0 and puntos_omitidos:
         motivos_resta.append(
-            f"🔸 **-{resta_negativa_apartados_omitidos:.2f} ptos por obviar contenido del resumen oficial (-1,00 pto c/u):** "
-            f"Has dejado sin desarrollar **{len(puntos_omitidos)} de los {total_unidades_ideas} apartados** del epígrafe."
+            f"🔸 **-{resta_negativa_apartados_omitidos:.2f} ptos por apartados no desarrollados (-0,40 ptos c/u, máx. -3,00):** "
+            f"Quedaron pendientes de abordar **{len(puntos_omitidos)} de los {total_unidades_ideas} bloques** del epígrafe."
         )
-    if resta_negativa_leyes_omitidas > 0 and leyes_rd_omitidos_lista:
+    if resta_negativa_referencias_omitidas > 0 and (leyes_rd_omitidos_lista or articulos_trlgss_omitidos_lista or articulos_otros_omitidos_lista):
         motivos_resta.append(
-            f"🔸 **-{resta_negativa_leyes_omitidas:.2f} ptos por Leyes o Reales Decretos omitidos (-0,15 ptos c/u):** "
-            f"No has citado **{'; '.join(leyes_rd_omitidos_lista)}**."
-        )
-    if resta_negativa_articulos_trlgss_omitidos > 0 and articulos_trlgss_omitidos_lista:
-        motivos_resta.append(
-            f"🔸 **-{resta_negativa_articulos_trlgss_omitidos:.2f} ptos por artículos esenciales del RDL 8/2015 (TRLGSS) omitidos (-0,15 ptos c/u: -0,10 base + -0,05 suplemento TRLGSS):** "
-            f"No has citado **{'; '.join(articulos_trlgss_omitidos_lista)}**."
-        )
-    if resta_negativa_articulos_otros_omitidos > 0 and articulos_otros_omitidos_lista:
-        motivos_resta.append(
-            f"🔸 **-{resta_negativa_articulos_otros_omitidos:.2f} ptos por otros artículos reglamentarios o legales omitidos (-0,10 ptos c/u):** "
-            f"No has citado **{'; '.join(articulos_otros_omitidos_lista)}**."
+            f"🔸 **-{resta_negativa_referencias_omitidas:.2f} ptos de ajuste global acotado por referencias normativas pendientes (máx. -1,00 pto en conjunto):** "
+            "Aunque la idea jurídica esté bien encaminada, citar expresamente la norma y los artículos esenciales del TRLGSS te permitirá asegurar el máximo ante el Tribunal."
         )
     if resta_negativa_cifras_omitidas > 0 and cifras_faltan:
         motivos_resta.append(
-            f"🔸 **-{resta_negativa_cifras_omitidas:.2f} ptos por plazos o cuantías omitidos (-0,15 ptos c/u):** "
-            f"Faltó precisar **{', '.join(cifras_faltan)}**."
+            f"🔸 **-{resta_negativa_cifras_omitidas:.2f} ptos por plazos o cuantías pendientes de concretar (-0,10 ptos c/u, máx. -0,60):** "
+            f"Conviene precisar **{', '.join(cifras_faltan)}**."
         )
     if penalizacion_siglas > 0:
-        lista_siglas_txt = ", ".join([f"**{s}** (debiste introducirlo previamente como *«{ej}»*)" for s, ej in siglas_sin_definir])
+        lista_siglas_txt = ", ".join([f"**{s}** (*«{ej}»*)" for s, ej in siglas_sin_definir])
         motivos_resta.append(
-            f"🔸 **-{penalizacion_siglas:.2f} ptos por siglas/abreviaturas sin fórmula introductoria previa (-0,25 ptos c/u):** "
+            f"🔸 **-{penalizacion_siglas:.2f} ptos en el Criterio 3 por siglas sin presentar en su primera mención (-0,15 ptos c/u, máx. -0,45):** "
             f"{lista_siglas_txt}."
         )
     if penalizacion_citas_erroneas > 0:
         motivos_resta.append(
-            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos por citar artículos sin relación con el epígrafe (-1,00 pto c/u):** "
+            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos por citar artículos ajenos al epígrafe:** "
             f"{' | '.join(citas_erroneas)}"
         )
     if penalizacion_sentido > 0:
         motivos_resta.append(f"🔻 **-{penalizacion_sentido:.2f} ptos (Conclusión invertida):** {alerta_sentido}")
-    if not supera_umbral_20:
-        motivos_resta.append(
-            "ℹ️ **Criterios 2 y 3 condicionados al umbral de 20,00 / 45 ptos:** "
-            "Conforme al baremo del Tribunal, los puntos de estructura (hasta 3 ptos) y expresión escrita (hasta 2 ptos) se activan al alcanzar 20,00 puntos en el Criterio 1."
-        )
+
+    # Unimos cubiertos y parciales como trabajados para el resumen positivo
+    puntos_trabajados_totales = puntos_cubiertos + puntos_parciales
 
     return {
         "nota": nota_10,
@@ -3062,7 +3082,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "articulos_extra_detectados": articulos_extra_detectados,
         "cifras_ok": cifras_ok,
         "cifras_faltan": cifras_faltan,
-        "puntos_cubiertos": puntos_cubiertos,
+        "puntos_cubiertos": puntos_trabajados_totales,
+        "puntos_parciales": puntos_parciales,
         "puntos_omitidos": puntos_omitidos,
         "texto_sugerido": texto_sugerido,
         "motivos_resta": motivos_resta,
@@ -3076,65 +3097,68 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     etiquetas_omitidas = [_extraer_etiqueta_breve_apartado(p) for p in ev["puntos_omitidos"][:5] if _extraer_etiqueta_breve_apartado(p)]
 
     resumen_aciertos_txt = (
-        f"En tu exposición has abordado con acierto **{len(ev['puntos_cubiertos'])} de los {tot_ideas} bloques esenciales** del epígrafe "
-        f"(destacando tu desarrollo sobre: *{'; '.join(etiquetas_acertadas)}*)."
+        f"Has trabajado con buen criterio **{len(ev['puntos_cubiertos'])} de los {tot_ideas} bloques esenciales** del epígrafe "
+        f"(destacando tu exposición sobre: *{'; '.join(etiquetas_acertadas)}*)."
         if etiquetas_acertadas else
-        f"Tu respuesta aún no recoge de forma suficiente los bloques conceptuales exigidos en los **{tot_ideas} apartados** del epígrafe."
+        f"Tu respuesta es un primer acercamiento que aún necesita incorporar los bloques nucleares de los **{tot_ideas} apartados** del epígrafe."
     )
     resumen_brecha_txt = (
-        f"Al contrastar tu redacción con la explicación oficial del epígrafe, la diferencia principal radica en que te ha faltado desarrollar o precisar "
-        f"**{len(ev['puntos_omitidos'])} apartados clave** (*{'; '.join(etiquetas_omitidas)}*)"
-        + (f", así como concretar plazos o cuantías ({', '.join(ev['cifras_faltan'][:4])})" if ev["cifras_faltan"] else "")
-        + (f" y engarzar expresamente preceptos esenciales ({'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('citas_faltan'))[:3])})." if ev.get("citas_faltan") else ".")
+        f"Al comparar tu ejercicio con la explicación oficial, la base conceptual va bien encaminada; para dar el salto al sobresaliente te animamos a incorporar "
+        f"**{len(ev['puntos_omitidos'])} bloques que quedaron sin desarrollar** (*{'; '.join(etiquetas_omitidas)}*)"
+        + (f", precisar algunos datos numéricos ({', '.join(ev['cifras_faltan'][:4])})" if ev["cifras_faltan"] else "")
+        + (f" y reforzar tu texto citando expresamente preceptos clave como {'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('citas_faltan'))[:3])}." if ev.get("citas_faltan") else ".")
         if (ev["puntos_omitidos"] or ev["cifras_faltan"] or ev.get("citas_faltan")) else
-        "Al comparar tu texto con la explicación oficial, se observa una correspondencia muy sólida tanto en los conceptos dogmáticos como en la precisión normativa."
+        "Al comparar tu texto con la explicación oficial, se observa una correspondencia excelente tanto en el fondo jurídico como en las citas normativas."
     )
     if ev.get("alerta_sentido"):
         resumen_brecha_txt += f"\n   - {ev['alerta_sentido']}"
 
     bloques.append(
-        "1. **✅ Análisis comparativo general: lo acertado frente a lo fallado u omitido:**\n"
-        f"   - **Lo que has acertado y consolidado (+{ev.get('pts_brutos_criterio_1', 0.0):.2f} / 45,00 ptos brutos):** {resumen_aciertos_txt}\n"
-        f"   - **Comparativa con la explicación oficial (qué te separó del pleno):** {resumen_brecha_txt}"
+        "1. **✅ Valoración conjunta: tus puntos fuertes y comparativa con la explicación oficial:**\n"
+        f"   - **Lo que has planteado bien (+{ev.get('pts_brutos_criterio_1', 0.0):.2f} / 45,00 ptos en contenido):** {resumen_aciertos_txt}\n"
+        f"   - **Qué te falta para brillar ante el Tribunal:** {resumen_brecha_txt}"
     )
 
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         lineas_b2 = [
-            "Contrastando párrafo a párrafo tu escrito con el texto mínimo oficial, debes incorporar a tu esquema los siguientes elementos (obviar un apartado resta **-1,00 pto** y omitir un plazo/cuantía resta **-0,15 ptos**):"
+            "Para que tu próximo intento sea redondo, incorpora estos elementos que aparecen en la explicación oficial (ajuste moderado y acotado de **-0,40 ptos** por bloque no abordado y **-0,10 ptos** por plazo/cuantía):"
         ]
         if ev["cifras_faltan"]:
-            lineas_b2.append(f"   - 🔸 **Plazos, cuantías o porcentajes omitidos (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos, a razón de -0,15 ptos c/u):** {', '.join(ev['cifras_faltan'])}.")
+            lineas_b2.append(f"   - 🔸 **Plazos, cuantías o porcentajes que conviene precisar (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos en total):** {', '.join(ev['cifras_faltan'])}.")
         for idx_om, p_om in enumerate(ev["puntos_omitidos"], 1):
-            lineas_b2.append(f"   - 🔸 **Apartado omitido {idx_om} (-1,00 pto):** *{p_om}*")
-        bloques.append("2. **⚠️ Contraste detallado de apartados, conceptos y plazos omitidos (-1,00 pto/apartado y -0,15 ptos/plazo):**\n" + "\n".join(lineas_b2))
+            lineas_b2.append(f"   - 🔸 **Bloque pendiente de incorporar {idx_om}:** *{p_om}*")
+        bloques.append("2. **⚠️ Bloques conceptuales y plazos a incorporar para completar el epígrafe:**\n" + "\n".join(lineas_b2))
     else:
         bloques.append(
-            "2. **⚠️ Contraste detallado de apartados, conceptos y plazos omitidos (-1,00 pto/apartado y -0,15 ptos/plazo):**\n"
-            "¡Excelente trabajo! Tu exposición recoge todos los apartados y datos numéricos esenciales de la explicación oficial."
+            "2. **⚠️ Bloques conceptuales y plazos a incorporar para completar el epígrafe:**\n"
+            "¡Magnífico trabajo! Has abordado todos los bloques conceptuales y datos numéricos esenciales de la explicación oficial."
         )
 
     rev_normas = []
     if ev["citas_ok"]:
-        rev_normas.append(f"- ✔️ **Referencias legales del epígrafe acertadas:** {'; '.join(ev['citas_ok'])}.")
+        rev_normas.append(f"- ✔️ **Normativa bien integrada en tu exposición:** {'; '.join(ev['citas_ok'])}.")
     if ev["citas_complementarias"]:
-        rev_normas.append(f"- 🌟 **Preceptos adicionales conexos bien aplicados (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
+        rev_normas.append(f"- 🌟 **Preceptos conexos muy bien traídos (+{ev.get('bonificacion_complementarias', 0.0):.2f} ptos):** {'; '.join(ev['citas_complementarias'])}.")
     for ref_ley in ev.get("leyes_rd_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Ley o Real Decreto omitido (-0,15 ptos):** *{ref_ley}*.")
+        rev_normas.append(f"- 💡 **Norma general recomendada para encuadrar el tema:** *{ref_ley}*.")
     for ref_art_trlgss in ev.get("articulos_trlgss_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Artículo esencial del RDL 8/2015 (TRLGSS) omitido (-0,15 ptos: -0,10 base + -0,05 suplemento TRLGSS):** *{ref_art_trlgss}*.")
+        rev_normas.append(f"- 📌 **Artículo esencial del RDL 8/2015 (TRLGSS) que conviene citar expresamente:** *{ref_art_trlgss}*.")
     for ref_art_otro in ev.get("articulos_otros_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Artículo reglamentario/legal omitido (-0,10 ptos):** *{ref_art_otro}*.")
+        rev_normas.append(f"- ℹ️ **Precepto reglamentario complementario (para sumar excelencia):** *{ref_art_otro}*.")
     if ev["citas_erroneas"]:
         for err_art in ev["citas_erroneas"]:
-            rev_normas.append(f"- ❌ **Artículo improcedente (-1,00 pto — contraste con su literal en el BOE):** {err_art}")
+            rev_normas.append(f"- ❌ **Cuidado con esta cita (contraste con el BOE):** {err_art}")
     if ev.get("siglas_sin_definir"):
-        sig_str = "; ".join([f"**{s}** → debiste introducirlo como *«{ej}»*" for s, ej in ev["siglas_sin_definir"]])
+        sig_str = "; ".join([f"**{s}** → preséntala la primera vez como *«{ej}»*" for s, ej in ev["siglas_sin_definir"]])
         rev_normas.append(
-            f"- 🔸 **Siglas/abreviaturas sin fórmula introductoria previa (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos, a razón de -0,25 ptos c/u):** {sig_str}."
+            f"- ✍️ **Consejo formal sobre siglas (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos en Criterio 3):** {sig_str}."
         )
     if not rev_normas:
-        rev_normas.append("- ✔️ Todas las referencias legales del epígrafe y las siglas han sido correctamente introducidas.")
-    bloques.append("3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos) y rigor en siglas:**\n" + "\n".join(rev_normas))
+        rev_normas.append("- ✔️ Has citado con gran solvencia todas las normas, artículos esenciales y siglas del epígrafe.")
+    bloques.append(
+        f"3. **⚖️ Recordatorio de normativa y artículos esenciales del TRLGSS (ajuste global acotado: -{ev.get('resta_negativa_referencias_omitidas', 0.0):.2f} ptos, máx. -1,00 pto):**\n"
+        + "\n".join(rev_normas)
+    )
 
     c1_bruto = ev.get("pts_brutos_criterio_1", 0.0)
     c1 = ev.get("pts_criterio_1", 0.0)
@@ -3143,35 +3167,35 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     c3 = ev.get("pts_criterio_3", 0.0)
     n50 = ev.get("nota_50", 0.0)
     n10 = ev.get("nota", 0.0)
-    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin deducciones."
+    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin ajustes negativos aplicables."
 
     paso_1_norma = (
-        f"Abre siempre el epígrafe encuadrando la institución en su norma matriz ({'; '.join((ev.get('leyes_rd_omitidos_lista') or ev.get('citas_ok') or ['el Real Decreto Legislativo 8/2015, de 30 de octubre (en adelante, TRLGSS)'])[:2])}) e introduciendo formalmente las siglas en su primera mención."
+        f"Abre siempre el epígrafe encuadrando la institución en su norma cabecera ({'; '.join((ev.get('leyes_rd_omitidos_lista') or ev.get('citas_ok') or ['el Real Decreto Legislativo 8/2015, de 30 de octubre (en adelante, TRLGSS)'])[:2])}) y presentando las siglas en su primera mención."
     )
     paso_2_arts = (
-        f"Engarza de forma expresa los preceptos esenciales que te faltaron ({'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('articulos_otros_omitidos_lista'))[:3])}) vinculándolos con sus plazos o cuantías exactos ({', '.join(ev['cifras_faltan'][:3]) or 'según el resumen oficial'})."
+        f"Tu planteamiento conceptual es bueno; para blindar la máxima nota ante el Tribunal, engarza explícitamente los artículos esenciales del TRLGSS ({'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('articulos_otros_omitidos_lista'))[:3])}) junto con sus plazos ({', '.join(ev['cifras_faltan'][:3]) or 'según el resumen oficial'})."
         if (ev.get("articulos_omitidos_lista") or ev.get("cifras_faltan")) else
-        "Mantén la conexión directa entre cada bloque conceptual y su artículo del TRLGSS y reglamento de desarrollo."
+        "Sigue manteniendo esa excelente costumbre de vincular cada institución jurídica con su artículo del TRLGSS."
     )
     paso_3_modelo = (
-        f"Incorpora a tu esquema mental este bloque clave que omitiste para cerrar un desarrollo de nivel Tribunal: *«{ev['texto_sugerido'][:380]}{'...' if len(ev['texto_sugerido']) > 380 else ''}»*"
+        f"Añade a tu esquema este bloque que te faltó para redondear el epígrafe: *«{ev['texto_sugerido'][:380]}{'...' if len(ev['texto_sugerido']) > 380 else ''}»*"
         if ev.get("puntos_omitidos") else
-        "Tu cobertura de contenidos es completa; repasa únicamente la fluidez entre párrafos para consolidar el máximo en los Criterios 2 y 3."
+        "Tienes todos los ingredientes del epígrafe; afina únicamente el enlace entre párrafos para lucirte en la lectura ante el Tribunal."
     )
 
     bloques.append(
-        "4. **🎓 Valoración por Criterios, Liquidación de Puntos y Plan de Progreso:**\n"
-        f"   - **Criterio 1 — Puntuación ganada por tus aciertos:** `+{c1_bruto:.2f} / 45,00 puntos`\n"
-        f"   - **Criterio 1 — Deducción aplicada por omisiones (-1,00 pto/apartado; -0,15 ptos/Ley o RD; -0,15 ptos/art. esencial TRLGSS; -0,10 ptos/otro art.; -0,15 ptos/plazo):** `-{resta_efectiva:.2f} puntos`\n"
+        "4. **🎓 Liquidación de Puntos y Plan de Progreso Motivador:**\n"
+        f"   - **Criterio 1 — Puntuación ganada por el contenido expuesto:** `+{c1_bruto:.2f} / 45,00 puntos`\n"
+        f"   - **Criterio 1 — Ajuste moderado por bloques/citas pendientes:** `-{resta_efectiva:.2f} puntos`\n"
         f"   - **Criterio 1 — Puntuación neta resultante (0 a 45 ptos):** **`{c1:.2f} / 45,00 puntos`**\n"
         f"   - **Criterio 2 — Orden de las ideas y exposición estructurada (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
         f"   - **Criterio 3 — Calidad de expresión escrita y siglas (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
         f"   - 🏆 **CALIFICACIÓN FINAL DEL EPÍGRAFE:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{n10:.2f} / 10`**)*\n"
-        f"   - **📉 Desglose de puntos restados:**\n{motivos_txt}\n\n"
+        f"   - **📊 Detalle de ajustes aplicados:**\n{motivos_txt}\n\n"
         "💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**\n"
-        f"   1. **Apertura y rigor formal:** {paso_1_norma}\n"
-        f"   2. **Anclaje normativo y precisión técnica:** {paso_2_arts}\n"
-        f"   3. **Párrafo de mejora para tu próximo intento:** {paso_3_modelo}"
+        f"   1. **Apertura y presentación formal:** {paso_1_norma}\n"
+        f"   2. **Cómo sumar más puntos con tus ideas:** {paso_2_arts}\n"
+        f"   3. **Párrafo clave para incorporar en tu próxima vuelta:** {paso_3_modelo}"
     )
 
     return "\n\n".join(bloques)
@@ -3201,51 +3225,52 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     citas_erroneas_boe = "\n".join(ev_fallback.get("citas_erroneas", []))
     citas_faltan_items = []
     for c_ley in ev_fallback.get("leyes_rd_omitidos_lista", []):
-        citas_faltan_items.append(f"- {c_ley} (Ley/RD omitido: -0,15 ptos)")
+        citas_faltan_items.append(f"- {c_ley} (Norma general recomendada)")
     for c_trlgss in ev_fallback.get("articulos_trlgss_omitidos_lista", []):
-        citas_faltan_items.append(f"- {c_trlgss} (Artículo esencial del RDL 8/2015 - TRLGSS omitido: -0,15 ptos [-0,10 base + -0,05 suplemento TRLGSS])")
+        citas_faltan_items.append(f"- {c_trlgss} (Artículo esencial del RDL 8/2015 - TRLGSS)")
     for c_otro in ev_fallback.get("articulos_otros_omitidos_lista", []):
-        citas_faltan_items.append(f"- {c_otro} (Artículo reglamentario/legal omitido: -0,10 ptos)")
+        citas_faltan_items.append(f"- {c_otro} (Artículo reglamentario complementario)")
     citas_faltan_lista = "\n".join(citas_faltan_items) or "Ninguna (ha citado todas las normas y artículos obligatorios)."
 
     siglas_mal = ev_fallback.get("siglas_sin_definir", [])
     tot_ideas = len(ev_fallback["puntos_cubiertos"]) + len(ev_fallback["puntos_omitidos"])
     acertados_resumen = "\n".join([f"- {_extraer_etiqueta_breve_apartado(p)}" for p in ev_fallback["puntos_cubiertos"]]) or "Ningún apartado cubierto con suficiencia."
-    omitidos_lista = "\n".join([f"- {p} (-1,00 pto)" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
+    omitidos_lista = "\n".join([f"- {p}" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
     resta_efectiva = round(max(0.0, ev_fallback.get('pts_brutos_criterio_1', 0.0) - ev_fallback['pts_criterio_1']), 2)
 
     instruccion_extra = (
-        f"\n- EN EL APARTADO 1 ('Análisis comparativo general: lo acertado frente a lo fallado u omitido'): Realiza un análisis comparativo directo y pedagógico entre lo escrito por el alumno y la explicación oficial del epígrafe. Indica en un primer subpunto qué ideas, conceptos e instituciones jurídicas ha sabido exponer con acierto ({len(ev_fallback['puntos_cubiertos'])} de {tot_ideas} apartados, sumando +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos) sin copiar párrafos enteros, y en un segundo subpunto analiza qué errores de concepto, imprecisiones técnicas o lagunas de enfoque presenta su texto comparado con la explicación oficial."
-        "\n- EN EL APARTADO 2 ('Contraste detallado de apartados, conceptos y plazos omitidos'): Compara lo que dice la explicación oficial frente a lo que calló o dejó incompleto el alumno, enumerando los apartados del resumen obviados (-1,00 punto cada uno) y los plazos/cuantías/porcentajes omitidos (-0,15 puntos cada uno), explicando brevemente por qué son clave en este epígrafe."
-        "\n- EN EL APARTADO 3 ('Auditoría de referencias legales, artículos esenciales del TRLGSS y rigor en siglas'): Enumera las referencias acertadas, las Leyes o Reales Decretos omitidos (-0,15 puntos c/u), los artículos esenciales del RDL 8/2015 (TRLGSS) omitidos indicando expresamente que son 'artículos esenciales del TRLGSS (RDL 8/2015)' y que restan -0,15 puntos cada uno (-0,10 base + -0,05 adicional por ser del RDL 8/2015), los demás artículos omitidos (-0,10 puntos c/u), y las siglas sin fórmula introductoria previa ('...en adelante, XXXX', -0,25 puntos c/u)."
-        "\n- EN EL APARTADO 4 ('Valoración por Criterios, Liquidación de Puntos y Plan de Progreso'): Muestra el desglose exacto de puntos e incluye al final la sección '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' con 3 pautas concretas y accionables para que el alumno mejore su exposición de este epígrafe concreto (1. Cómo mejorar su estructura y apertura normativa; 2. Qué conceptos/artículos esenciales engarzar; 3. Un breve párrafo modelo listo para memorizar que integre lo que ha fallado u omitido). PROHIBIDO usar la expresión 'Orientación del Tribunal' o 'Consejo del Tribunal'."
+        f"\n- TONO MOTIVADOR, CONSTRUCTIVO Y RIGUROSO: El objetivo es animar al opositor reconociendo todo lo que ha explicado bien ({len(ev_fallback['puntos_cubiertos'])} de {tot_ideas} bloques, +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos). Si un párrafo está bien planteado en su idea jurídica pero le faltó citar el número del artículo o reglamento, felicítale por la idea y recuérdale el precepto como una mejora para ganar excelencia ante el Tribunal (el ajuste global por toda la normativa omitida está topado como máximo a -{ev_fallback.get('resta_negativa_referencias_omitidas', 0.0):.2f} ptos)."
+        "\n- EN EL APARTADO 1 ('Valoración conjunta: tus puntos fuertes y comparativa con la explicación oficial'): Destaca primero qué conceptos e instituciones ha desarrollado con acierto y luego compara de forma constructiva su texto con la explicación oficial."
+        "\n- EN EL APARTADO 2 ('Bloques conceptuales y plazos a incorporar para completar el epígrafe'): Señala qué ideas o plazos de la explicación oficial quedaron pendientes para que los sume a su esquema."
+        "\n- EN EL APARTADO 3 ('Recordatorio de normativa y artículos esenciales del TRLGSS'): Recuérdale con tono pedagógico las Leyes/RD y los 'artículos esenciales del TRLGSS (RDL 8/2015)' que conviene citar expresamente para redondear el tema, así como el consejo de presentar las siglas ('...en adelante, XXXX')."
+        "\n- EN EL APARTADO 4 ('Liquidación de Puntos y Plan de Progreso Motivador'): Muestra las puntuaciones auditadas inamovibles y cierra con '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' en 3 pasos prácticos y motivadores (incluyendo un breve párrafo modelo sobre lo omitido). PROHIBIDO usar 'Orientación del Tribunal' o 'Consejo del Tribunal'."
     )
     if citas_erroneas_boe:
         instruccion_extra += (
-            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye su literalidad exacta en el apartado 3 y su resta de -1,00 pto):\n{citas_erroneas_boe}"
+            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye su literalidad exacta en el apartado 3):\n{citas_erroneas_boe}"
         )
     if siglas_mal:
         instruccion_extra += (
-            f"\n- SIGLAS SIN FÓRMULA INTRODUCTORIA PREVIA: {', '.join(f'{s} (debió poner «{ej}»)' for s, ej in siglas_mal)} -> resta aplicada: -{ev_fallback.get('penalizacion_siglas', 0.0):.2f} ptos."
+            f"\n- SIGLAS SIN PRESENTAR EN PRIMERA MENCIÓN: {', '.join(f'{s} (presentar como «{ej}»)' for s, ej in siglas_mal)} -> ajuste leve en Criterio 3: -{ev_fallback.get('penalizacion_siglas', 0.0):.2f} ptos."
         )
 
     prompt = (
         "Actúa como el equipo de preparadores expertos de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Tu objetivo es evaluar la respuesta del alumno comparándola a fondo con la explicación oficial del epígrafe para que el alumno comprenda exactamente qué ha hecho bien, en qué ha fallado o qué ha omitido, y cómo redactarlo mejor para superar el examen ante el Tribunal:\n"
-        f"- Puntuaciones auditadas inamovibles: Criterio 1 Ganado por aciertos = +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Deducción por omisiones = -{resta_efectiva:.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
+        "Evalúa la respuesta del alumno con un enfoque MOTIVADOR, JUSTO Y CONSTRUCTIVO, comparando su escrito con la explicación oficial para ayudarle a progresar sin desanimarle:\n"
+        f"- Puntuaciones auditadas inamovibles: Criterio 1 Ganado por contenido = +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Ajuste moderado por omisiones = -{resta_efectiva:.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
         f"{instruccion_extra}\n\n"
         f"=== EPÍGRAFE / CUESTIÓN ===\n{pregunta}\n\n"
         f"=== EXPLICACIÓN OFICIAL DEL EPÍGRAFE (MODELO DE REFERENCIA) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== BLOQUES QUE EL ALUMNO SÍ HA CUBIERTO ({len(ev_fallback['puntos_cubiertos'])} de {tot_ideas}) ===\n{acertados_resumen}\n\n"
-        f"=== APARTADOS DEL RESUMEN OMITIDOS POR EL ALUMNO (-1,00 PTO C/U) ===\n{omitidos_lista}\n\n"
-        f"=== REFERENCIAS NORMATIVAS OBLIGATORIAS OMITIDAS ===\n{citas_faltan_lista}\n\n"
-        f"=== DESGLOSE DE PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
+        f"=== BLOQUES QUE EL ALUMNO HA TRABAJADO BIEN ({len(ev_fallback['puntos_cubiertos'])} de {tot_ideas}) ===\n{acertados_resumen}\n\n"
+        f"=== BLOQUES PENDIENTES DE INCORPORAR ===\n{omitidos_lista}\n\n"
+        f"=== NORMATIVA Y ARTÍCULOS ESENCIALES PARA RECORDAR AL ALUMNO ===\n{citas_faltan_lista}\n\n"
+        f"=== DETALLE DE AJUSTES APLICADOS ===\n{motivos_calculados}\n\n"
         "Estructura tu respuesta únicamente con estos 4 apartados exactos (NO incluyas nota metodológica previa porque ya se muestra en un recuadro aparte):\n"
-        "1. **✅ Análisis comparativo general: lo acertado frente a lo fallado u omitido**\n"
-        "2. **⚠️ Contraste detallado de apartados, conceptos y plazos omitidos (-1,00 pto/apartado y -0,15 ptos/plazo)**\n"
-        "3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos), artículos indebidos (con literal del BOE) y siglas (-0,25 ptos c/u)**\n"
-        "4. **🎓 Valoración por Criterios, Liquidación de Puntos y Plan de Progreso** (mostrando Puntos ganados en Criterio 1, Deducción por omisiones, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y cerrando con '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' en 3 pasos prácticos)"
+        "1. **✅ Valoración conjunta: tus puntos fuertes y comparativa con la explicación oficial**\n"
+        "2. **⚠️ Bloques conceptuales y plazos a incorporar para completar el epígrafe**\n"
+        f"3. **⚖️ Recordatorio de normativa y artículos esenciales del TRLGSS (ajuste global acotado: -{ev_fallback.get('resta_negativa_referencias_omitidas', 0.0):.2f} ptos)**\n"
+        "4. **🎓 Liquidación de Puntos y Plan de Progreso Motivador** (mostrando las puntuaciones exactas y cerrando con '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' en 3 pasos prácticos)"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
