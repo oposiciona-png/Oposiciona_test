@@ -1212,6 +1212,7 @@ class PDFQuizParser:
                             line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
                             for pat in [
                                 r'^(?:OPOSICIONA\s*)+', r'^POSICIO\s*',
+                                r'^RESPUESTAS\s+TEST\s+TEMA\s+\d+\s+ADMINISTRATIVOS\.?\s+PARTE\s+GENERAL\.?\s*[A-ZÁÉÍÓÚÑ\s]*',
                                 r'^GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEST\s+TEMA\s+\d+\s+GENERAL\s*[\-–]?\s*[A-ZÁÉÍÓÚÑ\s]+)?\s*',
                                 r'^ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s*',
                                 r'^EXAMEN\s+REPASO\s+ADMINISTRATIVO\s+\d+\s+[A-ZÁÉÍÓÚÑ]+\s+202\d\s*',
@@ -1269,11 +1270,9 @@ class PDFQuizParser:
                         line_text = re.sub(rf'(?<=[.?!;\)\]"\'”»])\s*({PAT_MARCADOR_EXP})(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(rf'(?<=\S)\s{{2,}}({PAT_MARCADOR_EXP})(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?):', r'\n\1:', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(?<!"\s)(?<!«\s)(Art[íi]culo\s+aplicable:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text)
+                        line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(?<!"\s)(?<!«\s)(Art[íi]culo\s+aplicable:|Art[íi]culo\s+de\s+aplicaci[óo]n:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
                         line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        # Separar números de pregunta pegados sin espacio tras palabra o punto (ej. "actuar6. En el supuesto...", "indemnización29. Si un trabajador...")
                         line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<![0-9]\.)(?<!\d)(\d{1,3}(?:[\.\-]+:?|:))(?!\s*[ºª°\d])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        # Separar opciones pegadas a '.', '?', ':' o '"' con o sin espacio (ej. "?a) A una...", ".b) A una...", ".c) A la...")
                         line_text = re.sub(r'(?<![0-9]\.)(?<!\d)([.?!;:"»”\)])\s*([a-d][\)\.\-]|[A-D][\)\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<![0-9]\.)(?<![\dA-ZÁÉÍÓÚÑ])([.?!;:"»”\)])([a-d][\)\.\-]|[A-D][\)\-])(?!\s*\.)\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
                         line_text = re.sub(r'(?<=\S)\s*(\(p[aá]pages?\s+\d+[^)]*\)|\(p[aá]ginas?\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
@@ -1284,29 +1283,34 @@ class PDFQuizParser:
                                 lines.append({"text": re.sub(r'^([a-d][\)\.-]|[A-D][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
                     lines.append({"text": "<NEW_BLOCK>", "bold": False})
 
-        # Unir números de pregunta sueltos, pero NUNCA si son el número de un artículo o van sueltos al final de una explicación
+        # Unir números sueltos ("100.", "18).", "81.", "3.") cuando la línea anterior termina en "por", "de", "del", "Art." o tiene paréntesis abierto
         cleaned_num_lines, k = [], 0
         while k < len(lines):
             curr = lines[k]
             txt = curr["text"].strip()
-            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+$', txt, re.IGNORECASE):
+            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+[\"\'»\)]*$', txt, re.IGNORECASE):
                 m = k + 1
                 while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
                     m += 1
                 prev_idx = len(cleaned_num_lines) - 1
                 while prev_idx >= 0 and cleaned_num_lines[prev_idx]["text"] == "<NEW_BLOCK>":
                     prev_idx -= 1
-                prev_termina_en_art = bool(
-                    prev_idx >= 0 and re.search(
-                        r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|cap[íi]tulo|t[íi]tulo|apartado|ordinal|disposici[óo]n)\s*$',
-                        cleaned_num_lines[prev_idx]["text"].strip(),
-                        re.IGNORECASE
+                prev_txt_s = cleaned_num_lines[prev_idx]["text"].strip() if prev_idx >= 0 else ""
+                prev_termina_en_continuacion = bool(
+                    prev_idx >= 0 and (
+                        re.search(
+                            r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|cap[íi]tulo|t[íi]tulo|apartado|ordinal|disposici[óo]n|por|de|del|en|entre|hasta|a|al|con)\s*$',
+                            prev_txt_s,
+                            re.IGNORECASE
+                        ) or
+                        prev_txt_s.endswith('(') or
+                        (prev_txt_s.count("(") > prev_txt_s.count(")"))
                     )
                 )
                 if cleaned_num_lines and (
-                    prev_termina_en_art or
-                    ")" in txt and "(" not in txt and cleaned_num_lines[-1]["text"].count("(") > cleaned_num_lines[-1]["text"].count(")") or
-                    (m < len(lines) and re.match(r'^[a-d][\)\.\-](\s|$)', lines[m]["text"].strip(), re.IGNORECASE))
+                    prev_termina_en_continuacion or
+                    (m < len(lines) and re.match(r'^[a-d][\)\.\-](\s|$)', lines[m]["text"].strip(), re.IGNORECASE)) or
+                    (m < len(lines) and re.match(r'^(?:explicaci[óo]n|respuesta|resp)\b', lines[m]["text"].strip(), re.IGNORECASE))
                 ):
                     if prev_idx >= 0:
                         cleaned_num_lines[prev_idx]["text"] = cleaned_num_lines[prev_idx]["text"].rstrip() + " " + txt
@@ -1415,19 +1419,25 @@ class PDFQuizParser:
             r_idx += 1
         lines = reordered_lines
 
+        # Unir continuaciones numéricas partidas entre dos líneas ("...al 200 por" + "100. Además...", "...materias del" + "148...", "...(Art." + "18).")
         merged_lines, i = [], 0
         while i < len(lines):
             curr = lines[i]
             txt = curr["text"].strip()
             if txt != "<NEW_BLOCK>" and (
                 re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', txt, re.IGNORECASE) or
-                re.search(r'\b(?:art[íi]culos?|arts\.)\s+\d+(?:\s*,\s*\d+)*\s*,\s*$', txt, re.IGNORECASE)
+                re.search(r'\b(?:art[íi]culos?|arts\.)\s+\d+(?:\s*,\s*\d+)*\s*,\s*$', txt, re.IGNORECASE) or
+                re.search(r'\b(?:\d+\s+por|parto\s+de|materias\s+del|art[íi]culos?\s+del|apartados?\s+del)\s*$', txt, re.IGNORECASE)
             ):
                 j = i + 1
                 while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
                 if j < len(lines):
                     nxt_s = lines[j]["text"].strip()
-                    es_inicio_nueva_pregunta = bool(re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', nxt_s))
+                    termina_en_frase_incompleta = bool(re.search(r'\b(?:\d+\s+por|parto\s+de|materias\s+del|art[íi]culos?\s+del|apartados?\s+del|\(Art\.)\s*$', txt, re.IGNORECASE))
+                    es_inicio_nueva_pregunta = bool(
+                        not termina_en_frase_incompleta and
+                        re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', nxt_s)
+                    )
                     if re.match(r'^\d+', nxt_s) and not es_inicio_nueva_pregunta:
                         curr["text"] = txt + " " + nxt_s
                         curr["bold"] = curr["bold"] or lines[j]["bold"]
@@ -1486,8 +1496,6 @@ class PDFQuizParser:
                 if text.strip().endswith('?') and not re.match(r'^([a-d][\)\.\-]|[A-D][\)\-])\s*[¿A-ZÁÉÍÓÚÑ]', text):
                     is_option, forced_not_option = False, True
 
-            # CRÍTICO: solo activar is_reserve cuando sea realmente un título de sección ("PREGUNTAS DE RESERVA" o "RESERVA" sola),
-            # jamás cuando una línea empiece por "Reserva.", "reserva de dominio" o "reserva de puesto" en mitad de una frase.
             is_reserve = bool(
                 re.match(r'^\s*(?:preguntas?\s+de\s+reserva|supuestos?\s+de\s+reserva|reserva)\s*:?\s*$', text_lower)
             )
@@ -1515,10 +1523,16 @@ class PDFQuizParser:
 
             if m_num and current_q and current_q["state"] == "E":
                 exp_so_far = current_q["explanation"].strip()
-                parece_enunciado_real = bool(re.match(r'^\s*(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', text))
-                if not parece_enunciado_real and re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', exp_so_far[-60:], re.IGNORECASE):
-                    m_num = None
-                elif exp_so_far.endswith(',') and not parece_enunciado_real:
+                # Si la explicación acumulada termina en una palabra incompleta como "por", "de", "del", "Art.", "(Art.", NUNCA es una pregunta nueva
+                exp_termina_incompleta = bool(
+                    re.search(r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|por|de|del|en|con|para|entre|hasta)\s*$', exp_so_far[-40:], re.IGNORECASE) or
+                    exp_so_far.endswith(('(', ','))
+                )
+                parece_enunciado_real = bool(
+                    not exp_termina_incompleta and
+                    re.match(r'^\s*(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', text)
+                )
+                if exp_termina_incompleta:
                     m_num = None
                 elif (
                     not parece_enunciado_real
@@ -1628,7 +1642,6 @@ class PDFQuizParser:
 
             if is_explanation:
                 exp_clean_line = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?|respuestas?|resp)\s*[:\.]*\s*', '', text.strip(), flags=re.IGNORECASE).strip()
-                # Si la línea tenía un segundo "Explicación:" redundante (ej. TEMA 62 P9, P13, P26, P47), limpiarlo también
                 exp_clean_line = re.sub(r'\bExplicaci[óo]n\s*:\s*', '', exp_clean_line, flags=re.IGNORECASE).strip()
                 if exp_clean_line:
                     current_q["explanation"] = (current_q["explanation"].rstrip() + "\n\n" + exp_clean_line) if current_q["explanation"] else exp_clean_line
@@ -1671,7 +1684,6 @@ class PDFQuizParser:
                     if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
                     current_q["options"][-1] += " " + text
             elif current_q["state"] == "E":
-                # Limpiar posibles etiquetas "Explicación:" repetidas en mitad de párrafo (como en TEMA 62)
                 text_clean_e = re.sub(r'^(?:explicaci[óo]n|respuesta)\s*:\s*', '', text.strip(), flags=re.IGNORECASE)
                 text_clean_e = re.sub(r'\bExplicaci[óo]n\s*:\s*', '', text_clean_e).strip()
                 if not text_clean_e:
@@ -1683,7 +1695,9 @@ class PDFQuizParser:
                     ib = bool(re.match(r'^[\s]*[•\*]', text_clean_e))
                     io = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica)[\s:]', text_clean_e, re.IGNORECASE))
                     ipr = bool(re.match(r'^\(p[aá]ginas?\s+\d+', text_clean_e, re.IGNORECASE))
-                    ins = lc in ['.', ':', '?', '!', '"', '”', '»'] and bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text_clean_e))
+                    # No saltar de párrafo si la explicación previa termina en abreviatura como "Art." o "(Art."
+                    termina_en_abrev = bool(re.search(r'(?:\bArt\.|\barts?\.|\bnúm\.|\bpág\.)\s*$', current_q["explanation"].strip(), re.IGNORECASE))
+                    ins = (not termina_en_abrev) and lc in ['.', ':', '?', '!', '"', '”', '»'] and bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text_clean_e))
                     if ipr or ib or io or ins:
                         current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text_clean_e
                     else:
@@ -1691,10 +1705,19 @@ class PDFQuizParser:
 
         if current_q and current_q["options"]: questions.append(current_q)
 
-        # Limpieza final de números de bloque sueltos al final de explicaciones (ej. "...quince días.» 27.") y deducción de respuesta correcta cuando falte negrita
+        # Rescate de seguridad: si alguna opción última se tragó "Explicación: ..." pegado (como P83 en DOMINGO 6 SEP), separarlo limpiamente
         for q in questions:
+            if not q.get("explanation") and q.get("options"):
+                ult_opt = q["options"][-1]
+                m_pegada = re.search(rf'\s+({PAT_MARCADOR_EXP})\s*(.+)$', ult_opt, flags=re.IGNORECASE | re.DOTALL)
+                if m_pegada:
+                    q["options"][-1] = ult_opt[:m_pegada.start()].strip()
+                    q["explanation"] = m_pegada.group(2).strip()
+
+            # Solo limpiar un número suelto al final de la explicación si va detrás de cierre de comillas/paréntesis de página ("...quince días.» 27."),
+            # NUNCA detrás de "Art.", "por", "de", "del"
             if q.get("explanation"):
-                q["explanation"] = re.sub(r'(?<=[.»"\'\)\!])\s+\d{1,3}\.\s*$', '', q["explanation"].strip())
+                q["explanation"] = re.sub(r'(?<=[»”\)])\s+\d{1,3}\.\s*$', '', q["explanation"].strip())
 
             if q["answer"] == -1 and q.get("explanation"):
                 m_ans = re.search(r'(?:respuesta\s+correcta\s+es\s+la|opci[óo]n\s+([a-d])\s+es\s+la\s+correcta|correcta\s*:\s*([a-d])|respuesta\s*\(?([a-d])\)?\s+añade)\s*([a-d])?', q["explanation"], re.IGNORECASE)
@@ -1703,7 +1726,6 @@ class PDFQuizParser:
                     if letra_det and 0 <= (ord(letra_det) - ord('a')) < len(q["options"]):
                         q["answer"] = ord(letra_det) - ord('a')
 
-                # Si aún sigue sin respuesta marcada por falta de negrita en el PDF (ej. Tema 48 P28), deducir por coincidencia léxica con la explicación
                 if q["answer"] == -1 and q.get("options"):
                     exp_words = set(re.findall(r'\b[a-záéíóúñ]{4,}\b', q["explanation"].lower()))
                     mejor_idx, mejor_score = -1, 0
