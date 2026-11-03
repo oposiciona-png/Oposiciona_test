@@ -2261,6 +2261,19 @@ def _dividir_en_oraciones_juridicas(texto):
 
     return unidades
 
+def _extraer_etiqueta_breve_apartado(oracion):
+    """Extrae el título o idea clave inicial de un apartado para los resúmenes comparativos."""
+    if not oracion:
+        return ""
+    s = re.sub(r'^[•\*■▪\-–\s]+', '', oracion.replace("[[H]]", "")).strip()
+    m_tit = re.match(r'^(\d{1,2}\)|[a-g]\))?\s*([^:\.]{3,85}):\s+', s)
+    if m_tit:
+        pref = (m_tit.group(1) + " ") if m_tit.group(1) else ""
+        return f"{pref}{m_tit.group(2).strip()}"
+    palabras = s.split()
+     fragmento = " ".join(palabras[:11])
+    return fragmento + ("..." if len(palabras) > 11 else "")
+
 NOTA_METODOLOGICA_PREPARADORES = (
     "ℹ️ <b>Nota metodológica sobre la calificación:</b> Aunque los bloques de valoración (Conocimiento y normativa [0-45 ptos], "
     "Orden de ideas [0-3 ptos] y Expresión escrita [0-2 ptos]) responden íntegramente a los criterios oficiales publicados por el Tribunal Calificador, "
@@ -2465,16 +2478,13 @@ def es_articulo_esencial_trlgss(etiqueta_cita, ref_completa=""):
     if not es_cita_articulo_individual(etiqueta_cita):
         return False
     s = (etiqueta_cita or "").strip()
-    # Si la propia etiqueta menciona otra norma distinta (RIA, RD 84/1996, CE, Constitución, ET, LISOS, etc.), no es del TRLGSS
     if re.search(r'\b(Constituci[óo]n|CE|RD\s+84/1996|RIA|RGCL|RD\s+2064/1995|RGR|ET|TRET|Estatuto|LISOS|Orden|Ley\s+47/2015|RDL\s+670/1987|Clases\s+Pasivas)\b', s, re.IGNORECASE) and not re.search(r'\bTRLGSS\b', s, re.IGNORECASE):
         return False
     if re.search(r'\b(TRLGSS|LGSS|8/2015)\b', s, re.IGNORECASE):
         return True
-    # Si es "Artículo X" genérico, verificamos en el texto de referencia si está asociado al TRLGSS o a otra ley
     m_num = re.search(r'\b(\d{1,3})\b', s)
     if m_num and ref_completa:
         num = m_num.group(1)
-        # Si en el resumen aparece "artículo X del RIA / RD 84/1996 / CE / ET" y no del TRLGSS, no es TRLGSS
         pat_otra_ley = rf'art(?:[íi]culos?|\.|s\.)\s*{num}(?:\.\d+)?\s*(?:del?\s+)?(?:RIA|RD\s*84/1996|RGCL|ET|TRET|CE|Constituci[óo]n|LISOS|Orden)'
         pat_trlgss = rf'art(?:[íi]culos?|\.|s\.)\s*{num}(?:\.\d+)?\s*(?:del?\s+)?(?:TRLGSS|LGSS|Texto\s+Refundido)'
         if re.search(pat_trlgss, ref_completa, re.IGNORECASE):
@@ -3066,26 +3076,45 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
     bloques = []
     tot_ideas = len(ev["puntos_cubiertos"]) + len(ev["puntos_omitidos"])
+    etiquetas_acertadas = [_extraer_etiqueta_breve_apartado(p) for p in ev["puntos_cubiertos"][:6] if _extraer_etiqueta_breve_apartado(p)]
+    etiquetas_omitidas = [_extraer_etiqueta_breve_apartado(p) for p in ev["puntos_omitidos"][:5] if _extraer_etiqueta_breve_apartado(p)]
+
+    resumen_aciertos_txt = (
+        f"En tu exposición has abordado con acierto **{len(ev['puntos_cubiertos'])} de los {tot_ideas} bloques esenciales** del epígrafe "
+        f"(destacando tu desarrollo sobre: *{'; '.join(etiquetas_acertadas)}*)."
+        if etiquetas_acertadas else
+        f"Tu respuesta aún no recoge de forma suficiente los bloques conceptuales exigidos en los **{tot_ideas} apartados** del epígrafe."
+    )
+    resumen_brecha_txt = (
+        f"Al contrastar tu redacción con la explicación oficial del epígrafe, la diferencia principal radica en que te ha faltado desarrollar o precisar "
+        f"**{len(ev['puntos_omitidos'])} apartados clave** (*{'; '.join(etiquetas_omitidas)}*)"
+        + (f", así como concretar plazos o cuantías ({', '.join(ev['cifras_faltan'][:4])})" if ev["cifras_faltan"] else "")
+        + (f" y engarzar expresamente preceptos esenciales ({'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('citas_faltan'))[:3])})." if ev.get("citas_faltan") else ".")
+        if (ev["puntos_omitidos"] or ev["cifras_faltan"] or ev.get("citas_faltan")) else
+        "Al comparar tu texto con la explicación oficial, se observa una correspondencia muy sólida tanto en los conceptos dogmáticos como en la precisión normativa."
+    )
+    if ev.get("alerta_sentido"):
+        resumen_brecha_txt += f"\n   - {ev['alerta_sentido']}"
 
     bloques.append(
-        "1. **✅ Balance de cobertura del resumen oficial:**\n"
-        f"Has desarrollado con acierto **{len(ev['puntos_cubiertos'])} de los {tot_ideas} apartados esenciales** del epígrafe "
-        f"(sumando **+{ev.get('pts_brutos_criterio_1', 0.0):.2f} puntos brutos** antes de deducciones)."
+        "1. **✅ Análisis comparativo general: lo acertado frente a lo fallado u omitido:**\n"
+        f"   - **Lo que has acertado y consolidado (+{ev.get('pts_brutos_criterio_1', 0.0):.2f} / 45,00 ptos brutos):** {resumen_aciertos_txt}\n"
+        f"   - **Comparativa con la explicación oficial (qué te separó del pleno):** {resumen_brecha_txt}"
     )
 
     if ev["puntos_omitidos"] or ev["cifras_faltan"]:
         lineas_b2 = [
-            "Obviar contenido esencial del resumen resta **-1,00 punto por apartado omitido** (y **-0,15 puntos** por plazo/dato omitido):"
+            "Contrastando párrafo a párrafo tu escrito con el texto mínimo oficial, debes incorporar a tu esquema los siguientes elementos (obviar un apartado resta **-1,00 pto** y omitir un plazo/cuantía resta **-0,15 ptos**):"
         ]
         if ev["cifras_faltan"]:
             lineas_b2.append(f"   - 🔸 **Plazos, cuantías o porcentajes omitidos (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos, a razón de -0,15 ptos c/u):** {', '.join(ev['cifras_faltan'])}.")
         for idx_om, p_om in enumerate(ev["puntos_omitidos"], 1):
             lineas_b2.append(f"   - 🔸 **Apartado omitido {idx_om} (-1,00 pto):** *{p_om}*")
-        bloques.append("2. **⚠️ Apartados y plazos del resumen omitidos (-1,00 pto/apartado y -0,15 ptos/plazo):**\n" + "\n".join(lineas_b2))
+        bloques.append("2. **⚠️ Contraste detallado de apartados, conceptos y plazos omitidos (-1,00 pto/apartado y -0,15 ptos/plazo):**\n" + "\n".join(lineas_b2))
     else:
         bloques.append(
-            "2. **⚠️ Apartados y plazos del resumen omitidos (-1,00 pto/apartado y -0,15 ptos/plazo):**\n"
-            "¡Excelente! No has omitido ningún apartado ni plazo del resumen oficial."
+            "2. **⚠️ Contraste detallado de apartados, conceptos y plazos omitidos (-1,00 pto/apartado y -0,15 ptos/plazo):**\n"
+            "¡Excelente trabajo! Tu exposición recoge todos los apartados y datos numéricos esenciales de la explicación oficial."
         )
 
     rev_normas = []
@@ -3120,8 +3149,22 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
     n10 = ev.get("nota", 0.0)
     motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin deducciones."
 
+    paso_1_norma = (
+        f"Abre siempre el epígrafe encuadrando la institución en su norma matriz ({'; '.join((ev.get('leyes_rd_omitidos_lista') or ev.get('citas_ok') or ['el Real Decreto Legislativo 8/2015, de 30 de octubre (en adelante, TRLGSS)'])[:2])}) e introduciendo formalmente las siglas en su primera mención."
+    )
+    paso_2_arts = (
+        f"Engarza de forma expresa los preceptos esenciales que te faltaron ({'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('articulos_otros_omitidos_lista'))[:3])}) vinculándolos con sus plazos o cuantías exactos ({', '.join(ev['cifras_faltan'][:3]) or 'según el resumen oficial'})."
+        if (ev.get("articulos_omitidos_lista") or ev.get("cifras_faltan")) else
+        "Mantén la conexión directa entre cada bloque conceptual y su artículo del TRLGSS y reglamento de desarrollo."
+    )
+    paso_3_modelo = (
+        f"Incorpora a tu esquema mental este bloque clave que omitiste para cerrar un desarrollo de nivel Tribunal: *«{ev['texto_sugerido'][:380]}{'...' if len(ev['texto_sugerido']) > 380 else ''}»*"
+        if ev.get("puntos_omitidos") else
+        "Tu cobertura de contenidos es completa; repasa únicamente la fluidez entre párrafos para consolidar el máximo en los Criterios 2 y 3."
+    )
+
     bloques.append(
-        "4. **🎓 Valoración por Criterios y Liquidación de Puntos:**\n"
+        "4. **🎓 Valoración por Criterios, Liquidación de Puntos y Plan de Progreso:**\n"
         f"   - **Criterio 1 — Puntuación ganada por tus aciertos:** `+{c1_bruto:.2f} / 45,00 puntos`\n"
         f"   - **Criterio 1 — Deducción aplicada por omisiones (-1,00 pto/apartado; -0,15 ptos/Ley o RD; -0,15 ptos/art. esencial TRLGSS; -0,10 ptos/otro art.; -0,15 ptos/plazo):** `-{resta_efectiva:.2f} puntos`\n"
         f"   - **Criterio 1 — Puntuación neta resultante (0 a 45 ptos):** **`{c1:.2f} / 45,00 puntos`**\n"
@@ -3129,7 +3172,10 @@ def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficia
         f"   - **Criterio 3 — Calidad de expresión escrita y siglas (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
         f"   - 🏆 **CALIFICACIÓN FINAL DEL EPÍGRAFE:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{n10:.2f} / 10`**)*\n"
         f"   - **📉 Desglose de puntos restados:**\n{motivos_txt}\n\n"
-        "💡 **Orientación de tus preparadores:** Tienes una buena base con los apartados acertados; céntrate ahora únicamente en incorporar a tu esquema los puntos señalados en el apartado 2 y los artículos esenciales del TRLGSS y normas del apartado 3 para consolidar tu nota por encima del corte."
+        "💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**\n"
+        f"   1. **Apertura y rigor formal:** {paso_1_norma}\n"
+        f"   2. **Anclaje normativo y precisión técnica:** {paso_2_arts}\n"
+        f"   3. **Párrafo de mejora para tu próximo intento:** {paso_3_modelo}"
     )
 
     return "\n\n".join(bloques)
@@ -3168,14 +3214,15 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     siglas_mal = ev_fallback.get("siglas_sin_definir", [])
     tot_ideas = len(ev_fallback["puntos_cubiertos"]) + len(ev_fallback["puntos_omitidos"])
+    acertados_resumen = "\n".join([f"- {_extraer_etiqueta_breve_apartado(p)}" for p in ev_fallback["puntos_cubiertos"]]) or "Ningún apartado cubierto con suficiencia."
     omitidos_lista = "\n".join([f"- {p} (-1,00 pto)" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
     resta_efectiva = round(max(0.0, ev_fallback.get('pts_brutos_criterio_1', 0.0) - ev_fallback['pts_criterio_1']), 2)
 
     instruccion_extra = (
-        f"\n- REGLA DE BREVEDAD EN EL APARTADO 1: NO enumeres ni listes los apartados del resumen que el alumno ha recogido bien para no alargar el análisis; di únicamente en 1 línea cuántos apartados de {tot_ideas} ha cubierto con acierto (+{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos)."
-        "\n- En el apartado 2 enumera los apartados del resumen que ha obviado indicando que cada apartado omitido resta -1,00 punto, y los plazos/cuantías omitidos indicando que cada uno resta -0,15 puntos."
-        "\n- En el apartado 3 enumera las Leyes o Reales Decretos omitidos indicando que restan -0,15 puntos cada uno, los artículos esenciales del RDL 8/2015 (TRLGSS) omitidos indicando expresamente que son 'artículos esenciales del TRLGSS (RDL 8/2015)' y que restan -0,15 puntos cada uno (-0,10 base + -0,05 adicional por ser del RDL 8/2015), los demás artículos omitidos indicando que restan -0,10 puntos cada uno, y las siglas sin fórmula introductoria previa ('...en adelante, XXXX') que restan -0,25 puntos cada una."
-        "\n- PROHIBIDO usar la expresión 'Orientación del Tribunal' o 'Consejo del Tribunal': cierra siempre el apartado 4 con '💡 **Orientación de tus preparadores:**' seguido de un consejo breve y constructivo."
+        f"\n- EN EL APARTADO 1 ('Análisis comparativo general: lo acertado frente a lo fallado u omitido'): Realiza un análisis comparativo directo y pedagógico entre lo escrito por el alumno y la explicación oficial del epígrafe. Indica en un primer subpunto qué ideas, conceptos e instituciones jurídicas ha sabido exponer con acierto ({len(ev_fallback['puntos_cubiertos'])} de {tot_ideas} apartados, sumando +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos) sin copiar párrafos enteros, y en un segundo subpunto analiza qué errores de concepto, imprecisiones técnicas o lagunas de enfoque presenta su texto comparado con la explicación oficial."
+        "\n- EN EL APARTADO 2 ('Contraste detallado de apartados, conceptos y plazos omitidos'): Compara lo que dice la explicación oficial frente a lo que calló o dejó incompleto el alumno, enumerando los apartados del resumen obviados (-1,00 punto cada uno) y los plazos/cuantías/porcentajes omitidos (-0,15 puntos cada uno), explicando brevemente por qué son clave en este epígrafe."
+        "\n- EN EL APARTADO 3 ('Auditoría de referencias legales, artículos esenciales del TRLGSS y rigor en siglas'): Enumera las referencias acertadas, las Leyes o Reales Decretos omitidos (-0,15 puntos c/u), los artículos esenciales del RDL 8/2015 (TRLGSS) omitidos indicando expresamente que son 'artículos esenciales del TRLGSS (RDL 8/2015)' y que restan -0,15 puntos cada uno (-0,10 base + -0,05 adicional por ser del RDL 8/2015), los demás artículos omitidos (-0,10 puntos c/u), y las siglas sin fórmula introductoria previa ('...en adelante, XXXX', -0,25 puntos c/u)."
+        "\n- EN EL APARTADO 4 ('Valoración por Criterios, Liquidación de Puntos y Plan de Progreso'): Muestra el desglose exacto de puntos e incluye al final la sección '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' con 3 pautas concretas y accionables para que el alumno mejore su exposición de este epígrafe concreto (1. Cómo mejorar su estructura y apertura normativa; 2. Qué conceptos/artículos esenciales engarzar; 3. Un breve párrafo modelo listo para memorizar que integre lo que ha fallado u omitido). PROHIBIDO usar la expresión 'Orientación del Tribunal' o 'Consejo del Tribunal'."
     )
     if citas_erroneas_boe:
         instruccion_extra += (
@@ -3188,27 +3235,28 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     prompt = (
         "Actúa como el equipo de preparadores expertos de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Realiza una EVALUACIÓN CONCISA, DIRECTA Y CONSTRUCTIVA:\n"
+        "Tu objetivo es evaluar la respuesta del alumno comparándola a fondo con la explicación oficial del epígrafe para que el alumno comprenda exactamente qué ha hecho bien, en qué ha fallado o qué ha omitido, y cómo redactarlo mejor para superar el examen ante el Tribunal:\n"
         f"- Puntuaciones auditadas inamovibles: Criterio 1 Ganado por aciertos = +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Deducción por omisiones = -{resta_efectiva:.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
         f"{instruccion_extra}\n\n"
-        f"=== EPÍGRAFE ===\n{pregunta}\n\n"
-        f"=== RESUMEN OFICIAL DEL EPÍGRAFE ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
-        f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== APARTADOS DEL RESUMEN OMITIDOS (-1,00 PTO C/U) ===\n{omitidos_lista}\n\n"
+        f"=== EPÍGRAFE / CUESTIÓN ===\n{pregunta}\n\n"
+        f"=== EXPLICACIÓN OFICIAL DEL EPÍGRAFE (MODELO DE REFERENCIA) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+        f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
+        f"=== BLOQUES QUE EL ALUMNO SÍ HA CUBIERTO ({len(ev_fallback['puntos_cubiertos'])} de {tot_ideas}) ===\n{acertados_resumen}\n\n"
+        f"=== APARTADOS DEL RESUMEN OMITIDOS POR EL ALUMNO (-1,00 PTO C/U) ===\n{omitidos_lista}\n\n"
         f"=== REFERENCIAS NORMATIVAS OBLIGATORIAS OMITIDAS ===\n{citas_faltan_lista}\n\n"
         f"=== DESGLOSE DE PUNTOS RESTADOS ===\n{motivos_calculados}\n\n"
         "Estructura tu respuesta únicamente con estos 4 apartados exactos (NO incluyas nota metodológica previa porque ya se muestra en un recuadro aparte):\n"
-        "1. **✅ Balance de cobertura del resumen oficial** (solo 1 frase indicando cuántos apartados de los totales ha cubierto, SIN listar los apartados acertados)\n"
-        "2. **⚠️ Apartados y plazos del resumen omitidos (-1,00 pto/apartado y -0,15 ptos/plazo)**\n"
+        "1. **✅ Análisis comparativo general: lo acertado frente a lo fallado u omitido**\n"
+        "2. **⚠️ Contraste detallado de apartados, conceptos y plazos omitidos (-1,00 pto/apartado y -0,15 ptos/plazo)**\n"
         "3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos), artículos indebidos (con literal del BOE) y siglas (-0,25 ptos c/u)**\n"
-        "4. **🎓 Valoración por Criterios y Liquidación de Puntos** (mostrando Puntos ganados en Criterio 1, Deducción por omisiones, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y cerrando con '💡 **Orientación de tus preparadores:**')"
+        "4. **🎓 Valoración por Criterios, Liquidación de Puntos y Plan de Progreso** (mostrando Puntos ganados en Criterio 1, Deducción por omisiones, Criterio 1 Neto, Criterio 2, Criterio 3, Total sobre 50 y cerrando con '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' en 3 pasos prácticos)"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
-            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=15)
+            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=18)
             if r.status_code == 200:
                 data = r.json()
                 texto_ia = data["candidates"][0]["content"]["parts"][0]["text"]
