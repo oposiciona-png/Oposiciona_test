@@ -3085,10 +3085,6 @@ def descargar_pdf_fresco(url):
     return requests.get(url_nocache, headers=headers)
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
-    """
-    Cuadro de reporte de error o consulta tanto para preguntas Tipo Test como para Epígrafes de DESARROLLO y SUPUESTOS.
-    Vincula sus claves al test_name actual para que nunca persista al cambiar de test, y se cierra automáticamente al enviar.
-    """
     if not usuario_puede_reportar():
         return
 
@@ -3490,12 +3486,6 @@ def handle_radio_change():
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
 
 def preparar_preguntas_como_en_test(raw_qs, barajar=True):
-    """
-    Aplica exactamente el mismo post-procesado sobre opciones, limpieza de prefijos
-    y revinculación del índice de la respuesta correcta que procesar_preguntas().
-    Se usa tanto al abrir un test en vivo como en la herramienta de auditoría del Administrador
-    para garantizar una consonancia del 100% entre el recuento y la extracción real.
-    """
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
         r'todas\s+las\s+respuestas?\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -3530,12 +3520,10 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
 
 def auditar_extraccion_test_real(pdf_bytes, max_options=4):
     """
-    Ejecuta el motor real de extracción + preparación de preguntas de test (en orden secuencial para identificar el Nº de pregunta)
-    y audita una por una todas las preguntas buscando cualquier anomalía real de extracción:
-    - Preguntas tragadas/fusionadas dentro de una explicación o de una opción.
-    - Opciones de menos (< max_options) o vacías.
-    - Preguntas sin respuesta correcta marcada (answer == -1).
-    - Explicaciones vacías o cortadas abruptamente (ej. terminadas en coma o preposición).
+    Ejecuta el motor real de extracción + preparación de preguntas de test
+    y audita una por una todas las preguntas sin dar falsos positivos por explicaciones largas
+    ni por artículos legales que contengan apartados a), b), c) entre comillas.
+    Solo marca 'Pregunta fusionada' cuando realmente aparece una pregunta con sus opciones y otro bloque EXPLICACIÓN dentro de otra.
     """
     raw_qs = PDFQuizParser.parse(pdf_bytes, max_options=max_options)
     qs_finales = preparar_preguntas_como_en_test(raw_qs, barajar=False)
@@ -3572,14 +3560,17 @@ def auditar_extraccion_test_real(pdf_bytes, max_options=4):
         if ans == -1 or ans >= len(opts):
             sin_correcta.append(f"P{idx_q}")
 
-        # 3. Comprobar si se ha tragado otra pregunta dentro de la explicación o de una opción
-        texto_inspeccion = exp + "\n" + "\n".join(opts)
-        tiene_otra_preg = bool(
-            re.search(r'(?:^|\n)\s*(?:Pregunta\s+)?\d{1,3}[\.\-\)]\s+[¿¡A-ZÁÉÍÓÚÑ].{15,}\?', texto_inspeccion) or
-            re.search(r'\ba\)\s+.{5,}\bb\)\s+.{5,}\bc\)\s+', exp, flags=re.DOTALL) or
-            len(re.findall(r'\bEXPLICACI[ÓO]N(?:\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL)?\s*:', exp, flags=re.IGNORECASE)) >= 1
+        # 3. Comprobar si REALMENTE se ha tragado otra pregunta dentro de la explicación:
+        # Eliminamos primero los textos entre comillas «...» o "..." para no confundir artículos de la CE/TRLGSS con preguntas
+        exp_sin_citas = re.sub(r'«[^»]*»|"[^"]*"', ' ', exp)
+        tiene_etiqueta_explicacion_interna = bool(
+            re.search(r'(?:^|\n|\s)EXPLICACI[ÓO]N(?:\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL)?\s*:', exp, flags=re.IGNORECASE)
         )
-        if tiene_otra_preg or len(exp) > 1600:
+        tiene_bloque_opciones_pregunta = bool(
+            re.search(r'(?:^|\n)\s*a\)\s+.+\n\s*b\)\s+.+\n\s*c\)\s+', exp_sin_citas) or
+            (re.search(r'\?\s*a\)\s+.{10,}\bb\)\s+.{10,}\bc\)\s+', exp_sin_citas, flags=re.DOTALL))
+        )
+        if tiene_etiqueta_explicacion_interna or tiene_bloque_opciones_pregunta:
             preguntas_fusionadas.append(f"P{idx_q}")
 
         # 4. Comprobar si la explicación o el enunciado están vacíos o cortados a mitad de frase
@@ -3649,6 +3640,8 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
