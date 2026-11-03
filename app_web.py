@@ -3196,7 +3196,6 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                 enviado_servidor = False
 
             if enviado_servidor:
-                # Cerrar el cuadro automáticamente y mostrar confirmación limpia
                 limpiar_estados_reportes_error()
                 st.session_state[f"rep_ok_msg_{id_test_limpio}_{num_pregunta}"] = True
                 st.rerun()
@@ -3490,8 +3489,13 @@ def handle_radio_change():
         else:
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
 
-def procesar_preguntas(raw_qs, barajar=True):
-    limpiar_estados_reportes_error()
+def preparar_preguntas_como_en_test(raw_qs, barajar=True):
+    """
+    Aplica exactamente el mismo post-procesado sobre opciones, limpieza de prefijos
+    y revinculación del índice de la respuesta correcta que procesar_preguntas().
+    Se usa tanto al abrir un test en vivo como en la herramienta de auditoría del Administrador
+    para garantizar una consonancia del 100% entre el recuento y la extracción real.
+    """
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
         r'todas\s+las\s+respuestas?\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -3499,26 +3503,123 @@ def procesar_preguntas(raw_qs, barajar=True):
         r'ninguna\s+de\s+las\s+(anteriores|respuestas?)\s+es\s+correcta',
         r'las\s+opciones?\s+[a-d]\s*y\s*[a-d]\s+son\s+correctas'
     ]
-    for q in raw_qs:
+    qs_preparadas = []
+    for q_orig in raw_qs:
+        q = dict(q_orig)
         if q.get("is_open", False):
+            qs_preparadas.append(q)
             continue
         cleaned_options, tiene_fija = [], False
-        for opt in q["options"]:
+        for opt in q.get("options", []):
             to = re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip()
             cleaned_options.append(to)
-            if any(re.search(p, to.lower()) for p in patrones_fijos): tiene_fija = True
-        corr = cleaned_options[q["answer"]] if 0 <= q["answer"] < len(cleaned_options) else None
-        if not tiene_fija and barajar: random.shuffle(cleaned_options)
-        if corr: q["answer"] = cleaned_options.index(corr)
+            if any(re.search(p, to.lower()) for p in patrones_fijos):
+                tiene_fija = True
+        corr = cleaned_options[q["answer"]] if 0 <= q.get("answer", -1) < len(cleaned_options) else None
+        if not tiene_fija and barajar:
+            random.shuffle(cleaned_options)
+        if corr is not None and corr in cleaned_options:
+            q["answer"] = cleaned_options.index(corr)
+        else:
+            q["answer"] = -1
         q["options"] = [f"{chr(97+i)}) {o}" for i, o in enumerate(cleaned_options)]
+        qs_preparadas.append(q)
     if barajar:
-        random.shuffle(raw_qs)
+        random.shuffle(qs_preparadas)
+    return qs_preparadas
+
+def auditar_extraccion_test_real(pdf_bytes, max_options=4):
+    """
+    Ejecuta el motor real de extracción + preparación de preguntas de test (en orden secuencial para identificar el Nº de pregunta)
+    y audita una por una todas las preguntas buscando cualquier anomalía real de extracción:
+    - Preguntas tragadas/fusionadas dentro de una explicación o de una opción.
+    - Opciones de menos (< max_options) o vacías.
+    - Preguntas sin respuesta correcta marcada (answer == -1).
+    - Explicaciones vacías o cortadas abruptamente (ej. terminadas en coma o preposición).
+    """
+    raw_qs = PDFQuizParser.parse(pdf_bytes, max_options=max_options)
+    qs_finales = preparar_preguntas_como_en_test(raw_qs, barajar=False)
+    nq = len(qs_finales)
+    if nq == 0:
+        return {
+            "nq": 0,
+            "media_op": "0",
+            "estado_resumen": "❌ 0 preguntas extraídas",
+            "incidencias": ["No se extrajo ninguna pregunta del PDF."]
+        }
+
+    avg_val = sum(len(q.get("options", [])) for q in qs_finales) / nq
+    media_op = str(int(avg_val)) if avg_val.is_integer() else f"{avg_val:.2f}".replace(".", ",")
+
+    incidencias = []
+    sin_correcta = []
+    opciones_incompletas = []
+    preguntas_fusionadas = []
+    explicaciones_cortadas = []
+
+    for idx_q, q in enumerate(qs_finales, 1):
+        opts = q.get("options", [])
+        ans = q.get("answer", -1)
+        exp = (q.get("explanation") or "").strip()
+        q_txt = (q.get("question_text") or "").strip()
+
+        # 1. Comprobar número de opciones y si alguna opción está vacía
+        opts_sin_prefijo = [re.sub(r'^[a-d]\)\s*', '', o).strip() for o in opts]
+        if len(opts) < max_options or any(len(o) < 2 for o in opts_sin_prefijo):
+            opciones_incompletas.append(f"P{idx_q} ({len(opts)} opc)")
+
+        # 2. Comprobar si tiene respuesta correcta válida
+        if ans == -1 or ans >= len(opts):
+            sin_correcta.append(f"P{idx_q}")
+
+        # 3. Comprobar si se ha tragado otra pregunta dentro de la explicación o de una opción
+        texto_inspeccion = exp + "\n" + "\n".join(opts)
+        tiene_otra_preg = bool(
+            re.search(r'(?:^|\n)\s*(?:Pregunta\s+)?\d{1,3}[\.\-\)]\s+[¿¡A-ZÁÉÍÓÚÑ].{15,}\?', texto_inspeccion) or
+            re.search(r'\ba\)\s+.{5,}\bb\)\s+.{5,}\bc\)\s+', exp, flags=re.DOTALL) or
+            len(re.findall(r'\bEXPLICACI[ÓO]N(?:\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL)?\s*:', exp, flags=re.IGNORECASE)) >= 1
+        )
+        if tiene_otra_preg or len(exp) > 1600:
+            preguntas_fusionadas.append(f"P{idx_q}")
+
+        # 4. Comprobar si la explicación o el enunciado están vacíos o cortados a mitad de frase
+        if not exp or len(exp) < 25:
+            explicaciones_cortadas.append(f"P{idx_q} (sin exp)")
+        elif exp.endswith((',', 'artículo', 'artículos', 'Art.', 'Ley', 'Real Decreto', 'de', 'del', 'en', 'con', 'por', 'para', '(')):
+            explicaciones_cortadas.append(f"P{idx_q} (cortada: «...{exp[-22:]}»)")
+        elif len(q_txt) < 12:
+            explicaciones_cortadas.append(f"P{idx_q} (enunciado corto)")
+
+    if preguntas_fusionadas:
+        incidencias.append(f"🚨 Pregunta fusionada en exp: {', '.join(preguntas_fusionadas)}")
+    if explicaciones_cortadas:
+        incidencias.append(f"✂️ Exp/Texto cortado: {', '.join(explicaciones_cortadas[:5])}" + ("..." if len(explicaciones_cortadas) > 5 else ""))
+    if opciones_incompletas:
+        incidencias.append(f"⚠️ Opciones (<{max_options}): {', '.join(opciones_incompletas[:5])}" + ("..." if len(opciones_incompletas) > 5 else ""))
+    if sin_correcta:
+        incidencias.append(f"❓ Sin resp. correcta: {', '.join(sin_correcta[:6])}" + (f" (+{len(sin_correcta)-6} más)" if len(sin_correcta) > 6 else ""))
+
+    if not incidencias:
+        estado_resumen = f"✅ OK ({nq}/{nq} íntegras)"
+    else:
+        estado_resumen = " / ".join(incidencias)
+
+    return {
+        "nq": nq,
+        "media_op": media_op,
+        "estado_resumen": estado_resumen,
+        "incidencias": incidencias
+    }
+
+def procesar_preguntas(raw_qs, barajar=True):
+    limpiar_estados_reportes_error()
+    qs_listas = preparar_preguntas_como_en_test(raw_qs, barajar=barajar)
     st.session_state.update(
-        questions=raw_qs,
+        questions=qs_listas,
         current_index=0,
         finished=False,
         checked=False,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'last_evaluated_text': None} for i in range(len(raw_qs))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'last_evaluated_text': None} for i in range(len(qs_listas))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
         do_scroll=True
@@ -3548,7 +3649,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
@@ -3615,17 +3715,15 @@ if not st.session_state.questions:
         titulo_paso_4 = "4. Selección de Test"
 
     st.markdown(f"<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
-    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
-        st.info(f"📝 **{ej_txt}:** Corrección asistida con IA aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
+        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Corrección asistida con IA aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
     if rol == "INVITADO":
         if not tests_reales:
             st.warning("⚠️ CATEGORÍA NO DISPONIBLE PARA USUARIOS INVITADOS")
-        elif categoria == "DESARROLLO":
-            st.info("ℹ️ TEMA DE DEMOSTRACIÓN DE DESARROLLO (TEMA 53) DISPONIBLE PARA USUARIO INVITADO")
         else:
             st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
 
@@ -3701,6 +3799,7 @@ if not st.session_state.questions:
             cs1, cs2, cs3 = st.columns(3)
             for col_b, lbl, amb, t_lbl in [(cs1, "🌐 TODO", "TODO", "SIMULACRO GLOBAL"), (cs2, "📘 GENERAL", "GENERAL", "SIMULACRO"), (cs3, "🎯 ESPECÍFICO", "ESPECIFICO", "SIMULACRO")]:
                 if col_b.button(lbl, use_container_width=True, type="primary"):
+                    limpiar_estados_reportes_error()
                     st.session_state.test_name = f"{t_lbl} ({especialidad} - {amb})"
                     st.session_state.test_esp = especialidad
                     st.session_state.test_cat = f"SIMULACRO ({amb})"
@@ -3713,6 +3812,7 @@ if not st.session_state.questions:
         with st.expander("Opcional: Subir un PDF manualmente desde tu dispositivo"):
             uf = st.file_uploader("", type="pdf")
             if uf is not None:
+                limpiar_estados_reportes_error()
                 cat_local = "DESARROLLO" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else (categoria if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else "ARCHIVO LOCAL")
                 st.session_state.update(modo_avance=modo_avance, test_name=uf.name, test_esp=especialidad, test_cat=cat_local)
                 max_op_local = 3 if "GESTI" in especialidad.upper() else 4
@@ -3732,74 +3832,82 @@ if not st.session_state.questions:
                         else: procesar_preguntas(rqs, barajar=True)
 
     if es_admin:
-        with st.expander("📊 Herramienta Admin: Generar tablas con Nº exacto de preguntas, Supuestos y Epígrafes de Desarrollo"):
-            st.info("Esta herramienta es visible únicamente para el administrador. Incluye apartados específicos para SUPUESTOS y para DESARROLLO (indicando el Nº de epígrafes por PDF).")
+        with st.expander("📊 Herramienta Admin: Auditoría de Extracción Real y Recuento de Preguntas, Supuestos y Epígrafes"):
+            st.info(
+                "Esta herramienta ejecuta exactamente el mismo motor de extracción y procesado de opciones que cuando un alumno abre cada test, "
+                "auditando pregunta por pregunta si hay cortes en explicaciones, preguntas fusionadas, opciones faltantes o respuestas sin marcar."
+            )
             st.checkbox(
                 "🧪 Probar desenfoque antirrecortes en mi sesión de Administrador (desmárcalo para trabajar sin desenfoque)",
                 key="admin_test_blur"
             )
-            if st.button("Contar preguntas, supuestos y epígrafes de todos los PDFs", use_container_width=True, type="primary"):
+            if st.button("🔍 Auditar extracción real y contar todos los PDFs", use_container_width=True, type="primary"):
                 nuevos_hoy = globals().get("NUEVOS_HOY", [])
                 tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
-                bp, proc, txt_copiar = st.progress(0, text="Analizando PDFs..."), 0, ""
+                bp, proc, txt_copiar = st.progress(0, text="Extrayendo y auditando PDFs con el motor real..."), 0, ""
+                alertas_globales = []
 
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
                     max_op_adm = 3 if "GESTI" in esp.upper() else 4
 
-                    st.markdown(f"### 📋 Catálogo de Tests Tipo Test: {esp}")
-                    t_md = "| Categoría | Nombre del Test | Nº de Preguntas | Media Opciones |\n| :--- | :--- | :---: | :---: |\n"
+                    st.markdown(f"### 📋 Catálogo y Auditoría Real de Tests: {esp}")
+                    t_md = "| Categoría | Nombre del Test | Nº Extraídas | Media Opc. | Auditoría Real de Extracción |\n| :--- | :--- | :---: | :---: | :--- |\n"
                     for cat in ["ESPECIFICO", "EXAMENES", "GENERAL"]:
                         tests = cats.get(cat, {})
                         for nom, url in tests.items():
                             if url is None:
                                 continue
                             proc += 1
-                            bp.progress(proc / max(1, tot_pdfs), text=f"Analizando Test ({proc}/{tot_pdfs}): {nom}...")
+                            bp.progress(proc / max(1, tot_pdfs), text=f"Extrayendo y auditando ({proc}/{tot_pdfs}): {nom}...")
                             try:
                                 r = descargar_pdf_fresco(url)
                                 if r.status_code == 200:
-                                    qs_parsed = PDFQuizParser.parse(r.content, max_options=max_op_adm)
-                                    nq = len(qs_parsed)
-                                    if nq > 0:
-                                        avg_val = sum(len(q.get("options", [])) for q in qs_parsed) / nq
-                                        media_op = str(int(avg_val)) if avg_val.is_integer() else f"{avg_val:.2f}".replace(".", ",")
-                                    else:
-                                        media_op = "0"
+                                    res_aud = auditar_extraccion_test_real(r.content, max_options=max_op_adm)
+                                    nq = res_aud["nq"]
+                                    media_op = res_aud["media_op"]
+                                    est_aud = res_aud["estado_resumen"]
+                                    if res_aud["incidencias"]:
+                                        alertas_globales.append(f"**[{esp} - {cat}] {nom} ({nq} preg.):** {est_aud}")
                                 else:
-                                    nq, media_op = "Error", "-"
-                            except Exception:
-                                nq, media_op = "-", "-"
+                                    nq, media_op, est_aud = "Error", "-", "❌ Error de descarga en Drive"
+                                    alertas_globales.append(f"**[{esp} - {cat}] {nom}:** Error HTTP {r.status_code}")
+                            except Exception as e_aud:
+                                nq, media_op, est_aud = "-", "-", f"❌ Excepción: {e_aud}"
+                                alertas_globales.append(f"**[{esp} - {cat}] {nom}:** {e_aud}")
+
                             if nom in nuevos_hoy:
-                                t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** | **{media_op}** |\n"
+                                t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** | **{media_op}** | {est_aud} |\n"
                             else:
-                                t_md += f"| {cat} | {nom} | {nq} preguntas | {media_op} |\n"
+                                t_md += f"| {cat} | {nom} | {nq} preguntas | {media_op} | {est_aud} |\n"
                     st.markdown(t_md)
-                    txt_copiar += f"### 📋 Catálogo de Tests Tipo Test: {esp}\n\n" + t_md + "\n"
+                    txt_copiar += f"### 📋 Catálogo y Auditoría Real de Tests: {esp}\n\n" + t_md + "\n"
 
                     supuestos_dict = {k: v for k, v in cats.get("SUPUESTOS", {}).items() if v is not None}
                     st.markdown(f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} {'tema incluido' if len(supuestos_dict)==1 else 'temas incluidos'})")
                     if supuestos_dict:
-                        s_md = "| Categoría | Tema / Supuesto Incluido | Nº de Cuestiones en el PDF |\n| :--- | :--- | :---: |\n"
+                        s_md = "| Categoría | Tema / Supuesto Incluido | Nº de Cuestiones Extraídas | Estado Extracción |\n| :--- | :--- | :---: | :--- |\n"
                         tot_cuestiones_sup = 0
                         for nom_s, url_s in supuestos_dict.items():
                             proc += 1
-                            bp.progress(proc / max(1, tot_pdfs), text=f"Analizando Supuesto ({proc}/{tot_pdfs}): {nom_s}...")
+                            bp.progress(proc / max(1, tot_pdfs), text=f"Auditando Supuesto ({proc}/{tot_pdfs}): {nom_s}...")
                             try:
                                 r = descargar_pdf_fresco(url_s)
                                 if r.status_code == 200:
                                     qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
+                                    qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
                                     if not qs_sup:
-                                        qs_sup = PDFQuizParser.parse(r.content, max_options=max_op_adm)
+                                        qs_sup = preparar_preguntas_como_en_test(PDFQuizParser.parse(r.content, max_options=max_op_adm), barajar=False)
                                     n_sup = len(qs_sup)
                                     tot_cuestiones_sup += n_sup
                                     n_sup_str = f"{n_sup} cuestiones"
+                                    est_s = "✅ OK" if n_sup > 0 else "⚠️ 0 cuestiones detectadas"
                                 else:
-                                    n_sup_str = "Error de descarga"
-                            except Exception:
-                                n_sup_str = "-"
+                                    n_sup_str, est_s = "Error", "❌ Error de descarga"
+                            except Exception as e_s:
+                                n_sup_str, est_s = "-", f"❌ {e_s}"
                             et_tema_s = obtener_etiqueta_tema_visible(nom_s)
-                            s_md += f"| **SUPUESTOS** | **{nom_s}** — *{et_tema_s}* | **{n_sup_str}** |\n"
-                        s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} PDFs incluidos** | **{tot_cuestiones_sup} cuestiones** |\n"
+                            s_md += f"| **SUPUESTOS** | **{nom_s}** — *{et_tema_s}* | **{n_sup_str}** | {est_s} |\n"
+                        s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} PDFs incluidos** | **{tot_cuestiones_sup} cuestiones** | — |\n"
                     else:
                         s_md = "*Actualmente no hay ningún PDF cargado en la categoría SUPUESTOS de esta especialidad.*\n"
                     st.markdown(s_md)
@@ -3809,27 +3917,35 @@ if not st.session_state.questions:
                         desarrollo_dict = {k: v for k, v in cats.get("DESARROLLO", {}).items() if v is not None}
                         st.markdown(f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} {'tema incluido' if len(desarrollo_dict)==1 else 'temas incluidos'})")
                         if desarrollo_dict:
-                            d_md = "| Categoría | PDF Incluido | Tema Correspondiente | Nº de Epígrafes en el PDF |\n| :--- | :--- | :--- | :---: |\n"
+                            d_md = "| Categoría | PDF Incluido | Tema Correspondiente | Nº de Epígrafes Extraídos | Auditoría Epígrafes |\n| :--- | :--- | :--- | :---: | :--- |\n"
                             tot_epigrafes_des = 0
                             for nom_d, url_d in desarrollo_dict.items():
                                 proc += 1
-                                bp.progress(proc / max(1, tot_pdfs), text=f"Contando epígrafes de Desarrollo ({proc}/{tot_pdfs}): {nom_d}...")
+                                bp.progress(proc / max(1, tot_pdfs), text=f"Auditando Epígrafes de Desarrollo ({proc}/{tot_pdfs}): {nom_d}...")
                                 et_tema_d = obtener_etiqueta_tema_visible(nom_d)
                                 try:
                                     r = descargar_pdf_fresco(url_d)
                                     if r.status_code == 200:
                                         qs_des = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
+                                        qs_des = preparar_preguntas_como_en_test(qs_des, barajar=False)
                                         n_ep = len(qs_des)
                                         tot_epigrafes_des += n_ep
                                         if qs_des and qs_des[0].get("tema_titulo"):
                                             et_tema_d = qs_des[0]["tema_titulo"]
                                         n_ep_str = f"{n_ep} {'epígrafe' if n_ep == 1 else 'epígrafes'}"
+                                        ep_cortos = [f"Ep.{idx_e}" for idx_e, qe in enumerate(qs_des, 1) if len((qe.get("explanation") or "").strip()) < 120]
+                                        if n_ep == 0:
+                                            est_d = "❌ 0 epígrafes extraídos"
+                                        elif ep_cortos:
+                                            est_d = f"⚠️ Texto corto en {', '.join(ep_cortos)}"
+                                        else:
+                                            est_d = f"✅ OK ({n_ep} epígrafes completos)"
                                     else:
-                                        n_ep_str = "Error"
-                                except Exception:
-                                    n_ep_str = "-"
-                                d_md += f"| **DESARROLLO** | **{nom_d}** | {et_tema_d} | **{n_ep_str}** |\n"
-                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} PDFs incluidos** | **Relación completa de temas de desarrollo** | **{tot_epigrafes_des} epígrafes en total** |\n"
+                                        n_ep_str, est_d = "Error", "❌ Error de descarga"
+                                except Exception as e_d:
+                                    n_ep_str, est_d = "-", f"❌ {e_d}"
+                                d_md += f"| **DESARROLLO** | **{nom_d}** | {et_tema_d} | **{n_ep_str}** | {est_d} |\n"
+                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} PDFs incluidos** | **Relación completa de temas de desarrollo** | **{tot_epigrafes_des} epígrafes en total** | — |\n"
                         else:
                             d_md = "*Actualmente no hay ningún PDF cargado en la categoría DESARROLLO de esta especialidad.*\n"
                         st.markdown(d_md)
@@ -3838,7 +3954,12 @@ if not st.session_state.questions:
                     txt_copiar += "---\n\n"
 
                 bp.empty()
-                st.success("✅ ¡Recuento de Tests, Supuestos y Epígrafes de Desarrollo completado con éxito!")
+                st.success("✅ ¡Auditoría real de extracción y recuento completados con éxito!")
+                if alertas_globales:
+                    st.warning(f"⚠️ **Se han detectado incidencias de extracción en {len(alertas_globales)} PDF(s) que conviene revisar:**\n\n" + "\n".join([f"- {a}" for a in alertas_globales]))
+                else:
+                    st.balloons()
+                    st.success("🎉 ¡Todos los PDFs han superado la auditoría de extracción sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
 
 elif not st.session_state.finished:
@@ -3847,8 +3968,10 @@ elif not st.session_state.finished:
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
     puede_rep = usuario_puede_reportar()
     es_abierta = bool(q.get("is_open", False))
+    nombre_test_act = st.session_state.get("test_name") or "Test"
+    id_test_act = re.sub(r'\W+', '_', nombre_test_act)
 
-    etiqueta_tema = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), q)
+    etiqueta_tema = obtener_etiqueta_tema_visible(nombre_test_act, q)
     tipo_item_lbl = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if es_abierta else "Pregunta")
     st.markdown(
         f"<div style='background-color:#EFF6FF; border:1px solid #93C5FD; border-left:5px solid #1D4ED8; border-radius:6px; padding:8px 12px; margin-top:-8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;'>"
@@ -3888,6 +4011,7 @@ elif not st.session_state.finished:
 
     if c1.button("🡄 Anterior", use_container_width=True) and idx > 0:
         save_answer(sel_opt)
+        limpiar_estados_reportes_error()
         st.session_state.update(checked=False, current_index=idx - 1, do_scroll=True); st.rerun()
     if c2.button("Comprobar", use_container_width=True):
         save_answer(sel_opt)
@@ -3903,24 +4027,29 @@ elif not st.session_state.finished:
     if idx < len(st.session_state.questions) - 1:
         if c3.button("Siguiente ➔", use_container_width=True):
             save_answer(sel_opt)
+            limpiar_estados_reportes_error()
             st.session_state.update(checked=False, current_index=idx + 1, do_scroll=True); st.rerun()
     else:
         if c3.button("Terminar ➔", use_container_width=True):
             save_answer(sel_opt)
+            limpiar_estados_reportes_error()
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
     if c4.button("⏹ Finalizar Test", use_container_width=True):
         save_answer(sel_opt)
+        limpiar_estados_reportes_error()
         st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
 
-    key_rep_test = f"rep_open_test_{idx + 1}"
+    key_rep_test = f"rep_open_test_{id_test_act}_{idx + 1}"
     if key_rep_test not in st.session_state:
         st.session_state[key_rep_test] = False
     lbl_btn_reporte_top = "⚠️ Reportar Error en Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else "⚠️ Reportar Error"
     if puede_rep and c5 is not None:
-        if c5.button(lbl_btn_reporte_top, key=f"btn_err_top_{idx + 1}", use_container_width=True, type="primary"):
+        if c5.button(lbl_btn_reporte_top, key=f"btn_err_top_{id_test_act}_{idx + 1}", use_container_width=True, type="primary"):
             st.session_state[key_rep_test] = not st.session_state[key_rep_test]
 
-    # Mostrar el cuadro de reporte INMEDIATAMENTE debajo de los botones superiores cuando se pulsa
+    if st.session_state.pop(f"rep_ok_msg_{id_test_act}_{idx + 1}", False):
+        st.success("✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.")
+
     if puede_rep and st.session_state.get(key_rep_test, False):
         render_cuadro_reporte_error(q, idx + 1, "test_activo_top")
 
@@ -4019,7 +4148,6 @@ elif not st.session_state.finished:
                             unsafe_allow_html=True
                         )
 
-                    # Expander directo al pie de la corrección de Desarrollo / Supuestos para reportar sin subir arriba
                     if puede_rep:
                         with st.expander(f"⚠️ Reportar Error en {tipo_item_lbl} {idx + 1} a info@oposiciona.es"):
                             render_cuadro_reporte_error(q, idx + 1, "test_activo_bottom")
@@ -4194,7 +4322,9 @@ else:
             try: st.image("llorona.jpeg", use_container_width=True)
             except: pass
 
-    etiqueta_tema_fin = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), st.session_state.questions[0] if st.session_state.questions else None)
+    nombre_test_fin = st.session_state.get("test_name") or "Test"
+    id_test_fin = re.sub(r'\W+', '_', nombre_test_fin)
+    etiqueta_tema_fin = obtener_etiqueta_tema_visible(nombre_test_fin, st.session_state.questions[0] if st.session_state.questions else None)
     st.markdown("<div style='text-align: center; font-size: 22px; font-weight: 700; color: #2C3E50 !important; margin-top: -10px; margin-bottom: 6px;'>📊 RESULTADOS FINALES</div>", unsafe_allow_html=True)
     st.markdown(f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1f77b4 !important; margin-bottom: 15px;'>📘 {etiqueta_tema_fin}</div>", unsafe_allow_html=True)
 
@@ -4295,11 +4425,13 @@ else:
             unsafe_allow_html=True
         )
         if puede_rep:
-            key_rep_res = f"rep_open_res_{i + 1}"
+            key_rep_res = f"rep_open_res_{id_test_fin}_{i + 1}"
             if key_rep_res not in st.session_state:
                 st.session_state[key_rep_res] = False
+            if st.session_state.pop(f"rep_ok_msg_{id_test_fin}_{i + 1}", False):
+                st.success("✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.")
             lbl_btn_res = f"⚠️ Reportar Error en {tipo_lbl_res} {i + 1}"
-            if st.button(lbl_btn_res, key=f"btn_err_res_{i + 1}"):
+            if st.button(lbl_btn_res, key=f"btn_err_res_{id_test_fin}_{i + 1}"):
                 st.session_state[key_rep_res] = not st.session_state[key_rep_res]
             if st.session_state[key_rep_res]:
                 render_cuadro_reporte_error(q, i + 1, "resumen_final")
