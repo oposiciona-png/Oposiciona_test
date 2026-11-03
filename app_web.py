@@ -2271,7 +2271,7 @@ def _extraer_etiqueta_breve_apartado(oracion):
         pref = (m_tit.group(1) + " ") if m_tit.group(1) else ""
         return f"{pref}{m_tit.group(2).strip()}"
     palabras = s.split()
-     fragmento = " ".join(palabras[:11])
+    fragmento = " ".join(palabras[:11])
     return fragmento + ("..." if len(palabras) > 11 else "")
 
 NOTA_METODOLOGICA_PREPARADORES = (
@@ -2937,10 +2937,6 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     bonificacion_complementarias = round(min(3.0, 0.75 * len(citas_complementarias)), 2)
     pts_brutos_criterio_1 = round(min(45.0, pts_brutos_ideas + pts_brutos_legales + bonificacion_complementarias), 2)
 
-    # Clasificación en 3 niveles de las referencias normativas omitidas:
-    # 1) Leyes o Reales Decretos omitidos (-0,15 ptos c/u)
-    # 2) Artículos esenciales del RDL 8/2015 - TRLGSS omitidos (-0,15 ptos c/u: -0,10 base + -0,05 suplemento TRLGSS)
-    # 3) Otros artículos omitidos (-0,10 ptos c/u)
     leyes_rd_omitidos_lista = [c for c in citas_faltan if not es_cita_articulo_individual(c)]
     articulos_trlgss_omitidos_lista = [
         c if "TRLGSS" in c.upper() else f"{c} del TRLGSS (RDL 8/2015)"
