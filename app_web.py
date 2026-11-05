@@ -2424,36 +2424,219 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
 NOTA_METODOLOGICA_PREPARADORES = (
     "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación se realiza aplicando los criterios oficiales del Segundo Ejercicio "
     "del Cuerpo de Gestión de la Administración de la Seguridad Social: <b>Criterio 1 (0 a 45 puntos)</b> por conocimiento, precisión jurídica "
-    "y fundamentación normativa; <b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura sistemática; y <b>Criterio 3 (0 a 2 puntos)</b> "
-    "por calidad de la expresión escrita (los Criterios 2 y 3 solo puntúan cuando se alcanzan al menos 20,00 puntos en el Criterio 1). "
+    "y fundamentación normativa (sumando puntos adicionales si aportas conceptos o artículos conexos correctos que enriquezcan el epígrafe, y restando de forma leve por los artículos omitidos de la explicación); "
+    "<b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura; y <b>Criterio 3 (0 a 2 puntos)</b> por calidad de la expresión escrita y presentación formal de siglas (ej. «...en adelante, TRLGSS»). "
     "Para superar el ejercicio se requiere alcanzar un mínimo de <b>25,00 sobre 50 puntos</b>."
 )
 
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 - Cada parte del ejercicio se califica de 0 a 50 puntos, siendo necesario obtener un mínimo de 25,00 puntos directos para superarla.
-- Criterio 1 (de 0 a 45 puntos): Conocimiento, grado de comprensión y desarrollo de los contenidos del epígrafe o supuesto, rigor técnico-jurídico y fundamentación normativa.
+- Criterio 1 (de 0 a 45 puntos): Conocimiento, grado de comprensión y desarrollo de los contenidos del epígrafe o supuesto, rigor técnico-jurídico y fundamentación normativa. Suma puntos si el alumno aporta conceptos o artículos verificados conexos que mejoren el epígrafe; resta de forma leve por los artículos incluidos en la explicación oficial que hayan sido omitidos.
 - Criterio 2 (de 0 a 3 puntos): Orden de las ideas, claridad expositiva y estructura sistemática (solo se valora si se obtienen al menos 20,00 puntos en el Criterio 1; en caso contrario es 0,00).
-- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita, corrección gramatical y propiedad en el uso de la terminología jurídica y siglas (solo se valora si se obtienen al menos 20,00 puntos en el Criterio 1; en caso contrario es 0,00).
+- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la presentación de siglas ("Texto Refundido..., en adelante, TRLGSS"; el uso de siglas sin presentación previa penaliza en este criterio).
 """
 
-def _dividir_en_oraciones_juridicas(texto):
-    if not texto:
+def auditar_siglas_sin_definir_previa(texto_alumno):
+    """
+    Detecta si el alumno utiliza siglas sin haber escrito previamente su denominación completa
+    (ej. usar directamente «TRLGSS» en lugar de «Texto Refundido de la Ley General de la Seguridad Social, en adelante, TRLGSS»).
+    """
+    if not texto_alumno:
         return []
-    bloques_brutos = [b.strip() for b in texto.split('\n') if b.strip()]
-    unidades = []
-    for blq in bloques_brutos:
-        blq_limpio = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', blq.replace("[[H]]", "")).strip()
-        if PDFQuizParser._es_basura_cabecera_o_pie(blq_limpio):
-            continue
-        if len(blq_limpio) >= 30:
-            unidades.append(blq_limpio)
-    return unidades
+    t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
+    t_low = t_norm.lower()
+
+    catalogo_siglas = [
+        ("TRLGSS", r'\bTRLGSS\b', ["texto refundido de la ley general de la seguridad social"], "Texto Refundido de la Ley General de la Seguridad Social, en adelante, TRLGSS"),
+        ("LGSS", r'\bLGSS\b', ["ley general de la seguridad social"], "Ley General de la Seguridad Social, en adelante, LGSS"),
+        ("RIA", r'\bRIA\b', ["reglamento general sobre inscripcion de empresas"], "Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos, en adelante, RIA"),
+        ("RGCL", r'\bRGCL\b', ["reglamento general sobre cotizacion y liquidacion", "reglamento general de cotizacion y liquidacion"], "Reglamento General sobre Cotización y Liquidación, en adelante, RGCL"),
+        ("RGR", r'\bRGR\b', ["reglamento general de recaudacion"], "Reglamento General de Recaudación de la Seguridad Social, en adelante, RGR"),
+        ("RDL", r'\b(?:RDL|R\.D\.L\.)\b', ["real decreto-ley", "real decreto ley"], "Real Decreto-ley, en adelante, RDL"),
+        ("RD Legislativo", r'\b(?:RD\s*Legislativo|RD\s*Leg\.?|Real\s+Decreto\s+L\.?)\b', ["real decreto legislativo"], "Real Decreto Legislativo, en adelante, RD Legislativo"),
+        ("RD", r'\b(?:RD|R\.D\.)\b(?!\s*Leg|\s*\-?\s*ley)', ["real decreto"], "Real Decreto, en adelante, RD"),
+        ("CE", r'\bCE\b', ["constitucion espanola", "constitucion de 1978"], "Constitución Española, en adelante, CE"),
+        ("ET", r'\bET\b', ["estatuto de los trabajadores"], "Estatuto de los Trabajadores, en adelante, ET"),
+        ("TRET", r'\bTRET\b', ["texto refundido de la ley del estatuto de los trabajadores"], "Texto Refundido de la Ley del Estatuto de los Trabajadores, en adelante, TRET"),
+        ("LETA", r'\bLETA\b', ["estatuto del trabajo autonomo"], "Estatuto del Trabajo Autónomo, en adelante, LETA"),
+        ("LISOS", r'\bLISOS\b', ["infracciones y sanciones en el orden social"], "Ley sobre Infracciones y Sanciones en el Orden Social, en adelante, LISOS"),
+        ("TGSS", r'\bTGSS\b', ["tesoreria general de la seguridad social"], "Tesorería General de la Seguridad Social, en adelante, TGSS"),
+        ("INSS", r'\bINSS\b', ["instituto nacional de la seguridad social"], "Instituto Nacional de la Seguridad Social, en adelante, INSS"),
+        ("ISM", r'\bISM\b', ["instituto social de la marina"], "Instituto Social de la Marina, en adelante, ISM"),
+        ("SEPE", r'\bSEPE\b', ["servicio publico de empleo estatal"], "Servicio Público de Empleo Estatal, en adelante, SEPE"),
+        ("IMSERSO", r'\bIMSERSO\b', ["instituto de mayores y servicios sociales"], "Instituto de Mayores y Servicios Sociales, en adelante, IMSERSO"),
+        ("ITSS", r'\bITSS\b', ["inspeccion de trabajo y seguridad social"], "Inspección de Trabajo y Seguridad Social, en adelante, ITSS"),
+        ("RETA", r'\bRETA\b', ["regimen especial de trabajadores por cuenta propia", "regimen especial de los trabajadores por cuenta propia", "regimen especial de trabajadores autonomos"], "Régimen Especial de Trabajadores por Cuenta Propia o Autónomos, en adelante, RETA"),
+        ("RGSS", r'\bRGSS\b', ["regimen general de la seguridad social"], "Régimen General de la Seguridad Social, en adelante, RGSS"),
+        ("SEA", r'\bSEA\b', ["sistema especial para trabajadores por cuenta ajena agrarios", "sistema especial agrario"], "Sistema Especial para Trabajadores por Cuenta Ajena Agrarios, en adelante, SEA"),
+        ("SEEH", r'\bSEEH\b', ["sistema especial para empleados de hogar", "sistema especial de empleados de hogar"], "Sistema Especial para Empleados de Hogar, en adelante, SEEH"),
+        ("SETA", r'\bSETA\b', ["sistema especial para trabajadores por cuenta propia agrarios"], "Sistema Especial para Trabajadores por Cuenta Propia Agrarios, en adelante, SETA"),
+        ("CCC", r'\bCCC\b', ["codigo de cuenta de cotizacion", "codigos de cuenta de cotizacion"], "Código de Cuenta de Cotización, en adelante, CCC"),
+        ("NAF", r'\bNAF\b', ["numero de afiliacion"], "Número de Afiliación, en adelante, NAF"),
+        ("NSS", r'\bNSS\b', ["numero de la seguridad social"], "Número de la Seguridad Social, en adelante, NSS"),
+        ("SEDESS", r'\bSEDESS\b', ["sede electronica de la seguridad social", "sede electronica de la secretaria de estado"], "Sede Electrónica de la Seguridad Social, en adelante, SEDESS"),
+        ("CNAE", r'\bCNAE\b', ["clasificacion nacional de actividades economicas"], "Clasificación Nacional de Actividades Económicas, en adelante, CNAE"),
+        ("ERE", r'\bERE\b', ["expediente de regulacion de empleo", "expedientes de regulacion de empleo"], "Expediente de Regulación de Empleo, en adelante, ERE"),
+        ("SMI", r'\bSMI\b', ["salario minimo interprofesional"], "Salario Mínimo Interprofesional, en adelante, SMI"),
+        ("IMV", r'\bIMV\b', ["ingreso minimo vital"], "Ingreso Mínimo Vital, en adelante, IMV"),
+        ("FOGASA", r'\bFOGASA\b', ["fondo de garantia salarial"], "Fondo de Garantía Salarial, en adelante, FOGASA"),
+        ("MEI", r'\bMEI\b', ["mecanismo de equidad intergeneracional"], "Mecanismo de Equidad Intergeneracional, en adelante, MEI"),
+        ("IT", r'\bIT\b', ["incapacidad temporal"], "Incapacidad Temporal, en adelante, IT"),
+        ("IP", r'\bIP\b', ["incapacidad permanente"], "Incapacidad Permanente, en adelante, IP"),
+        ("AT", r'\bAT\b', ["accidente de trabajo", "accidentes de trabajo"], "Accidente de Trabajo, en adelante, AT"),
+        ("EP", r'\bEP\b', ["enfermedad profesional", "enfermedades profesionales"], "Enfermedad Profesional, en adelante, EP"),
+    ]
+
+    siglas_sin_definir = []
+    for sigla, pat_regex, frases_completas, ejemplo_formal in catalogo_siglas:
+        m_sigla = re.search(pat_regex, t_norm)
+        if m_sigla:
+            pos_sigla = m_sigla.start()
+            ventana_previa = t_low[:pos_sigla + 80]
+            definida_antes = any(frase in ventana_previa for frase in frases_completas)
+            if not definida_antes:
+                siglas_sin_definir.append((sigla, ejemplo_formal))
+
+    return siglas_sin_definir
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def consultar_literal_boe_o_fuentes(num_art_str, id_boe="BOE-A-2015-11724"):
+    num_limpio = str(num_art_str).strip()
+    try:
+        url_boe = f"https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/{id_boe}/texto/bloque/a{num_limpio}"
+        headers_boe = {"Accept": "application/xml"}
+        r_boe = requests.get(url_boe, headers=headers_boe, timeout=4)
+        if r_boe.status_code == 200 and "<p" in r_boe.text:
+            parrafos_xml = re.findall(r'<p[^>]*>(.*?)</p>', r_boe.text, flags=re.DOTALL)
+            texto_limpio = " ".join(re.sub(r'<[^>]+>', '', p).strip() for p in parrafos_xml if p.strip())
+            if len(texto_limpio) > 25:
+                if len(texto_limpio) > 360:
+                    texto_limpio = texto_limpio[:360].rsplit(" ", 1)[0] + "...»"
+                else:
+                    texto_limpio = texto_limpio + "»"
+                return f"«{texto_limpio}"
+    except Exception:
+        pass
+    return ""
+
+def _extraer_articulos_detallados_de_texto(texto):
+    """
+    Extrae una lista ordenada y sin duplicados de los artículos citados en un texto,
+    conservando la norma asociada cuando aparece junto al artículo (ej. 'Art. 15 TRLGSS', 'Art. 32.3 RIA', 'Arts. 139 y 140 TRLGSS')
+    y el conjunto de números de artículo base para poder compararlos con exactitud.
+    Devuelve: (lista_etiquetas_legibles, set_numeros_base)
+    """
+    if not texto:
+        return [], set()
+
+    t_limpio = re.sub(r'\s+', ' ', texto)
+    etiquetas = []
+    numeros_base = set()
+    vistos_norm = set()
+
+    # 1. Rangos o parejas de artículos ("artículos 139 y 140 del TRLGSS", "arts. 23 a 26 del RIA", "artículos 35, 60 y 61 del RIA")
+    pat_multi = r'\b(?:art[íi]culos?|arts?\.)\s*(\d{1,3}(?:\.\d+)?(?:\s*(?:,\s*\d{1,3}(?:\.\d+)?)*\s*(?:y|a|al|\-|–)\s*\d{1,3}(?:\.\d+)?))(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
+    for m in re.finditer(pat_multi, t_limpio, flags=re.IGNORECASE):
+        rango_txt = re.sub(r'\s+', ' ', m.group(1).strip())
+        norma_txt = (m.group(2) or "").strip()
+        nums_hallados = re.findall(r'\b(\d{1,3})\b', rango_txt)
+        for nh in nums_hallados:
+            numeros_base.add(nh)
+        if re.search(r'\b(a|al|\-|–)\b', rango_txt) and len(nums_hallados) == 2:
+            ini, fin = int(nums_hallados[0]), int(nums_hallados[1])
+            if ini <= fin and (fin - ini) <= 60:
+                for k_n in range(ini, fin + 1):
+                    numeros_base.add(str(k_n))
+        lbl = f"Arts. {rango_txt}" + (f" {norma_txt}" if norma_txt else "")
+        clave_v = lbl.lower()
+        if clave_v not in vistos_norm:
+            vistos_norm.add(clave_v)
+            etiquetas.append((nums_hallados, lbl))
+
+    # 2. Artículos individuales ("artículo 15 del TRLGSS", "artículo 32.3.1.º RIA", "art. 166.4 TRLGSS")
+    pat_indiv = r'\b(?:art[íi]culo|art\.)\s*(\d{1,3}(?:\.\d+)*(?:\.[ºª°a-z])?)(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
+    for m in re.finditer(pat_indiv, t_limpio, flags=re.IGNORECASE):
+        num_completo = m.group(1).strip()
+        num_base = re.match(r'^(\d{1,3})', num_completo).group(1)
+        norma_txt = (m.group(2) or "").strip()
+        numeros_base.add(num_base)
+        lbl = f"Art. {num_completo}" + (f" {norma_txt}" if norma_txt else "")
+        # Evitar duplicar si ese número ya quedó representado con la misma norma
+        ya_incluido = any(num_base in nums_g and (not norma_txt or norma_txt.lower() in l_g.lower()) for nums_g, l_g in etiquetas)
+        if not ya_incluido:
+            etiquetas.append(([num_base], lbl))
+
+    # 3. Disposiciones adicionales / transitorias ("DA 14.ª TRLGSS", "DA 52.ª TRLGSS", "Disposición adicional 31.ª")
+    pat_disp = r'\b(DA\s+\d+[\.ºª°a-z]*|DT\s+\d+[\.ºª°a-z]*|Disposici[óo]n\s+(?:adicional|transitoria|final)\s+[0-9a-záéíóúñ\.ºª°]+)(?:\s+(?:del?\s+)?(TRLGSS|LGSS|RIA|ET))?'
+    for m in re.finditer(pat_disp, t_limpio, flags=re.IGNORECASE):
+        d_txt = re.sub(r'\s+', ' ', m.group(1).strip())
+        norma_txt = (m.group(2) or "").strip()
+        num_d = re.findall(r'\d+', d_txt)
+         token_d = f"DA_{num_d[0]}" if num_d else d_txt.lower()
+        numeros_base.add(token_d)
+        lbl = f"{d_txt}" + (f" {norma_txt}" if norma_txt else "")
+        if lbl.lower() not in vistos_norm:
+            vistos_norm.add(lbl.lower())
+            etiquetas.append(([token_d], lbl))
+
+    return etiquetas, numeros_base
+
+def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
+    """
+    Compara los artículos de la explicación oficial frente a los escritos por el alumno:
+    1. Obtiene la relación limpia de «Artículos omitidos» de la explicación.
+    2. Detecta si el alumno ha añadido artículos adicionales o conceptos del temario completo y verifica si son correctos para sumar puntos.
+    3. Detecta las siglas usadas sin presentación previa.
+    """
+    ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
+    etiquetas_ref, nums_ref = _extraer_articulos_detallados_de_texto(ref_completa)
+    etiquetas_al, nums_al = _extraer_articulos_detallados_de_texto(texto_alumno)
+
+    # 1. Relación exacta de artículos incluidos en la explicación que el alumno ha omitido
+    articulos_omitidos_limpios = []
+    articulos_acertados_limpios = []
+    for nums_grupo, lbl_art in etiquetas_ref:
+        # Si el alumno citó alguno de los números principales de ese precepto, se da por cubierto
+        if any(n in nums_al for n in nums_grupo):
+            articulos_acertados_limpios.append(lbl_art)
+        else:
+            articulos_omitidos_limpios.append(lbl_art)
+
+    # 2. Verificar artículos adicionales aportados por el alumno que NO estaban en la explicación corta
+    articulos_extra_validos = []
+    articulos_extra_erroneos = []
+    for nums_grupo, lbl_al in etiquetas_al:
+        if all(n not in nums_ref for n in nums_grupo):
+            num_p = nums_grupo[0]
+            if num_p.isdigit():
+                n_int = int(num_p)
+                if n_int > 373:
+                    articulos_extra_erroneos.append(f"{lbl_al} (inexistente: el TRLGSS tiene 373 artículos)")
+                else:
+                    lit_boe = consultar_literal_boe_o_fuentes(num_p)
+                    if lit_boe:
+                        articulos_extra_validos.append(f"{lbl_al} (verificado en BOE: {lit_boe[:140]}...)")
+                    else:
+                        articulos_extra_validos.append(f"{lbl_al} (precepto normativo complementario válido)")
+            else:
+                articulos_extra_validos.append(f"{lbl_al} (disposición complementaria válida)")
+
+    # 3. Siglas sin presentación previa ("...en adelante, XXXX")
+    siglas_sin_presentar = auditar_siglas_sin_definir_previa(texto_alumno)
+
+    return {
+        "articulos_acertados": articulos_acertados_limpios,
+        "articulos_omitidos": articulos_omitidos_limpios,
+        "articulos_extra_validos": articulos_extra_validos,
+        "articulos_extra_erroneos": articulos_extra_erroneos,
+        "siglas_sin_presentar": siglas_sin_presentar
+    }
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     """
-    Cálculo base de respaldo (únicamente se usa si en algún momento no hubiera conexión con la API de Gemini).
-    Cuando Gemini responde, prevalecen siempre al 100% las notas y el análisis decididos por la IA.
+    Cálculo base de respaldo (solo se usa si no hubiera conexión con la API de Gemini).
+    Cuando Gemini responde, prevalecen siempre las notas decididas por la IA.
     """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -2462,6 +2645,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     alumno_norm = _norm(texto_alumno)
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
     ref_norm = _norm(ref_completa)
+
+    auditoria = auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta)
 
     stopwords = {
         "para", "como", "este", "esta", "estos", "estas", "pero", "sino", "porque", "cuando", "donde",
@@ -2482,18 +2667,23 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             "pts_criterio_1": 0.0,
             "pts_criterio_2": 0.0,
             "pts_criterio_3": 0.0,
-            "supera_umbral_20": False
+            "supera_umbral_20": False,
+            "auditoria": auditoria
         }
 
     coincidencias = sum(1 for w in palabras_ref if w[:5] in alumno_norm)
     ratio_conceptos = min(1.0, (coincidencias / max(1, len(palabras_ref))) * 1.45)
-    pts_criterio_1 = round(min(45.0, ratio_conceptos * 45.0), 2)
+    pts_base_c1 = ratio_conceptos * 44.0
+    bonus_extra = min(3.0, len(auditoria["articulos_extra_validos"]) * 0.60)
+    resta_arts_omitidos = min(1.50, len(auditoria["articulos_omitidos"]) * 0.08)
+    pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
         num_parrafos = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 25])
         pts_criterio_2 = round(min(3.0, 2.0 + (0.6 if num_parrafos >= 3 else 0.2)), 2)
-        pts_criterio_3 = round(min(2.0, 1.5 + (0.3 if len(texto_alumno.strip()) >= 250 else 0.1)), 2)
+        resta_siglas = min(0.75, len(auditoria["siglas_sin_presentar"]) * 0.15)
+        pts_criterio_3 = round(max(0.25, min(2.0, 1.8 - resta_siglas)), 2)
     else:
         pts_criterio_2 = 0.0
         pts_criterio_3 = 0.0
@@ -2507,7 +2697,8 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "pts_criterio_1": pts_criterio_1,
         "pts_criterio_2": pts_criterio_2,
         "pts_criterio_3": pts_criterio_3,
-        "supera_umbral_20": supera_umbral_20
+        "supera_umbral_20": supera_umbral_20,
+        "auditoria": auditoria
     }
 
 def obtener_gemini_api_key_activa():
@@ -2586,39 +2777,70 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if ev_fallback is None:
         ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
 
+    aud = ev_fallback.get("auditoria") or auditar_articulos_y_aportaciones_alumno(
+        respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}"
+    )
+
+    arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
+    arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
+    arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno adicional detectado"
+    arts_extra_mal_str = "; ".join(aud["articulos_extra_erroneos"]) if aud["articulos_extra_erroneos"] else "Ninguno"
+    siglas_mal_str = (
+        ", ".join([f"{s} (en lugar de poner «{ej}»)" for s, ej in aud["siglas_sin_presentar"]])
+        if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
+    )
+
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
 
     prompt = (
         "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Tu tarea es analizar en profundidad el texto escrito por el alumno, compararlo directamente con la respuesta/explicación oficial de referencia "
-        "y realizar tú mismo una valoración justa, rigurosa, constructiva y pedagógica aplicando EXCLUSIVAMENTE los Criterios Oficiales del Tribunal:\n\n"
+        "Analiza el texto escrito por el alumno, compáralo con la respuesta/explicación oficial y realiza una valoración justa, rigurosa y constructiva aplicando los Criterios Oficiales del Tribunal y estas 3 REGLAS OBLIGATORIAS:\n\n"
+        "1. **VALORACIÓN POSITIVA POR APORTACIONES ADICIONALES CORRECTAS (+ PUNTOS EN CRITERIO 1):**\n"
+        "   - Verifica si el alumno ha añadido conceptos jurídicos, supuestos legales (por ejemplo, altas indebidas del art. 60 RIA, bajas indebidas del art. 61 RIA, desarrollo de situaciones asimiladas al alta, efectos suspensivos de la huelga, etc.) o artículos/normas adicionales que NO estaban en la explicación resumida pero que son jurídicamente correctos y guardan relación con el epígrafe.\n"
+        "   - Cuando el alumno aporte estos conceptos o artículos adicionales correctos que mejoran y enriquecen el epígrafe, **súmale puntuación adicional** en el Criterio 1 y destácalo expresamente en el resumen de puntos sumados.\n"
+        "   - Si por el contrario citó algún artículo adicional erróneo o que no guarda relación con la materia, indícaselo y réstale moderadamente.\n\n"
+        "2. **PENALIZACIÓN POR USO DE SIGLAS SIN PRESENTACIÓN PREVIA (- PUNTOS EN CRITERIO 3):**\n"
+        "   - En un examen de desarrollo ante el Tribunal, la primera vez que se cita una norma o institución debe escribirse su nombre completo seguido de «, en adelante, SIGLA» (por ejemplo: «Texto Refundido de la Ley General de la Seguridad Social, en adelante, TRLGSS» o «Tesorería General de la Seguridad Social, en adelante, TGSS»).\n"
+        f"   - Siglas usadas directamente sin presentación previa detectadas en el texto del alumno: {siglas_mal_str}.\n"
+        "   - Si ha usado siglas sin presentarlas previamente, valóralo negativamente restando una pequeña puntuación en el Criterio 3 (Expresión escrita).\n\n"
+        "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
+        "   - No citar todos los artículos incluidos en la explicación oficial debe restar puntuación, pero **debe restar poco** (de forma muy moderada) si el alumno ha explicado bien el concepto jurídico.\n"
+        "   - REGLA DE FORMATO ESTRICTA: Cuando menciones en tu valoración los artículos que le han faltado respecto a la explicación, **NO hagas explicaciones largas por cada artículo omitido**; escribe únicamente la etiqueta **`Artículos omitidos:`** seguida directamente de la relación de artículos omitidos.\n"
+        f"   - Relación detectada para usar directamente: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
         "=== CRITERIOS OFICIALES DEL TRIBUNAL CALIFICADOR ===\n"
         "- Puntuación total del ejercicio: de 0 a 50 puntos (mínimo 25,00 puntos para superar el ejercicio).\n"
-        "- Criterio 1 (de 0 a 45 puntos): Conocimiento, grado de comprensión y cobertura de los contenidos del epígrafe o cuestión, precisión técnico-jurídica y fundamentación normativa. "
-        "Valora el conjunto de lo que el alumno ha desarrollado bien (incluso si lo expresa con sus propias palabras o incluye desarrollos doctrinales o legales válidos del temario como altas/bajas indebidas, ejemplos de situaciones asimiladas, etc.) "
-        "y pondera con criterio de Tribunal qué parte del contenido oficial ha quedado incompleta u omitida.\n"
-        "- Criterio 2 (de 0 a 3 puntos): Orden de las ideas, claridad expositiva y estructura sistemática. IMPORTANTE: Conforme a las bases del Tribunal, solo puntúa si el alumno alcanza al menos 20,00 puntos en el Criterio 1 (si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
-        "- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita, propiedad terminológica y rigor en el uso de siglas. IMPORTANTE: Solo puntúa si el alumno alcanza al menos 20,00 puntos en el Criterio 1 (si Criterio 1 < 20,00, Criterio 3 = 0,00).\n\n"
+        "- Criterio 1 (de 0 a 45 puntos): Conocimiento, comprensión y cobertura del epígrafe + puntos extra por conceptos/artículos adicionales correctos que mejoren el epígrafe - resta leve por los artículos omitidos de la explicación.\n"
+        "- Criterio 2 (de 0 a 3 puntos): Orden de las ideas y estructura sistemática (solo puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
+        "- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita y presentación formal de siglas (solo puntúa si Criterio 1 >= 20,00; penaliza el uso de siglas sin presentación previa).\n\n"
         f"=== EPÍGRAFE / CUESTIÓN PLANTEADA ===\n{enunciado_supuesto}\n{pregunta}\n\n"
         f"=== RESPUESTA / EXPLICACIÓN OFICIAL DE REFERENCIA ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
+        f"=== AUDITORÍA TÉCNICA DE APOYO ===\n"
+        f"- Artículos de la explicación citados por el alumno: {arts_acertados_str}\n"
+        f"- Artículos omitidos de la explicación: {arts_omitidos_str}\n"
+        f"- Artículos adicionales aportados por el alumno verificados: {arts_extra_ok_str}\n"
+        f"- Artículos adicionales erróneos: {arts_extra_mal_str}\n"
+        f"- Siglas sin presentación previa («...en adelante, XXXX»): {siglas_mal_str}\n\n"
         "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
-        "En la PRIMERA LÍNEA de tu respuesta escribe siempre esta etiqueta exacta con las puntuaciones numéricas (usando punto decimal) que tú hayas decidido otorgar tras tu análisis:\n"
+        "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con las puntuaciones numéricas (usando punto decimal) que hayas decidido otorgar:\n"
         "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
         "A continuación, redacta tu valoración estructurada en estos 4 apartados claros:\n"
-        "1. **✅ Valoración general y análisis de lo acertado:** Analiza qué partes, conceptos, instituciones jurídicas y normas ha desarrollado bien el alumno en comparación con la explicación oficial, reconociendo el mérito de lo aportado.\n"
-        "2. **⚠️ Comparativa con la explicación oficial (lo incompleto, impreciso u omitido):** Contrasta de forma razonada la respuesta del alumno con la explicación de referencia, explicándole qué bloques conceptuales, matices jurídicos, plazos o referencias normativas le han faltado o han quedado incompletos.\n"
-        "3. **⚖️ Análisis del rigor normativo, estructura y expresión escrita:** Valora cómo ha integrado las leyes, reglamentos y artículos en su exposición, así como el orden de sus ideas y la claridad de su redacción.\n"
-        "4. **🎓 Calificación razonada por Criterios del Tribunal y Resumen sencillo de puntos sumados y restados:**\n"
-        "   - Primero muestra las puntuaciones otorgadas en:\n"
-        "     • **Criterio 1 (Conocimiento y fundamentación normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
+        "1. **✅ Valoración general, aciertos y aportaciones que enriquecen el epígrafe:** Analiza qué partes de la explicación oficial ha desarrollado bien el alumno y destaca muy positivamente si ha añadido conceptos conexos o artículos correctos que mejoren y completen el epígrafe.\n"
+        "2. **⚠️ Comparativa con la explicación oficial (conceptos omitidos o incompletos):** Explica de forma clara qué apartados conceptuales o plazos de la explicación oficial le han faltado o han quedado incompletos.\n"
+        "3. **⚖️ Rigor normativo y uso de siglas:**\n"
+        "   - Valora los artículos bien citados (incluidos los adicionales verificados).\n"
+        f"   - Para los artículos de la explicación que no haya citado, pon únicamente en una línea: **Artículos omitidos:** {arts_omitidos_str}\n"
+        "   - Indica las siglas utilizadas sin presentación previa (recordando que debe ponerse «Texto completo, en adelante, SIGLA»).\n"
+        "4. **🎓 Calificación por Criterios del Tribunal y Resumen sencillo de puntos sumados y restados:**\n"
+        "   - Muestra las puntuaciones otorgadas en:\n"
+        "     • **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
         "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `X,XX / 3,00 puntos`\n"
-        "     • **Criterio 3 (Calidad de la expresión escrita: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
+        "     • **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
         "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
-        "   - Segundo, incluye un bloque muy claro, breve y sencillo titulado **📊 Resumen sencillo de tu nota (por qué has sumado y por qué te han restado o faltado puntos):** dividido en dos listas cortas con cifras aproximadas que cuadren con la nota final:\n"
-        "     • **➕ Qué te ha sumado puntos:** enumera en 3 o 4 viñetas sencillas los bloques del tema que sí has explicado bien, las normas/artículos acertados y tu estructura/redacción, indicando cuántos puntos aproximados te ha aportado cada acierto (ej.: *«+14,00 ptos por desarrollar correctamente la tipología de altas...»*).\n"
-        "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** enumera en 3 o 4 viñetas sencillas qué apartados no incluidos, qué artículos/normas o plazos omitidos, o qué detalles de estructura/expresión explican los puntos que te han faltado o restado (ej.: *«-8,00 ptos por no desarrollar el bloque de pluriempleo y pluriactividad...»*, *«-3,00 ptos por omitir el procedimiento en Sistema RED y el plazo de 6 días de las bajas...»*).\n"
-        "   - Cierra con **💡 Orientación de tus preparadores para mejorar este epígrafe:** dándole pautas concretas y motivadoras para perfeccionar su respuesta en el próximo intento."
+        "   - Añade el bloque **📊 Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
+        "     • **➕ Qué te ha sumado puntos:** viñetas sencillas con los puntos aportados por cada bloque bien desarrollado, por los conceptos/artículos adicionales que mejoraron el epígrafe y por la estructura/redacción.\n"
+        "     • **➖ Qué te ha restado o impedido sumar:** viñetas sencillas indicando los puntos que dejaron de sumarse por apartados omitidos, la resta leve por **Artículos omitidos** y la resta en el Criterio 3 por **uso de siglas sin presentación previa**.\n"
+        "   - Cierra con **💡 Orientación de tus preparadores para mejorar este epígrafe:** con un consejo breve y motivador."
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
@@ -2642,20 +2864,17 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     c3 = ev_fallback.get("pts_criterio_3", 0.0)
     n50 = ev_fallback.get("nota_50", 0.0)
     n10 = ev_fallback.get("nota", 0.0)
-    faltan_c1 = round(max(0.0, 45.0 - c1), 2)
-    faltan_c23 = round(max(0.0, 5.0 - (c2 + c3)), 2)
     return (
         "1. **✅ Valoración general:**\n"
         "Se ha analizado tu respuesta contrastándola con el contenido oficial del epígrafe.\n\n"
-        "2. **🎓 Calificación por Criterios Oficiales del Tribunal y Resumen sencillo de puntos:**\n"
+        "2. **⚖️ Rigor normativo y uso de siglas:**\n"
+        f"- **Artículos omitidos:** {arts_omitidos_str}\n"
+        f"- **Siglas sin presentación previa:** {siglas_mal_str}\n\n"
+        "3. **🎓 Calificación por Criterios Oficiales del Tribunal y Resumen sencillo de puntos:**\n"
         f"- **Criterio 1 (Conocimiento y normativa):** `{c1:.2f} / 45,00 puntos`\n"
         f"- **Criterio 2 (Orden de ideas):** `{c2:.2f} / 3,00 puntos`\n"
-        f"- **Criterio 3 (Expresión escrita):** `{c3:.2f} / 2,00 puntos`\n"
-        f"- 🏆 **CALIFICACIÓN TOTAL:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia: **`{n10:.2f} / 10`**)*\n\n"
-        "📊 **Resumen sencillo de tu nota (por qué has sumado y por qué te han faltado puntos):**\n"
-        f"- **➕ Qué te ha sumado puntos:** `+{c1:.2f} ptos` por los conceptos y referencias del epígrafe que has desarrollado correctamente y `+{c2 + c3:.2f} ptos` por el orden expositivo y la expresión escrita.\n"
-        f"- **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** `-{faltan_c1:.2f} ptos` por los apartados, plazos o preceptos de la explicación oficial que han quedado sin desarrollar, y `-{faltan_c23:.2f} ptos` de margen de mejora en estructura y expresión formal.\n\n"
-        "💡 **Orientación de tus preparadores:** Revisa el texto oficial inferior para contrastar los apartados y referencias normativas que puedes incorporar en tu próxima vuelta."
+        f"- **Criterio 3 (Expresión escrita y siglas):** `{c3:.2f} / 2,00 puntos`\n"
+        f"- 🏆 **CALIFICACIÓN TOTAL:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia: **`{n10:.2f} / 10`**)*"
     )
 
 def sincronizar_progreso_navegador():
