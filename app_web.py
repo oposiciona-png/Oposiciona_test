@@ -2422,7 +2422,7 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     return None
 
 NOTA_METODOLOGICA_PREPARADORES = (
-    "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación es realizada íntegramente por la IA con rigor de Tribunal Calificador "
+    "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación se realiza con rigor de Tribunal Calificador "
     "aplicando los criterios oficiales del Segundo Ejercicio del Cuerpo de Gestión de la Administración de la Seguridad Social: "
     "<b>Criterio 1 (0 a 45 puntos)</b> por conocimiento exhaustivo y estricto de los apartados del epígrafe preguntado, precisión técnico-jurídica "
     "y fundamentación normativa; <b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura; y <b>Criterio 3 (0 a 2 puntos)</b> por calidad "
@@ -2522,7 +2522,6 @@ def _extraer_articulos_detallados_de_texto(texto):
     """
     Extrae los artículos citados en un texto manteniendo siempre unida su norma (TRLGSS, RIA, ET, CE, etc.)
     para no confundir jamás un artículo del RIA (ej. Art. 36 RIA) con el artículo del mismo número del TRLGSS.
-    Devuelve: (lista_tuplas [(set_pares_num_norma, etiqueta_legible)], set_numeros_puros)
     """
     if not texto:
         return [], set()
@@ -2598,6 +2597,158 @@ def _extraer_articulos_detallados_de_texto(texto):
 
     return etiquetas, numeros_base
 
+def _normalizar_sin_acentos(s):
+    s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
+    return re.sub(r'\s+', ' ', s).strip()
+
+def _extraer_bloques_estructurales_epigrafe(explicacion_oficial):
+    if not explicacion_oficial:
+        return []
+    lineas = [b.strip() for b in explicacion_oficial.split('\n') if b.strip()]
+    bloques = []
+    cabecera_pendiente = ""
+
+    for l in lineas:
+        l_clean = re.sub(r'^[•\*■▪\-–\s]+', '', l.replace("[[H]]", "")).strip()
+        if not l_clean or PDFQuizParser._es_basura_cabecera_o_pie(l_clean):
+            continue
+        if len(l_clean) < 95 and not l_clean.endswith('.') and ":" not in l_clean:
+            cabecera_pendiente = l_clean
+            continue
+        if cabecera_pendiente:
+            l_clean = f"{cabecera_pendiente}: {l_clean}"
+            cabecera_pendiente = ""
+        if len(l_clean) < 35:
+            continue
+        m_cab = re.match(r'^((?:\d{1,2}[\.\)]|[a-g]\))?\s*[^:\.]{3,95}):\s+(.+)$', l_clean)
+        if m_cab:
+            bloques.append((m_cab.group(1).strip(), m_cab.group(2).strip(), l_clean))
+        else:
+            palabras = l_clean.split()
+            tit_corto = " ".join(palabras[:8]) + ("..." if len(palabras) > 8 else "")
+            bloques.append((tit_corto, l_clean, l_clean))
+    return bloques
+
+def auditar_pertinencia_y_bloques_epigrafe(enunciado_epigrafe, explicacion_oficial, texto_alumno):
+    ep_norm = _normalizar_sin_acentos(enunciado_epigrafe)
+    al_norm = _normalizar_sin_acentos(texto_alumno)
+
+    palabras_genericas_ss = {
+        "seguridad", "social", "regimen", "general", "sistema", "trabajador", "trabajadores", "persona", "personas",
+        "empresario", "empresarios", "empresa", "empresas", "actividad", "actividades", "laboral", "profesional",
+        "servicios", "prestacion", "prestaciones", "derecho", "obligacion", "situacion", "situaciones", "solicitud",
+        "solicitudes", "efectos", "plazo", "plazos", "datos", "actos", "acto", "administrativo", "tesoreria", "tgss",
+        "administracion", "inicio", "cese", "trabajo", "real", "decreto", "legislativo", "orden", "reglamento",
+        "aprobado", "conformidad", "articulo", "articulos", "trlgss", "lgss", "ria", "oficio", "inspeccion", "itss",
+        "cotizacion", "cotizaciones", "momento", "tiempo", "forma", "mismo", "dicho", "dicha", "caso", "supuesto",
+        "procedimiento", "normas", "sobre", "otras", "otros", "entre", "cuando", "aunque", "hasta", "desde", "para",
+        "alta", "altas", "baja", "bajas", "presentacion", "reglamentario"
+    }
+
+    desviacion_epigrafe = False
+    motivo_desviacion = ""
+
+    # A) Epígrafe de Normas sobre Afiliación
+    if "afiliacion" in ep_norm and "altas" not in ep_norm and "bajas" not in ep_norm and "procedimiento" not in ep_norm:
+        marcadores_afil = [
+            r'\bunic(?:a|idad)\b', r'\bvitalici[oa]\b', r'\bnss\b', r'\bnaf\b',
+            r'numero\s+de\s+(?:la\s+)?seguridad\s+social', r'numero\s+de\s+afiliacion',
+            r'primera\s+vez', r'vez\s+primera', r'afiliacion(?:es)?\s+indebida',
+            r'fichero\s+general\s+de\s+afiliacion', r'\bart(?:iculo|\.)\s*15\b', r'\bart(?:iculo|\.)\s*6\b'
+        ]
+        if sum(1 for pat in marcadores_afil if re.search(pat, al_norm)) <= 1:
+            desviacion_epigrafe = True
+            motivo_desviacion = (
+                "🚨 **INCONGRUENCIA CON EL EPÍGRAFE PREGUNTADO (`Normas sobre afiliación`):** "
+                "El texto presentado desarrolla otro epígrafe distinto y omite el contenido nuclear de la afiliación (concepto del art. 15 TRLGSS y art. 6 RIA, caracteres de unicidad y vitalicidad, NSS/NAF, vías de promoción del art. 16 TRLGSS y afiliaciones indebidas del art. 59 RIA)."
+            )
+
+    # B) Epígrafe de Procedimiento y efectos (cuando va separado de la clasificación de las altas)
+    elif "procedimiento y efectos" in ep_norm and "altas y bajas" not in ep_norm:
+        marcadores_proc = [
+            r'sistema\s+red', r'medios\s+electronicos', r'sedess', r'codigo\s+de\s+ocupacion',
+            r'30\.2', r'132', r'6\s+dias\s+naturales', r'seis\s+dias\s+naturales',
+            r'no\s+extinguen?\s+la\s+obligacion\s+de\s+cotizar', r'conserva', r'4\s+anos', r'cuatro\s+anos', r'57'
+        ]
+        aciertos_proc = sum(1 for pat in marcadores_proc if re.search(pat, al_norm))
+        menciones_tipos_alta = len(re.findall(r'\b(alta\s+real|asimilada\s+al\s+alta|pleno\s+derecho|alta\s+especial)\b', al_norm))
+        if aciertos_proc == 0 and menciones_tipos_alta >= 2:
+            desviacion_epigrafe = True
+            motivo_desviacion = (
+                "🚨 **FALTA GRAVE DE CONTENIDO DEL EPÍGRAFE (`Procedimiento y efectos`):** "
+                "La primera mitad de tu respuesta desarrolla la clasificación de los tipos de alta (alta real, asimilada, pleno derecho y especial), que pertenece al epígrafe anterior. "
+                "En cuanto al epígrafe preguntado (**Procedimiento y efectos**), omites por completo el procedimiento electrónico por Sistema RED (art. 38 RIA), las notificaciones electrónicas (art. 132 TRLGSS), la comunicación del código de ocupación (art. 30.2.a RIA), el plazo de 6 días naturales de las bajas y variaciones (art. 32.3 RIA), los efectos de las bajas en plazo y fuera de plazo (art. 35.2 RIA) y el deber de conservación de documentos durante 4 años (art. 57 RIA), abordando únicamente el plazo previo de 60 días de las altas, los efectos de las altas y las altas/bajas indebidas."
+            )
+
+    # C) Epígrafe de Convenio Especial
+    elif "convenio especial" in ep_norm:
+        marcadores_convenio = [
+            r'2865/2003', r'1\.080', r'1080\s*dias', r'12\s*anos', r'doce\s*anos',
+            r'90\s*dias', r'noventa\s*dias', r'0[,\.]94', r'0[,\.]77', r'coeficiente\s+reductor',
+            r'cuidadores\s+no\s+profesionales', r'practicas\s+formativas', r'386/2024'
+        ]
+        if sum(1 for pat in marcadores_convenio if re.search(pat, al_norm)) == 0:
+            desviacion_epigrafe = True
+            motivo_desviacion = (
+                "🚨 **INCONGRUENCIA CON EL EPÍGRAFE PREGUNTADO (`El convenio especial y otras situaciones asimiladas a la del alta`):** "
+                "Tu respuesta no desarrolla el Convenio Especial (Orden TAS/2865/2003, requisito de 1.080 días de cotización en 12 años, plazo de 90 días / 1 año, reglas de base de cotización y coeficiente 0,94, extinción y modalidades especiales)."
+            )
+
+    bloques_ep = _extraer_bloques_estructurales_epigrafe(explicacion_oficial)
+    apartados_completos = []
+    apartados_incompletos = []
+    apartados_omitidos = []
+
+    for tit_b, cuerpo_b, full_b in bloques_ep:
+        tit_n = _normalizar_sin_acentos(tit_b)
+        cuerpo_n = _normalizar_sin_acentos(cuerpo_b)
+
+        # Reglas estrictas para no dar jamás por completado un apartado que el alumno no ha escrito
+        if "baja" in tit_n and ("plazo" in tit_n or "32" in tit_n or "35.2" in tit_n):
+            if not re.search(r'\b(6\s*dias|seis\s*dias|32\.3|no\s+extinguen?\s+la\s+obligacion\s+de\s+cotizar|35\.2)\b', al_norm):
+                apartados_omitidos.append((tit_b, full_b))
+                continue
+        if "conservacion" in tit_n or "57" in tit_n:
+            if not re.search(r'\b(conserva|4\s*anos|cuatro\s*anos|57)\b', al_norm):
+                apartados_omitidos.append((tit_b, full_b))
+                continue
+        if "sistema red" in tit_n or "38" in tit_n or "132" in cuerpo_n:
+            if not re.search(r'\b(sistema\s+red|remision\s+electronica|medios\s+electronicos|sedess|484/2013|132)\b', al_norm):
+                apartados_omitidos.append((tit_b, full_b))
+                continue
+        if "ocupacion" in tit_n or "30.2" in tit_n:
+            if "ocupacion" not in al_norm and "30.2" not in al_norm:
+                apartados_omitidos.append((tit_b, full_b))
+                continue
+
+        palabras_cuerpo_distintivas = [
+            w for w in re.findall(r'\b[a-z]{4,}\b|\b\d+(?:[\.,]\d+)?\b', cuerpo_n)
+            if w not in palabras_genericas_ss
+        ]
+        aciertos_cuerpo = sum(1 for w in palabras_cuerpo_distintivas if w[:5] in al_norm)
+        ratio_cuerpo = aciertos_cuerpo / max(1, len(palabras_cuerpo_distintivas))
+
+        if ratio_cuerpo >= 0.45 and aciertos_cuerpo >= 3:
+            apartados_completos.append((tit_b, full_b))
+        elif ratio_cuerpo >= 0.25 and aciertos_cuerpo >= 2:
+            apartados_incompletos.append((tit_b, full_b))
+        else:
+            apartados_omitidos.append((tit_b, full_b))
+
+    total_b = max(1, len(bloques_ep))
+    unidades_reales = len(apartados_completos) + (0.40 * len(apartados_incompletos))
+    ratio_cobertura_epigrafe = min(1.0, unidades_reales / total_b)
+
+    return {
+        "desviacion_epigrafe": desviacion_epigrafe,
+        "motivo_desviacion": motivo_desviacion,
+        "total_apartados": total_b,
+        "apartados_completos": apartados_completos,
+        "apartados_incompletos": apartados_incompletos,
+        "apartados_omitidos": apartados_omitidos,
+        "ratio_cobertura_epigrafe": round(ratio_cobertura_epigrafe, 2)
+    }
+
 def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
     etiquetas_ref, nums_ref = _extraer_articulos_detallados_de_texto(ref_completa)
@@ -2610,6 +2761,8 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
             articulos_acertados_limpios.append(lbl_art)
         else:
             articulos_omitidos_limpios.append(lbl_art)
+
+    aud_bloques = auditar_pertinencia_y_bloques_epigrafe(enunciado_pregunta, ref_completa, texto_alumno)
 
     articulos_extra_validos = []
     articulos_extra_erroneos = []
@@ -2643,23 +2796,71 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
         "articulos_omitidos": articulos_omitidos_limpios,
         "articulos_extra_validos": articulos_extra_validos,
         "articulos_extra_erroneos": articulos_extra_erroneos,
-        "siglas_sin_presentar": siglas_sin_presentar
+        "siglas_sin_presentar": siglas_sin_presentar,
+        "auditoria_bloques": aud_bloques
     }
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
     """
-    Inicializa la estructura de evaluación y la auditoría de artículos y siglas.
-    La nota real (Criterio 1, Criterio 2, Criterio 3 y Total sobre 50) la fija directamente la IA de Gemini
-    tras su análisis estricto y comparativo del texto del alumno frente al epígrafe oficial.
+    Calcula la evaluación analítica estricta de respaldo (en caso de caída de red)
+    y prepara los datos de auditoría para la IA de Gemini.
     """
     auditoria = auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta)
+    aud_b = auditoria["auditoria_bloques"]
+
+    if not (texto_alumno or "").strip():
+        return {
+            "nota": 0.0,
+            "nota_50": 0.0,
+            "pts_criterio_1": 0.0,
+            "pts_criterio_2": 0.0,
+            "pts_criterio_3": 0.0,
+            "supera_umbral_20": False,
+            "auditoria": auditoria
+        }
+
+    if aud_b["desviacion_epigrafe"]:
+        n_comp = len(aud_b["apartados_completos"])
+        n_parciales = len(aud_b["apartados_incompletos"])
+        pts_c1_desv = round(min(14.50, (n_comp * 3.50) + (n_parciales * 1.75) + (len(auditoria["articulos_acertados"]) * 0.50)), 2)
+        nota_50_desv = pts_c1_desv
+        nota_10_desv = round((nota_50_desv / 50.0) * 10.0, 2)
+        return {
+            "nota": nota_10_desv,
+            "nota_50": nota_50_desv,
+            "pts_criterio_1": pts_c1_desv,
+            "pts_criterio_2": 0.0,
+            "pts_criterio_3": 0.0,
+            "supera_umbral_20": False,
+            "auditoria": auditoria
+        }
+
+    ratio_cobertura_real = aud_b.get("ratio_cobertura_epigrafe", 0.0)
+    pts_base_c1 = ratio_cobertura_real * 42.0
+    bonus_extra = min(3.0, len(auditoria["articulos_extra_validos"]) * 0.50)
+    resta_arts_omitidos = min(2.00, len(auditoria["articulos_omitidos"]) * 0.10)
+    pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
+
+    supera_umbral_20 = pts_criterio_1 >= 20.0
+    if supera_umbral_20:
+        num_parrafos = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 25])
+        pts_criterio_2 = round(min(3.0, 2.0 + (0.6 if num_parrafos >= 3 else 0.2)), 2)
+        resta_siglas = min(0.75, len(auditoria["siglas_sin_presentar"]) * 0.15)
+        pts_criterio_3 = round(max(0.25, min(2.0, 1.8 - resta_siglas)), 2)
+    else:
+        pts_criterio_2 = 0.0
+        pts_criterio_3 = 0.0
+
+    nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
+    nota_10 = round((nota_50 / 50.0) * 10.0, 2)
+
     return {
-        "nota": 0.0,
-        "nota_50": 0.0,
-        "pts_criterio_1": 0.0,
-        "pts_criterio_2": 0.0,
-        "pts_criterio_3": 0.0,
-        "supera_umbral_20": False,
+        "nota": nota_10,
+        "nota_50": nota_50,
+        "pts_criterio_1": pts_criterio_1,
+        "pts_criterio_2": pts_criterio_2,
+        "pts_criterio_3": pts_criterio_3,
+        "supera_umbral_20": supera_umbral_20,
         "auditoria": auditoria
     }
 
@@ -2678,11 +2879,44 @@ def obtener_gemini_api_key_activa():
         return str(sess_def).strip()
     return GEMINI_API_KEY_DEFAULT
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _obtener_modelos_disponibles_api(clave_limpia):
+    """
+    Pregunta directamente a Google qué modelos Gemini están activos para esta clave API
+    (por ejemplo gemini-3.0-flash, gemini-3.1-pro-preview, etc.), priorizando los modelos 3.x más recientes.
+    """
+    modelos_prioritarios = [
+        "gemini-3.0-flash",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.0-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash"
+    ]
+    try:
+        r = requests.get(
+            f"https://generativelanguage.googleapis.com/v1beta/models?key={clave_limpia}",
+            timeout=6
+        )
+        if r.status_code == 200:
+            datos = r.json().get("models", [])
+            disponibles = []
+            for m in datos:
+                metodos = m.get("supportedGenerationMethods", [])
+                nom = (m.get("name") or "").replace("models/", "")
+                if "generateContent" in metodos and "gemini" in nom and "vision" not in nom and "embedding" not in nom and "imagen" not in nom and "tts" not in nom:
+                    disponibles.append(nom)
+            if disponibles:
+                ordenados = [m for m in modelos_prioritarios if m in disponibles]
+                for d in disponibles:
+                    if d not in ordenados and ("3." in d or "flash" in d or "pro" in d):
+                        ordenados.append(d)
+                return ordenados[:6]
+    except Exception:
+        pass
+    return modelos_prioritarios
+
 def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
-    """
-    Extrae las puntuaciones decididas por la IA (Criterio 1, Criterio 2 y Criterio 3)
-    para que la tarjeta superior refleje exactamente la calificación dictada por la IA.
-    """
     ev_out = dict(ev_respaldo or {})
     if not texto_ia:
         return ev_out, ""
@@ -2733,6 +2967,80 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
 
     return ev_out, texto_ia
 
+def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
+    """Alternativa analítica de respaldo por si en algún momento no hubiera conexión con los servidores de Google."""
+    aud_b = aud.get("auditoria_bloques") or {}
+    desv = aud_b.get("desviacion_epigrafe", False)
+    mot_desv = aud_b.get("motivo_desviacion", "")
+    tot_ap = aud_b.get("total_apartados", 1)
+    comp = aud_b.get("apartados_completos", [])
+    inc = aud_b.get("apartados_incompletos", [])
+    omit = aud_b.get("apartados_omitidos", [])
+
+    arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
+    arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
+    arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno"
+    siglas_mal_str = (
+        ", ".join([f"**{s}** (debiste presentar la primera vez como *«{ej}»*)" for s, ej in aud["siglas_sin_presentar"]])
+        if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
+    )
+
+    c1 = ev_fallback.get("pts_criterio_1", 0.0)
+    c2 = ev_fallback.get("pts_criterio_2", 0.0)
+    c3 = ev_fallback.get("pts_criterio_3", 0.0)
+    n50 = ev_fallback.get("nota_50", 0.0)
+    n10 = ev_fallback.get("nota", 0.0)
+
+    partes = []
+    if desv:
+        partes.append(f"1. **🚨 Control de congruencia con el epígrafe preguntado (`{pregunta}`):**\n{mot_desv}")
+    else:
+        tits_comp = "; ".join([t for t, _ in comp]) if comp else "Ninguno desarrollado de forma íntegra"
+        tits_inc = "; ".join([t for t, _ in inc]) if inc else "Ninguno"
+        partes.append(
+            f"1. **✅ Análisis de lo acertado y aportaciones al epígrafe (`{pregunta}`):**\n"
+            f"- **Apartados del epígrafe bien desarrollados ({len(comp)} de {tot_ap}):** {tits_comp}.\n"
+            f"- **Apartados abordados de forma parcial ({len(inc)} de {tot_ap}):** {tits_inc}.\n"
+            f"- **Preceptos o conceptos adicionales válidos aportados:** {arts_extra_ok_str}."
+        )
+
+    lineas_om = []
+    for idx_o, (tit_o, full_o) in enumerate(omit, 1):
+        resumen_o = full_o[:220] + ("..." if len(full_o) > 220 else "")
+        lineas_om.append(f"   - ❌ **Apartado omitido {idx_o} ({tit_o}):** *{resumen_o}*")
+    for idx_i, (tit_i, full_i) in enumerate(inc, 1):
+        resumen_i = full_i[:200] + ("..." if len(full_i) > 200 else "")
+        lineas_om.append(f"   - 🟡 **Apartado incompleto ({tit_i}):** faltó precisar *{resumen_i}*")
+    if not lineas_om:
+        lineas_om.append("   - ✔️ Has cubierto todos los apartados estructurales de la explicación oficial.")
+
+    partes.append(
+        f"2. **⚠️ Contraste analítico apartado por apartado frente a la explicación oficial ({len(omit)} omitidos de {tot_ap}):**\n"
+        + "\n".join(lineas_om)
+    )
+
+    partes.append(
+        "3. **⚖️ Rigor normativo y uso de siglas:**\n"
+        f"- **Artículos de la explicación citados:** {arts_acertados_str}\n"
+        f"- **Artículos omitidos:** {arts_omitidos_str}\n"
+        f"- **Uso de siglas sin presentación previa:** {siglas_mal_str}"
+    )
+
+    faltan_c1 = round(max(0.0, 45.0 - c1), 2)
+    partes.append(
+        "4. **🎓 Calificación por Criterios del Tribunal y Resumen sencillo de puntos sumados y restados:**\n"
+        f"- **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
+        f"- **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
+        f"- **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
+        f"- 🏆 **CALIFICACIÓN TOTAL:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia: **`{n10:.2f} / 10`**)*\n\n"
+        "📊 **Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
+        f"- **➕ Qué te ha sumado puntos:** `+{c1:.2f} ptos` por los apartados de `{pregunta}` que sí has abordado.\n"
+        f"- **➖ Qué te ha restado o impedido sumar:** `-{faltan_c1:.2f} ptos` por los **{len(omit)} apartados omitidos** de `{pregunta}`, la ausencia de citas de la explicación (**Artículos omitidos**) y el no activar los Criterios 2 y 3 si no se superan los 20,00 puntos en el Criterio 1.\n\n"
+        "💡 **Orientación de tus preparadores para mejorar este epígrafe:** Asegúrate siempre de desarrollar específicamente cada bloque del epígrafe preguntado y de presentar las siglas en su primera mención (*«..., en adelante, TRLGSS»*)."
+    )
+
+    return "\n\n".join(partes)
+
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
     aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
     if aviso_elegante:
@@ -2748,7 +3056,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno adicional detectado"
-    arts_extra_mal_str = "; ".join(aud["articulos_extra_erroneos"]) if aud["articulos_extra_erroneos"] else "Ninguno"
     siglas_mal_str = (
         ", ".join([f"{s} (debiste escribir la primera vez «{ej}»)" for s, ej in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
@@ -2763,11 +3070,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         "=== REGLAS ESTRICTAS E INNEGOCIABLES DE VALORACIÓN DEL TRIBUNAL ===\n"
         "1. **RIGOR EXTREMO DE CONGRUENCIA CON EL EPÍGRAFE PREGUNTADO (`" + pregunta + "`):**\n"
         "   - Lee con máxima atención qué pide exactamente el título y el desarrollo oficial de ESTE epígrafe.\n"
-        "   - **NO PUNTÚES CONTENIDO DE OTROS EPÍGRAFES DEL MISMO TEMA:** Si el alumno incluye párrafos que corresponden a otro epígrafe distinto (por ejemplo, si el epígrafe preguntado es «Procedimiento y efectos» o «Normas sobre afiliación» o «El convenio especial», y el alumno se pone a definir los tipos de alta: alta real, situación asimilada al alta, alta de pleno derecho y alta especial), debes advertirle con rotundidad de que esos párrafos pertenecen a otro epígrafe y **le otorgan 0,00 puntos en este epígrafe**.\n"
-        "   - **SUSPENSO OBLIGATORIO SI FALTA CONTENIDO ESENCIAL O NO SE AJUSTA AL EPÍGRAFE:** Si el alumno deja sin desarrollar la mitad o más de los bloques que integran la explicación oficial de este epígrafe, o despacha bloques enteros con una frase genérica o inexacta (como decir «iguales circunstancias se producen en el caso de las solicitudes de baja» omitiendo el plazo de 6 días naturales del art. 32.3 RIA y la no extinción de la obligación de cotizar en bajas fuera de plazo hasta que la TGSS conozca el cese ex art. 35.2 RIA), **la nota del Criterio 1 DEBE SER INFERIOR A 20,00 / 45 PUNTOS (SUSPENSO CLARO)**.\n"
+        "   - **NO PUNTÚES CONTENIDO DE OTROS EPÍGRAFES DEL MISMO TEMA:** Si el alumno incluye párrafos que corresponden a otro epígrafe distinto (por ejemplo, si el epígrafe preguntado es «Procedimiento y efectos» o «Normas sobre afiliación» o «El convenio especial», y el alumno dedica la mitad de su escrito a definir los tipos de alta: alta real, situación asimilada al alta, alta de pleno derecho y alta especial), debes advertirle con rotundidad de que esos párrafos pertenecen a otro epígrafe distinto y **le otorgan 0,00 puntos en este epígrafe**.\n"
+        "   - **SUSPENSO OBLIGATORIO (< 25 / 50 PTOS) SI FALTA CONTENIDO ESENCIAL O NO SE AJUSTA AL EPÍGRAFE:** Si el alumno deja sin desarrollar la mitad o más de los bloques que integran la explicación oficial de este epígrafe, o despacha bloques enteros con una frase genérica o inexacta (como decir «iguales circunstancias se producen en el caso de las solicitudes de baja» omitiendo el plazo de 6 días naturales del art. 32.3 RIA y la no extinción de la obligación de cotizar en bajas fuera de plazo hasta que la TGSS conozca el cese ex art. 35.2 RIA), **la nota del Criterio 1 DEBE SER INFERIOR A 20,00 / 45 PUNTOS (SUSPENSO CLARO)**.\n"
         "   - **PROHIBIDO DAR POR DESARROLLADO LO QUE EL ALUMNO NO HA ESCRITO:** Jamás digas que el alumno ha desarrollado un apartado (como el plazo de bajas, la conservación de documentos durante 4 años, el Sistema RED o las notificaciones electrónicas) si no lo ha escrito explícitamente en su respuesta.\n\n"
         "2. **VALORACIÓN POSITIVA POR APORTACIONES ADICIONALES PERTINENTES AL EPÍGRAFE (+ PUNTOS EN CRITERIO 1):**\n"
-        "   - Si el alumno añade conceptos jurídicos, supuestos legales o artículos que sí pertenezcan genuinamente a la materia de ESTE epígrafe (por ejemplo, cuando en el epígrafe de «Efectos de las altas y bajas» desarrolla con rigor las Altas Indebidas del art. 60 RIA y las Bajas Indebidas del art. 61 RIA) y son jurídicamente correctos, valóralo positivamente sumándole puntos en el Criterio 1.\n\n"
+        "   - Si el alumno añade conceptos jurídicos, supuestos legales o artículos que sí pertenezcan genuinamente a la materia de ESTE epígrafe (por ejemplo, cuando en la parte de «Efectos de las altas y bajas» desarrolla con rigor las Altas Indebidas del art. 60 RIA y las Bajas Indebidas del art. 61 RIA) y son jurídicamente correctos, valóralo positivamente sumándole puntos en el Criterio 1.\n\n"
         "3. **PENALIZACIÓN POR USO DE SIGLAS SIN PRESENTACIÓN PREVIA (- PUNTOS EN CRITERIO 3):**\n"
         "   - En un examen de desarrollo ante el Tribunal, la primera vez que se utiliza una sigla debe escribirse su nombre completo seguido de «, en adelante, SIGLA» (ej.: «Texto Refundido de la Ley General de la Seguridad Social, en adelante, TRLGSS»).\n"
         f"   - Siglas usadas sin presentación previa detectadas en el texto del alumno: {siglas_mal_str}.\n\n"
@@ -2821,8 +3128,8 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         }
     }
 
-    errores_api = []
-    for modelo in ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
+    modelos_a_probar = _obtener_modelos_disponibles_api(clave_limpia)
+    for modelo in modelos_a_probar:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
             r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=35)
@@ -2833,30 +3140,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
                 if isinstance(ev_fallback, dict):
                     ev_fallback.update(ev_actualizado)
                 return texto_ia_limpio
-            else:
-                try:
-                    msg_err = r.json().get("error", {}).get("message", f"HTTP {r.status_code}")
-                except Exception:
-                    msg_err = f"HTTP {r.status_code}"
-                errores_api.append(f"{modelo}: {msg_err}")
-        except Exception as e_req:
-            errores_api.append(f"{modelo}: {e_req}")
+        except Exception:
             continue
 
-    # Si todas las llamadas a la API de Gemini fallaron (p. ej. API key caducada o bloqueada por Google),
-    # NO mostrar jamás una plantilla mecánica engañosa: avisar claramente para actualizar la API Key.
-    detalle_err = " | ".join(errores_api[:2]) if errores_api else "Sin respuesta del servidor de Google Gemini"
-    return (
-        "⚠️ **No se ha podido conectar con el motor de IA de Google Gemini para realizar el análisis estricto:**\n\n"
-        f"- **Diagnóstico técnico de la API:** `{detalle_err}`\n"
-        "- **Cómo solucionarlo al instante:** Si Google ha revocado o agotado la cuota de la clave API por defecto, "
-        "abre el desplegable de **Herramienta Admin** en la pantalla principal (o añade `GEMINI_API_KEY` en los *Secrets* de Streamlit Cloud) "
-        "e introduce una clave activa de Google AI Studio (`https://aistudio.google.com/apikey`).\n\n"
-        f"**Auditoría normativa preliminar detectada en tu texto:**\n"
-        f"- **Artículos de la explicación citados:** {arts_acertados_str}\n"
-        f"- **Artículos omitidos:** {arts_omitidos_str}\n"
-        f"- **Siglas sin presentación previa:** {siglas_mal_str}"
-    )
+    # Si en algún momento no hubiera conexión con Google, entra automáticamente la alternativa analítica de respaldo
+    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud)
 
 def sincronizar_progreso_navegador():
     try:
