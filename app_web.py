@@ -2470,67 +2470,267 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     return None
 
 NOTA_METODOLOGICA_PREPARADORES = (
-    "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación se realiza con rigor de Tribunal Calificador "
-    "aplicando los criterios oficiales del Segundo Ejercicio del Cuerpo de Gestión de la Administración de la Seguridad Social: "
-    "<b>Criterio 1 (0 a 45 puntos)</b> por conocimiento exhaustivo y estricto de los apartados del epígrafe preguntado, precisión técnico-jurídica "
-    "y fundamentación normativa; <b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura; y <b>Criterio 3 (0 a 2 puntos)</b> por calidad "
-    "de la expresión escrita y presentación formal de siglas (ej. «...en adelante, TRLGSS»). Los Criterios 2 y 3 solo puntúan si se alcanzan al menos "
-    "20,00 puntos en el Criterio 1. Mínimo para superar el ejercicio: <b>25,00 sobre 50 puntos</b>."
+    "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación se realiza aplicando los criterios oficiales del Segundo Ejercicio "
+    "del Cuerpo de Gestión de la Administración de la Seguridad Social con un enfoque constructivo y formativo: "
+    "<b>Criterio 1 (0 a 45 puntos)</b> por conocimiento y desarrollo de los apartados del epígrafe preguntado, valorando positivamente tanto la comprensión "
+    "conceptual como las aportaciones conexas que enriquezcan el tema; <b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura; y "
+    "<b>Criterio 3 (0 a 2 puntos)</b> por calidad de la expresión escrita y presentación de siglas (ej. «Nombre completo (SIGLA)» o «..., en adelante, SIGLA»). "
+    "Los Criterios 2 y 3 se suman al alcanzar al menos 20,00 puntos en el Criterio 1. Mínimo para superar el ejercicio: <b>25,00 sobre 50 puntos</b>."
 )
 
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
 - Cada parte del ejercicio se califica de 0 a 50 puntos, siendo necesario obtener un mínimo de 25,00 puntos directos para superarla.
-- Criterio 1 (de 0 a 45 puntos): Conocimiento profundo, exacto y completo de los apartados del epígrafe concreto preguntado e inclusión de normativa y artículos de aplicación.
+- Criterio 1 (de 0 a 45 puntos): Conocimiento y desarrollo de los apartados del epígrafe concreto preguntado e inclusión de normativa de aplicación.
 - Criterio 2 (de 0 a 3 puntos): Orden de las ideas, claridad expositiva y estructura sistemática (solo puntúa si alcanza al menos 20,00 puntos en el Criterio 1).
-- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita y rigor formal en la presentación de siglas ("Texto Refundido..., en adelante, TRLGSS").
+- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas ("Nombre completo (SIGLA)" o "Nombre completo, en adelante, SIGLA").
 """
 
+# Mapa de identificadores oficiales de Legislación Consolidada en el BOE
+MAPA_NORMA_A_BOE_ID = {
+    "TRLGSS": ("BOE-A-2015-11724", "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+    "LGSS": ("BOE-A-2015-11724", "Real Decreto Legislativo 8/2015 (TRLGSS)"),
+    "RIA": ("BOE-A-1996-4447", "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas y afiliación, altas y bajas - RIA)"),
+    "RGCL": ("BOE-A-1996-1579", "Real Decreto 2064/1995 (Reglamento General sobre Cotización y Liquidación - RGCL)"),
+    "RGR": ("BOE-A-2004-11273", "Real Decreto 1415/2004 (Reglamento General de Recaudación de la Seguridad Social - RGR)"),
+    "CE": ("BOE-A-1978-31229", "Constitución Española de 1978"),
+    "ET": ("BOE-A-2015-11430", "Real Decreto Legislativo 2/2015 (Estatuto de los Trabajadores)"),
+    "TRET": ("BOE-A-2015-11430", "Real Decreto Legislativo 2/2015 (Estatuto de los Trabajadores)"),
+    "LISOS": ("BOE-A-2000-15060", "Real Decreto Legislativo 5/2000 (Ley sobre Infracciones y Sanciones en el Orden Social - LISOS)"),
+    "LETA": ("BOE-A-2007-13409", "Ley 20/2007 (Estatuto del trabajo autónomo)"),
+    "ORDEN TAS/2865/2003": ("BOE-A-2003-19209", "Orden TAS/2865/2003 (Convenio Especial en el Sistema de la Seguridad Social)"),
+    "LEY 19/2021": ("BOE-A-2021-21007", "Ley 19/2021 (Ingreso Mínimo Vital)"),
+    "LEY 47/2015": ("BOE-A-2015-11346", "Ley 47/2015 (Protección social de las personas trabajadoras del sector marítimo-pesquero)"),
+}
+
+def _resolver_id_boe_de_norma(norma_txt):
+    nt = (norma_txt or "").strip().upper()
+    if not nt or "TRLGSS" in nt or "LGSS" in nt or "8/2015" in nt:
+        return MAPA_NORMA_A_BOE_ID["TRLGSS"]
+    if "RIA" in nt or "84/1996" in nt:
+        return MAPA_NORMA_A_BOE_ID["RIA"]
+    if "RGCL" in nt or "2064/1995" in nt:
+        return MAPA_NORMA_A_BOE_ID["RGCL"]
+    if "RGR" in nt or "1415/2004" in nt:
+        return MAPA_NORMA_A_BOE_ID["RGR"]
+    if nt == "CE" or "CONSTITUCI" in nt:
+        return MAPA_NORMA_A_BOE_ID["CE"]
+    if nt in ("ET", "TRET") or "2/2015" in nt or "ESTATUTO" in nt:
+        return MAPA_NORMA_A_BOE_ID["ET"]
+    if "LISOS" in nt or "5/2000" in nt:
+        return MAPA_NORMA_A_BOE_ID["LISOS"]
+    if "LETA" in nt or "20/2007" in nt:
+        return MAPA_NORMA_A_BOE_ID["LETA"]
+    if "2865/2003" in nt:
+        return MAPA_NORMA_A_BOE_ID["ORDEN TAS/2865/2003"]
+    if "19/2021" in nt:
+        return MAPA_NORMA_A_BOE_ID["LEY 19/2021"]
+    if "47/2015" in nt:
+        return MAPA_NORMA_A_BOE_ID["LEY 47/2015"]
+    return None, norma_txt
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def consultar_bloque_boe_completo(num_o_token, id_boe="BOE-A-2015-11724"):
+    """
+    Descarga de la API de Datos Abiertos del BOE el texto consolidado oficial de un artículo o disposición,
+    conservando la división en párrafos para mostrarlo en el anexo desplegable de estudio.
+    Devuelve: (titulo_bloque, lista_parrafos_limpios, url_consulta_boe)
+    """
+    if not id_boe or not num_o_token:
+        return "", [], ""
+
+    tk = str(num_o_token).strip()
+    if tk.upper().startswith("DA_"):
+        num_da = re.sub(r'\D+', '', tk)
+        id_bloque = f"da{num_da}" if num_da else "da"
+    elif tk.upper().startswith("DT_"):
+        num_dt = re.sub(r'\D+', '', tk)
+        id_bloque = f"dt{num_dt}" if num_dt else "dt"
+    else:
+        num_art = re.match(r'^(\d{1,3})', tk)
+        if not num_art:
+            return "", [], ""
+        id_bloque = f"a{num_art.group(1)}"
+
+    url_api = f"https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/{id_boe}/texto/bloque/{id_bloque}"
+    url_web_boe = f"https://www.boe.es/buscar/act.php?id={id_boe}#{id_bloque}"
+    try:
+        r_boe = requests.get(url_api, headers={"Accept": "application/xml"}, timeout=4)
+        if r_boe.status_code == 200 and "<p" in r_boe.text:
+            parrafos_raw = re.findall(r'<p[^>]*>(.*?)</p>', r_boe.text, flags=re.DOTALL)
+            parrafos_limpios = []
+            titulo_precepto = ""
+            for p in parrafos_raw:
+                p_txt = re.sub(r'<[^>]+>', '', p).strip()
+                p_txt = re.sub(r'\s+', ' ', p_txt).strip()
+                if not p_txt:
+                    continue
+                if not titulo_precepto and re.match(r'^(?:Art[íi]culo|Disposici[óo]n)\b', p_txt, re.IGNORECASE) and len(p_txt) < 160:
+                    titulo_precepto = p_txt
+                else:
+                    parrafos_limpios.append(p_txt)
+            return titulo_precepto, parrafos_limpios, url_web_boe
+    except Exception:
+        pass
+    return "", [], url_web_boe
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def consultar_literal_boe_trlgss(num_art_str):
+    """Versión breve para verificaciones internas de artículos del TRLGSS."""
+    tit, parrs, _ = consultar_bloque_boe_completo(num_art_str, "BOE-A-2015-11724")
+    texto_unido = " ".join(([tit] if tit else []) + parrs).strip()
+    if len(texto_unido) > 25:
+        if len(texto_unido) > 320:
+            texto_unido = texto_unido[:320].rsplit(" ", 1)[0] + "...»"
+        else:
+            texto_unido = texto_unido + "»"
+        return f"«{texto_unido}"
+    return ""
+
+def construir_anexo_desplegable_boe_epigrafe(respuesta_oficial, explicacion_oficial, nums_citados_alumno=None):
+    """
+    Construye un bloque desplegable interactivo (<details><summary>) al final de la valoración
+    con la literalidad oficial obtenida en tiempo real del BOE de todos los artículos que aparecen
+    en la explicación oficial del epígrafe, indicando cuáles citó el alumno y cuáles omitió.
+    """
+    ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
+    if not ref_completa:
+        return ""
+
+    etiquetas_ref, _ = _extraer_articulos_detallados_de_texto(ref_completa)
+    if not etiquetas_ref:
+        return ""
+
+    nums_al_set = set(nums_citados_alumno or [])
+    preceptos_individuales = []
+    vistos_boe = set()
+
+    for nums_grupo, norma_g, lbl_art in etiquetas_ref:
+        id_boe, nombre_norma_largo = _resolver_id_boe_de_norma(norma_g)
+        if not id_boe:
+            continue
+        norma_corta = norma_g if norma_g else "TRLGSS"
+        for n_item in nums_grupo:
+            clave_unica = (id_boe, str(n_item))
+            if clave_unica in vistos_boe:
+                continue
+            vistos_boe.add(clave_unica)
+            preceptos_individuales.append((n_item, norma_corta, id_boe, nombre_norma_largo, n_item in nums_al_set))
+
+    if not preceptos_individuales:
+        return ""
+
+    tarjetas_html = []
+    for n_item, norma_corta, id_boe, nombre_norma_largo, fue_citado in preceptos_individuales[:16]:
+        tit_boe, parrs_boe, url_web = consultar_bloque_boe_completo(n_item, id_boe)
+        if not parrs_boe and not tit_boe:
+            continue
+
+        estado_badge = (
+            "<span style='background:#DCFCE7; color:#166534 !important; border:1px solid #86EFAC; padding:2px 8px; border-radius:12px; font-size:11.5px; font-weight:700; margin-left:8px;'>✅ Citado en tu respuesta</span>"
+            if fue_citado else
+            "<span style='background:#FEF3C7; color:#92400E !important; border:1px solid #FDE68A; padding:2px 8px; border-radius:12px; font-size:11.5px; font-weight:700; margin-left:8px;'>🔸 Omitido en tu respuesta</span>"
+        )
+
+        etiqueta_art = tit_boe if tit_boe else (f"Disposición {n_item}" if str(n_item).startswith("DA") else f"Artículo {n_item}")
+        if norma_corta and norma_corta.upper() not in etiqueta_art.upper():
+            etiqueta_cabecera = f"{etiqueta_art} ({norma_corta})"
+        else:
+            etiqueta_cabecera = etiqueta_art
+
+        cuerpo_parrafos_html = "".join(
+            f"<p style='margin:0 0 8px 0; font-size:13.8px; line-height:1.52; color:#1E293B !important; text-align:justify;'>{p}</p>"
+            for p in parrafos_boe[:14]
+        )
+        if len(parrafos_boe) > 14:
+            cuerpo_parrafos_html += (
+                f"<p style='margin:4px 0 0 0; font-size:12.5px; font-style:italic; color:#475569 !important;'>"
+                f"Texto extenso ({len(parrafos_boe)} párrafos). <a href='{url_web}' target='_blank' style='color:#1D4ED8 !important; font-weight:600;'>Ver artículo completo en boe.es ↗</a></p>"
+            )
+
+        tarjetas_html.append(
+            f"<details style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid {'#16A34A' if fue_citado else '#F59E0B'}; border-radius:6px; margin-top:8px; margin-bottom:8px; padding:8px 12px;'>"
+            f"<summary style='cursor:pointer; font-weight:700; font-size:14px; color:#0F172A !important; outline:none; list-style:disclosure-closed;'>"
+            f"⚖️ {etiqueta_cabecera} {estado_badge}"
+            f"<div style='font-size:11.5px; font-weight:500; color:#64748B !important; margin-top:2px;'>{nombre_norma_largo}</div>"
+            f"</summary>"
+            f"<div style='margin-top:10px; padding-top:8px; border-top:1px dashed #E2E8F0;'>"
+            f"{cuerpo_parrafos_html}"
+            f"<div style='text-align:right; margin-top:4px;'><a href='{url_web}' target='_blank' style='font-size:12px; color:#1D4ED8 !important; text-decoration:none; font-weight:600;'>🔗 Consultar en el BOE oficial ↗</a></div>"
+            f"</div>"
+            f"</details>"
+        )
+
+    if not tarjetas_html:
+        return ""
+
+    n_tot_boe = len(tarjetas_html)
+    anexo_html = (
+        f"\n\n<details style='background-color:#F8FAFC; border:2px solid #3B82F6; border-radius:10px; padding:12px 16px; margin-top:16px; margin-bottom:10px;'>"
+        f"<summary style='cursor:pointer; font-size:15.5px; font-weight:800; color:#1E3A8A !important; outline:none;'>"
+        f"📚 Anexo de repaso BOE: Literalidad de los artículos del epígrafe ({n_tot_boe} {'precepto oficial' if n_tot_boe == 1 else 'preceptos oficiales'} — pulsa para desplegar)"
+        f"</summary>"
+        f"<div style='margin-top:10px; font-size:13px; color:#334155 !important;'>"
+        f"Pulsa sobre cada artículo para leer su redacción oficial consolidada extraída directamente del <b>Boletín Oficial del Estado (BOE)</b> y repasar los preceptos de este epígrafe:"
+        f"{''.join(tarjetas_html)}"
+        f"</div>"
+        f"</details>"
+    )
+    return anexo_html
+
 def auditar_siglas_sin_definir_previa(texto_alumno):
+    """
+    Analiza EXCLUSIVAMENTE las siglas que el alumno ha escrito en su propio texto y comprueba si
+    el alumno ha escrito su denominación completa antes o justo después entre paréntesis:
+    - Acepta tanto «Reglamento General sobre inscripción de empresas... (RIA)»
+      como «Reglamento General sobre inscripción de empresas..., en adelante, RIA».
+    - Jamás incluye siglas que el alumno NO haya utilizado en su respuesta.
+    """
     if not texto_alumno:
         return []
     t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
+    t_norm = re.sub(r'\s+', ' ', t_norm)
     t_low = t_norm.lower()
 
     catalogo_siglas = [
-        ("TRLGSS", r'\bTRLGSS\b', ["texto refundido de la ley general de la seguridad social"], "Texto Refundido de la Ley General de la Seguridad Social, en adelante, TRLGSS"),
-        ("LGSS", r'\bLGSS\b', ["ley general de la seguridad social"], "Ley General de la Seguridad Social, en adelante, LGSS"),
-        ("RIA", r'\bRIA\b', ["reglamento general sobre inscripcion de empresas"], "Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos, en adelante, RIA"),
-        ("RGCL", r'\bRGCL\b', ["reglamento general sobre cotizacion y liquidacion", "reglamento general de cotizacion y liquidacion"], "Reglamento General sobre Cotización y Liquidación, en adelante, RGCL"),
-        ("RGR", r'\bRGR\b', ["reglamento general de recaudacion"], "Reglamento General de Recaudación de la Seguridad Social, en adelante, RGR"),
-        ("RDL", r'\b(?:RDL|R\.D\.L\.)\b', ["real decreto-ley", "real decreto ley"], "Real Decreto-ley, en adelante, RDL"),
-        ("RD Legislativo", r'\b(?:RD\s*Legislativo|RD\s*Leg\.?|Real\s+Decreto\s+L\.?)\b', ["real decreto legislativo"], "Real Decreto Legislativo, en adelante, RD Legislativo"),
-        ("RD", r'\b(?:RD|R\.D\.)\b(?!\s*Leg|\s*\-?\s*ley)', ["real decreto"], "Real Decreto, en adelante, RD"),
-        ("CE", r'\bCE\b', ["constitucion espanola", "constitucion de 1978"], "Constitución Española, en adelante, CE"),
-        ("ET", r'\bET\b', ["estatuto de los trabajadores"], "Estatuto de los Trabajadores, en adelante, ET"),
-        ("TRET", r'\bTRET\b', ["texto refundido de la ley del estatuto de los trabajadores"], "Texto Refundido de la Ley del Estatuto de los Trabajadores, en adelante, TRET"),
-        ("LETA", r'\bLETA\b', ["estatuto del trabajo autonomo"], "Estatuto del Trabajo Autónomo, en adelante, LETA"),
-        ("LISOS", r'\bLISOS\b', ["infracciones y sanciones en el orden social"], "Ley sobre Infracciones y Sanciones en el Orden Social, en adelante, LISOS"),
-        ("TGSS", r'\bTGSS\b', ["tesoreria general de la seguridad social"], "Tesorería General de la Seguridad Social, en adelante, TGSS"),
-        ("INSS", r'\bINSS\b', ["instituto nacional de la seguridad social"], "Instituto Nacional de la Seguridad Social, en adelante, INSS"),
-        ("ISM", r'\bISM\b', ["instituto social de la marina"], "Instituto Social de la Marina, en adelante, ISM"),
-        ("SEPE", r'\bSEPE\b', ["servicio publico de empleo estatal"], "Servicio Público de Empleo Estatal, en adelante, SEPE"),
-        ("IMSERSO", r'\bIMSERSO\b', ["instituto de mayores y servicios sociales"], "Instituto de Mayores y Servicios Sociales, en adelante, IMSERSO"),
-        ("ITSS", r'\bITSS\b', ["inspeccion de trabajo y seguridad social"], "Inspección de Trabajo y Seguridad Social, en adelante, ITSS"),
-        ("RETA", r'\bRETA\b', ["regimen especial de trabajadores por cuenta propia", "regimen especial de los trabajadores por cuenta propia", "regimen especial de trabajadores autonomos"], "Régimen Especial de Trabajadores por Cuenta Propia o Autónomos, en adelante, RETA"),
-        ("RGSS", r'\bRGSS\b', ["regimen general de la seguridad social"], "Régimen General de la Seguridad Social, en adelante, RGSS"),
-        ("SEA", r'\bSEA\b', ["sistema especial para trabajadores por cuenta ajena agrarios", "sistema especial agrario"], "Sistema Especial para Trabajadores por Cuenta Ajena Agrarios, en adelante, SEA"),
-        ("SEEH", r'\bSEEH\b', ["sistema especial para empleados de hogar", "sistema especial de empleados de hogar"], "Sistema Especial para Empleados de Hogar, en adelante, SEEH"),
-        ("SETA", r'\bSETA\b', ["sistema especial para trabajadores por cuenta propia agrarios"], "Sistema Especial para Trabajadores por Cuenta Propia Agrarios, en adelante, SETA"),
-        ("CCC", r'\bCCC\b', ["codigo de cuenta de cotizacion", "codigos de cuenta de cotizacion"], "Código de Cuenta de Cotización, en adelante, CCC"),
-        ("NAF", r'\bNAF\b', ["numero de afiliacion"], "Número de Afiliación, en adelante, NAF"),
-        ("NSS", r'\bNSS\b', ["numero de la seguridad social"], "Número de la Seguridad Social, en adelante, NSS"),
-        ("SEDESS", r'\bSEDESS\b', ["sede electronica de la seguridad social", "sede electronica de la secretaria de estado"], "Sede Electrónica de la Seguridad Social, en adelante, SEDESS"),
-        ("CNAE", r'\bCNAE\b', ["clasificacion nacional de actividades economicas"], "Clasificación Nacional de Actividades Económicas, en adelante, CNAE"),
-        ("ERE", r'\bERE\b', ["expediente de regulacion de empleo", "expedientes de regulacion de empleo"], "Expediente de Regulación de Empleo, en adelante, ERE"),
-        ("SMI", r'\bSMI\b', ["salario minimo interprofesional"], "Salario Mínimo Interprofesional, en adelante, SMI"),
-        ("IMV", r'\bIMV\b', ["ingreso minimo vital"], "Ingreso Mínimo Vital, en adelante, IMV"),
-        ("FOGASA", r'\bFOGASA\b', ["fondo de garantia salarial"], "Fondo de Garantía Salarial, en adelante, FOGASA"),
-        ("MEI", r'\bMEI\b', ["mecanismo de equidad intergeneracional"], "Mecanismo de Equidad Intergeneracional, en adelante, MEI"),
-        ("IT", r'\bIT\b', ["incapacidad temporal"], "Incapacidad Temporal, en adelante, IT"),
-        ("IP", r'\bIP\b', ["incapacidad permanente"], "Incapacidad Permanente, en adelante, IP"),
-        ("AT", r'\bAT\b', ["accidente de trabajo", "accidentes de trabajo"], "Accidente de Trabajo, en adelante, AT"),
-        ("EP", r'\bEP\b', ["enfermedad profesional", "enfermedades profesionales"], "Enfermedad Profesional, en adelante, EP"),
+        ("TRLGSS", r'\bTRLGSS\b', ["texto refundido de la ley general de la seguridad social", "ley general de la seguridad social"], "Texto Refundido de la Ley General de la Seguridad Social (TRLGSS) o ..., en adelante, TRLGSS"),
+        ("LGSS", r'\bLGSS\b', ["ley general de la seguridad social"], "Ley General de la Seguridad Social (LGSS) o ..., en adelante, LGSS"),
+        ("RIA", r'\bRIA\b', ["reglamento general sobre inscripcion de empresas", "reglamento general de inscripcion de empresas", "afiliacion, altas, bajas"], "Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos (RIA)"),
+        ("RGCL", r'\bRGCL\b', ["reglamento general sobre cotizacion y liquidacion", "reglamento general de cotizacion y liquidacion"], "Reglamento General sobre Cotización y Liquidación (RGCL)"),
+        ("RGR", r'\bRGR\b', ["reglamento general de recaudacion"], "Reglamento General de Recaudación de la Seguridad Social (RGR)"),
+        ("RDL", r'\b(?:RDL|R\.D\.L\.)\b', ["real decreto-ley", "real decreto ley", "real decreto legislativo"], "Real Decreto-ley (RDL) / Real Decreto Legislativo (RDL)"),
+        ("RD", r'\b(?:RD|R\.D\.)\b(?!\s*Leg|\s*\-?\s*ley)', ["real decreto"], "Real Decreto (RD)"),
+        ("CE", r'\bCE\b', ["constitucion espanola", "constitucion de 1978"], "Constitución Española (CE)"),
+        ("ET", r'\bET\b', ["estatuto de los trabajadores"], "Estatuto de los Trabajadores (ET)"),
+        ("TRET", r'\bTRET\b', ["texto refundido de la ley del estatuto de los trabajadores", "estatuto de los trabajadores"], "Texto Refundido de la Ley del Estatuto de los Trabajadores (TRET)"),
+        ("LETA", r'\bLETA\b', ["estatuto del trabajo autonomo"], "Estatuto del Trabajo Autónomo (LETA)"),
+        ("LISOS", r'\bLISOS\b', ["infracciones y sanciones en el orden social"], "Ley sobre Infracciones y Sanciones en el Orden Social (LISOS)"),
+        ("TGSS", r'\bTGSS\b', ["tesoreria general de la seguridad social"], "Tesorería General de la Seguridad Social (TGSS)"),
+        ("INSS", r'\bINSS\b', ["instituto nacional de la seguridad social"], "Instituto Nacional de la Seguridad Social (INSS)"),
+        ("ISM", r'\bISM\b', ["instituto social de la marina"], "Instituto Social de la Marina (ISM)"),
+        ("SEPE", r'\bSEPE\b', ["servicio publico de empleo estatal"], "Servicio Público de Empleo Estatal (SEPE)"),
+        ("IMSERSO", r'\bIMSERSO\b', ["instituto de mayores y servicios sociales"], "Instituto de Mayores y Servicios Sociales (IMSERSO)"),
+        ("ITSS", r'\bITSS\b', ["inspeccion de trabajo y seguridad social", "inspeccion de trabajo"], "Inspección de Trabajo y Seguridad Social (ITSS)"),
+        ("RETA", r'\bRETA\b', ["regimen especial de trabajadores por cuenta propia", "regimen especial de los trabajadores por cuenta propia", "regimen especial de trabajadores autonomos", "trabajadores por cuenta propia o autonomos"], "Régimen Especial de Trabajadores por Cuenta Propia o Autónomos (RETA)"),
+        ("RGSS", r'\bRGSS\b', ["regimen general de la seguridad social"], "Régimen General de la Seguridad Social (RGSS)"),
+        ("SEA", r'\bSEA\b', ["sistema especial para trabajadores por cuenta ajena agrarios", "sistema especial agrario"], "Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (SEA)"),
+        ("SEEH", r'\bSEEH\b', ["sistema especial para empleados de hogar", "sistema especial de empleados de hogar"], "Sistema Especial para Empleados de Hogar (SEEH)"),
+        ("SETA", r'\bSETA\b', ["sistema especial para trabajadores por cuenta propia agrarios"], "Sistema Especial para Trabajadores por Cuenta Propia Agrarios (SETA)"),
+        ("CCC", r'\bCCC\b', ["codigo de cuenta de cotizacion", "codigos de cuenta de cotizacion"], "Código de Cuenta de Cotización (CCC)"),
+        ("NAF", r'\bNAF\b', ["numero de afiliacion"], "Número de Afiliación (NAF)"),
+        ("NSS", r'\bNSS\b', ["numero de la seguridad social"], "Número de la Seguridad Social (NSS)"),
+        ("SEDESS", r'\bSEDESS\b', ["sede electronica de la seguridad social", "sede electronica de la secretaria de estado"], "Sede Electrónica de la Seguridad Social (SEDESS)"),
+        ("CNAE", r'\bCNAE\b', ["clasificacion nacional de actividades economicas"], "Clasificación Nacional de Actividades Económicas (CNAE)"),
+        ("CNO", r'\bCNO\b', ["clasificacion nacional de ocupaciones"], "Clasificación Nacional de Ocupaciones (CNO)"),
+        ("ERE", r'\bERE\b', ["expediente de regulacion de empleo", "expedientes de regulacion de empleo"], "Expediente de Regulación de Empleo (ERE)"),
+        ("SMI", r'\bSMI\b', ["salario minimo interprofesional"], "Salario Mínimo Interprofesional (SMI)"),
+        ("IMV", r'\bIMV\b', ["ingreso minimo vital"], "Ingreso Mínimo Vital (IMV)"),
+        ("FOGASA", r'\bFOGASA\b', ["fondo de garantia salarial"], "Fondo de Garantía Salarial (FOGASA)"),
+        ("MEI", r'\bMEI\b', ["mecanismo de equidad intergeneracional"], "Mecanismo de Equidad Intergeneracional (MEI)"),
+        ("IT", r'\bIT\b', ["incapacidad temporal"], "Incapacidad Temporal (IT)"),
+        ("IP", r'\bIP\b', ["incapacidad permanente"], "Incapacidad Permanente (IP)"),
+        ("AT", r'\bAT\b', ["accidente de trabajo", "accidentes de trabajo"], "Accidente de Trabajo (AT)"),
+        ("EP", r'\bEP\b', ["enfermedad profesional", "enfermedades profesionales"], "Enfermedad Profesional (EP)"),
     ]
 
     siglas_sin_definir = []
@@ -2538,33 +2738,12 @@ def auditar_siglas_sin_definir_previa(texto_alumno):
         m_sigla = re.search(pat_regex, t_norm)
         if m_sigla:
             pos_sigla = m_sigla.start()
-            ventana_previa = t_low[:pos_sigla + 80]
-            definida_antes = any(frase in ventana_previa for frase in frases_completas)
-            if not definida_antes:
+            ventana_entorno = t_low[:min(len(t_low), pos_sigla + 120)]
+            definida_correctamente = any(frase in ventana_entorno for frase in frases_completas)
+            if not definida_correctamente:
                 siglas_sin_definir.append((sigla, ejemplo_formal))
 
     return siglas_sin_definir
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def consultar_literal_boe_trlgss(num_art_str):
-    """Consulta en el BOE únicamente cuando el artículo pertenece al TRLGSS (BOE-A-2015-11724)."""
-    num_limpio = str(num_art_str).strip()
-    try:
-        url_boe = f"https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-11724/texto/bloque/a{num_limpio}"
-        headers_boe = {"Accept": "application/xml"}
-        r_boe = requests.get(url_boe, headers=headers_boe, timeout=4)
-        if r_boe.status_code == 200 and "<p" in r_boe.text:
-            parrafos_xml = re.findall(r'<p[^>]*>(.*?)</p>', r_boe.text, flags=re.DOTALL)
-            texto_limpio = " ".join(re.sub(r'<[^>]+>', '', p).strip() for p in parrafos_xml if p.strip())
-            if len(texto_limpio) > 25:
-                if len(texto_limpio) > 320:
-                    texto_limpio = texto_limpio[:320].rsplit(" ", 1)[0] + "...»"
-                else:
-                    texto_limpio = texto_limpio + "»"
-                return f"«{texto_limpio}"
-    except Exception:
-        pass
-    return ""
 
 def _extraer_articulos_detallados_de_texto(texto):
     """
@@ -2588,6 +2767,8 @@ def _extraer_articulos_detallados_de_texto(texto):
                 return "TRLGSS"
             if "2064/1995" in nc or "RGCL" in nc:
                 return "RGCL"
+            if "1415/2004" in nc or "RGR" in nc:
+                return "RGR"
             if "ET" in nc or "ESTATUTO" in nc:
                 return "ET"
             if "CE" in nc or "CONSTITUCI" in nc:
@@ -2598,6 +2779,10 @@ def _extraer_articulos_detallados_de_texto(texto):
         ventana_sig = t_limpio[pos_fin_match:pos_fin_match + 45]
         if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RIA|Reglamento\s+General\s+sobre\s+inscripci|RD\s*84/1996)', ventana_sig, re.IGNORECASE):
             return "RIA"
+        if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RGCL|Reglamento\s+General\s+sobre\s+Cotizaci|RD\s*2064/1995)', ventana_sig, re.IGNORECASE):
+            return "RGCL"
+        if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RGR|Reglamento\s+General\s+de\s+Recaudaci|RD\s*1415/2004)', ventana_sig, re.IGNORECASE):
+            return "RGR"
         if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:TRLGSS|LGSS|Texto\s+Refundido|RDL\s*8/2015)', ventana_sig, re.IGNORECASE):
             return "TRLGSS"
         return ""
@@ -2611,9 +2796,10 @@ def _extraer_articulos_detallados_de_texto(texto):
             numeros_base.add(nh)
         if re.search(r'\b(a|al|\-|–)\b', rango_txt) and len(nums_hallados) == 2:
             ini, fin = int(nums_hallados[0]), int(nums_hallados[1])
-            if ini <= fin and (fin - ini) <= 60:
-                for k_n in range(ini, fin + 1):
-                    numeros_base.add(str(k_n))
+            if ini <= fin and (fin - ini) <= 25:
+                nums_hallados = [str(k_n) for k_n in range(ini, fin + 1)]
+                for k_s in nums_hallados:
+                    numeros_base.add(k_s)
         lbl = f"Arts. {rango_txt}" + (f" {norma_txt}" if norma_txt else "")
         clave_v = lbl.lower()
         if clave_v not in vistos_norm:
@@ -2636,7 +2822,9 @@ def _extraer_articulos_detallados_de_texto(texto):
         d_txt = re.sub(r'\s+', ' ', m.group(1).strip())
         norma_txt = (m.group(2) or "").strip()
         num_d = re.findall(r'\d+', d_txt)
-        token_d = f"DA_{num_d[0]}" if num_d else d_txt.lower()
+        es_dt = bool(re.match(r'^(?:DT|Disposici[óo]n\s+transitoria)', d_txt, re.IGNORECASE))
+        pref_d = "DT" if es_dt else "DA"
+        token_d = f"{pref_d}_{num_d[0]}" if num_d else d_txt.lower()
         numeros_base.add(token_d)
         lbl = f"{d_txt}" + (f" {norma_txt}" if norma_txt else "")
         if lbl.lower() not in vistos_norm:
@@ -2696,7 +2884,6 @@ def auditar_pertinencia_y_bloques_epigrafe(enunciado_epigrafe, explicacion_ofici
     desviacion_epigrafe = False
     motivo_desviacion = ""
 
-    # A) Epígrafe de Normas sobre Afiliación
     if "afiliacion" in ep_norm and "altas" not in ep_norm and "bajas" not in ep_norm and "procedimiento" not in ep_norm:
         marcadores_afil = [
             r'\bunic(?:a|idad)\b', r'\bvitalici[oa]\b', r'\bnss\b', r'\bnaf\b',
@@ -2711,24 +2898,6 @@ def auditar_pertinencia_y_bloques_epigrafe(enunciado_epigrafe, explicacion_ofici
                 "El texto presentado desarrolla otro epígrafe distinto y omite el contenido nuclear de la afiliación (concepto del art. 15 TRLGSS y art. 6 RIA, caracteres de unicidad y vitalicidad, NSS/NAF, vías de promoción del art. 16 TRLGSS y afiliaciones indebidas del art. 59 RIA)."
             )
 
-    # B) Epígrafe de Procedimiento y efectos (cuando va separado de la clasificación de las altas)
-    elif "procedimiento y efectos" in ep_norm and "altas y bajas" not in ep_norm:
-        marcadores_proc = [
-            r'sistema\s+red', r'medios\s+electronicos', r'sedess', r'codigo\s+de\s+ocupacion',
-            r'30\.2', r'132', r'6\s+dias\s+naturales', r'seis\s+dias\s+naturales',
-            r'no\s+extinguen?\s+la\s+obligacion\s+de\s+cotizar', r'conserva', r'4\s+anos', r'cuatro\s+anos', r'57'
-        ]
-        aciertos_proc = sum(1 for pat in marcadores_proc if re.search(pat, al_norm))
-        menciones_tipos_alta = len(re.findall(r'\b(alta\s+real|asimilada\s+al\s+alta|pleno\s+derecho|alta\s+especial)\b', al_norm))
-        if aciertos_proc == 0 and menciones_tipos_alta >= 2:
-            desviacion_epigrafe = True
-            motivo_desviacion = (
-                "🚨 **FALTA GRAVE DE CONTENIDO DEL EPÍGRAFE (`Procedimiento y efectos`):** "
-                "La primera mitad de tu respuesta desarrolla la clasificación de los tipos de alta (alta real, asimilada, pleno derecho y especial), que pertenece al epígrafe anterior. "
-                "En cuanto al epígrafe preguntado (**Procedimiento y efectos**), omites por completo el procedimiento electrónico por Sistema RED (art. 38 RIA), las notificaciones electrónicas (art. 132 TRLGSS), la comunicación del código de ocupación (art. 30.2.a RIA), el plazo de 6 días naturales de las bajas y variaciones (art. 32.3 RIA), los efectos de las bajas en plazo y fuera de plazo (art. 35.2 RIA) y el deber de conservación de documentos durante 4 años (art. 57 RIA), abordando únicamente el plazo previo de 60 días de las altas, los efectos de las altas y las altas/bajas indebidas."
-            )
-
-    # C) Epígrafe de Convenio Especial
     elif "convenio especial" in ep_norm:
         marcadores_convenio = [
             r'2865/2003', r'1\.080', r'1080\s*dias', r'12\s*anos', r'doce\s*anos',
@@ -2742,6 +2911,19 @@ def auditar_pertinencia_y_bloques_epigrafe(enunciado_epigrafe, explicacion_ofici
                 "Tu respuesta no desarrolla el Convenio Especial (Orden TAS/2865/2003, requisito de 1.080 días de cotización en 12 años, plazo de 90 días / 1 año, reglas de base de cotización y coeficiente 0,94, extinción y modalidades especiales)."
             )
 
+    elif "inscripcion" in ep_norm and "encuadramiento" in ep_norm:
+        marcadores_inscripcion = [
+            r'inscripcion\s+de\s+empresa', r'cuenta\s+de\s+cotizacion', r'\bccc\b',
+            r'mutua\s+colaboradora', r'poliza\s+de\s+asociacion', r'documento\s+de\s+asociacion',
+            r'fichero\s+general\s+de\s+empresarios', r'cnae', r'45\s+dias', r'\bart(?:iculo|\.)\s*138\b', r'\bart(?:iculo|\.)\s*5\b'
+        ]
+        if sum(1 for pat in marcadores_inscripcion if re.search(pat, al_norm)) <= 1:
+            desviacion_epigrafe = True
+            motivo_desviacion = (
+                "🚨 **INCONGRUENCIA CON EL EPÍGRAFE PREGUNTADO (`Encuadramiento e inscripción`):** "
+                "El texto presentado no desarrolla la inscripción de empresas (art. 138 TRLGSS y art. 5 RIA), el Código de Cuenta de Cotización (CCC), la opción de cobertura con Mutua ni las variaciones de datos empresariales."
+            )
+
     bloques_ep = _extraer_bloques_estructurales_epigrafe(explicacion_oficial)
     apartados_completos = []
     apartados_incompletos = []
@@ -2751,7 +2933,6 @@ def auditar_pertinencia_y_bloques_epigrafe(enunciado_epigrafe, explicacion_ofici
         tit_n = _normalizar_sin_acentos(tit_b)
         cuerpo_n = _normalizar_sin_acentos(cuerpo_b)
 
-        # Reglas estrictas para no dar jamás por completado un apartado que el alumno no ha escrito
         if "baja" in tit_n and ("plazo" in tit_n or "32" in tit_n or "35.2" in tit_n):
             if not re.search(r'\b(6\s*dias|seis\s*dias|32\.3|no\s+extinguen?\s+la\s+obligacion\s+de\s+cotizar|35\.2)\b', al_norm):
                 apartados_omitidos.append((tit_b, full_b))
@@ -2776,15 +2957,15 @@ def auditar_pertinencia_y_bloques_epigrafe(enunciado_epigrafe, explicacion_ofici
         aciertos_cuerpo = sum(1 for w in palabras_cuerpo_distintivas if w[:5] in al_norm)
         ratio_cuerpo = aciertos_cuerpo / max(1, len(palabras_cuerpo_distintivas))
 
-        if ratio_cuerpo >= 0.45 and aciertos_cuerpo >= 3:
+        if ratio_cuerpo >= 0.35 and aciertos_cuerpo >= 2:
             apartados_completos.append((tit_b, full_b))
-        elif ratio_cuerpo >= 0.25 and aciertos_cuerpo >= 2:
+        elif ratio_cuerpo >= 0.18 and aciertos_cuerpo >= 2:
             apartados_incompletos.append((tit_b, full_b))
         else:
             apartados_omitidos.append((tit_b, full_b))
 
     total_b = max(1, len(bloques_ep))
-    unidades_reales = len(apartados_completos) + (0.40 * len(apartados_incompletos))
+    unidades_reales = len(apartados_completos) + (0.55 * len(apartados_incompletos))
     ratio_cobertura_epigrafe = min(1.0, unidades_reales / total_b)
 
     return {
@@ -2845,14 +3026,11 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
         "articulos_extra_validos": articulos_extra_validos,
         "articulos_extra_erroneos": articulos_extra_erroneos,
         "siglas_sin_presentar": siglas_sin_presentar,
+        "nums_citados_alumno": nums_al,
         "auditoria_bloques": aud_bloques
     }
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
-    """
-    Calcula la evaluación analítica estricta de respaldo (en caso de caída de red)
-    y prepara los datos de auditoría para la IA de Gemini.
-    """
     auditoria = auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta)
     aud_b = auditoria["auditoria_bloques"]
 
@@ -2870,7 +3048,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     if aud_b["desviacion_epigrafe"]:
         n_comp = len(aud_b["apartados_completos"])
         n_parciales = len(aud_b["apartados_incompletos"])
-        pts_c1_desv = round(min(14.50, (n_comp * 3.50) + (n_parciales * 1.75) + (len(auditoria["articulos_acertados"]) * 0.50)), 2)
+        pts_c1_desv = round(min(10.0, (n_comp * 3.0) + (n_parciales * 1.5) + (len(auditoria["articulos_acertados"]) * 0.50)), 2)
         nota_50_desv = pts_c1_desv
         nota_10_desv = round((nota_50_desv / 50.0) * 10.0, 2)
         return {
@@ -2884,17 +3062,17 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         }
 
     ratio_cobertura_real = aud_b.get("ratio_cobertura_epigrafe", 0.0)
-    pts_base_c1 = ratio_cobertura_real * 42.0
-    bonus_extra = min(3.0, len(auditoria["articulos_extra_validos"]) * 0.50)
-    resta_arts_omitidos = min(2.00, len(auditoria["articulos_omitidos"]) * 0.10)
+    pts_base_c1 = ratio_cobertura_real * 43.0
+    bonus_extra = min(4.0, len(auditoria["articulos_extra_validos"]) * 0.65)
+    resta_arts_omitidos = min(1.50, len(auditoria["articulos_omitidos"]) * 0.08)
     pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
         num_parrafos = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 25])
-        pts_criterio_2 = round(min(3.0, 2.0 + (0.6 if num_parrafos >= 3 else 0.2)), 2)
-        resta_siglas = min(0.75, len(auditoria["siglas_sin_presentar"]) * 0.15)
-        pts_criterio_3 = round(max(0.25, min(2.0, 1.8 - resta_siglas)), 2)
+        pts_criterio_2 = round(min(3.0, 2.2 + (0.6 if num_parrafos >= 3 else 0.2)), 2)
+        resta_siglas = min(0.50, len(auditoria["siglas_sin_presentar"]) * 0.15)
+        pts_criterio_3 = round(max(0.50, min(2.0, 1.85 - resta_siglas)), 2)
     else:
         pts_criterio_2 = 0.0
         pts_criterio_3 = 0.0
@@ -2929,10 +3107,6 @@ def obtener_gemini_api_key_activa():
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _obtener_modelos_disponibles_api(clave_limpia):
-    """
-    Pregunta directamente a Google qué modelos Gemini están activos para esta clave API
-    (por ejemplo gemini-3.0-flash, gemini-3.1-pro-preview, etc.), priorizando los modelos 3.x más recientes.
-    """
     modelos_prioritarios = [
         "gemini-3.0-flash",
         "gemini-3.1-pro-preview",
@@ -2969,6 +3143,9 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     if not texto_ia:
         return ev_out, ""
 
+    aud_b = (ev_out.get("auditoria") or {}).get("auditoria_bloques") or {}
+    hay_desviacion = bool(aud_b.get("desviacion_epigrafe", False))
+
     c1_val = c2_val = c3_val = None
 
     m_tag = re.search(
@@ -2994,12 +3171,14 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
 
     if c1_val is not None:
         c1_val = round(max(0.0, min(45.0, c1_val)), 2)
+        if hay_desviacion:
+            c1_val = min(c1_val, 10.0)
         if c1_val < 20.0:
             c2_val = 0.0
             c3_val = 0.0
         else:
-            c2_val = round(max(0.0, min(3.0, c2_val if c2_val is not None else 2.0)), 2)
-            c3_val = round(max(0.0, min(2.0, c3_val if c3_val is not None else 1.5)), 2)
+            c2_val = round(max(0.0, min(3.0, c2_val if c2_val is not None else 2.2)), 2)
+            c3_val = round(max(0.0, min(2.0, c3_val if c3_val is not None else 1.6)), 2)
 
         nota_50 = round(min(50.0, c1_val + c2_val + c3_val), 2)
         nota_10 = round((nota_50 / 50.0) * 10.0, 2)
@@ -3015,7 +3194,7 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
 
     return ev_out, texto_ia
 
-def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
+def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, anexo_boe_html=""):
     """Alternativa analítica de respaldo por si en algún momento no hubiera conexión con los servidores de Google."""
     aud_b = aud.get("auditoria_bloques") or {}
     desv = aud_b.get("desviacion_epigrafe", False)
@@ -3084,10 +3263,10 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
         "📊 **Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
         f"- **➕ Qué te ha sumado puntos:** `+{c1:.2f} ptos` por los apartados de `{pregunta}` que sí has abordado.\n"
         f"- **➖ Qué te ha restado o impedido sumar:** `-{faltan_c1:.2f} ptos` por los **{len(omit)} apartados omitidos** de `{pregunta}`, la ausencia de citas de la explicación (**Artículos omitidos**) y el no activar los Criterios 2 y 3 si no se superan los 20,00 puntos en el Criterio 1.\n\n"
-        "💡 **Orientación de tus preparadores para mejorar este epígrafe:** Asegúrate siempre de desarrollar específicamente cada bloque del epígrafe preguntado y de presentar las siglas en su primera mención (*«..., en adelante, TRLGSS»*)."
+        "💡 **Orientación de tus preparadores para mejorar este epígrafe:** Vas por buen camino; completa tu esquema incorporando los apartados pendientes y asegurando las citas normativas principales."
     )
 
-    return "\n\n".join(partes)
+    return "\n\n".join(partes) + anexo_boe_html
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
     aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
@@ -3100,62 +3279,71 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     aud = ev_fallback.get("auditoria") or auditar_articulos_y_aportaciones_alumno(
         respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}"
     )
+    aud_b = aud.get("auditoria_bloques") or {}
+
+    # Construir el anexo desplegable con la literalidad en el BOE de los artículos del epígrafe oficial
+    anexo_boe_html = construir_anexo_desplegable_boe_epigrafe(
+        respuesta_oficial, explicacion_oficial, nums_citados_alumno=aud.get("nums_citados_alumno")
+    )
 
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno adicional detectado"
     siglas_mal_str = (
-        ", ".join([f"{s} (debiste escribir la primera vez «{ej}»)" for s, ej in aud["siglas_sin_presentar"]])
-        if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
+        ", ".join([f"{s} (no fue presentada con su nombre completo antes)" for s, _ in aud["siglas_sin_presentar"]])
+        if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas empleadas por el alumno fueron correctamente presentadas)"
+    )
+    alerta_desv_str = (
+        f"\n🚨 ATENCIÓN: Se ha detectado incongruencia con el epígrafe preguntado: {aud_b.get('motivo_desviacion')}\n"
+        "Si el alumno ha contestado un epígrafe distinto al preguntado (por ejemplo, hablar de Altas y Bajas cuando se pregunta Afiliación o Convenio Especial), la nota de Criterio 1 no puede superar los 10,00 puntos.\n"
+        if aud_b.get("desviacion_epigrafe") else ""
     )
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
 
     prompt = (
-        "Actúa como el Tribunal Calificador oficial del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Debes realizar un TRABAJO DE IA PURO, EXTREMADAMENTE ESTRICTO, RIGUROSO Y ANALÍTICO, comparando párrafo por párrafo lo escrito por el alumno "
-        "con el desarrollo oficial del epígrafe preguntado.\n\n"
-        "=== REGLAS ESTRICTAS E INNEGOCIABLES DE VALORACIÓN DEL TRIBUNAL ===\n"
-        "1. **RIGOR EXTREMO DE CONGRUENCIA CON EL EPÍGRAFE PREGUNTADO (`" + pregunta + "`):**\n"
-        "   - Lee con máxima atención qué pide exactamente el título y el desarrollo oficial de ESTE epígrafe.\n"
-        "   - **NO PUNTÚES CONTENIDO DE OTROS EPÍGRAFES DEL MISMO TEMA:** Si el alumno incluye párrafos que corresponden a otro epígrafe distinto (por ejemplo, si el epígrafe preguntado es «Procedimiento y efectos» o «Normas sobre afiliación» o «El convenio especial», y el alumno dedica la mitad de su escrito a definir los tipos de alta: alta real, situación asimilada al alta, alta de pleno derecho y alta especial), debes advertirle con rotundidad de que esos párrafos pertenecen a otro epígrafe distinto y **le otorgan 0,00 puntos en este epígrafe**.\n"
-        "   - **SUSPENSO OBLIGATORIO (< 25 / 50 PTOS) SI FALTA CONTENIDO ESENCIAL O NO SE AJUSTA AL EPÍGRAFE:** Si el alumno deja sin desarrollar la mitad o más de los bloques que integran la explicación oficial de este epígrafe, o despacha bloques enteros con una frase genérica o inexacta (como decir «iguales circunstancias se producen en el caso de las solicitudes de baja» omitiendo el plazo de 6 días naturales del art. 32.3 RIA y la no extinción de la obligación de cotizar en bajas fuera de plazo hasta que la TGSS conozca el cese ex art. 35.2 RIA), **la nota del Criterio 1 DEBE SER INFERIOR A 20,00 / 45 PUNTOS (SUSPENSO CLARO)**.\n"
-        "   - **PROHIBIDO DAR POR DESARROLLADO LO QUE EL ALUMNO NO HA ESCRITO:** Jamás digas que el alumno ha desarrollado un apartado (como el plazo de bajas, la conservación de documentos durante 4 años, el Sistema RED o las notificaciones electrónicas) si no lo ha escrito explícitamente en su respuesta.\n\n"
-        "2. **VALORACIÓN POSITIVA POR APORTACIONES ADICIONALES PERTINENTES AL EPÍGRAFE (+ PUNTOS EN CRITERIO 1):**\n"
-        "   - Si el alumno añade conceptos jurídicos, supuestos legales o artículos que sí pertenezcan genuinamente a la materia de ESTE epígrafe (por ejemplo, cuando en la parte de «Efectos de las altas y bajas» desarrolla con rigor las Altas Indebidas del art. 60 RIA y las Bajas Indebidas del art. 61 RIA) y son jurídicamente correctos, valóralo positivamente sumándole puntos en el Criterio 1.\n\n"
-        "3. **PENALIZACIÓN POR USO DE SIGLAS SIN PRESENTACIÓN PREVIA (- PUNTOS EN CRITERIO 3):**\n"
-        "   - En un examen de desarrollo ante el Tribunal, la primera vez que se utiliza una sigla debe escribirse su nombre completo seguido de «, en adelante, SIGLA» (ej.: «Texto Refundido de la Ley General de la Seguridad Social, en adelante, TRLGSS»).\n"
-        f"   - Siglas usadas sin presentación previa detectadas en el texto del alumno: {siglas_mal_str}.\n\n"
-        "4. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MODERADA Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
-        "   - No citar los artículos incluidos en la explicación oficial debe penalizar de forma moderada.\n"
-        "   - En el apartado 3 de tu informe, cuando indiques los artículos de la explicación que el alumno no ha citado, escribe únicamente **`Artículos omitidos:`** seguido directamente de la relación de artículos omitidos.\n"
+        "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+        "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
+        "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
+        "=== REGLAS EQUILIBRADAS DE VALORACIÓN DEL TRIBUNAL ===\n"
+        "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE VS. RESPUESTA PARCIAL PERO PERTINENTE (`" + pregunta + "`):**\n"
+        "   - **Cuándo SÍ debes suspender con firmeza (< 12 / 50 ptos):** Únicamente cuando el alumno conteste un epígrafe distinto al preguntado (por ejemplo, si el epígrafe preguntado es `Normas sobre afiliación`, `El convenio especial` o `Encuadramiento e inscripción` y el alumno pega un texto sobre `Altas y bajas en el Régimen General` omitiendo la institución preguntada) o cuando deje casi todo en blanco.\n"
+        "   - **Cuándo debes ser UN POCO MÁS INDULGENTE Y CONSTRUCTIVO (permitiendo alcanzar o superar los 22-30 / 45 puntos en Criterio 1):** Cuando el alumno SÍ está contestando al epígrafe preguntado, comprende bien el núcleo del tema y desarrolla correctamente una parte relevante (por ejemplo, explica bien las modalidades de alta —real, asimilada, presunta/pleno derecho y especial— y además aporta el procedimiento, efectos o altas/bajas indebidas), aunque haya olvidado algunos subapartados del esquema (como definir pluriempleo/pluriactividad o sujetos obligados) o haya explicado conceptos con sus propias palabras sin recordar todos los números de artículo. En estos casos, **valora con generosidad todo lo que sí sabe y aporta** para que su esfuerzo se vea recompensado y pueda superar el corte eliminatorio de 25/50 si la respuesta demuestra estudio y buena base.\n"
+        "   - **NO EXIJAS COMO OBLIGATORIO LO QUE NO ESTÉ EN LA EXPLICACIÓN OFICIAL DE ESTE EPÍGRAFE:** Si el alumno adelanta o añade conceptos conexos válidos del tema (como plazos de altas previas, efectos de las altas o las altas y bajas indebidas de los arts. 60 y 61 RIA), súmale puntos adicionales en el Criterio 1 por enriquecer la exposición."
+        f"{alerta_desv_str}\n"
+        "2. **REGLA EXACTA SOBRE PRESENTACIÓN DE SIGLAS (PROHIBIDO INVENTAR FALSOS POSITIVOS):**\n"
+        "   - Una sigla está **CORRECTAMENTE PRESENTADA** tanto si el alumno escribe su nombre completo seguido de la sigla entre paréntesis —por ejemplo: *«Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos de trabajadores en la Seguridad Social (RIA)»*— como si utiliza la fórmula *«..., en adelante, SIGLA»*.\n"
+        "   - **PROHIBIDO** acusar al alumno de usar siglas sin presentar si ya puso su nombre completo antes (como en el caso de `(RIA)`), y **PROHIBIDO** mencionar siglas que el alumno ni siquiera ha escrito en su texto.\n"
+        f"   - Auditoría automática verificada sobre el texto del alumno: **Siglas usadas sin presentar detectadas:** `{siglas_mal_str}` (respeta exactamente este dato y resta muy poquito —máximo 0,15 o 0,20 ptos— si hay alguna).\n\n"
+        "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MUY LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
+        "   - Omitir números de artículos incluidos en la explicación oficial debe restar **muy poco** cuando el alumno ha sabido explicar el concepto jurídico.\n"
+        "   - En el apartado 3 de tu informe, escribe en una línea limpia únicamente **`Artículos omitidos:`** seguido directamente de la relación de artículos omitidos.\n"
         f"   - Relación detectada: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
         "=== BAREMO OFICIAL DEL TRIBUNAL CALIFICADOR ===\n"
         "- Puntuación total: de 0 a 50 puntos (mínimo 25,00 puntos para aprobar).\n"
-        "- Criterio 1 (0 a 45 puntos): Conocimiento, exactitud y completitud de los apartados de ESTE epígrafe concreto. Calcula la nota con estricto rigor proporcional a lo que realmente ha contestado de la explicación oficial (si solo desarrolla correctamente el 30% o 40% del contenido real de este epígrafe, su nota en Criterio 1 debe estar entre 10,00 y 17,00 / 45 puntos, nunca por encima de 20).\n"
-        "- Criterio 2 (0 a 3 puntos): Orden de ideas y estructura sistemática (IMPORTANTE: si Criterio 1 < 20,00, Criterio 2 = 0,00 obligatoriamente).\n"
-        "- Criterio 3 (0 a 2 puntos): Calidad de expresión escrita y presentación de siglas (IMPORTANTE: si Criterio 1 < 20,00, Criterio 3 = 0,00 obligatoriamente).\n\n"
+        "- Criterio 1 (0 a 45 puntos): Conocimiento y desarrollo de los apartados de la explicación oficial de este epígrafe + puntos extra por conceptos o artículos adicionales conexos válidos que mejoren el epígrafe - resta muy leve por los artículos omitidos de la explicación.\n"
+        "- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
+        "- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas (puntúa si Criterio 1 >= 20,00; resta muy levemente solo por las siglas que realmente haya usado el alumno sin presentar su nombre completo).\n\n"
         f"=== EPÍGRAFE PREGUNTADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
-        f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (MODELO EXIGIDO POR EL TRIBUNAL) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+        f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (REFERENCIA DE CONTENIDO) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
         f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== DATOS DE AUDITORÍA NORMATIVA ===\n"
+        f"=== DATOS DE AUDITORÍA VERIFICADOS ===\n"
         f"- Artículos de la explicación citados por el alumno: {arts_acertados_str}\n"
         f"- Artículos omitidos de la explicación: {arts_omitidos_str}\n"
-        f"- Otros artículos citados por el alumno: {arts_extra_ok_str}\n"
-        f"- Siglas sin presentación previa: {siglas_mal_str}\n\n"
+        f"- Artículos adicionales aportados por el alumno: {arts_extra_ok_str}\n"
+        f"- Siglas usadas por el alumno sin presentación previa: {siglas_mal_str}\n\n"
         "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
-        "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con las puntuaciones numéricas (con punto decimal) que otorgas tras tu análisis estricto:\n"
+        "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con las puntuaciones numéricas (con punto decimal) que otorgas:\n"
         "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
-        "A continuación, redacta tu dictamen analítico estructurado en estos 4 apartados:\n"
-        "1. **✅ Análisis crítico de pertinencia y de lo realmente acertado en este epígrafe:**\n"
-        "   - Indica con total franqueza y precisión analítica qué parte del escrito del alumno se ajusta verdaderamente al epígrafe preguntado y qué parte (si la hay) corresponde a otro epígrafe distinto y no puede puntuar aquí.\n"
-        "   - Detalla qué puntos concretos del epígrafe oficial sí ha explicado bien y si ha aportado algún bloque conexo válido (como altas y bajas indebidas en la parte de efectos).\n"
-        "2. **⚠️ Análisis exhaustivo de lo omitido, incompleto o erróneo frente a la explicación oficial:**\n"
-        "   - Analiza con máximo rigor técnico y punto por punto qué apartados de la explicación oficial ha omitido por completo y qué errores o imprecisiones ha cometido en lo que sí mencionó.\n"
+        "A continuación, redacta tu dictamen analítico y motivador estructurado en estos 4 apartados:\n"
+        "1. **✅ Análisis de pertinencia, apartados acertados y aportaciones adicionales que enriquecen el epígrafe:**\n"
+        "   - Valora de forma constructiva y positiva todo lo que el alumno ha desarrollado bien respecto al epígrafe y destaca muy favorablemente los conceptos o artículos adicionales conexos (como efectos o altas/bajas indebidas) que ha aportado para enriquecer su respuesta.\n"
+        "2. **⚠️ Análisis constructivo de lo que falta por completar respecto a la explicación oficial:**\n"
+        "   - Explica con detalle analítico pero con tono cercano y pedagógico qué apartados o matices de la `EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE` le han faltado para alcanzar una nota de sobresaliente.\n"
         "3. **⚖️ Rigor normativo y uso de siglas:**\n"
-        "   - Comenta el uso de normativa en el texto del alumno.\n"
+        "   - Valora las normas y artículos bien citados (incluyendo la correcta presentación de siglas como `(RIA)` cuando lo haya hecho).\n"
         f"   - Escribe en una línea limpia: **Artículos omitidos:** {arts_omitidos_str}\n"
-        "   - Indica las siglas utilizadas sin presentación previa (recordando que debe escribirse «Texto completo, en adelante, SIGLA»).\n"
+        f"   - Respecto a las siglas sin presentar, indica únicamente: **Siglas sin presentación previa:** {siglas_mal_str}\n"
         "4. **🎓 Calificación por Criterios del Tribunal y Desglose sencillo de puntos sumados y restados:**\n"
         "   - Muestra las puntuaciones otorgadas en:\n"
         "     • **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
@@ -3163,15 +3351,15 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         "     • **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
         "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
         "   - Añade el bloque **📊 Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
-        "     • **➕ Qué te ha sumado puntos:** viñetas claras indicando cuántos puntos te ha aportado cada bloque pertinente que sí has explicado bien.\n"
-        "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras indicando cuántos puntos has dejado de ganar por cada bloque omitido o improcedente, la resta leve por **Artículos omitidos** y la penalización por **uso de siglas sin presentación previa**.\n"
-        "   - Cierra con **💡 Orientación de tus preparadores para dominar este epígrafe:**."
+        "     • **➕ Qué te ha sumado puntos:** viñetas claras con los puntos aportados por cada bloque bien desarrollado, por los conceptos/artículos adicionales que mejoraron el epígrafe y por estructura/expresión.\n"
+        "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras con los puntos que faltaron por los apartados de la explicación oficial no incluidos, la resta leve por **Artículos omitidos** y la resta leve (si procede) por **siglas sin presentación previa**.\n"
+        "   - Cierra con **💡 Orientación motivadora de tus preparadores para seguir subiendo nota en este epígrafe:**."
     )
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": 0.15,
             "topP": 0.85,
         }
     }
@@ -3187,12 +3375,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
                 ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
                 if isinstance(ev_fallback, dict):
                     ev_fallback.update(ev_actualizado)
-                return texto_ia_limpio
+                return texto_ia_limpio + anexo_boe_html
         except Exception:
             continue
 
-    # Si en algún momento no hubiera conexión con Google, entra automáticamente la alternativa analítica de respaldo
-    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud)
+    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, anexo_boe_html=anexo_boe_html)
 
 def sincronizar_progreso_navegador():
     try:
