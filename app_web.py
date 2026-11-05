@@ -2534,7 +2534,6 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
 
     c1_val = c2_val = c3_val = None
 
-    # 1. Buscar bloque estructurado [[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]
     m_tag = re.search(
         r'\[\[NOTAS_TRIBUNAL:\s*C1\s*=\s*(\d+(?:[\.,]\d+)?)\s*\|\s*C2\s*=\s*(\d+(?:[\.,]\d+)?)\s*\|\s*C3\s*=\s*(\d+(?:[\.,]\d+)?)\s*\]\]',
         texto_ia,
@@ -2546,7 +2545,6 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
         c3_val = float(m_tag.group(3).replace(",", "."))
         texto_ia = re.sub(r'\[\[NOTAS_TRIBUNAL:[^\]]*\]\]\s*', '', texto_ia, flags=re.IGNORECASE).strip()
     else:
-        # 2. Respaldo por expresión regular sobre el texto si la IA omitió la etiqueta superior
         m_c1 = re.search(r'Criterio\s*1[^\d\n]{0,60}(\d{1,2}(?:[\.,]\d{1,2})?)\s*/\s*45', texto_ia, flags=re.IGNORECASE)
         m_c2 = re.search(r'Criterio\s*2[^\d\n]{0,60}(\d{1}(?:[\.,]\d{1,2})?)\s*/\s*3', texto_ia, flags=re.IGNORECASE)
         m_c3 = re.search(r'Criterio\s*3[^\d\n]{0,60}(\d{1}(?:[\.,]\d{1,2})?)\s*/\s*2', texto_ia, flags=re.IGNORECASE)
@@ -2593,8 +2591,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     prompt = (
         "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
         "Tu tarea es analizar en profundidad el texto escrito por el alumno, compararlo directamente con la respuesta/explicación oficial de referencia "
-        "y realizar tú mismo una valoración justa, rigurosa, constructiva y pedagógica aplicando EXCLUSIVAMENTE los Criterios Oficiales del Tribunal "
-        "(sin aplicar restas mecánicas prefabricadas por elemento omitido):\n\n"
+        "y realizar tú mismo una valoración justa, rigurosa, constructiva y pedagógica aplicando EXCLUSIVAMENTE los Criterios Oficiales del Tribunal:\n\n"
         "=== CRITERIOS OFICIALES DEL TRIBUNAL CALIFICADOR ===\n"
         "- Puntuación total del ejercicio: de 0 a 50 puntos (mínimo 25,00 puntos para superar el ejercicio).\n"
         "- Criterio 1 (de 0 a 45 puntos): Conocimiento, grado de comprensión y cobertura de los contenidos del epígrafe o cuestión, precisión técnico-jurídica y fundamentación normativa. "
@@ -2612,12 +2609,15 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         "1. **✅ Valoración general y análisis de lo acertado:** Analiza qué partes, conceptos, instituciones jurídicas y normas ha desarrollado bien el alumno en comparación con la explicación oficial, reconociendo el mérito de lo aportado.\n"
         "2. **⚠️ Comparativa con la explicación oficial (lo incompleto, impreciso u omitido):** Contrasta de forma razonada la respuesta del alumno con la explicación de referencia, explicándole qué bloques conceptuales, matices jurídicos, plazos o referencias normativas le han faltado o han quedado incompletos.\n"
         "3. **⚖️ Análisis del rigor normativo, estructura y expresión escrita:** Valora cómo ha integrado las leyes, reglamentos y artículos en su exposición, así como el orden de sus ideas y la claridad de su redacción.\n"
-        "4. **🎓 Calificación razonada por Criterios del Tribunal y Orientación para progresar:**\n"
-        "   - Desglosa y justifica brevemente la puntuación que le otorgas en:\n"
-        "     • **Criterio 1 (Conocimiento y fundamentación normativa: 0 a 45 ptos)**\n"
-        "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos)**\n"
-        "     • **Criterio 3 (Calidad de la expresión escrita: 0 a 2 ptos)**\n"
-        "     • **🏆 CALIFICACIÓN TOTAL SOBRE 50 PUNTOS (y su equivalencia sobre 10)**\n"
+        "4. **🎓 Calificación razonada por Criterios del Tribunal y Resumen sencillo de puntos sumados y restados:**\n"
+        "   - Primero muestra las puntuaciones otorgadas en:\n"
+        "     • **Criterio 1 (Conocimiento y fundamentación normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
+        "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `X,XX / 3,00 puntos`\n"
+        "     • **Criterio 3 (Calidad de la expresión escrita: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
+        "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
+        "   - Segundo, incluye un bloque muy claro, breve y sencillo titulado **📊 Resumen sencillo de tu nota (por qué has sumado y por qué te han restado o faltado puntos):** dividido en dos listas cortas con cifras aproximadas que cuadren con la nota final:\n"
+        "     • **➕ Qué te ha sumado puntos:** enumera en 3 o 4 viñetas sencillas los bloques del tema que sí has explicado bien, las normas/artículos acertados y tu estructura/redacción, indicando cuántos puntos aproximados te ha aportado cada acierto (ej.: *«+14,00 ptos por desarrollar correctamente la tipología de altas...»*).\n"
+        "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** enumera en 3 o 4 viñetas sencillas qué apartados no incluidos, qué artículos/normas o plazos omitidos, o qué detalles de estructura/expresión explican los puntos que te han faltado o restado (ej.: *«-8,00 ptos por no desarrollar el bloque de pluriempleo y pluriactividad...»*, *«-3,00 ptos por omitir el procedimiento en Sistema RED y el plazo de 6 días de las bajas...»*).\n"
         "   - Cierra con **💡 Orientación de tus preparadores para mejorar este epígrafe:** dándole pautas concretas y motivadoras para perfeccionar su respuesta en el próximo intento."
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -2642,14 +2642,19 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     c3 = ev_fallback.get("pts_criterio_3", 0.0)
     n50 = ev_fallback.get("nota_50", 0.0)
     n10 = ev_fallback.get("nota", 0.0)
+    faltan_c1 = round(max(0.0, 45.0 - c1), 2)
+    faltan_c23 = round(max(0.0, 5.0 - (c2 + c3)), 2)
     return (
         "1. **✅ Valoración general:**\n"
         "Se ha analizado tu respuesta contrastándola con el contenido oficial del epígrafe.\n\n"
-        "2. **🎓 Calificación por Criterios Oficiales del Tribunal:**\n"
+        "2. **🎓 Calificación por Criterios Oficiales del Tribunal y Resumen sencillo de puntos:**\n"
         f"- **Criterio 1 (Conocimiento y normativa):** `{c1:.2f} / 45,00 puntos`\n"
         f"- **Criterio 2 (Orden de ideas):** `{c2:.2f} / 3,00 puntos`\n"
         f"- **Criterio 3 (Expresión escrita):** `{c3:.2f} / 2,00 puntos`\n"
         f"- 🏆 **CALIFICACIÓN TOTAL:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia: **`{n10:.2f} / 10`**)*\n\n"
+        "📊 **Resumen sencillo de tu nota (por qué has sumado y por qué te han faltado puntos):**\n"
+        f"- **➕ Qué te ha sumado puntos:** `+{c1:.2f} ptos` por los conceptos y referencias del epígrafe que has desarrollado correctamente y `+{c2 + c3:.2f} ptos` por el orden expositivo y la expresión escrita.\n"
+        f"- **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** `-{faltan_c1:.2f} ptos` por los apartados, plazos o preceptos de la explicación oficial que han quedado sin desarrollar, y `-{faltan_c23:.2f} ptos` de margen de mejora en estructura y expresión formal.\n\n"
         "💡 **Orientación de tus preparadores:** Revisa el texto oficial inferior para contrastar los apartados y referencias normativas que puedes incorporar en tu próxima vuelta."
     )
 
@@ -3247,7 +3252,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
