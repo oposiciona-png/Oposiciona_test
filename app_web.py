@@ -7,12 +7,37 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 icono_ruta = "ICONO OPOSICIONA.png"
-st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
+st.set_page_config(
+    page_title="Plataforma de Tests Oposiciona",
+    page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚",
+    layout="centered",
+    menu_items={"Get Help": None, "Report a bug": None, "About": None}
+)
 
 GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw_B-g4pwxuZX4HzH99cobW6jQoValvLXI2ogeJgMuekjwlyS766KS4ujm3CFYdJ7DPlA/exec"
 # Clave ofuscada por fragmentos en Base64 para evitar falsas alertas de Secret Scanning en GitHub
 _K_PARTS = ("QVEuQWI4Uk42", "TDRmWVhWNHg0", "Vi1FWVlIbmRk", "bWxob0llcTZIRXNC", "S1BPUENDUHZDVkJ4RXc=")
 GEMINI_API_KEY_DEFAULT = "".join(base64.b64decode(p).decode("utf-8") for p in _K_PARTS)
+
+# Clave interna del servidor para cifrar el backup de sesión en localStorage y evitar que nadie extraiga el JSON de preguntas
+_BACKUP_SECRET_BYTES = b"Oposiciona_5.0_Blindaje_Privado_2026_SS#Key"
+
+def _cifrar_backup_sesion(datos_dict):
+    raw = zlib.compress(json.dumps(datos_dict, ensure_ascii=False).encode("utf-8"), level=9)
+    klen = len(_BACKUP_SECRET_BYTES)
+    xored = bytes(b ^ _BACKUP_SECRET_BYTES[i % klen] for i, b in enumerate(raw))
+    return "v2_" + base64.urlsafe_b64encode(xored).decode("ascii")
+
+def _descifrar_backup_sesion(token_str):
+    if not token_str:
+        return {}
+    if token_str.startswith("v2_"):
+        xored = base64.urlsafe_b64decode(token_str[3:].encode("ascii"))
+        klen = len(_BACKUP_SECRET_BYTES)
+        raw = bytes(b ^ _BACKUP_SECRET_BYTES[i % klen] for i, b in enumerate(xored))
+        return json.loads(zlib.decompress(raw).decode("utf-8"))
+    raw_legacy = zlib.decompress(base64.urlsafe_b64decode(token_str.encode("ascii")))
+    return json.loads(raw_legacy.decode("utf-8"))
 
 USUARIOS_ADMIN = ["ponentes@oposiciona.es", "ponentes@oposicona.es"]
 USUARIOS_AUTORIZADOS = {
@@ -85,11 +110,13 @@ body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
     }
 }
 """ if _es_sesion_admin else """
-body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
+body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span, div, img {
     -webkit-user-select: none !important;
     -moz-user-select: none !important;
     -ms-user-select: none !important;
     user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-user-drag: none !important;
 }
 @media print {
     html, body * {display: none !important; visibility: hidden !important;}
@@ -106,11 +133,11 @@ st.markdown("""<style>
     --secondary-background-color: #F8FAFC !important;
     color: #1E293B !important;
 }
-#MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stDeployButton, [data-testid="stAppDeployButton"] {
+#MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"], .stDeployButton, [data-testid="stAppDeployButton"] {
     visibility: hidden !important;
     display: none !important;
 }
-[class*="viewerBadge"], [class*="styles_viewerBadge"] {
+[class*="viewerBadge"], [class*="styles_viewerBadge"], [class*="profileContainer"], [class*="stActionButton"] {
     display: none !important;
     opacity: 0 !important;
     pointer-events: none !important;
@@ -261,27 +288,66 @@ try {{
             var script = parentDoc.createElement("script");
             script.id = "escudo-oposiciona";
             script.innerHTML = `
+                /* 1. Bloqueo de menú contextual (clic derecho) y arrastrar elementos */
                 document.addEventListener('contextmenu', function(e) {{
                     if (window.__oposiciona_es_admin) return;
                     e.preventDefault();
-                }});
+                }}, true);
+
+                document.addEventListener('dragstart', function(e) {{
+                    if (window.__oposiciona_es_admin) return;
+                    e.preventDefault();
+                }}, true);
+
+                /* 2. Bloqueo de copiado / cortado fuera de campos de escritura (textarea/input) */
                 document.addEventListener('copy', function(e) {{
                     if (window.__oposiciona_es_admin) return;
-                    var s = window.getSelection().toString();
-                    if (s.length > 0) {{
-                        e.clipboardData.setData('text/plain', s + "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0");
-                        e.preventDefault();
-                    }}
-                }});
-                document.addEventListener('keydown', function(e) {{
+                    var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+                    if (tag === 'textarea' || tag === 'input') return;
+                    e.clipboardData.setData('text/plain', 'Contenido protegido propiedad de Oposiciona 5.0.');
+                    e.preventDefault();
+                }}, true);
+
+                document.addEventListener('cut', function(e) {{
                     if (window.__oposiciona_es_admin) return;
-                    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {{
+                    var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+                    if (tag === 'textarea' || tag === 'input') return;
+                    e.preventDefault();
+                }}, true);
+
+                /* 3. Bloqueo de atajos de descarga HTML (Ctrl+S), código fuente (Ctrl+U), impresión (Ctrl+P) e Inspector DevTools (F12 / Ctrl+Shift+I/J/C/K) */
+                window.addEventListener('keydown', function(e) {{
+                    if (window.__oposiciona_es_admin) return;
+                    var k = (e.key || '').toLowerCase();
+                    var code = e.keyCode || e.which || 0;
+
+                    /* F12 */
+                    if (code === 123 || k === 'f12') {{
                         e.preventDefault();
                         e.stopPropagation();
+                        return false;
                     }}
-                }});
+                    /* Ctrl+S (Guardar HTML), Ctrl+U (Ver fuente), Ctrl+P (Imprimir) */
+                    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (k === 's' || k === 'u' || k === 'p')) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }}
+                    /* Ctrl+Shift+I / J / C / K (Herramientas de Desarrollador en Windows/Linux) */
+                    if (e.ctrlKey && e.shiftKey && (k === 'i' || k === 'j' || k === 'c' || k === 'k')) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }}
+                    /* Cmd+Option+I / J / C / U (Herramientas de Desarrollador y Ver fuente en Mac) */
+                    if (e.metaKey && e.altKey && (k === 'i' || k === 'j' || k === 'c' || k === 'u')) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }}
+                }}, true);
 
-                /* Latido anti-desconexión cada 25s y WakeLock para que no se suspenda la pestaña leyendo explicaciones */
+                /* Latido anti-desconexión cada 25s y WakeLock */
                 setInterval(function() {{
                     try {{
                         fetch(window.location.origin + "/_stcore/health", {{ method: "GET", cache: "no-store" }}).catch(function(){{}});
@@ -300,7 +366,7 @@ try {{
             `;
             parentDoc.head.appendChild(script);
         }}
-    }}, 400);
+    }}, 300);
 }} catch(e) {{}}
 </script>""", height=0)
 
@@ -426,8 +492,7 @@ if not st.session_state.autenticado:
     qp_restore = st.query_params.get("restore_session", "")
     if qp_restore:
         try:
-            raw_bytes = zlib.decompress(base64.urlsafe_b64decode(qp_restore.encode("ascii")))
-            datos_rec = json.loads(raw_bytes.decode("utf-8"))
+            datos_rec = _descifrar_backup_sesion(qp_restore)
             correo_rec = (datos_rec.get("email") or "").lower().strip()
             rol_rec = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_rec in lc), None)
             if rol_rec:
@@ -2281,6 +2346,7 @@ def activar_proteccion_antirecortes_alumno():
                 var pw = window.parent;
                 var pd = pw.document;
                 pw.__oposiciona_blur_disabled = true;
+                pw.__oposiciona_es_admin = true;
                 if (pw.__oposiciona_focus_timer) {
                     clearInterval(pw.__oposiciona_focus_timer);
                     pw.__oposiciona_focus_timer = null;
@@ -2303,12 +2369,13 @@ def activar_proteccion_antirecortes_alumno():
             var pw = window.parent;
             var pd = pw.document;
             pw.__oposiciona_blur_disabled = false;
+            pw.__oposiciona_es_admin = false;
 
             if (!pd.getElementById('oposiciona_blur_overlay')) {
                 var ov = pd.createElement('div');
                 ov.id = 'oposiciona_blur_overlay';
-                ov.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,23,42,0.72); z-index:2147483647; justify-content:center; align-items:center; text-align:center; color:#ffffff; font-family:sans-serif; padding:24px; cursor:pointer; user-select:none;';
-                ov.innerHTML = '<div style="background:#1E293B; border:2px solid #3B82F6; border-radius:12px; padding:24px 30px; max-width:480px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"><div style="font-size:34px; margin-bottom:10px;">🛡️</div><div style="font-size:18px; font-weight:800; margin-bottom:8px; color:#F8FAFC;">Contenido Protegido por Oposiciona</div><div style="font-size:14px; color:#CBD5E1; line-height:1.45;">La pantalla se desenfoca automáticamente al abrir herramientas de recorte o cambiar de ventana.<br><br><b style="color:#60A5FA;">Haz clic aquí dentro para continuar con tu ejercicio.</b></div></div>';
+                ov.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(15,23,42,0.78); z-index:2147483647; justify-content:center; align-items:center; text-align:center; color:#ffffff; font-family:sans-serif; padding:24px; cursor:pointer; user-select:none;';
+                ov.innerHTML = '<div style="background:#1E293B; border:2px solid #3B82F6; border-radius:12px; padding:24px 30px; max-width:480px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"><div style="font-size:34px; margin-bottom:10px;">🛡️</div><div style="font-size:18px; font-weight:800; margin-bottom:8px; color:#F8FAFC;">Contenido Protegido por Oposiciona</div><div style="font-size:14px; color:#CBD5E1; line-height:1.45;">La pantalla se protege automáticamente al detectar herramientas de inspección, descarga, recorte o cambio de ventana.<br><br><b style="color:#60A5FA;">Cierra cualquier panel lateral y haz clic aquí dentro para continuar.</b></div></div>';
                 pd.body.appendChild(ov);
                 ov.addEventListener('click', function() {
                     pw.__oposiciona_forzar_blur = false;
@@ -2321,8 +2388,8 @@ def activar_proteccion_antirecortes_alumno():
                 var appEl = pd.querySelector('[data-testid="stAppViewContainer"]') || pd.querySelector('.stApp') || pd.body;
                 if (appEl) {
                     appEl.style.transition = 'none';
-                    appEl.style.filter = 'blur(22px)';
-                    appEl.style.webkitFilter = 'blur(22px)';
+                    appEl.style.filter = 'blur(24px)';
+                    appEl.style.webkitFilter = 'blur(24px)';
                 }
                 var ov = pd.getElementById('oposiciona_blur_overlay');
                 if (ov) ov.style.display = 'flex';
@@ -2338,11 +2405,21 @@ def activar_proteccion_antirecortes_alumno():
                 if (ov) ov.style.display = 'none';
             };
 
+            /* Detector continuo de foco y de apertura del Inspector de Elementos (DevTools) por menú del navegador */
             if (pw.__oposiciona_focus_timer) clearInterval(pw.__oposiciona_focus_timer);
             pw.__oposiciona_focus_timer = setInterval(function() {
                 if (pw.__oposiciona_blur_disabled) return;
                 var tieneFoco = pd.hasFocus();
-                if (!tieneFoco || pd.hidden || pw.__oposiciona_forzar_blur) {
+                var esMovil = /iphone|ipad|ipod|android|mobile/i.test(pw.navigator.userAgent || '');
+                var devToolsAbierto = false;
+                if (!esMovil && pw.outerWidth > 0 && pw.innerWidth > 0) {
+                    var diffW = pw.outerWidth - pw.innerWidth;
+                    var diffH = pw.outerHeight - pw.innerHeight;
+                    if (diffW > 240 || diffH > 260) {
+                        devToolsAbierto = true;
+                    }
+                }
+                if (!tieneFoco || pd.hidden || pw.__oposiciona_forzar_blur || devToolsAbierto) {
                     pw.oposicionaAplicarBlur();
                 } else {
                     pw.oposicionaQuitarBlur();
@@ -2381,11 +2458,22 @@ def activar_proteccion_antirecortes_alumno():
 
                 pd.addEventListener('keydown', function(e) {
                     if (pw.__oposiciona_blur_disabled) return;
-                    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === '3' || e.key === '4')) {
+                    var k = (e.key || '').toLowerCase();
+                    var code = e.keyCode || e.which || 0;
+                    /* Bloquear F12, Ctrl+S, Ctrl+U, Ctrl+P, Ctrl+Shift+I/J/C/S y activar escudo visual */
+                    if (
+                        code === 123 || k === 'f12' ||
+                        ((e.metaKey || e.ctrlKey) && !e.shiftKey && (k === 's' || k === 'u' || k === 'p')) ||
+                        ((e.metaKey || e.ctrlKey) && e.shiftKey && (k === 's' || k === 'i' || k === 'j' || k === 'c' || k === '3' || k === '4')) ||
+                        (e.metaKey && e.altKey && (k === 'i' || k === 'j' || k === 'c' || k === 'u'))
+                    ) {
+                        e.preventDefault();
+                        e.stopPropagation();
                         pw.__oposiciona_forzar_blur = true;
                         pw.oposicionaAplicarBlur();
+                        return false;
                     }
-                });
+                }, true);
             }
         } catch(e) {}
     })();
@@ -3187,7 +3275,7 @@ def sincronizar_progreso_navegador():
             "saved_cat": st.session_state.get("saved_cat", "ESPECIFICO"),
             "modo_avance": st.session_state.get("modo_avance", "")
         }
-        b64_auth = base64.urlsafe_b64encode(zlib.compress(json.dumps(datos_auth, ensure_ascii=False).encode("utf-8"), level=9)).decode("ascii")
+        b64_auth = _cifrar_backup_sesion(datos_auth)
 
         if st.session_state.get("questions"):
             datos_test = dict(datos_auth)
@@ -3206,7 +3294,7 @@ def sincronizar_progreso_navegador():
                 "inicio_registrado_sheets": st.session_state.get("inicio_registrado_sheets", False),
                 "resultado_registrado": st.session_state.get("resultado_registrado", False)
             })
-            b64_test = base64.urlsafe_b64encode(zlib.compress(json.dumps(datos_test, ensure_ascii=False).encode("utf-8"), level=9)).decode("ascii")
+            b64_test = _cifrar_backup_sesion(datos_test)
             components.html(f"""<script>
             try {{
                 window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
