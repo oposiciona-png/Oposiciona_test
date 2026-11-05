@@ -2056,21 +2056,6 @@ TESTS_DISPONIBLES = {
     "GESTION": {
         "DESARROLLO": {
             "Elige un test de desarrollo...": None,
-            "Tema_51_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1yD2q1MNBBanTLp5eK0OP0OlnN4xfowYN",
-            "Tema_52_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1HJbA5m070nmE-cDSb96BF_sdMEPJu6sC",
-            "Tema_53_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1gxZ_EqNFGL2xoySeoWZgF9OuSRX2o8-d",
-            "Tema_55_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1oIuFye_F4dcDmW_JnL0GCMx5Upm0zvk-",
-            "Tema_56_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1OcnPPhEPSEp6hNHY3Wr9MGQU4UCZZ00i",
-            "Tema_57_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=17g1ipag1FbAWnA3YaQBQWeyOEInIWSuV",
-            "Tema_58_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1ZFuriqz3_WY8TePVeWyjCpm5mKfuRR9F",
-            "Tema_59_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1UlIEhMZaYgNjCuTrkEIF97OShMn7KpjS",
-            "Tema_60_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1UDtCGoV5FEbNNEYynyWULJHtQtC4TaqQ",
-            "Tema_61_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1TRbQbUXs-WRP_x947uyT2XvgXkkoBA6L",
-            "Tema_62_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1i3A9Q7wuhR_TQHiGWgWiLGmJH01ANjfF",
-            "Tema_67_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1v0Pv7CpvwExVhNRTKMaGLrdCui3Olk-K",
-            "Tema_73_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1YILNrT4KD_GmcvJtsRQj2vsXPS6FciRw",
-            "Tema_74_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=1_8WXh1zc6qimkZAM0GZwbOyo9nltrulY",
-            "Tema_75_Resumen_Epigrafes": "https://drive.google.com/uc?export=download&id=13KE0VQRVPMG8qcnG9F0E_ag3MQe4b_bP",
         },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
