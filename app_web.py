@@ -450,7 +450,11 @@ if not st.session_state.autenticado:
     st.stop()
 # === FIN SECCIÓN 1 ===
 
-# === SECCIÓN 2: LECTOR DE PDF (PDFQuizParser) ===
+# === SECCIÓN 2: LECTOR DE PDF Y WORD DOCX (PDFQuizParser) ===
+import io
+import zipfile
+import xml.etree.ElementTree as ET
+
 class PDFQuizParser:
     REEMPLAZOS_INGLES_RAE = [
         (r'\band\b', 'y'),
@@ -581,6 +585,139 @@ class PDFQuizParser:
                 return reemplazo
             texto = re.sub(patron, _reemplazar_respetando_mayus, texto, flags=re.IGNORECASE)
         return texto
+
+    @staticmethod
+    def es_archivo_docx(file_bytes):
+        """Detecta si los bytes recibidos corresponden a un documento Word (.docx)."""
+        if not file_bytes or len(file_bytes) < 4:
+            return False
+        if file_bytes[:4] != b'PK\x03\x04':
+            return False
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
+                return "word/document.xml" in zf.namelist()
+        except Exception:
+            return False
+
+    @staticmethod
+    def _extraer_lineas_desde_docx(docx_bytes):
+        """
+        Extrae los párrafos de un archivo Word (.docx) de forma nativa sin librerías externas,
+        conservando la estructura de párrafos reales, listas y negritas de cabecera.
+        Devuelve: (all_clean_lines, raw_lines, tema_detectado)
+        """
+        all_clean_lines = []
+        raw_lines = []
+        in_abiertas = False
+        tema_detectado = ""
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+        try:
+            with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zf:
+                xml_content = zf.read("word/document.xml")
+            root = ET.fromstring(xml_content)
+        except Exception:
+            return [], [], ""
+
+        for p in root.iter(f"{{{ns['w']}}}p"):
+            runs_texto = []
+            runs_con_texto = 0
+            runs_bold = 0
+
+            # Detectar si el párrafo tiene estilo de título o lista en Word
+            p_style_val = ""
+            es_item_lista_word = False
+            pPr = p.find("w:pPr", ns)
+            if pPr is not None:
+                pStyle = pPr.find("w:pStyle", ns)
+                if pStyle is not None:
+                    p_style_val = (pStyle.attrib.get(f"{{{ns['w']}}}val") or "").lower()
+                if pPr.find("w:numPr", ns) is not None or "list" in p_style_val or "vieta" in p_style_val:
+                    es_item_lista_word = True
+
+            for r in p.iter(f"{{{ns['w']}}}r"):
+                partes_r = []
+                for child in r:
+                    tag_local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    if tag_local == "t" and child.text:
+                        partes_r.append(child.text)
+                    elif tag_local == "tab":
+                        partes_r.append(" ")
+                    elif tag_local in ("br", "cr"):
+                        partes_r.append("\n")
+                t_r = "".join(partes_r)
+                if not t_r.strip():
+                    if t_r:
+                        runs_texto.append(t_r)
+                    continue
+                runs_texto.append(t_r)
+                runs_con_texto += 1
+                rPr = r.find("w:rPr", ns)
+                es_r_bold = False
+                if rPr is not None:
+                    b_el = rPr.find("w:b", ns)
+                    if b_el is not None:
+                        val_b = b_el.attrib.get(f"{{{ns['w']}}}val", "true").lower()
+                        if val_b not in ("0", "false", "off"):
+                            es_r_bold = True
+                if es_r_bold:
+                    runs_bold += 1
+
+            lt = "".join(runs_texto).strip()
+            if not lt:
+                continue
+
+            linea_es_bold = (
+                (runs_con_texto > 0 and runs_bold == runs_con_texto)
+                or ("heading" in p_style_val or "titulo" in p_style_val or "ttulo" in p_style_val)
+            )
+
+            lt = re.sub(r'<{2,}', '«', lt)
+            lt = re.sub(r'>{2,}', '»', lt)
+            lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
+            lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
+
+            if not tema_detectado and re.match(r'^TEMA\s+\d+[\.\:\-–]\s*\S+', lt, re.IGNORECASE):
+                t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
+                if t_cand and len(t_cand) > 8:
+                    tema_detectado = t_cand
+
+            lt = PDFQuizParser._limpiar_cabeceras_incrustadas(lt, tema_detectado)
+            if not lt or PDFQuizParser._es_basura_cabecera_o_pie(lt, tema_detectado):
+                continue
+
+            tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
+            tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
+
+            lt_proc = PDFQuizParser.traducir_ingles_no_rae(lt)
+            lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
+            lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
+            lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
+            lt_proc = re.sub(r'(?<=[.?!:;])\s+(?=(?:[■▪•\*]\s*)?EP[IÍ]GRAFE\s+\d+)', '\n', lt_proc, flags=re.IGNORECASE)
+
+            for sub_l in lt_proc.split('\n'):
+                sub_l = sub_l.strip()
+                if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l, tema_detectado):
+                    continue
+                if es_item_lista_word and not re.match(r'^(?:[•\*■▪\-–]|\d{1,2}[\.\)]|[a-g]\)|EP[IÍ]GRAFE\b)', sub_l, re.IGNORECASE):
+                    sub_l = f"• {sub_l}"
+                es_cabecera_apartado_bold = (
+                    linea_es_bold
+                    and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', sub_l)
+                    and not re.match(r'^EP[IÍ]GRAFE\b', sub_l, re.IGNORECASE)
+                    and len(sub_l) < 140
+                )
+                # En un DOCX cada párrafo es un bloque real; añadimos salto de línea final para preservar la separación de párrafos
+                linea_guardar = f"[[H]]{sub_l}" if es_cabecera_apartado_bold else sub_l
+                all_clean_lines.append(linea_guardar)
+                if not in_abiertas:
+                    if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
+                        if sub_l.isupper() or len(tl_clean) < 95:
+                            in_abiertas = True
+                if in_abiertas:
+                    raw_lines.append(linea_guardar)
+
+        return all_clean_lines, raw_lines, tema_detectado
 
     @staticmethod
     def _reducir_opciones_pregunta(q, limite):
@@ -717,12 +854,9 @@ class PDFQuizParser:
         if not linea:
             return []
         s = re.sub(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s*)', '\n', linea)
-        # Separar enumeraciones "1) ...", "2) ...", "3) ..." precedidas de '.', ':', ';' o ')'
         s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\)\s+[A-ZÁÉÍÓÚÑ¿¡])', '\n', s)
-        # Separar enumeraciones por letras "a) ...", "b) ...", "c) ...", "d) ..." precedidas de '.', ':', ';' o ')'
         s = re.sub(r'(?<=[.?!:;\)])\s+(?=[a-g]\)\s+[A-ZÁÉÍÓÚÑ¿¡])', '\n', s)
         s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])', '\n', s)
-        # Separar nuevos epígrafes internos tras punto ("...obligación de cotizar. Situaciones de encuadramiento múltiple: ...")
         s = re.sub(
             r'(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-–—]{3,85}:\s+[A-ZÁÉÍÓÚÑ])',
             '\n• ',
@@ -731,7 +865,7 @@ class PDFQuizParser:
         return [p.strip() for p in s.split('\n') if p.strip()]
 
     @staticmethod
-    def _formatear_explicacion_estructurada(lista_lineas, tema_cabecera=""):
+    def _formatear_explicacion_estructurada(lista_lineas, tema_cabecera="", es_docx=False):
         if not lista_lineas:
             return ""
 
@@ -747,7 +881,6 @@ class PDFQuizParser:
             l_sin_marca = PDFQuizParser._limpiar_cabeceras_incrustadas(l_sin_marca, tema_cabecera)
             if not l_sin_marca or PDFQuizParser._es_basura_cabecera_o_pie(l_sin_marca, tema_cabecera):
                 continue
-            # Si una línea termina en ": 1)" o ": a)" al final de línea, pasar ese "1)" al principio de la siguiente línea
             m_trail_enum = re.search(r'(?<=[.?!:;\)])\s+(\d{1,2}\)|[a-g]\))\s*$', l_sin_marca)
             if m_trail_enum:
                 token_enum = m_trail_enum.group(1)
@@ -775,25 +908,28 @@ class PDFQuizParser:
         if not lineas_limpias:
             return ""
 
-        # Primero unimos las líneas continuas del PDF para recomponer las oraciones partidas a mitad de línea,
-        # y luego dividimos por apartados, definiciones y enumeraciones 1), 2), a), b)
-        texto_corrido = ""
-        bloques_pre = []
-        for l_raw in lineas_limpias:
-            forzada_cabecera = l_raw.startswith("[[H]]")
-            l_str = l_raw.replace("[[H]]", "").strip()
-            if forzada_cabecera:
-                if texto_corrido:
-                    bloques_pre.append(texto_corrido.strip())
-                    texto_corrido = ""
-                bloques_pre.append(f"[[H]]{l_str}")
-            else:
-                if not texto_corrido:
-                    texto_corrido = l_str
+        # Si proviene de un Word (.docx), cada elemento de lineas_limpias ya es un párrafo completo y real;
+        # si proviene de un PDF, unimos las líneas continuas antes de dividir por apartados y enumeraciones.
+        if es_docx:
+            bloques_pre = list(lineas_limpias)
+        else:
+            texto_corrido = ""
+            bloques_pre = []
+            for l_raw in lineas_limpias:
+                forzada_cabecera = l_raw.startswith("[[H]]")
+                l_str = l_raw.replace("[[H]]", "").strip()
+                if forzada_cabecera:
+                    if texto_corrido:
+                        bloques_pre.append(texto_corrido.strip())
+                        texto_corrido = ""
+                    bloques_pre.append(f"[[H]]{l_str}")
                 else:
-                    texto_corrido += " " + l_str
-        if texto_corrido:
-            bloques_pre.append(texto_corrido.strip())
+                    if not texto_corrido:
+                        texto_corrido = l_str
+                    else:
+                        texto_corrido += " " + l_str
+            if texto_corrido:
+                bloques_pre.append(texto_corrido.strip())
 
         parrafos = []
         for b_raw in bloques_pre:
@@ -873,7 +1009,6 @@ class PDFQuizParser:
                 )
                 continue
 
-            # Formato específico con salto de párrafo y sangría para ítems numerados "1) ...", "2) ..." o "a) ...", "b) ..."
             m_enum_item = re.match(r'^(\d{1,2}\)|[a-g]\))\s*([^:]{2,90}):\s*(.+)$', blq_txt)
             if m_enum_item:
                 num_lbl = m_enum_item.group(1).strip()
@@ -937,70 +1072,79 @@ class PDFQuizParser:
         return t
 
     @staticmethod
-    def parse_abiertas_gestion(pdf_bytes, modo="TODOS"):
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        raw_lines = []
-        all_clean_lines = []
-        in_abiertas = False
-        tema_detectado = ""
+    def parse_abiertas_gestion(file_bytes, modo="TODOS"):
+        """
+        Lee indistintamente archivos Word (.docx) o PDF (.pdf) para extraer
+        Preguntas de Desarrollo (Epígrafes) y Supuestos Prácticos.
+        """
+        es_formato_docx = PDFQuizParser.es_archivo_docx(file_bytes)
 
-        for page in doc:
-            for b in page.get_text("dict")["blocks"]:
-                if b.get("type", 0) == 0:
-                    for l in b["lines"]:
-                        spans_validos = [s for s in l["spans"] if s["text"].strip()]
-                        if not spans_validos:
-                            continue
-                        lt = " ".join(s["text"].strip() for s in spans_validos).strip()
-                        if not lt:
-                            continue
-                        linea_es_bold = all(
-                            ("bold" in s.get("font", "").lower()) or (s.get("flags", 0) & 2 != 0)
-                            for s in spans_validos
-                        )
+        if es_formato_docx:
+            all_clean_lines, raw_lines, tema_detectado = PDFQuizParser._extraer_lineas_desde_docx(file_bytes)
+        else:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            raw_lines = []
+            all_clean_lines = []
+            in_abiertas = False
+            tema_detectado = ""
 
-                        lt = re.sub(r'<{2,}', '«', lt)
-                        lt = re.sub(r'>{2,}', '»', lt)
-                        lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
-                        lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
-
-                        if not tema_detectado and re.match(r'^TEMA\s+\d+[\.\:\-–]\s*\S+', lt, re.IGNORECASE):
-                            t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
-                            if t_cand and len(t_cand) > 8:
-                                tema_detectado = t_cand
-
-                        lt = PDFQuizParser._limpiar_cabeceras_incrustadas(lt, tema_detectado)
-                        if not lt or PDFQuizParser._es_basura_cabecera_o_pie(lt, tema_detectado):
-                            continue
-
-                        tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
-                        tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
-
-                        lt_proc = PDFQuizParser.traducir_ingles_no_rae(lt)
-                        lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
-                        lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
-                        lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
-
-                        lt_proc = re.sub(r'(?<=[.?!:;])\s+(?=(?:[■▪•\*]\s*)?EP[IÍ]GRAFE\s+\d+)', '\n', lt_proc, flags=re.IGNORECASE)
-
-                        for sub_l in lt_proc.split('\n'):
-                            sub_l = sub_l.strip()
-                            if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l, tema_detectado):
+            for page in doc:
+                for b in page.get_text("dict")["blocks"]:
+                    if b.get("type", 0) == 0:
+                        for l in b["lines"]:
+                            spans_validos = [s for s in l["spans"] if s["text"].strip()]
+                            if not spans_validos:
                                 continue
-                            es_cabecera_apartado_bold = (
-                                linea_es_bold
-                                and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', sub_l)
-                                and not re.match(r'^EP[IÍ]GRAFE\b', sub_l, re.IGNORECASE)
-                                and len(sub_l) < 140
+                            lt = " ".join(s["text"].strip() for s in spans_validos).strip()
+                            if not lt:
+                                continue
+                            linea_es_bold = all(
+                                ("bold" in s.get("font", "").lower()) or (s.get("flags", 0) & 2 != 0)
+                                for s in spans_validos
                             )
-                            linea_guardar = f"[[H]]{sub_l}" if es_cabecera_apartado_bold else sub_l
-                            all_clean_lines.append(linea_guardar)
-                            if not in_abiertas:
-                                if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
-                                    if sub_l.isupper() or len(tl_clean) < 95:
-                                        in_abiertas = True
-                            if in_abiertas:
-                                raw_lines.append(linea_guardar)
+
+                            lt = re.sub(r'<{2,}', '«', lt)
+                            lt = re.sub(r'>{2,}', '»', lt)
+                            lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
+                            lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
+
+                            if not tema_detectado and re.match(r'^TEMA\s+\d+[\.\:\-–]\s*\S+', lt, re.IGNORECASE):
+                                t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
+                                if t_cand and len(t_cand) > 8:
+                                    tema_detectado = t_cand
+
+                            lt = PDFQuizParser._limpiar_cabeceras_incrustadas(lt, tema_detectado)
+                            if not lt or PDFQuizParser._es_basura_cabecera_o_pie(lt, tema_detectado):
+                                continue
+
+                            tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
+                            tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
+
+                            lt_proc = PDFQuizParser.traducir_ingles_no_rae(lt)
+                            lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
+                            lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
+                            lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
+
+                            lt_proc = re.sub(r'(?<=[.?!:;])\s+(?=(?:[■▪•\*]\s*)?EP[IÍ]GRAFE\s+\d+)', '\n', lt_proc, flags=re.IGNORECASE)
+
+                            for sub_l in lt_proc.split('\n'):
+                                sub_l = sub_l.strip()
+                                if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l, tema_detectado):
+                                    continue
+                                es_cabecera_apartado_bold = (
+                                    linea_es_bold
+                                    and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', sub_l)
+                                    and not re.match(r'^EP[IÍ]GRAFE\b', sub_l, re.IGNORECASE)
+                                    and len(sub_l) < 140
+                                )
+                                linea_guardar = f"[[H]]{sub_l}" if es_cabecera_apartado_bold else sub_l
+                                all_clean_lines.append(linea_guardar)
+                                if not in_abiertas:
+                                    if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
+                                        if sub_l.isupper() or len(tl_clean) < 95:
+                                            in_abiertas = True
+                                if in_abiertas:
+                                    raw_lines.append(linea_guardar)
 
         desarrollo_qs = []
         supuestos_qs = []
@@ -1044,7 +1188,7 @@ class PDFQuizParser:
                         if not PDFQuizParser._es_basura_cabecera_o_pie(l_next, tema_detectado):
                             cuerpo_des.append(l_next_raw)
                         idx += 1
-                    texto_oficial = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_des, tema_detectado)
+                    texto_oficial = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_des, tema_detectado, es_docx=es_formato_docx)
                     if texto_oficial:
                         desarrollo_qs.append({
                             "is_open": True,
@@ -1138,14 +1282,13 @@ class PDFQuizParser:
             if current_q and (current_q["answer_text"] or current_q["explanation"]):
                 supuestos_qs.append(current_q)
 
-        # 5. EXTRACCIÓN LIMPIA, EN ORDEN NUMÉRICO Y SIN FALSOS POSITIVOS DE ÍNDICE PARA PDFs DE RESUMEN
+        # 5. EXTRACCIÓN LIMPIA, EN ORDEN NUMÉRICO Y SIN FALSOS POSITIVOS DE ÍNDICE PARA RESÚMENES (WORD .DOCX O .PDF)
         if modo in ["DESARROLLO", "TODOS"] and not desarrollo_qs and all_clean_lines:
             lineas_utiles = [
                 l.strip() for l in all_clean_lines
                 if l.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(l.strip(), tema_detectado)
             ]
 
-            # Comprobar si existen cabeceras de epígrafe reales sin viñeta inicial ("EPÍGRAFE 1: NORMAS SOBRE AFILIACIÓN.")
             tiene_epigrafe_sin_bullet = any(
                 re.match(r'^(?:[■▪]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l.replace("[[H]]", "").strip(), re.IGNORECASE)
                 for l in lineas_utiles
@@ -1158,7 +1301,6 @@ class PDFQuizParser:
             def _es_inicio_epigrafe(linea):
                 lin_clean = linea.replace("[[H]]", "").strip()
                 if tiene_epigrafe_sin_bullet:
-                    # Ignorar las líneas de índice que empiezan por viñeta "• EPÍGRAFE 1: ..."
                     return bool(re.match(r'^(?:[■▪]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', lin_clean, re.IGNORECASE))
                 if tiene_palabra_epigrafe:
                     return bool(re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', lin_clean, re.IGNORECASE))
@@ -1182,7 +1324,6 @@ class PDFQuizParser:
                         if PDFQuizParser._es_basura_cabecera_o_pie(cand, tema_detectado):
                             idx_l += 1
                             continue
-                        # Si la línea ya contiene ":" (es el primer apartado del cuerpo) o empieza por palabra normal con minúsculas, parar título
                         if ":" in cand or not cand.isupper():
                             break
                         if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Nota\s+metodol[óo]gica\b)', cand, re.IGNORECASE):
@@ -1199,7 +1340,6 @@ class PDFQuizParser:
                     while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
                         l_cuerpo = lineas_utiles[idx_l]
                         l_cuerpo_clean = l_cuerpo.replace("[[H]]", "").strip()
-                        # Ignorar la Nota metodológica del índice si se coló antes del Epígrafe 1
                         if re.match(r'^Nota\s+metodol[óo]gica\s*:', l_cuerpo_clean, re.IGNORECASE):
                             idx_l += 1
                             continue
@@ -1207,15 +1347,13 @@ class PDFQuizParser:
                             cuerpo_ep.append(l_cuerpo)
                         idx_l += 1
 
-                    texto_ep = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_ep, tema_cabecera=tema_detectado)
-                    # Solo guardar si tiene verdadero contenido de desarrollo (descarta líneas sueltas de índice)
+                    texto_ep = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_ep, tema_cabecera=tema_detectado, es_docx=es_formato_docx)
                     if texto_ep and len(texto_ep) >= 200:
                         epigrafes_detectados.append((titulo_ep, texto_ep))
                 else:
                     idx_l += 1
 
             if epigrafes_detectados:
-                # Ordenar siempre por el número de epígrafe (EPÍGRAFE 1, EPÍGRAFE 2, EPÍGRAFE 3, EPÍGRAFE 4...)
                 def _clave_orden_epigrafe(par_ep):
                     tit = par_ep[0]
                     m_n = re.search(r'EP[IÍ]GRAFE\s+(\d+)', tit, re.IGNORECASE)
@@ -1241,7 +1379,7 @@ class PDFQuizParser:
                         "explanation": txt_ep
                     })
             elif lineas_utiles:
-                texto_integro = PDFQuizParser._formatear_explicacion_estructurada(lineas_utiles, tema_detectado)
+                texto_integro = PDFQuizParser._formatear_explicacion_estructurada(lineas_utiles, tema_detectado, es_docx=es_formato_docx)
                 tit_gen = PDFQuizParser._limpiar_titulo_epigrafe(lineas_utiles[0][:120])
                 desarrollo_qs.append({
                     "is_open": True,
