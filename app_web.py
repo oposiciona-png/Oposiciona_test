@@ -9,6 +9,95 @@ from zoneinfo import ZoneInfo
 icono_ruta = "ICONO OPOSICIONA.png"
 st.set_page_config(page_title="Plataforma de Tests Oposiciona", page_icon=icono_ruta if os.path.exists(icono_ruta) else "📚", layout="centered")
 
+GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw_B-g4pwxuZX4HzH99cobW6jQoValvLXI2ogeJgMuekjwlyS766KS4ujm3CFYdJ7DPlA/exec"
+# Clave ofuscada por fragmentos en Base64 para evitar falsas alertas de Secret Scanning en GitHub
+_K_PARTS = ("QVEuQWI4Uk42", "TDRmWVhWNHg0", "Vi1FWVlIbmRk", "bWxob0llcTZIRXNC", "S1BPUENDUHZDVkJ4RXc=")
+GEMINI_API_KEY_DEFAULT = "".join(base64.b64decode(p).decode("utf-8") for p in _K_PARTS)
+
+USUARIOS_ADMIN = ["ponentes@oposiciona.es", "ponentes@oposicona.es"]
+USUARIOS_AUTORIZADOS = {
+    "ACCESO TOTAL": [
+        "ponentes@oposiciona.es", "ponentes@oposicona.es", "gonzalogonzaleztejedor@gmail.com",
+        "ignacio.garcia.heras@gmail.com", "alvarezpugamartin@gmail.com", "claratoledo06@gmail.com",
+        "blancazortega@gmail.com", "mijurista@gmail.com", "isabelmgutierrogil@gmail.com",
+        "carmenvl28@gmail.com", "leticiagenerelosolana@gmail.com", "cguinaldobravo@gmail.com",
+        "alvaro20011996@gmail.com", "sion.nuba@gmail.com"
+    ],
+    "ADMTVOS": [
+        "elenavegasanchez73@gmail.com", "josemurillomoreno.mail@gmail.com", "raulff1997.rfg@gmail.com",
+        "sandradcastanares@gmail.com", "joycewayland@gmail.com", "celia.pks@gmail.com",
+        "cynthiaflafla14@gmail.com", "fragosotorbellinocarmen@gmail.com", "pherrerojulian@gmail.com",
+        "rsilveiraescudero@gmail.com", "delfijv19@gmail.com", "marielipedreira@hotmail.com",
+        "vanessagarciajimenez87@gmail.com", "luiscacid@gmail.com", "miguelromanrmm@gmail.com",
+        "raquelkmacho@gmail.com", "patripintoalvarez@gmail.com", "alexandrajimenezmontoliu@gmail.com"
+    ],
+    "GESTION": [
+        "vsaurod@gmail.com", "mariaquirosmonge5@gmail.com", "vanessagomeztdla@gmail.com",
+        "zoemorcor@gmail.com", "julianayem@gmail.com", "yasminkhalili@gmail.com",
+        "miriamvazquezseoane2000@gmail.com", "monetcacerescc@gmail.com", "maariiamaji@gmail.com",
+        "micastroespejo@gmail.com", "aisacarrerapexe@gmail.com", "csanchezssmm@gmail.com",
+        "maria.concal@gmail.com", "mariachinchurreta@gmail.com", "rocio10460@gmail.com",
+        "manuelmuriel97@gmail.com", "hfdiaz99@gmail.com", "ireneizquierdo22@gmail.com",
+        "manuelsan240902@gmail.com"
+    ],
+    "INVITADO": ["invitado@oposiciona.es", "invitado"]
+}
+PASSWORD_ADMIN, PASSWORD_ACCESO, PASSWORD_INVITADO = "Gonz4loN4cho23", "plaza2026", "oposiciona"
+
+for k, v in [
+    ('autenticado', False), ('rol', None), ('email', None), ('es_admin', False),
+    ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
+    ('inicio_registrado_sheets', False), ('resultado_registrado', False),
+    ('test_start_ts', None), ('fecha_inicio_str', ""), ('hora_inicio_str', ""),
+    ('test_esp', ""), ('test_cat', ""), ('borrar_backup_ls', False),
+    ('gemini_api_key_session', GEMINI_API_KEY_DEFAULT),
+    ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
+]:
+    if k not in st.session_state: st.session_state[k] = v
+
+_es_sesion_admin = bool(
+    st.session_state.get("autenticado", False) and (
+        st.session_state.get("es_admin", False) or
+        (st.session_state.get("email") or "").lower().strip() in USUARIOS_ADMIN
+    )
+)
+
+_css_proteccion_impresion = """
+body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+}
+@media print {
+    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .block-container {
+        display: block !important;
+        visibility: visible !important;
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    body::before {
+        content: none !important;
+        display: none !important;
+    }
+}
+""" if _es_sesion_admin else """
+body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+}
+@media print {
+    html, body * {display: none !important; visibility: hidden !important;}
+    html, body {display: block !important; background-color: white !important;}
+    body::before {content: "Acción no permitida.\\A Test propiedad de Oposiciona 5.0." !important; white-space: pre-wrap !important; display: block !important; text-align: center !important; font-size: 30px !important; font-family: sans-serif !important; margin-top: 20% !important; color: #d32f2f !important;}
+}
+"""
+
 st.markdown("""<style>
 :root, html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
     color-scheme: light only !important;
@@ -159,91 +248,61 @@ div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     padding-bottom: 6rem !important;
     max-width: 750px !important;
 }
-body, .stApp, .block-container, p, h1, h2, h3, h4, h5, h6, span {
-    -webkit-user-select: none !important;
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    user-select: none !important;
-}
-@media print {
-    html, body * {display: none !important; visibility: hidden !important;}
-    html, body {display: block !important; background-color: white !important;}
-    body::before {content: "Acción no permitida.\\A Test propiedad de Oposiciona 5.0." !important; white-space: pre-wrap !important; display: block !important; text-align: center !important; font-size: 30px !important; font-family: sans-serif !important; margin-top: 20% !important; color: #d32f2f !important;}
-}
-</style>""", unsafe_allow_html=True)
+""" + _css_proteccion_impresion + "</style>", unsafe_allow_html=True)
 
-components.html("""<script>
-try {
-    setTimeout(function() {
-        var parentDoc = window.parent.document;
-        if (!parentDoc.getElementById("escudo-oposiciona")) {
+components.html(f"""<script>
+try {{
+    setTimeout(function() {{
+        var pw = window.parent;
+        var parentDoc = pw.document;
+        pw.__oposiciona_es_admin = {"true" if _es_sesion_admin else "false"};
+
+        if (!parentDoc.getElementById("escudo-oposiciona")) {{
             var script = parentDoc.createElement("script");
             script.id = "escudo-oposiciona";
             script.innerHTML = `
-                document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
-                document.addEventListener('copy', function(e) {
+                document.addEventListener('contextmenu', function(e) {{
+                    if (window.__oposiciona_es_admin) return;
+                    e.preventDefault();
+                }});
+                document.addEventListener('copy', function(e) {{
+                    if (window.__oposiciona_es_admin) return;
                     var s = window.getSelection().toString();
-                    if (s.length > 0) { e.clipboardData.setData('text/plain', s + "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0"); e.preventDefault(); }
-                });
-                document.addEventListener('keydown', function(e) { if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) { e.preventDefault(); e.stopPropagation(); } });
+                    if (s.length > 0) {{
+                        e.clipboardData.setData('text/plain', s + "\\n\\n-----------------------------------\\nTest propiedad de Oposiciona 5.0");
+                        e.preventDefault();
+                    }}
+                }});
+                document.addEventListener('keydown', function(e) {{
+                    if (window.__oposiciona_es_admin) return;
+                    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                }});
 
                 /* Latido anti-desconexión cada 25s y WakeLock para que no se suspenda la pestaña leyendo explicaciones */
-                setInterval(function() {
-                    try {
-                        fetch(window.location.origin + "/_stcore/health", { method: "GET", cache: "no-store" }).catch(function(){});
+                setInterval(function() {{
+                    try {{
+                        fetch(window.location.origin + "/_stcore/health", {{ method: "GET", cache: "no-store" }}).catch(function(){{}});
                         document.dispatchEvent(new CustomEvent("oposiciona_keepalive"));
-                    } catch(err) {}
-                }, 25000);
+                    }} catch(err) {{}}
+                }}, 25000);
 
                 var wakeLockObj = null;
-                function activarWakeLock() {
-                    if ('wakeLock' in navigator && document.visibilityState === 'visible') {
-                        navigator.wakeLock.request('screen').then(function(wl) { wakeLockObj = wl; }).catch(function(){});
-                    }
-                }
+                function activarWakeLock() {{
+                    if ('wakeLock' in navigator && document.visibilityState === 'visible') {{
+                        navigator.wakeLock.request('screen').then(function(wl) {{ wakeLockObj = wl; }}).catch(function(){{}});
+                    }}
+                }}
                 document.addEventListener('visibilitychange', activarWakeLock);
-                document.addEventListener('click', activarWakeLock, { once: true });
+                document.addEventListener('click', activarWakeLock, {{ once: true }});
             `;
             parentDoc.head.appendChild(script);
-        }
-    }, 800);
-} catch(e) {}
+        }}
+    }}, 400);
+}} catch(e) {{}}
 </script>""", height=0)
-
-GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw_B-g4pwxuZX4HzH99cobW6jQoValvLXI2ogeJgMuekjwlyS766KS4ujm3CFYdJ7DPlA/exec"
-# Clave ofuscada por fragmentos en Base64 para evitar falsas alertas de Secret Scanning en GitHub
-_K_PARTS = ("QVEuQWI4Uk42", "TDRmWVhWNHg0", "Vi1FWVlIbmRk", "bWxob0llcTZIRXNC", "S1BPUENDUHZDVkJ4RXc=")
-GEMINI_API_KEY_DEFAULT = "".join(base64.b64decode(p).decode("utf-8") for p in _K_PARTS)
-
-USUARIOS_ADMIN = ["ponentes@oposiciona.es", "ponentes@oposicona.es"]
-USUARIOS_AUTORIZADOS = {
-    "ACCESO TOTAL": [
-        "ponentes@oposiciona.es", "ponentes@oposicona.es", "gonzalogonzaleztejedor@gmail.com",
-        "ignacio.garcia.heras@gmail.com", "alvarezpugamartin@gmail.com", "claratoledo06@gmail.com",
-        "blancazortega@gmail.com", "mijurista@gmail.com", "isabelmgutierrogil@gmail.com",
-        "carmenvl28@gmail.com", "leticiagenerelosolana@gmail.com", "cguinaldobravo@gmail.com",
-        "alvaro20011996@gmail.com", "sion.nuba@gmail.com"
-    ],
-    "ADMTVOS": [
-        "elenavegasanchez73@gmail.com", "josemurillomoreno.mail@gmail.com", "raulff1997.rfg@gmail.com",
-        "sandradcastanares@gmail.com", "joycewayland@gmail.com", "celia.pks@gmail.com",
-        "cynthiaflafla14@gmail.com", "fragosotorbellinocarmen@gmail.com", "pherrerojulian@gmail.com",
-        "rsilveiraescudero@gmail.com", "delfijv19@gmail.com", "marielipedreira@hotmail.com",
-        "vanessagarciajimenez87@gmail.com", "luiscacid@gmail.com", "miguelromanrmm@gmail.com",
-        "raquelkmacho@gmail.com", "patripintoalvarez@gmail.com", "alexandrajimenezmontoliu@gmail.com"
-    ],
-    "GESTION": [
-        "vsaurod@gmail.com", "mariaquirosmonge5@gmail.com", "vanessagomeztdla@gmail.com",
-        "zoemorcor@gmail.com", "julianayem@gmail.com", "yasminkhalili@gmail.com",
-        "miriamvazquezseoane2000@gmail.com", "monetcacerescc@gmail.com", "maariiamaji@gmail.com",
-        "micastroespejo@gmail.com", "aisacarrerapexe@gmail.com", "csanchezssmm@gmail.com",
-        "maria.concal@gmail.com", "mariachinchurreta@gmail.com", "rocio10460@gmail.com",
-        "manuelmuriel97@gmail.com", "hfdiaz99@gmail.com", "ireneizquierdo22@gmail.com",
-        "manuelsan240902@gmail.com"
-    ],
-    "INVITADO": ["invitado@oposiciona.es", "invitado"]
-}
-PASSWORD_ADMIN, PASSWORD_ACCESO, PASSWORD_INVITADO = "Gonz4loN4cho23", "plaza2026", "oposiciona"
 
 def detectar_dispositivo_usuario():
     try:
@@ -336,17 +395,6 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
         threading.Thread(target=_enviar_post_background, args=(url, payload), daemon=True).start()
     except Exception:
         pass
-
-for k, v in [
-    ('autenticado', False), ('rol', None), ('email', None), ('es_admin', False),
-    ('do_scroll', False), ('mostrar_opciones_simulacro', False), ('celebracion_mostrada', False),
-    ('inicio_registrado_sheets', False), ('resultado_registrado', False),
-    ('test_start_ts', None), ('fecha_inicio_str', ""), ('hora_inicio_str', ""),
-    ('test_esp', ""), ('test_cat', ""), ('borrar_backup_ls', False),
-    ('gemini_api_key_session', GEMINI_API_KEY_DEFAULT),
-    ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
-]:
-    if k not in st.session_state: st.session_state[k] = v
 
 if st.session_state.get("borrar_backup_ls", False):
     st.session_state.borrar_backup_ls = False
