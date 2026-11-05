@@ -2640,17 +2640,17 @@ def construir_anexo_desplegable_boe_epigrafe(respuesta_oficial, explicacion_ofic
 
         cuerpo_parrafos_html = "".join(
             f"<p style='margin:0 0 8px 0; font-size:13.8px; line-height:1.52; color:#1E293B !important; text-align:justify;'>{p}</p>"
-            for p in parrafos_boe[:14]
+            for p in parrs_boe[:14]
         )
-        if len(parrafos_boe) > 14:
+        if len(parrs_boe) > 14:
             cuerpo_parrafos_html += (
                 f"<p style='margin:4px 0 0 0; font-size:12.5px; font-style:italic; color:#475569 !important;'>"
-                f"Texto extenso ({len(parrafos_boe)} párrafos). <a href='{url_web}' target='_blank' style='color:#1D4ED8 !important; font-weight:600;'>Ver artículo completo en boe.es ↗</a></p>"
+                f"Texto extenso ({len(parrs_boe)} párrafos). <a href='{url_web}' target='_blank' style='color:#1D4ED8 !important; font-weight:600;'>Ver artículo completo en boe.es ↗</a></p>"
             )
 
         tarjetas_html.append(
             f"<details style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid {'#16A34A' if fue_citado else '#F59E0B'}; border-radius:6px; margin-top:8px; margin-bottom:8px; padding:8px 12px;'>"
-            f"<summary style='cursor:pointer; font-weight:700; font-size:14px; color:#0F172A !important; outline:none; list-style:disclosure-closed;'>"
+            f"<summary style='cursor:pointer; font-weight:700; font-size:14px; color:#0F172A !important; outline:none;'>"
             f"⚖️ {etiqueta_cabecera} {estado_badge}"
             f"<div style='font-size:11.5px; font-weight:500; color:#64748B !important; margin-top:2px;'>{nombre_norma_largo}</div>"
             f"</summary>"
@@ -3281,7 +3281,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     )
     aud_b = aud.get("auditoria_bloques") or {}
 
-    # Construir el anexo desplegable con la literalidad en el BOE de los artículos del epígrafe oficial
     anexo_boe_html = construir_anexo_desplegable_boe_epigrafe(
         respuesta_oficial, explicacion_oficial, nums_citados_alumno=aud.get("nums_citados_alumno")
     )
@@ -3975,6 +3974,8 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
