@@ -2380,7 +2380,7 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
             60: "TEMA 60: CALIFICACIÓN Y REVISIÓN DE LA INCAPACIDAD PERMANENTE Y LESIONES PERMANENTES NO INVALIDANTES",
             61: "TEMA 61: JUBILACIÓN EN EL RÉGIMEN GENERAL",
             62: "TEMA 62: MUERTE Y SUPERVIVENCIA",
-            67: "TEMA 67: COTIZACIÓN EN EL RÉGIMEN GENERAL DE LA SEGURIDAD SOCIAL",
+            67: "TEMA 67: ASISTENCIA SANITARIA / COTIZACIÓN EN EL RÉGIMEN GENERAL DE LA SEGURIDAD SOCIAL",
             73: "TEMA 73: REGÍMENES ESPECIALES E INTEGRACIÓN EN EL RÉGIMEN GENERAL (SEA Y SEEH)",
             74: "TEMA 74: RÉGIMEN ESPECIAL DE TRABAJADORES AUTÓNOMOS (RETA), SETA Y MAR",
             75: "TEMA 75: MINERÍA DEL CARBÓN, SEGURO ESCOLAR Y REGÍMENES ESPECIALES DE FUNCIONARIOS",
@@ -2421,847 +2421,47 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
         )
     return None
 
-def _dividir_en_oraciones_juridicas(texto):
-    if not texto:
-        return []
-
-    bloques_brutos = [b.strip() for b in texto.split('\n') if b.strip()]
-    unidades = []
-
-    for blq in bloques_brutos:
-        blq_limpio = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', blq.replace("[[H]]", "")).strip()
-        if PDFQuizParser._es_basura_cabecera_o_pie(blq_limpio):
-            continue
-        if re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_limpio) and len(blq_limpio) < 90 and not blq_limpio.endswith('.'):
-            continue
-        if len(blq_limpio) >= 30:
-            unidades.append(blq_limpio)
-
-    if len(unidades) <= 2 and len(texto) > 400:
-        t = re.sub(r'\b(art|arts|núm|num|cap|disp|ad|trans|apdo|párr|pág|rd|rdl|et|cc|lec)\.', r'\1<DOT>', texto, flags=re.IGNORECASE)
-        t = re.sub(r'(\d)\.(\d)', r'\1<DOT>\2', t)
-        t = re.sub(r'(\d)\.([a-zA-Zºª°])', r'\1<DOT>\2', t)
-        partes = re.split(r'(?<=[.?!;])\s+(?=[A-ZÁÉÍÓÚÑ«"\']|[•\*\-–]\s)', t)
-        unidades = []
-        for p in partes:
-            p_rest = p.replace('<DOT>', '.').replace("[[H]]", "").strip()
-            p_rest = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', p_rest).strip()
-            if len(p_rest) >= 40 and not PDFQuizParser._es_basura_cabecera_o_pie(p_rest):
-                unidades.append(p_rest)
-
-    return unidades
-
-def _extraer_etiqueta_breve_apartado(oracion):
-    """Extrae el título o idea clave inicial de un apartado para los resúmenes comparativos."""
-    if not oracion:
-        return ""
-    s = re.sub(r'^[•\*■▪\-–\s]+', '', oracion.replace("[[H]]", "")).strip()
-    m_tit = re.match(r'^(\d{1,2}\)|[a-g]\))?\s*([^:\.]{3,85}):\s+', s)
-    if m_tit:
-        pref = (m_tit.group(1) + " ") if m_tit.group(1) else ""
-        return f"{pref}{m_tit.group(2).strip()}"
-    palabras = s.split()
-    fragmento = " ".join(palabras[:11])
-    return fragmento + ("..." if len(palabras) > 11 else "")
-
 NOTA_METODOLOGICA_PREPARADORES = (
-    "ℹ️ <b>Nota metodológica sobre la calificación:</b> Los bloques de valoración (Conocimiento y normativa [0-45 ptos], "
-    "Orden de ideas [0-3 ptos] y Expresión escrita [0-2 ptos]) siguen fielmente los criterios oficiales del Tribunal Calificador. "
-    "El sistema evalúa tanto los subapartados del resumen de exposición como los desarrollos procedentes del Tema Completo de Oposiciona "
-    "(por ejemplo, el régimen de altas y bajas indebidas de los arts. 60 y 61 del RIA, supuestos especiales, etc.), aplicando ajustes moderados "
-    "en artículos (-0,15 ptos TRLGSS / -0,10 ptos otros), normas (-0,15 ptos) y plazos (-0,15 ptos) para ayudarte a perfeccionar tu examen."
+    "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación se realiza aplicando los criterios oficiales del Segundo Ejercicio "
+    "del Cuerpo de Gestión de la Administración de la Seguridad Social: <b>Criterio 1 (0 a 45 puntos)</b> por conocimiento, precisión jurídica "
+    "y fundamentación normativa; <b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura sistemática; y <b>Criterio 3 (0 a 2 puntos)</b> "
+    "por calidad de la expresión escrita (los Criterios 2 y 3 solo puntúan cuando se alcanzan al menos 20,00 puntos en el Criterio 1). "
+    "Para superar el ejercicio se requiere alcanzar un mínimo de <b>25,00 sobre 50 puntos</b>."
 )
 
 CRITERIOS_OFICIALES_TRIBUNAL_2_EJERCICIO = """
 CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCICIO (CUERPO DE GESTIÓN DE LA ADMINISTRACIÓN DE LA SEGURIDAD SOCIAL - ACCESO LIBRE):
-- Cada parte se califica de 0 a 50 puntos (mínimo 25 puntos directos para superar sin compensación).
-- Criterio 1 (0 a 45 puntos): Conocimiento de los bloques doctrinales y legales del epígrafe (valorando positivamente tanto el esquema del resumen como los contenidos del Tema Completo de Oposiciona aportados por el opositor).
-  * Deducciones de entrenamiento fijadas por los preparadores: artículo esencial del TRLGSS (RDL 8/2015) omitido (-0,15 ptos); otro artículo omitido (-0,10 ptos); Ley o Real Decreto omitido (-0,15 ptos); plazo o cuantía omitido (-0,15 ptos).
-- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (se activa desde 20,00/45 en Criterio 1).
-- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y fórmula introductoria de siglas ("...en adelante, XXXX", -0,25 ptos por sigla sin introducir; se activa desde 20,00/45 en Criterio 1).
+- Cada parte del ejercicio se califica de 0 a 50 puntos, siendo necesario obtener un mínimo de 25,00 puntos directos para superarla.
+- Criterio 1 (de 0 a 45 puntos): Conocimiento, grado de comprensión y desarrollo de los contenidos del epígrafe o supuesto, rigor técnico-jurídico y fundamentación normativa.
+- Criterio 2 (de 0 a 3 puntos): Orden de las ideas, claridad expositiva y estructura sistemática (solo se valora si se obtienen al menos 20,00 puntos en el Criterio 1; en caso contrario es 0,00).
+- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita, corrección gramatical y propiedad en el uso de la terminología jurídica y siglas (solo se valora si se obtienen al menos 20,00 puntos en el Criterio 1; en caso contrario es 0,00).
 """
 
-# Bloques doctrinales adicionales procedentes del TEMA COMPLETO de Oposiciona (que pueden no estar detallados en el resumen corto
-# pero que el alumno que estudia por el tema completo desarrolla con total acierto, como hizo Zoe con las Altas y Bajas Indebidas).
-CONTENIDOS_TEMA_COMPLETO_POR_EPIGRAFE = [
-    {
-        "match_epigrafe": ["altas y bajas en el regimen general", "procedimiento y efectos"],
-        "aportaciones_tema_completo": [
-            (
-                "Régimen jurídico de las Altas Indebidas (art. 60 RIA): reposición al estado previo si no pertenece a ningún régimen, o validez hasta resolución y cómputo recíproco de cuotas si correspondía otro régimen",
-                ["altas indebidas", "alta indebida", "ningun otro regimen", "regime equivocado", "compensaran los efectos", "anularan los efectos"]
-            ),
-            (
-                "Régimen jurídico de las Bajas Indebidas (art. 61 RIA): restitución y mantenimiento de la situación de alta del trabajador con efectos desde el inicio del procedimiento declarativo (o desde la causa si hay nulidad/lesión de derechos)",
-                ["bajas indebidas", "baja indebida", "baja como indebida", "restituir la situacion del alta", "continuar en situacion de alta"]
-            ),
-            (
-                "Enumeración ejemplificativa de Situaciones Asimiladas al Alta conectada con el art. 166 TRLGSS y art. 36 RIA (desempleo total, excedencia forzosa, traslado fuera del territorio nacional, convenio especial)",
-                ["desempleo total", "excedencia forzosa", "traslado por la empresa fuera del territorio nacional", "convenio especial"]
-            ),
-            (
-                "Efectos suspensivos de la huelga legal y cierre patronal en el Alta Especial (suspensión —que no extinción— del contrato, de la prestación de servicios y de la obligación salarial)",
-                ["suspension, que no extincion", "suspende la prestacion de servicios", "abonar el salario"]
-            ),
-            (
-                "Supuestos especiales de no consideración de cese (IT incluidas las 5 situaciones especiales del art. 169.1.a TRLGSS, nacimiento y cuidado de menor, riesgo durante embarazo/lactancia), período de prueba, cambio de centro o declaración de familiares",
-                ["periodo de prueba", "cambio de centro", "familiares del empresario", "hijos menores de 30", "subsanacion en el plazo de 10 dias"]
-            ),
-            (
-                "Particularidades de colectivos específicos (profesionales taurinos en censo de activos, artistas RD 607/2026, funcionarios públicos en cambio de destino, empleados de hogar)",
-                ["censo de activos", "607/2026", "artes escenicas", "cambio de destino", "domiciliar el pago"]
-            ),
-        ]
-    },
-    {
-        "match_epigrafe": ["normas sobre afiliacion"],
-        "aportaciones_tema_completo": [
-            (
-                "Competencia territorial para el reconocimiento de la afiliación (art. 33 RIA) y efectos registrales en el Fichero General de Afiliación con derecho al documento de afiliación (art. 34 RIA)",
-                ["fichero general de afiliacion", "documento de afiliacion", "articulo 33", "articulo 34"]
-            ),
-            (
-                "Variación de datos de la afiliación en el plazo de 6 días naturales (RD 643/2026) y comunicación a la ITSS en caso de incumplimiento",
-                ["variacion de datos", "6 dias naturales", "seis dias naturales"]
-            ),
-        ]
-    },
-    {
-        "match_epigrafe": ["convenio especial", "situaciones asimiladas"],
-        "aportaciones_tema_completo": [
-            (
-                "Reglas de elección de base de cotización en el Convenio Especial (base máxima si cotizó 24 meses en 5 años, promedio de 12 meses consecutivos, base mínima del tramo 1 del RETA o base intermedia) y fórmula de cuota con MEI (0,90%)",
-                ["24 meses", "doce meses consecutivos", "12 meses consecutivos", "tramo 1", "28,30", "mecanismo de equidad"]
-            ),
-            (
-                "Causas de suspensión (alta superpuesta con base inferior, comunicación en 10 días) y extinción del Convenio Especial (art. 10.2 Orden TAS/2865/2003: impago de 3 meses consecutivos o 5 alternativos, jubilación/IP, base igual o superior)",
-                ["3 meses consecutivos", "tres meses consecutivos", "5 alternativos", "cinco alternativos", "suspension", "reanudarse"]
-            ),
-        ]
-    },
-    {
-        "match_epigrafe": ["encuadramiento e inscripcion"],
-        "aportaciones_tema_completo": [
-            (
-                "Efectos de la formalización y tarifación indebidas (art. 58 RIA), inscripción indebida (art. 57 RIA) y actuaciones de oficio de la TGSS ante empresas ficticias o ceses no comunicados (trámite de audiencia en BOE ex Ley 39/2015)",
-                ["tarifacion indebida", "inscripcion indebida", "empresas ficticias", "carentes de actividad", "boletin oficial del estado"]
-            ),
-        ]
-    },
-]
-
-AUDITORIA_NORMATIVA_POR_EPIGRAFE = [
-    {
-        "nombre_epigrafe": "Constitución Española y Seguridad Social (Tema 51 - Ep. 1)",
-        "match_keywords": ["constitucion", "modelo constitucional", "pacto de toledo", "competencias"],
-        "obligatorios": [
-            ("ART_41", ["41"], "Artículo 41 de la Constitución Española (régimen público de Seguridad Social)"),
-            ("ART_149", ["149"], "Artículo 149.1.17.ª de la Constitución Española (competencia exclusiva del Estado en legislación básica y régimen económico)"),
-            ("NORMA_CE", ["constitucion", "ce"], "Constitución Española de 1978"),
-        ],
-        "articulos_validos": {"1", "2", "14", "39", "41", "42", "43", "49", "50", "53", "82", "86", "129", "149"}
-    },
-    {
-        "nombre_epigrafe": "El Texto Refundido de la Ley General de la Seguridad Social: estructura y contenido (Tema 51 - Ep. 2)",
-        "match_keywords": ["texto refundido", "estructura y contenido", "seis titulos", "titulo i", "titulo ii"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015, de 30 de octubre (TRLGSS)"),
-            ("ART_1_2", ["1", "2"], "Artículos 1 y 2 del TRLGSS (derecho y principios del sistema)"),
-            ("ESTRUCTURA_TITULOS", ["titulo i", "titulo ii", "titulo iii", "136", "262", "305"], "Estructura en Títulos del TRLGSS (Títulos I a VI)"),
-        ],
-        "articulos_validos": {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "82", "136", "261", "262", "304", "305", "326", "327", "350", "351", "373"}
-    },
-    {
-        "nombre_epigrafe": "Campo de aplicación y composición del Sistema de la Seguridad Social (Tema 52)",
-        "match_keywords": ["campo de aplicacion", "composicion del sistema", "universalidad", "modalidad contributiva", "regimen general y regimenes especiales", "familiares"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_7", ["7"], "Artículo 7 del TRLGSS (extensión del campo de aplicación)"),
-            ("ART_9_10", ["9", "10"], "Artículos 9 y 10 del TRLGSS (composición del sistema: Régimen General y Regímenes Especiales)"),
-            ("ART_12_136", ["12", "136", "137"], "Artículos 12 (familiares) o 136-137 (inclusiones y exclusiones del Régimen General) del TRLGSS"),
-        ],
-        "articulos_validos": {"1", "2", "7", "8", "9", "10", "11", "12", "136", "137", "250", "252", "305"}
-    },
-    {
-        "nombre_epigrafe": "Normas sobre afiliación (Tema 53 - Ep. 1)",
-        "match_keywords": ["normas sobre afiliacion", "unicidad", "vitaliedad", "afiliaciones indebidas", "acto administrativo esencial"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("NORMA_RD84", ["84/1996", "ria"], "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas - RIA)"),
-            ("ART_15", ["15"], "Artículo 15 del TRLGSS (obligatoriedad y caracteres de la afiliación)"),
-            ("ART_16", ["16", "17"], "Artículos 16 y 17 del TRLGSS (formas de promover la afiliación)"),
-        ],
-        "articulos_validos": {"7", "8", "12", "15", "16", "17", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "53", "59", "136", "138", "139", "140", "167", "307"}
-    },
-    {
-        "nombre_epigrafe": "Altas y bajas en el Régimen General: procedimiento y efectos (Tema 53 - Ep. 2)",
-        "match_keywords": ["altas y bajas en el regimen general", "pluriempleo", "pluriactividad", "modalidades de alta", "tipologia de altas", "alta real", "alta especial", "sistema red"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("NORMA_RD84", ["84/1996", "ria"], "Real Decreto 84/1996 (Reglamento General sobre inscripción, afiliación, altas y bajas - RIA)"),
-            ("NORMA_RD643", ["643/2026"], "Real Decreto 643/2026, de 29 de julio (plazo de 6 días naturales para bajas y variaciones)"),
-            ("ART_139_140", ["139", "140"], "Artículos 139 y 140 del TRLGSS (obligación y comunicación de altas y bajas en el Régimen General)"),
-            ("ART_166", ["166"], "Artículo 166 del TRLGSS (alta asimilada, alta de pleno derecho y alta especial)"),
-            ("ART_RIA_ALTAS", ["29", "32", "35", "36", "60", "61"], "Artículos 29, 32, 35, 36, 60 o 61 del RD 84/1996 (tipos de alta, plazos y efectos de altas y bajas)"),
-        ],
-        "articulos_validos": {"3", "7", "8", "9", "10", "12", "15", "16", "17", "18", "20", "21", "28", "29", "30", "31", "32", "33", "35", "36", "37", "38", "39", "60", "61", "62", "68", "136", "138", "139", "140", "144", "165", "166", "169", "254"}
-    },
-    {
-        "nombre_epigrafe": "El Convenio Especial y otras situaciones asimiladas a la del alta (Tema 53 - Ep. 3)",
-        "match_keywords": ["convenio especial", "situaciones asimiladas", "situacion asimilada", "1.080", "1080", "0,94", "cuidadores no profesionales"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_165_166", ["165", "166", "237"], "Artículos 165, 166 y 237 del TRLGSS (situaciones asimiladas a la de alta y cómputo en cuidados familiares)"),
-            ("NORMA_CONVENIO", ["2865/2003", "386/2024"], "Orden TAS/2865/2003 (reguladora del Convenio Especial) y Orden ISM/386/2024"),
-        ],
-        "articulos_validos": {"15", "16", "24", "36", "46", "51", "129", "138", "139", "140", "152", "165", "166", "237", "267", "305", "311"}
-    },
-    {
-        "nombre_epigrafe": "Encuadramiento e inscripción de empresas (Tema 53 - Ep. 4)",
-        "match_keywords": ["inscripcion de empresas", "codigo de cuenta de cotizacion", "documento de asociacion", "registro de empresarios", "mutua colaboradora"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("NORMA_RD84", ["84/1996", "ria", "643/2026"], "Real Decreto 84/1996 (RIA) y Real Decreto 643/2026 (plazo de 6 días para variaciones patronales)"),
-            ("ART_138_RIA", ["10", "83", "138"], "Artículos 10, 83 y 138 del TRLGSS (encuadramiento, opción de cobertura con Mutua e inscripción de empresas)"),
-        ],
-        "articulos_validos": {"5", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "21", "57", "58", "80", "83", "136", "138", "139", "140"}
-    },
-    {
-        "nombre_epigrafe": "Acción protectora y requisitos generales de las prestaciones (Temas 55 y 56)",
-        "match_keywords": ["accion protectora", "clasificacion de las prestaciones", "requisitos generales", "revalorizacion", "prescripcion", "caducidad", "responsabilidad en orden a las prestaciones", "reintegro"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_42_60", ["42", "43", "44", "46", "53", "54", "55", "58"], "Artículos 42 a 60 del TRLGSS (acción protectora, caracteres de las prestaciones, prescripción, caducidad y revalorización)"),
-            ("ART_165_167", ["165", "166", "167", "168"], "Artículos 165 a 168 del TRLGSS (requisitos generales del derecho a las prestaciones y responsabilidad empresarial)"),
-        ],
-        "articulos_validos": {"42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "163", "164", "165", "166", "167", "168"}
-    },
-    {
-        "nombre_epigrafe": "Incapacidad Temporal (Tema 57)",
-        "match_keywords": ["incapacidad temporal", "situaciones determinantes", "365 dias", "180 dias", "carencia", "pago delegado", "parte medico"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_169_170", ["169", "170"], "Artículos 169 y 170 del TRLGSS (concepto, situaciones especiales y duración/prórroga de la IT)"),
-            ("ART_171_175", ["171", "172", "173", "174", "175"], "Artículos 171 a 175 del TRLGSS (cuantía, período de carencia de 180 días, nacimiento, pago y extinción del subsidio de IT)"),
-        ],
-        "articulos_validos": {"144", "165", "166", "169", "170", "171", "172", "173", "174", "175", "176"}
-    },
-    {
-        "nombre_epigrafe": "Nacimiento y cuidado de menor, corresponsabilidad y riesgo durante el embarazo/lactancia (Tema 58)",
-        "match_keywords": ["nacimiento y cuidado", "corresponsabilidad", "riesgo durante el embarazo", "riesgo durante la lactancia", "16 semanas", "progenitor", "lactante"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_177_182", ["177", "178", "179", "180", "181", "182"], "Artículos 177 a 182 del TRLGSS (nacimiento y cuidado de menor)"),
-            ("ART_183_189", ["183", "184", "185", "186", "187", "188", "189"], "Artículos 183 a 189 del TRLGSS (corresponsabilidad en el cuidado del lactante y riesgo durante el embarazo y la lactancia natural)"),
-        ],
-        "articulos_validos": {"165", "166", "177", "178", "179", "180", "181", "182", "183", "184", "185", "186", "187", "188", "189", "190", "191", "192"}
-    },
-    {
-        "nombre_epigrafe": "Incapacidad Permanente y Lesiones Permanentes No Invalidantes (Temas 59 y 60)",
-        "match_keywords": ["incapacidad permanente", "parcial", "total", "absoluta", "gran invalidez", "lesiones permanentes no invalidantes", "baremo", "calificacion y revision"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_193_194", ["193", "194"], "Artículos 193 y 194 del TRLGSS (concepto y grados de incapacidad permanente)"),
-            ("ART_195_200", ["195", "196", "197", "198", "200", "201", "202", "203"], "Artículos 195 a 203 del TRLGSS (beneficiarios, cuantía, base reguladora, compatibilidades, calificación/revisión y lesiones permanentes no invalidantes)"),
-        ],
-        "articulos_validos": {"165", "166", "193", "194", "195", "196", "197", "198", "199", "200", "201", "202", "203"}
-    },
-    {
-        "nombre_epigrafe": "Jubilación en el Régimen General (Tema 61)",
-        "match_keywords": ["jubilacion", "hecho causante", "15 años", "base reguladora", "jubilacion anticipada", "jubilacion parcial", "jubilacion activa", "demorada"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_204_206", ["204", "205", "206"], "Artículos 204 a 206 del TRLGSS (concepto, beneficiarios, edad ordinaria y coeficientes reductores)"),
-            ("ART_207_215", ["207", "208", "209", "210", "213", "214", "215"], "Artículos 207 a 215 del TRLGSS (jubilación anticipada, base reguladora, cuantía, incompatibilidades y jubilación activa/parcial)"),
-        ],
-        "articulos_validos": {"165", "166", "204", "205", "206", "207", "208", "209", "210", "211", "212", "213", "214", "215"}
-    },
-    {
-        "nombre_epigrafe": "Muerte y Supervivencia (Tema 62)",
-        "match_keywords": ["muerte y supervivencia", "auxilio por defuncion", "viudedad", "orfandad", "favor de familiares", "pareja de hecho", "sujetos causantes"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_216_217", ["216", "217"], "Artículos 216 y 217 del TRLGSS (prestaciones por muerte y supervivencia y sujetos causantes)"),
-            ("ART_219_226", ["219", "220", "221", "224", "225", "226", "227"], "Artículos 219 a 227 del TRLGSS (pensión de viudedad, pareja de hecho, orfandad, prestaciones en favor de familiares e indemnizaciones a tanto alzado)"),
-        ],
-        "articulos_validos": {"165", "166", "216", "217", "218", "219", "220", "221", "222", "223", "224", "225", "226", "227", "228", "229", "230", "231", "232", "233", "234"}
-    },
-    {
-        "nombre_epigrafe": "Cotización y Recaudación en el Régimen General (Tema 67)",
-        "match_keywords": ["cotizacion", "base de cotizacion", "topes maximo y minimo", "horas extraordinarias", "liquidacion", "recaudacion", "recargo"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("NORMA_RD2064", ["2064/1995", "297/2026"], "Real Decreto 2064/1995 (Reglamento General sobre Cotización y Liquidación) u Orden anual de cotización"),
-            ("ART_18_19", ["18", "19", "20"], "Artículos 18 a 20 del TRLGSS (obligatoriedad, bases, tipos y beneficios en la cotización)"),
-            ("ART_141_148", ["141", "142", "143", "144", "147", "148", "151"], "Artículos 141 a 151 del TRLGSS (sujetos obligados y responsables, duración de la obligación de cotizar, determinación de la base de cotización del art. 147 y topes del art. 148)"),
-        ],
-        "articulos_validos": {"18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "141", "142", "143", "144", "145", "146", "147", "148", "149", "150", "151", "152", "153"}
-    },
-    {
-        "nombre_epigrafe": "Sistemas Especiales Agrario (SEA) y Empleados de Hogar (SEEH) (Tema 73)",
-        "match_keywords": ["empleados de hogar", "hogar familiar", "trabajadores por cuenta ajena agrarios", "jornadas reales", "inactividad", "sistemas especiales"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_250_256", ["250", "251", "252", "253", "254", "255", "256", "136", "1620/2011", "28/2011", "27/2011"], "Artículos 250-251 (SEEH) o 252-256 (SEA) del TRLGSS"),
-        ],
-        "articulos_validos": {"7", "10", "11", "12", "15", "16", "136", "151", "167", "169", "197", "209", "250", "251", "252", "253", "254", "255", "256", "267", "284"}
-    },
-    {
-        "nombre_epigrafe": "RETA, SETA y Régimen Especial de Trabajadores del Mar (Tema 74)",
-        "match_keywords": ["autonomos", "cuenta propia", "reta", "seta", "trabajadores del mar", "maritimo", "ingresos reales", "cese de actividad"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido"], "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-            ("ART_305_326", ["305", "306", "307", "308", "313", "324", "327", "47/2015", "20/2007", "13/2022"], "Artículos 305 a 326 del TRLGSS (RETA y SETA)"),
-        ],
-        "articulos_validos": {"7", "10", "12", "305", "306", "307", "308", "309", "310", "311", "312", "313", "314", "315", "316", "317", "318", "319", "320", "321", "322", "323", "324", "325", "326", "327", "328", "329", "330"}
-    },
-    {
-        "nombre_epigrafe": "Minería del Carbón, Seguro Escolar y Regímenes Especiales de Funcionarios (Tema 75)",
-        "match_keywords": ["mineria del carbon", "seguro escolar", "clases pasivas", "muface", "isfas", "mugeju", "funcionarios"],
-        "obligatorios": [
-            ("NORMA_TRLGSS", ["8/2015", "trlgss", "texto refundido", "29/1975", "670/1987", "298/1973"], "Real Decreto Legislativo 8/2015 (TRLGSS) y normativa específica del Régimen Especial (Decreto 298/1973 Minería del Carbón, Ley de 17/07/1953 Seguro Escolar, RDL 4/2000 MUFACE o RDL 670/1987 Clases Pasivas)"),
-        ],
-        "articulos_validos": {"7", "9", "10", "136"}
-    },
-]
-
-def es_cita_articulo_individual(etiqueta_cita):
-    s = (etiqueta_cita or "").strip()
-    return bool(re.match(r'^(?:Art[íi]culos?|Arts?\.|Disposici[óo]n|T[íi]tulo|Estructura\s+en\s+T[íi]tulos)\b', s, re.IGNORECASE))
-
-def es_articulo_esencial_trlgss(etiqueta_cita, ref_completa=""):
-    if not es_cita_articulo_individual(etiqueta_cita):
-        return False
-    s = (etiqueta_cita or "").strip()
-    if re.search(r'\b(Constituci[óo]n|CE|RD\s+84/1996|RIA|RGCL|RD\s+2064/1995|RGR|ET|TRET|Estatuto|LISOS|Orden|Ley\s+47/2015|RDL\s+670/1987|Clases\s+Pasivas)\b', s, re.IGNORECASE) and not re.search(r'\bTRLGSS\b', s, re.IGNORECASE):
-        return False
-    if re.search(r'\b(TRLGSS|LGSS|8/2015)\b', s, re.IGNORECASE):
-        return True
-    m_num = re.search(r'\b(\d{1,3})\b', s)
-    if m_num and ref_completa:
-        num = m_num.group(1)
-        pat_otra_ley = rf'art(?:[íi]culos?|\.|s\.)\s*{num}(?:\.\d+)?\s*(?:del?\s+)?(?:RIA|RD\s*84/1996|RGCL|ET|TRET|CE|Constituci[óo]n|LISOS|Orden)'
-        pat_trlgss = rf'art(?:[íi]culos?|\.|s\.)\s*{num}(?:\.\d+)?\s*(?:del?\s+)?(?:TRLGSS|LGSS|Texto\s+Refundido)'
-        if re.search(pat_trlgss, ref_completa, re.IGNORECASE):
-            return True
-        if re.search(pat_otra_ley, ref_completa, re.IGNORECASE):
-            return False
-    return True
-
-def auditar_normativa_obligatoria_del_epigrafe(texto_alumno_norm, arts_en_alumno, contexto_epigrafe_norm, citas_ok_directas, citas_faltan_directas):
-    acertados_oblig = list(citas_ok_directas)
-    omitidos_oblig = list(citas_faltan_directas)
-
-    for reg in AUDITORIA_NORMATIVA_POR_EPIGRAFE:
-        if any(kw in contexto_epigrafe_norm for kw in reg["match_keywords"]):
-            for cod_ob, tokens_validos, desc_ob in reg["obligatorios"]:
-                cumplido = False
-                for tk in tokens_validos:
-                    if tk.isdigit():
-                        if tk in arts_en_alumno or re.search(rf'\bart(?:iculos?|\.|s\.?)?\s*{tk}\b', texto_alumno_norm):
-                            cumplido = True
-                            break
-                    else:
-                        if tk in texto_alumno_norm:
-                            cumplido = True
-                            break
-                if cumplido:
-                    if not any(desc_ob[:18].lower() in x.lower() for x in acertados_oblig):
-                        acertados_oblig.append(desc_ob)
-                else:
-                    if not any(desc_ob[:18].lower() in x.lower() for x in omitidos_oblig):
-                        omitidos_oblig.append(desc_ob)
-            break
-
-    return acertados_oblig, omitidos_oblig
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def consultar_literal_boe_o_fuentes(num_art_str, id_boe="BOE-A-2015-11724"):
-    num_limpio = str(num_art_str).strip()
-    try:
-        url_boe = f"https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/{id_boe}/texto/bloque/a{num_limpio}"
-        headers_boe = {"Accept": "application/xml"}
-        r_boe = requests.get(url_boe, headers=headers_boe, timeout=4)
-        if r_boe.status_code == 200 and "<p" in r_boe.text:
-            parrafos_xml = re.findall(r'<p[^>]*>(.*?)</p>', r_boe.text, flags=re.DOTALL)
-            texto_limpio = " ".join(re.sub(r'<[^>]+>', '', p).strip() for p in parrafos_xml if p.strip())
-            if len(texto_limpio) > 25:
-                if len(texto_limpio) > 420:
-                    texto_limpio = texto_limpio[:420].rsplit(" ", 1)[0] + "...»"
-                else:
-                    texto_limpio = texto_limpio + "»"
-                return f"«{texto_limpio}"
-    except Exception:
-        pass
-
-    respaldo_tematico = {
-        "1": "«Artículo 1 TRLGSS: Regula el alcance general del derecho de los españoles a la Seguridad Social conforme al artículo 41 de la Constitución.»",
-        "2": "«Artículo 2 TRLGSS: Establece los principios y fines rectores del sistema de la Seguridad Social (universalidad, unidad, solidaridad e igualdad).»",
-        "3": "«Artículo 3 TRLGSS: Dispone la irrenunciabilidad de los derechos reconocidos en materia de Seguridad Social.»",
-        "7": "«Artículo 7 TRLGSS: Delimita la extensión del campo de aplicación del sistema en sus modalidades contributiva y no contributiva.»",
-        "8": "«Artículo 8 TRLGSS: Establece la prohibición de inclusión múltiple obligatoria por un mismo trabajo.»",
-        "9": "«Artículo 9 TRLGSS: Determina la estructura del sistema de la Seguridad Social en Régimen General y Regímenes Especiales.»",
-        "12": "«Artículo 12 TRLGSS: Regula el encuadramiento y exclusión, salvo prueba en contrario, de los familiares del empresario.»",
-        "15": "«Artículo 15 TRLGSS: Regula la obligatoriedad, unicidad y alcance vitalicio de la afiliación al sistema.»",
-        "16": "«Artículo 16 TRLGSS: Establece las formas de promover la afiliación (a instancia del empresario, del trabajador o de oficio).»",
-        "18": "«Artículo 18 TRLGSS: Establece la obligatoriedad de la cotización en los regímenes General y Especiales.»",
-        "21": "«Artículo 21 TRLGSS: Configura la Tesorería General de la Seguridad Social como servicio común bajo los principios de solidaridad financiera y caja única.»",
-        "36": "«Artículo 36 TRLGSS: Regula las facultades de comprobación de la Tesorería General sobre liquidación e ingreso de cuotas.»",
-        "41": "«Artículo 41 CE: Garantiza el mantenimiento por los poderes públicos de un régimen público de Seguridad Social para todos los ciudadanos.»",
-        "42": "«Artículo 42 TRLGSS: Enumera el catálogo general de prestaciones que integran la acción protectora del sistema.»",
-        "58": "«Artículo 58 TRLGSS: Regula la revalorización anual de las pensiones contributivas conforme al IPC.»",
-        "136": "«Artículo 136 TRLGSS: Determina los colectivos incluidos obligatoriamente en el campo de aplicación del Régimen General.»",
-        "137": "«Artículo 137 TRLGSS: Establece los trabajos excluidos del Régimen General (servicios amistosos, benévolos o de buena vecindad).»",
-        "138": "«Artículo 138 TRLGSS: Regula la inscripción previa de empresas y las comunicaciones de altas, bajas y variaciones en el Régimen General.»",
-        "139": "«Artículo 139 TRLGSS: Regula las obligaciones de los empresarios y trabajadores en materia de afiliación, altas y bajas en el Régimen General.»",
-        "140": "«Artículo 140 TRLGSS: Regula el procedimiento de afiliación, altas y bajas de oficio por la Tesorería General de la Seguridad Social.»",
-        "165": "«Artículo 165 TRLGSS: Establece los requisitos generales de afiliación y alta o situación asimilada para causar derecho a las prestaciones.»",
-        "166": "«Artículo 166 TRLGSS: Regula las situaciones asimiladas a la de alta, el alta de pleno derecho (166.4) y el alta especial en huelga o cierre patronal (166.7).»",
-        "169": "«Artículo 169 TRLGSS: Define el concepto y las situaciones determinantes de la incapacidad temporal.»",
-        "193": "«Artículo 193 TRLGSS: Define el concepto de la incapacidad permanente contributiva.»",
-        "205": "«Artículo 205 TRLGSS: Establece los requisitos de edad y cotización para acceder a la pensión de jubilación contributiva.»",
-        "250": "«Artículo 250 TRLGSS: Regula el objeto y ámbito del Sistema Especial para Empleados de Hogar.»",
-        "252": "«Artículo 252 TRLGSS: Delimita el ámbito de aplicación del Sistema Especial para Trabajadores por Cuenta Ajena Agrarios.»",
-        "305": "«Artículo 305 TRLGSS: Delimita la extensión del campo de aplicación del Régimen Especial de Trabajadores por Cuenta Propia o Autónomos.»",
-    }
-    if num_limpio in respaldo_tematico:
-        return respaldo_tematico[num_limpio]
-    if num_limpio.isdigit():
-        n = int(num_limpio)
-        if n > 373:
-            return f"«El artículo {n} no existe en el Texto Refundido de la Ley General de la Seguridad Social (que consta de 373 artículos).»"
-    return f"«El artículo {num_limpio} regula un precepto distinto a los contenidos en este epígrafe.»"
-
-def auditar_siglas_sin_definir_previa(texto_alumno):
-    if not texto_alumno:
-        return []
-    t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
-    t_low = t_norm.lower()
-
-    catalogo_siglas = [
-        ("TRLGSS", r'\bTRLGSS\b', ["texto refundido de la ley general de la seguridad social"], "Texto Refundido de la Ley General de la Seguridad Social (en adelante, TRLGSS)"),
-        ("LGSS", r'\bLGSS\b', ["ley general de la seguridad social"], "Ley General de la Seguridad Social (en adelante, LGSS)"),
-        ("RIA", r'\bRIA\b', ["reglamento general sobre inscripcion de empresas"], "Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos (en adelante, RIA)"),
-        ("RDL", r'\b(?:RDL|R\.D\.L\.)\b', ["real decreto-ley", "real decreto ley"], "Real Decreto-ley (en adelante, RDL)"),
-        ("RD Legislativo", r'\b(?:RD\s*Legislativo|RD\s*Leg\.?|Real\s+Decreto\s+L\.?)\b', ["real decreto legislativo"], "Real Decreto Legislativo (en adelante, RD Legislativo)"),
-        ("RD", r'\b(?:RD|R\.D\.)\b(?!\s*Leg|\s*\-?\s*ley)', ["real decreto"], "Real Decreto (en adelante, RD)"),
-        ("CE", r'\bCE\b', ["constitucion espanola", "constitucion de 1978"], "Constitución Española (en adelante, CE)"),
-        ("ET", r'\bET\b', ["estatuto de los trabajadores"], "Estatuto de los Trabajadores (en adelante, ET)"),
-        ("TRET", r'\bTRET\b', ["texto refundido de la ley del estatuto de los trabajadores"], "Texto Refundido de la Ley del Estatuto de los Trabajadores (en adelante, TRET)"),
-        ("LETA", r'\bLETA\b', ["estatuto del trabajo autonomo"], "Estatuto del Trabajo Autónomo (en adelante, LETA)"),
-        ("TGSS", r'\bTGSS\b', ["tesoreria general de la seguridad social"], "Tesorería General de la Seguridad Social (en adelante, TGSS)"),
-        ("INSS", r'\bINSS\b', ["instituto nacional de la seguridad social"], "Instituto Nacional de la Seguridad Social (en adelante, INSS)"),
-        ("ISM", r'\bISM\b', ["instituto social de la marina"], "Instituto Social de la Marina (en adelante, ISM)"),
-        ("SEPE", r'\bSEPE\b', ["servicio publico de empleo estatal"], "Servicio Público de Empleo Estatal (en adelante, SEPE)"),
-        ("IMSERSO", r'\bIMSERSO\b', ["instituto de mayores y servicios sociales"], "Instituto de Mayores y Servicios Sociales (en adelante, IMSERSO)"),
-        ("ITSS", r'\bITSS\b', ["inspeccion de trabajo y seguridad social"], "Inspección de Trabajo y Seguridad Social (en adelante, ITSS)"),
-        ("RETA", r'\bRETA\b', ["regimen especial de trabajadores por cuenta propia", "regimen especial de los trabajadores por cuenta propia", "regimen especial de trabajadores autonomos"], "Régimen Especial de Trabajadores por Cuenta Propia o Autónomos (en adelante, RETA)"),
-        ("RGSS", r'\bRGSS\b', ["regimen general de la seguridad social"], "Régimen General de la Seguridad Social (en adelante, RGSS)"),
-        ("SEA", r'\bSEA\b', ["sistema especial para trabajadores por cuenta ajena agrarios", "sistema especial agrario"], "Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (en adelante, SEA)"),
-        ("SEEH", r'\bSEEH\b', ["sistema especial para empleados de hogar", "sistema especial de empleados de hogar"], "Sistema Especial para Empleados de Hogar (en adelante, SEEH)"),
-        ("SETA", r'\bSETA\b', ["sistema especial para trabajadores por cuenta propia agrarios"], "Sistema Especial para Trabajadores por Cuenta Propia Agrarios (en adelante, SETA)"),
-        ("CCC", r'\bCCC\b', ["codigo de cuenta de cotizacion", "codigos de cuenta de cotizacion"], "Código de Cuenta de Cotización (en adelante, CCC)"),
-        ("NAF", r'\bNAF\b', ["numero de afiliacion"], "Número de Afiliación (en adelante, NAF)"),
-        ("NSS", r'\bNSS\b', ["numero de la seguridad social"], "Número de la Seguridad Social (en adelante, NSS)"),
-        ("SEDESS", r'\bSEDESS\b', ["sede electronica de la seguridad social", "sede electronica de la secretaria de estado"], "Sede Electrónica de la Seguridad Social (en adelante, SEDESS)"),
-        ("CNAE", r'\bCNAE\b', ["clasificacion nacional de actividades economicas"], "Clasificación Nacional de Actividades Económicas (en adelante, CNAE)"),
-        ("ERE", r'\bERE\b', ["expediente de regulacion de empleo", "expedientes de regulacion de empleo"], "Expediente de Regulación de Empleo (en adelante, ERE)"),
-        ("SMI", r'\bSMI\b', ["salario minimo interprofesional"], "Salario Mínimo Interprofesional (en adelante, SMI)"),
-        ("IMV", r'\bIMV\b', ["ingreso minimo vital"], "Ingreso Mínimo Vital (en adelante, IMV)"),
-        ("FOGASA", r'\bFOGASA\b', ["fondo de garantia salarial"], "Fondo de Garantía Salarial (en adelante, FOGASA)"),
-        ("MEI", r'\bMEI\b', ["mecanismo de equidad intergeneracional"], "Mecanismo de Equidad Intergeneracional (en adelante, MEI)"),
-        ("IT", r'\bIT\b', ["incapacidad temporal"], "Incapacidad Temporal (en adelante, IT)"),
-        ("IP", r'\bIP\b', ["incapacidad permanente"], "Incapacidad Permanente (en adelante, IP)"),
-    ]
-
-    siglas_sin_definir = []
-    for sigla, pat_regex, frases_completas, ejemplo_formal in catalogo_siglas:
-        m_sigla = re.search(pat_regex, t_norm)
-        if m_sigla:
-            pos_sigla = m_sigla.start()
-            ventana_previa = t_low[:pos_sigla + 75]
-            definida_antes = any(frase in ventana_previa for frase in frases_completas)
-            if not definida_antes:
-                siglas_sin_definir.append((sigla, ejemplo_formal))
-
-    return siglas_sin_definir
-
-def _extraer_rangos_articulos(texto):
-    arts = set()
+def _dividir_en_oraciones_juridicas(texto):
     if not texto:
-        return arts
-    for m_r in re.finditer(r'\bart(?:[íi]culos?|\.|\s*s\.)\s*(\d{1,3})\s*(?:a|al|\-|–)\s*(\d{1,3})\b', texto, flags=re.IGNORECASE):
-        ini, fin = int(m_r.group(1)), int(m_r.group(2))
-        if ini <= fin and (fin - ini) <= 350:
-            for n in range(ini, fin + 1):
-                arts.add(str(n))
-    for m_i in re.finditer(r'\bart(?:[íi]culos?|\.|\s*s\.)\s*(\d{1,3})\b', texto, flags=re.IGNORECASE):
-        arts.add(m_i.group(1))
-    return arts
-
-def _verificar_articulo_extra_en_fuentes(k_tipo, k_id, k_lbl, oracion_alumno, contexto_epigrafe):
-    def _norm(s):
-        return ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
-
-    orac_low = _norm(oracion_alumno)
-    ep_low = _norm(contexto_epigrafe)
-
-    if k_tipo in ["NORMA", "SIGLA", "TITULO", "DISP"]:
-        leyes_ss_validas = {
-            "8/2015": "Real Decreto Legislativo 8/2015 (TRLGSS)",
-            "2/2015": "Real Decreto Legislativo 2/2015 (Estatuto de los Trabajadores)",
-            "84/1996": "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas, afiliación, altas y bajas)",
-            "2064/1995": "Real Decreto 2064/1995 (Reglamento General sobre cotización y liquidación)",
-            "1415/2004": "Real Decreto 1415/2004 (Reglamento General de Recaudación de la Seguridad Social)",
-            "193/1963": "Ley 193/1963 de Bases de la Seguridad Social",
-            "907/1966": "Decreto 907/1966 (Texto Articulado I de la Ley de Seguridad Social)",
-            "24/1972": "Ley 24/1972 de financiación y perfeccionamiento de la acción protectora",
-            "2065/1974": "Decreto 2065/1974 (Texto Refundido de la LGSS de 1974)",
-            "26/1990": "Ley 26/1990 de prestaciones no contributivas",
-            "1/1994": "Real Decreto Legislativo 1/1994 (anterior TRLGSS)",
-            "24/1997": "Ley 24/1997 de Consolidación y Racionalización del Sistema",
-            "20/2007": "Ley 20/2007 del Estatuto del trabajo autónomo",
-            "27/2011": "Ley 27/2011 de actualización y modernización del sistema de Seguridad Social",
-            "28/2011": "Ley 28/2011 de integración del Régimen Especial Agrario",
-            "1620/2011": "Real Decreto 1620/2011 del servicio del hogar familiar",
-            "47/2015": "Ley 47/2015 de protección social del sector marítimo-pesquero",
-            "19/2021": "Ley 19/2021 del Ingreso Mínimo Vital",
-            "21/2021": "Ley 21/2021 de garantía del poder adquisitivo de las pensiones",
-            "13/2022": "Real Decreto-ley 13/2022 de cotización por ingresos reales de autónomos",
-            "16/2022": "Real Decreto-ley 16/2022 de personas trabajadoras al servicio del hogar",
-            "2/2023": "Real Decreto-ley 2/2023 de ampliación de derechos de los pensionistas",
-            "3/2026": "Real Decreto-ley 3/2026 de revalorización de pensiones y cotización para 2026",
-            "31/2026": "Real Decreto-ley 31/2026 de reforma de prestaciones de Seguridad Social",
-            "126/2026": "Real Decreto 126/2026 de fijación del SMI para 2026",
-            "643/2026": "Real Decreto 643/2026 de modificación del Reglamento General de afiliación",
-            "607/2026": "Real Decreto 607/2026 regulador de la relación laboral especial de las personas artistas",
-            "297/2026": "Orden PJC/297/2026 de cotización para 2026",
-            "2908/2003": "Orden TAS/2865/2003 reguladora del Convenio Especial en la Seguridad Social",
-            "2865/2003": "Orden TAS/2865/2003 reguladora del Convenio Especial en la Seguridad Social",
-            "386/2024": "Orden ISM/386/2024 de convenio especial por prácticas formativas",
-            "156/2013": "Real Decreto 156/2013 de convenio especial para personas con discapacidad",
-            "484/2013": "Orden ESS/484/2013 reguladora del Sistema RED",
-            "903/2020": "Orden ISM/903/2020 reguladora de notificaciones electrónicas en la Seguridad Social",
-        }
-        if k_tipo == "SIGLA":
-            return True, f"**{k_lbl}** (referencia normativa pertinente)"
-        if k_tipo == "NORMA" and k_id in leyes_ss_validas:
-            return True, f"**{k_lbl}** ({leyes_ss_validas[k_id]})"
-        if k_tipo == "TITULO":
-            if k_id in ["I", "II", "III", "IV", "V", "VI", "1", "2", "3", "4", "5", "6"]:
-                return True, f"**{k_lbl}** (Título verificado en la estructura del TRLGSS)"
-            return False, f"**{k_lbl}** (el TRLGSS solo consta de seis Títulos: I a VI)"
-        if k_tipo == "DISP":
-            return True, f"**{k_lbl}**"
-
-    if k_tipo == "RANGO_ART":
-        nums = [int(x) for x in re.findall(r'\d+', k_id)]
-        if len(nums) == 2 and 1 <= nums[0] <= nums[1] <= 373:
-            return True, f"**{k_lbl}** (rango de artículos verificado en el TRLGSS)"
-        return False, f"**{k_lbl}** (rango de artículos inexistente en el TRLGSS)"
-
-    if k_tipo == "ART" and k_id.isdigit():
-        num_art = int(k_id)
-        if num_art > 373:
-            literal_boe = consultar_literal_boe_o_fuentes(k_id)
-            return False, f"**{k_lbl}** es inexistente: {literal_boe}"
-
-        for reg_ep in AUDITORIA_NORMATIVA_POR_EPIGRAFE:
-            if any(kw in ep_low for kw in reg_ep["match_keywords"]):
-                if k_id in reg_ep["articulos_validos"]:
-                    return True, f"**{k_lbl}** (precepto aplicable a este epígrafe)"
-
-        literal_boe = consultar_literal_boe_o_fuentes(k_id)
-        lit_norm = _norm(literal_boe)
-        stopwords_lit = {"articulo", "seguridad", "social", "regimen", "general", "sistema", "presente", "dispuesto", "establecido", "efectos", "cuando", "mismo", "dicho", "todos", "todas", "trabajador", "trabajadores"}
-        palabras_lit = {w for w in re.findall(r'\b[a-z]{5,}\b', lit_norm) if w not in stopwords_lit}
-        palabras_ep = {w for w in re.findall(r'\b[a-z]{5,}\b', ep_low) if w not in stopwords_lit}
-        palabras_orac = {w for w in re.findall(r'\b[a-z]{5,}\b', orac_low) if w not in stopwords_lit}
-
-        if len(palabras_lit.intersection(palabras_ep)) >= 2 or len(palabras_orac.intersection(palabras_ep)) >= 3:
-            return True, f"**{k_lbl}** (precepto conexo bien interrelacionado con el epígrafe)"
-
-        return False, f"**{k_lbl}** no guarda relación con este epígrafe. Su literalidad oficial en el BOE establece: {literal_boe}"
-
-    return False, f"**{k_lbl}** (referencia sin conexión con este epígrafe)"
-
-def _evaluar_cobertura_subapartado(orac_limpia, alumno_norm, stopwords, func_norm, func_raiz):
-    """
-    Evalúa cada subapartado reconociendo tanto la redacción del Resumen de Epígrafes como la del Tema Completo de Oposiciona:
-    - 'COMPLETO' (1.0): El alumno expone el concepto y su regla jurídica esencial (aunque use sus propias palabras).
-    - 'PARCIAL'  (0.65): El alumno aborda el concepto correctamente pero le falta precisar algún matiz secundario (ej. contingencias específicas o plazo concreto).
-    - 'OMITIDO'  (0.0): El alumno no aborda el concepto.
-    """
-    palabras_comodin_tema = {
-        "alta", "altas", "baja", "bajas", "afiliacion", "inscripcion", "encuadramiento",
-        "trabajador", "trabajadores", "persona", "personas", "empresario", "empresarios",
-        "empresa", "empresas", "seguridad", "social", "regimen", "regimenes", "general",
-        "sistema", "actividad", "actividades", "laboral", "profesional", "servicios",
-        "prestacion", "prestaciones", "derecho", "obligacion", "situacion", "situaciones",
-        "solicitud", "solicitudes", "efectos", "plazo", "plazos", "datos", "actos", "acto",
-        "administrativo", "tesoreria", "tgss", "administracion", "inicio", "cese", "trabajo",
-        "real", "decreto", "legislativo", "orden", "reglamento", "aprobado", "conformidad"
-    }
-
-    s_sin_viñeta = re.sub(r'^[•\*■▪\-–\s]+', '', orac_limpia.replace("[[H]]", "")).strip()
-    m_cab = re.match(r'^(?:\d{1,2}\)|[a-g]\))?\s*([^:\.]{3,90}):\s*(.+)$', s_sin_viñeta)
-
-    if m_cab:
-        titulo_sub = func_norm(m_cab.group(1))
-        cuerpo_sub = func_norm(m_cab.group(2))
-    else:
-        titulo_sub = ""
-        cuerpo_sub = func_norm(s_sin_viñeta)
-
-    # Reglas específicas alineadas con el Temario Completo + Resumen de Epígrafes:
-    if titulo_sub:
-        if "delimitacion conceptual" in titulo_sub:
-            if ("inscri" in alumno_norm or "comenzar la actividad" in alumno_norm or "inicia una actividad" in alumno_norm or "ria" in alumno_norm) and ("alta" in alumno_norm and "baja" in alumno_norm):
-                if "139" in alumno_norm or "obligacion de cotizar" in alumno_norm:
-                    return "COMPLETO", ""
-                return "PARCIAL", "Introduce el marco en el RIA y vincula las altas y bajas con el inicio/cese de actividad, aunque conviene citar expresamente los arts. 139-140 TRLGSS y el nacimiento/extinción de la obligación de cotizar."
-
-        if "alta real" in titulo_sub:
-            if "alta real" in alumno_norm or ("cumplimiento" in alumno_norm and "comenzar la actividad" in alumno_norm):
-                return "COMPLETO", ""
-
-        if "alta asimilada" in titulo_sub or "situacion asimilada" in titulo_sub:
-            if "asimilada al alta" in alumno_norm or "alta asimilada" in alumno_norm:
-                return "COMPLETO", ""
-
-        if "pleno derecho" in titulo_sub or "presunta" in titulo_sub:
-            if "pleno derecho" in alumno_norm or "presunta" in alumno_norm:
-                menciona_contingencias = sum(
-                    1 for kw in ["accidente", "profesional", "desempleo", "sanitaria", "embarazo", "lactancia", "maternidad"]
-                    if kw in alumno_norm
-                )
-                if menciona_contingencias >= 2:
-                    return "COMPLETO", ""
-                return "PARCIAL", "Explica con total exactitud el concepto de alta de pleno derecho (art. 166.4 TRLGSS) ante el incumplimiento empresarial, faltando únicamente enumerar las contingencias cubiertas (AT/EP, desempleo, riesgo embarazo/lactancia y asistencia sanitaria)."
-
-        if "alta especial" in titulo_sub:
-            if "alta especial" in alumno_norm or ("huelga" in alumno_norm and "cierre patronal" in alumno_norm):
-                return "COMPLETO", ""
-
-        if "plazo de altas" in titulo_sub or "altas previas" in titulo_sub:
-            if "60 dias" in alumno_norm or "sesenta dias" in alumno_norm or "inicie la actividad" in alumno_norm:
-                return "COMPLETO", ""
-
-        if "altas extemporaneas" in titulo_sub:
-            if ("tiempo y forma" in alumno_norm or "fuera de plazo" in alumno_norm or "extemporanea" in alumno_norm) and ("presentacion de la solicitud" in alumno_norm or "abonado las cotizaciones" in alumno_norm or "retrotra" in alumno_norm):
-                return "COMPLETO", ""
-
-        if "altas de oficio" in titulo_sub:
-            if "de oficio" in alumno_norm and ("inspeccion" in alumno_norm or "itss" in alumno_norm):
-                return "COMPLETO", ""
-
-        if "bajas comunicadas en plazo" in titulo_sub or ("bajas" in titulo_sub and "plazo" in titulo_sub and "extemporaneas" not in titulo_sub):
-            if re.search(r'\bbajas?\b[^\.]{0,90}\b(?:6\s*dias|seis\s*dias|extinguen?\s+la\s+obligacion\s+de\s+cotizar)\b', alumno_norm):
-                return "COMPLETO", ""
-            if "solicitudes de baja" in alumno_norm or "baja laboral" in alumno_norm:
-                return "PARCIAL", "Alude a los efectos de las solicitudes de baja, pero debe precisarse el plazo de 6 días naturales (RD 643/2026) y que la baja en plazo extingue la obligación de cotizar desde el cese real."
-            return "OMITIDO", "No desarrolla el plazo reglamentario de las bajas (6 días naturales ex RD 643/2026) ni su efecto extintivo de la cotización."
-
-        if "bajas extemporaneas" in titulo_sub:
-            if re.search(r'\bbajas?\b[^\.]{0,120}\b(?:extemporanea|fuera\s+de\s+plazo|no\s+extinguen?\s+la\s+obligacion\s+de\s+cotizar|conocimiento\s+formal)\b', alumno_norm):
-                return "COMPLETO", ""
-            return "OMITIDO", "Falta precisar que la baja comunicada fuera de plazo no extingue la obligación de cotizar hasta que la TGSS conozca el cese (salvo prueba en contrario, art. 35.2 RIA)."
-
-        if "plazo de bajas" in titulo_sub or "643/2026" in titulo_sub:
-            if re.search(r'\b(?:6\s*dias|seis\s*dias|643/2026|32\.3)\b', alumno_norm):
-                return "COMPLETO", ""
-            return "OMITIDO", "Falta indicar el plazo de 6 días naturales para comunicar las bajas y variaciones de datos (art. 32.3 RIA modificado por RD 643/2026)."
-
-        if "pluriempleo" in titulo_sub and "pluriactividad" in titulo_sub:
-            if "pluriempleo" not in alumno_norm and "pluriactividad" not in alumno_norm:
-                return "OMITIDO", "Falta desarrollar las situaciones de encuadramiento múltiple (pluriempleo y pluriactividad)."
-        elif "pluriempleo" in titulo_sub:
-            if "pluriempleo" not in alumno_norm and "dos o mas empresas" not in alumno_norm:
-                return "OMITIDO", "Falta el concepto de pluriempleo (servicios en dos o más empresas del mismo Régimen)."
-        elif "pluriactividad" in titulo_sub:
-            if "pluriactividad" not in alumno_norm and "regimenes distintos" not in alumno_norm:
-                return "OMITIDO", "Falta el concepto de pluriactividad (actividades en dos o más Regímenes distintos)."
-        elif "procedimiento telematico" in titulo_sub or "sistema red" in titulo_sub:
-            if "sistema red" not in alumno_norm and "remision electronica" not in alumno_norm and "sedess" not in alumno_norm and "medios electronicos" not in alumno_norm:
-                return "OMITIDO", "Falta mencionar la tramitación electrónica a través del Sistema RED y SEDESS (arts. 38-39 RIA y Orden ESS/484/2013)."
-        elif "notificaciones" in titulo_sub:
-            if "notificacion" not in alumno_norm and "sedess" not in alumno_norm and "10 dias" not in alumno_norm:
-                return "OMITIDO", "Falta mencionar las notificaciones electrónicas en SEDESS (rechazo a los 10 días naturales)."
-        elif "conservacion" in titulo_sub:
-            if "conserva" not in alumno_norm and "4 anos" not in alumno_norm:
-                return "OMITIDO", "Falta mencionar el deber empresarial de conservar justificantes durante 4 años (art. 21 LISOS)."
-        elif "mayores de 62" in titulo_sub:
-            if "62" not in alumno_norm and "75%" not in alumno_norm:
-                return "OMITIDO", "Falta mencionar el supuesto especial de reducción del 75% en la cotización empresarial por contingencias comunes durante la IT de mayores de 62 años (art. 144.4 TRLGSS)."
-
-    cuerpo_sin_citas = re.sub(r'\b(?:art[íi]culos?|arts?\.|real\s+decreto(?:\-ley|\s+legislativo)?|rdl|rd|orden|ley)\s+[0-9/\.\-a-zªº]+\b', '', cuerpo_sub)
-    palabras_tecnicas = [
-        w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b|\b\d+(?:[\.,]\d+)?\b', cuerpo_sin_citas)
-        if w not in stopwords and w not in palabras_comodin_tema
-    ]
-    if not palabras_tecnicas:
-        palabras_tecnicas = [w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b', cuerpo_sin_citas) if w not in stopwords]
-
-    if not palabras_tecnicas:
-        return "COMPLETO", ""
-
-    aciertos_tec = sum(1 for w in palabras_tecnicas if func_raiz(w) in alumno_norm)
-    ratio_tec = aciertos_tec / len(palabras_tecnicas)
-
-    if ratio_tec >= 0.34 or (len(palabras_tecnicas) <= 6 and aciertos_tec >= 2):
-        return "COMPLETO", ""
-    if ratio_tec >= 0.18 or aciertos_tec >= 2:
-        faltantes_ej = [w for w in palabras_tecnicas if func_raiz(w) not in alumno_norm][:4]
-        return "PARCIAL", f"Abordado de forma parcial (conviene completar con: {', '.join(faltantes_ej)})."
-
-    return "OMITIDO", f"Pendiente de desarrollar «{_extraer_etiqueta_breve_apartado(orac_limpia)}»."
+        return []
+    bloques_brutos = [b.strip() for b in texto.split('\n') if b.strip()]
+    unidades = []
+    for blq in bloques_brutos:
+        blq_limpio = re.sub(r'^[«"\'\-\•\*■▪]+|[»"\']+$', '', blq.replace("[[H]]", "")).strip()
+        if PDFQuizParser._es_basura_cabecera_o_pie(blq_limpio):
+            continue
+        if len(blq_limpio) >= 30:
+            unidades.append(blq_limpio)
+    return unidades
 
 def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta=""):
+    """
+    Cálculo base de respaldo (únicamente se usa si en algún momento no hubiera conexión con la API de Gemini).
+    Cuando Gemini responde, prevalecen siempre al 100% las notas y el análisis decididos por la IA.
+    """
     def _norm(s):
         s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
         return re.sub(r'\s+', ' ', s).strip()
 
-    def _raiz(palabra):
-        p = _norm(palabra)
-        if len(p) >= 7:
-            return p[:-2]
-        if len(p) >= 5:
-            return p[:-1]
-        return p
-
     alumno_norm = _norm(texto_alumno)
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
     ref_norm = _norm(ref_completa)
-    ctx_completo_norm = _norm(f"{enunciado_pregunta} {ref_completa}")
-
-    pat_normas = r'\b(?:arts?(?:[íi]culos?|\.)\s*\d+(?:\s*(?:a|al|\-|–)\s*\d+)?(?:\.\d+)?(?:\.[a-z])?|t[íi]tulo\s+(?:[ivx]+|\d+)|ley(?:\s+org[áa]nica)?\s+\d+/\d{4}|real\s+decreto(?:\s+legislativo|\s+l\.?|\-ley|\s+ley)?\s+\d+/\d{4}|rd\s*legislativo\s+\d+/\d{4}|rd\s*leg\.?\s+\d+/\d{4}|rdl\s+\d+/\d{4}|rd[\-\s]*ley\s+\d+/\d{4}|rd\s+\d+/\d{4}|decreto\s+\d+/\d{4}|trlgss|lgss|ria|estatuto\s+de\s+los\s+trabajadores|constituci[óo]n\s+espa[ñn]ola|orden\s+(?:[a-z]+\/)?\d+/\d{4}|disposici[óo]n\s+(?:adicional|transitoria|final)\s+(?:\d+[ºª°]?|[a-záéíóúñ]+))'
-
-    def _clave_norma(texto_cita):
-        cn = _norm(texto_cita)
-        m_rango = re.match(r'^arts?(?:iculos?|\.)\s*(\d+\s*(?:a|al|\-|–)\s*\d+)', cn)
-        if m_rango:
-            r_limpio = re.sub(r'\s+', ' ', m_rango.group(1))
-            return ("RANGO_ART", r_limpio, f"Arts. {r_limpio}")
-        m_art = re.match(r'^arts?(?:iculos?|\.)\s*(\d+)', cn)
-        if m_art:
-            return ("ART", m_art.group(1), f"Artículo {m_art.group(1)}")
-        m_tit = re.match(r'^titulo\s+([ivx0-9]+)', cn)
-        if m_tit:
-            return ("TITULO", m_tit.group(1).upper(), f"Título {m_tit.group(1).upper()}")
-        m_ley = re.search(r'(ley(?:\s+organica)?|real\s+decreto(?:\s+legislativo|\s+l\.?|\-ley|\s+ley)?|rd\s*legislativo|rd\s*leg\.?|rdl|rd[\-\s]*ley|rd|decreto|orden(?:\s+[a-z]+)?)\s+(\d+/\d{4})', cn)
-        if m_ley:
-            tipo = m_ley.group(1).upper()
-            num = m_ley.group(2)
-            if num == "8/2015":
-                return ("NORMA", "8/2015", "RD Legislativo 8/2015 (TRLGSS)")
-            if "LEG" in tipo or re.search(r'DECRETO\s+L\.?$', tipo):
-                etiqueta = f"RD Legislativo {num}"
-            elif "LEY" in tipo or tipo == "RDL":
-                etiqueta = f"RD-ley {num}"
-            elif "REAL DECRETO" in tipo or tipo == "RD":
-                etiqueta = f"Real Decreto {num}"
-            elif "ORDEN" in tipo:
-                etiqueta = f"Orden {num}"
-            else:
-                etiqueta = f"Ley {num}"
-            return ("NORMA", num, etiqueta)
-        if "trlgss" in cn or "lgss" in cn:
-            return ("NORMA", "8/2015", "TRLGSS (RD Legislativo 8/2015)")
-        if cn == "ria":
-            return ("NORMA", "84/1996", "Real Decreto 84/1996 (RIA)")
-        if "estatuto de los trabajadores" in cn:
-            return ("NORMA", "2/2015", "Estatuto de los Trabajadores (RD Legislativo 2/2015)")
-        if "constitucion espanola" in cn:
-            return ("SIGLA", "ce", "Constitución Española")
-        m_da = re.match(r'^disposicion\s+(adicional|transitoria|final)\s+(.+)$', cn)
-        if m_da:
-            return ("DISP", f"{m_da.group(1)}_{m_da.group(2)}", texto_cita.strip().capitalize())
-        return ("OTRO", cn, texto_cita.strip())
-
-    citas_ref_raw = re.findall(pat_normas, ref_completa, flags=re.IGNORECASE)
-    citas_alumno_raw = re.findall(pat_normas, texto_alumno, flags=re.IGNORECASE)
-
-    mapa_ref = {}
-    for c in citas_ref_raw:
-        k_tipo, k_id, k_lbl = _clave_norma(c)
-        if (k_tipo, k_id) not in mapa_ref:
-            mapa_ref[(k_tipo, k_id)] = k_lbl
-
-    mapa_al = {}
-    for c in citas_alumno_raw:
-        k_tipo, k_id, k_lbl = _clave_norma(c)
-        if (k_tipo, k_id) not in mapa_al:
-            mapa_al[(k_tipo, k_id)] = k_lbl
-
-    arts_en_ref = _extraer_rangos_articulos(ref_completa)
-    arts_en_alumno = _extraer_rangos_articulos(texto_alumno)
-
-    ids_ref_equiv = set(mapa_ref.keys())
-
-    citas_ok_base, citas_faltan_base = [], []
-    for k_par, lbl in mapa_ref.items():
-        if k_par in mapa_al:
-            citas_ok_base.append(lbl)
-        elif k_par[0] == "ART" and k_par[1] in arts_en_alumno:
-            citas_ok_base.append(lbl)
-        elif k_par[0] == "RANGO_ART":
-            nums_r = re.findall(r'\d+', k_par[1])
-            if nums_r and all(n in arts_en_alumno for n in nums_r):
-                citas_ok_base.append(lbl)
-            else:
-                citas_faltan_base.append(lbl)
-        else:
-            citas_faltan_base.append(lbl)
-
-    citas_ok, citas_faltan = auditar_normativa_obligatoria_del_epigrafe(
-        alumno_norm, arts_en_alumno, ctx_completo_norm, citas_ok_base, citas_faltan_base
-    )
-
-    citas_complementarias, citas_erroneas, articulos_extra_detectados = [], [], []
-    oraciones_alumno = re.split(r'(?<=[.?!;])\s+|\n+', texto_alumno)
-
-    for k_par, lbl in mapa_al.items():
-        if k_par in ids_ref_equiv:
-            continue
-        if k_par[0] == "ART" and k_par[1] in arts_en_ref:
-            continue
-        if k_par[0] == "RANGO_ART":
-            nums_r = re.findall(r'\d+', k_par[1])
-            if nums_r and all(n in arts_en_ref for n in nums_r):
-                continue
-        if k_par[1] in ref_norm:
-            continue
-
-        articulos_extra_detectados.append(lbl)
-        orac_donde_aparece = next((o for o in oraciones_alumno if k_par[1] in _norm(o)), texto_alumno)
-        es_correcto_en_fuente, detalle_fuente = _verificar_articulo_extra_en_fuentes(
-            k_par[0], k_par[1], lbl, orac_donde_aparece, f"{enunciado_pregunta} {ref_completa}"
-        )
-        if es_correcto_en_fuente:
-            citas_complementarias.append(detalle_fuente)
-        else:
-            citas_erroneas.append(detalle_fuente)
-
-    siglas_sin_definir = auditar_siglas_sin_definir_previa(texto_alumno)
-
-    pat_cifras = r'\b\d+(?:[\.,]\d+)?\s*(?:%|por\s+ciento|puntos\s+porcentuales|d[íi]as?(?:\s+naturales|\s+h[áa]biles)?|meses|a[ñn]os|horas|jornadas?(?:\s+reales)?|euros(?:/mes|/d[íi]a)?|€/mes|€|mensualidades|tramo\s+\d+[ºª°]?|(?:primer|segundo|tercer)\s+grado)\b'
-    cifras_raw = re.findall(pat_cifras, ref_completa, flags=re.IGNORECASE)
-    cifras_unicas = []
-    vistas_n = set()
-    for cf in cifras_raw:
-        cfn = _norm(cf)
-        if cfn not in vistas_n:
-            vistas_n.add(cfn)
-            cifras_unicas.append(cf.strip())
-
-    cifras_ok, cifras_faltan = [], []
-    for cf in cifras_unicas:
-        cfn = _norm(cf)
-        num_principal = re.findall(r'\d+(?:[\.,]\d+)?', cfn)
-        if cfn in alumno_norm or (num_principal and re.search(rf'\b{re.escape(num_principal[0])}\b', alumno_norm)):
-            cifras_ok.append(cf)
-        else:
-            cifras_faltan.append(cf)
 
     stopwords = {
         "para", "como", "este", "esta", "estos", "estas", "pero", "sino", "porque", "cuando", "donde",
@@ -3269,132 +2469,31 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
         "otras", "mismo", "misma", "mismos", "mismas", "tanto", "entre", "sobre", "bajo", "ante", "tras",
         "desde", "hasta", "hacia", "segun", "conforme", "mediante", "durante", "cada", "algun", "alguna",
         "ningun", "ninguna", "pueden", "puede", "debe", "debera", "deberan", "sera", "seran", "tiene",
-        "tienen", "haber", "habia", "estar", "esta", "estan", "sido", "siendo", "establece", "dispone",
-        "regula", "articulo", "texto", "refundido", "general", "seguridad", "social", "norma", "normativa",
-        "literalmente", "siguiente", "siguientes", "caso", "casos", "supuesto", "supuestos", "efectos",
-        "parte", "partes", "forma", "manera", "dichos", "dicha", "dicho", "dichas", "aquel", "aquella",
-        "ademas", "asimismo", "obstante", "embargo", "respecto", "aplicacion", "sistema", "especial",
-        "sintesis", "resumen", "analitico", "epigrafe", "epigrafes"
+        "tienen", "haber", "habia", "estar", "esta", "estan", "sido", "siendo"
     }
 
-    texto_base_ideas = f"{respuesta_oficial}. {explicacion_oficial}" if respuesta_oficial else explicacion_oficial
-    oraciones_completas = _dividir_en_oraciones_juridicas(texto_base_ideas)
-    puntos_cubiertos = []
-    puntos_parciales = []
-    detalles_parciales = []
-    puntos_omitidos = []
+    palabras_ref = {w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b', ref_norm) if w not in stopwords}
+    palabras_al = {w for w in re.findall(r'\b[a-záéíóúñ]{4,}\b', alumno_norm) if w not in stopwords}
 
-    for orac_limpia in oraciones_completas:
-        if PDFQuizParser._es_basura_cabecera_o_pie(orac_limpia):
-            continue
-        if any(_norm(orac_limpia)[:55] == _norm(x)[:55] for x in (puntos_cubiertos + puntos_parciales + puntos_omitidos)):
-            continue
-        nivel_cob, motivo_cob = _evaluar_cobertura_subapartado(orac_limpia, alumno_norm, stopwords, _norm, _raiz)
-        if nivel_cob == "COMPLETO":
-            puntos_cubiertos.append(orac_limpia)
-        elif nivel_cob == "PARCIAL":
-            puntos_parciales.append(orac_limpia)
-            detalles_parciales.append((_extraer_etiqueta_breve_apartado(orac_limpia), motivo_cob, orac_limpia))
-        else:
-            puntos_omitidos.append(orac_limpia)
+    if not palabras_ref or not palabras_al:
+        return {
+            "nota": 0.0,
+            "nota_50": 0.0,
+            "pts_criterio_1": 0.0,
+            "pts_criterio_2": 0.0,
+            "pts_criterio_3": 0.0,
+            "supera_umbral_20": False
+        }
 
-    # RECONOCIMIENTO DE CONTENIDOS DEL TEMA COMPLETO DE OPOSICIONA APORTADOS POR EL ALUMNO
-    # (Por ejemplo, cuando el alumno desarrolla las Altas Indebidas del art. 60 RIA y Bajas Indebidas del art. 61 RIA,
-    # o enumera las situaciones asimiladas al alta del art. 36 RIA y los efectos suspensivos de la huelga).
-    aportaciones_temario_completo_detectadas = []
-    for blq_tc in CONTENIDOS_TEMA_COMPLETO_POR_EPIGRAFE:
-        if any(mk in ctx_completo_norm for mk in blq_tc["match_epigrafe"]):
-            for desc_tc, kw_list in blq_tc["aportaciones_tema_completo"]:
-                if any(kw in alumno_norm for kw in kw_list):
-                    aportaciones_temario_completo_detectadas.append(desc_tc)
+    coincidencias = sum(1 for w in palabras_ref if w[:5] in alumno_norm)
+    ratio_conceptos = min(1.0, (coincidencias / max(1, len(palabras_ref))) * 1.45)
+    pts_criterio_1 = round(min(45.0, ratio_conceptos * 45.0), 2)
 
-    alerta_sentido = ""
-    resp_inicio = _norm(respuesta_oficial[:40]) if respuesta_oficial else ""
-    alumno_inicio = alumno_norm[:50]
-    if re.match(r'^no\b', resp_inicio) and re.match(r'^si\b', alumno_inicio):
-        alerta_sentido = "❌ **Sentido invertido:** La solución oficial comienza negando (**«No...»**) y tu respuesta afirmando (**«Sí...»**)."
-    elif re.match(r'^si\b', resp_inicio) and re.match(r'^no\b', alumno_inicio):
-        alerta_sentido = "❌ **Sentido invertido:** La solución oficial comienza afirmando (**«Sí...»**) y tu respuesta negando (**«No...»**)."
-
-    if puntos_omitidos:
-        texto_sugerido = " ".join(puntos_omitidos[:3])
-    elif puntos_parciales:
-        texto_sugerido = " ".join(puntos_parciales[:2])
-    elif respuesta_oficial:
-        texto_sugerido = respuesta_oficial
-    else:
-        texto_sugerido = explicacion_oficial
-
-    # CÁLCULO PONDERADO, JUSTO Y FIEL AL TEMARIO COMPLETO + RESUMEN (CRITERIO 1: 0 a 45 PUNTOS):
-    # - Cada subapartado cubierto suma 1.0 unidad; cada subapartado parcial suma 0.65 unidades;
-    #   y cada bloque del Tema Completo de Oposiciona desarrollado por el alumno (como Altas Indebidas, Bajas Indebidas, etc.)
-    #   suma 1.0 unidad adicional compensando subapartados del resumen corto.
-    total_unidades_ideas = max(1, len(puntos_cubiertos) + len(puntos_parciales) + len(puntos_omitidos))
-    unidades_ponderadas = (
-        len(puntos_cubiertos)
-        + (0.65 * len(puntos_parciales))
-        + (1.10 * len(aportaciones_temario_completo_detectadas))
-    )
-    ratio_cobertura_global = min(1.0, unidades_ponderadas / total_unidades_ideas)
-    pts_brutos_ideas = round(ratio_cobertura_global * 38.0, 2)
-
-    total_unidades_legales = max(1, len(citas_ok) + len(citas_faltan))
-    pts_brutos_legales = round((len(citas_ok) / total_unidades_legales) * 4.5, 2)
-
-    total_unidades_cifras = max(1, len(cifras_ok) + len(cifras_faltan))
-    pts_brutos_cifras = round((len(cifras_ok) / total_unidades_cifras) * 2.5, 2)
-
-    bonificacion_complementarias = round(min(2.5, 0.50 * len(citas_complementarias)), 2)
-    pts_brutos_criterio_1 = round(min(45.0, pts_brutos_ideas + pts_brutos_legales + pts_brutos_cifras + bonificacion_complementarias), 2)
-
-    leyes_rd_omitidos_lista = [c for c in citas_faltan if not es_cita_articulo_individual(c)]
-    articulos_trlgss_omitidos_lista = [
-        c if "TRLGSS" in c.upper() else f"{c} del TRLGSS (RDL 8/2015)"
-        for c in citas_faltan
-        if es_cita_articulo_individual(c) and es_articulo_esencial_trlgss(c, ref_completa)
-    ]
-    articulos_otros_omitidos_lista = [
-        c for c in citas_faltan
-        if es_cita_articulo_individual(c) and not es_articulo_esencial_trlgss(c, ref_completa)
-    ]
-
-    # Deducciones exactas acordadas (sin restar dos veces por los subapartados, ya que los no cubiertos ya dejaron de sumar en pts_brutos_ideas):
-    # - Ley/RD omitido: -0,15 ptos
-    # - Artículo esencial del RDL 8/2015 (TRLGSS) omitido: -0,15 ptos (-0,10 base + -0,05 por ser del TRLGSS)
-    # - Otro artículo omitido: -0,10 ptos
-    # - Plazo/cuantía omitido: -0,15 ptos (con tope moderado para no hundir un buen desarrollo)
-    resta_negativa_apartados_omitidos = 0.0
-    resta_negativa_leyes_omitidas = round(len(leyes_rd_omitidos_lista) * 0.15, 2)
-    resta_negativa_articulos_trlgss_omitidos = round(len(articulos_trlgss_omitidos_lista) * 0.15, 2)
-    resta_negativa_articulos_otros_omitidos = round(len(articulos_otros_omitidos_lista) * 0.10, 2)
-    resta_negativa_articulos_omitidos = round(resta_negativa_articulos_trlgss_omitidos + resta_negativa_articulos_otros_omitidos, 2)
-    resta_negativa_referencias_omitidas = round(min(1.50, resta_negativa_leyes_omitidas + resta_negativa_articulos_omitidos), 2)
-    resta_negativa_cifras_omitidas = round(min(0.90, len(cifras_faltan) * 0.15), 2)
-    penalizacion_citas_erroneas = round(min(1.50, len(citas_erroneas) * 0.50), 2)
-    penalizacion_sentido = 3.00 if alerta_sentido else 0.0
-    penalizacion_siglas = round(min(0.50, len(siglas_sin_definir) * 0.25), 2)
-
-    total_restas_c1 = round(
-        resta_negativa_referencias_omitidas
-        + resta_negativa_cifras_omitidas
-        + penalizacion_citas_erroneas
-        + penalizacion_sentido,
-        2
-    )
-
-    pts_criterio_1 = round(max(0.0, pts_brutos_criterio_1 - total_restas_c1), 2)
-
-    palabras_ref_num = max(1, len(re.findall(r'\b\w+\b', ref_completa)))
-    palabras_al_num = len(re.findall(r'\b\w+\b', texto_alumno))
-
-    # Criterios oficiales del Tribunal: Criterio 2 (hasta 3 ptos) y Criterio 3 (hasta 2 ptos) se activan al alcanzar 20,00 / 45 en el Criterio 1
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
-        num_parrafos_al = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 20])
-        usa_conectores = sum(1 for c in ["conforme", "virtud", "establece", "dispone", "asimismo", "obstante", "tanto", "articulo", "respecto", "titulo", "cuanto", "ultimo", "otro lado"] if c in alumno_norm)
-        pts_criterio_2 = round(min(3.0, 2.0 + (0.5 if num_parrafos_al >= 3 else 0.2) + (0.5 if usa_conectores >= 2 else 0.2)), 2)
-        pts_criterio_3_base = min(2.0, 1.6 + (0.4 if len(texto_alumno.strip()) >= 250 else 0.2))
-        pts_criterio_3 = round(max(0.5, pts_criterio_3_base - penalizacion_siglas), 2)
+        num_parrafos = len([p for p in texto_alumno.split("\n") if len(p.strip()) > 25])
+        pts_criterio_2 = round(min(3.0, 2.0 + (0.6 if num_parrafos >= 3 else 0.2)), 2)
+        pts_criterio_3 = round(min(2.0, 1.5 + (0.3 if len(texto_alumno.strip()) >= 250 else 0.1)), 2)
     else:
         pts_criterio_2 = 0.0
         pts_criterio_3 = 0.0
@@ -3402,199 +2501,14 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     nota_50 = round(min(50.0, pts_criterio_1 + pts_criterio_2 + pts_criterio_3), 2)
     nota_10 = round((nota_50 / 50.0) * 10.0, 2)
 
-    motivos_resta = []
-    if resta_negativa_leyes_omitidas > 0 and leyes_rd_omitidos_lista:
-        motivos_resta.append(
-            f"🔸 **-{resta_negativa_leyes_omitidas:.2f} ptos por Leyes, Reales Decretos u Órdenes omitidos (-0,15 ptos c/u):** "
-            f"No has citado **{'; '.join(leyes_rd_omitidos_lista)}**."
-        )
-    if resta_negativa_articulos_trlgss_omitidos > 0 and articulos_trlgss_omitidos_lista:
-        motivos_resta.append(
-            f"🔸 **-{resta_negativa_articulos_trlgss_omitidos:.2f} ptos por artículos esenciales del RDL 8/2015 (TRLGSS) omitidos (-0,15 ptos c/u: -0,10 base + -0,05 suplemento TRLGSS):** "
-            f"No has citado **{'; '.join(articulos_trlgss_omitidos_lista)}**."
-        )
-    if resta_negativa_articulos_otros_omitidos > 0 and articulos_otros_omitidos_lista:
-        motivos_resta.append(
-            f"🔸 **-{resta_negativa_articulos_otros_omitidos:.2f} ptos por otros artículos reglamentarios omitidos (-0,10 ptos c/u):** "
-            f"No has citado **{'; '.join(articulos_otros_omitidos_lista)}**."
-        )
-    if resta_negativa_cifras_omitidas > 0 and cifras_faltan:
-        motivos_resta.append(
-            f"🔸 **-{resta_negativa_cifras_omitidas:.2f} ptos por plazos o cuantías omitidos (-0,15 ptos c/u, máx. -0,90):** "
-            f"Faltó precisar **{', '.join(cifras_faltan)}**."
-        )
-    if penalizacion_siglas > 0:
-        lista_siglas_txt = ", ".join([f"**{s}** (*«{ej}»*)" for s, ej in siglas_sin_definir])
-        motivos_resta.append(
-            f"🔸 **-{penalizacion_siglas:.2f} ptos en el Criterio 3 por siglas sin fórmula introductoria previa (-0,25 ptos c/u):** "
-            f"{lista_siglas_txt}."
-        )
-    if penalizacion_citas_erroneas > 0:
-        motivos_resta.append(
-            f"🔻 **-{penalizacion_citas_erroneas:.2f} ptos por citar artículos ajenos al epígrafe:** "
-            f"{' | '.join(citas_erroneas)}"
-        )
-    if not supera_umbral_20:
-        motivos_resta.append(
-            f"ℹ️ **Criterios 2 (0-3 ptos) y 3 (0-2 ptos) condicionados a alcanzar 20,00 / 45 ptos en el Criterio 1.**"
-        )
-
     return {
         "nota": nota_10,
         "nota_50": nota_50,
-        "pts_brutos_criterio_1": pts_brutos_criterio_1,
-        "total_restas_c1": total_restas_c1,
         "pts_criterio_1": pts_criterio_1,
         "pts_criterio_2": pts_criterio_2,
         "pts_criterio_3": pts_criterio_3,
-        "supera_umbral_20": supera_umbral_20,
-        "alerta_sentido": alerta_sentido,
-        "citas_ok": citas_ok,
-        "citas_complementarias": citas_complementarias,
-        "citas_faltan": citas_faltan,
-        "articulos_trlgss_omitidos_lista": articulos_trlgss_omitidos_lista,
-        "articulos_otros_omitidos_lista": articulos_otros_omitidos_lista,
-        "articulos_omitidos_lista": articulos_trlgss_omitidos_lista + articulos_otros_omitidos_lista,
-        "leyes_rd_omitidos_lista": leyes_rd_omitidos_lista,
-        "citas_erroneas": citas_erroneas,
-        "siglas_sin_definir": siglas_sin_definir,
-        "penalizacion_siglas": penalizacion_siglas,
-        "resta_negativa_apartados_omitidos": resta_negativa_apartados_omitidos,
-        "resta_negativa_leyes_omitidas": resta_negativa_leyes_omitidas,
-        "resta_negativa_articulos_trlgss_omitidos": resta_negativa_articulos_trlgss_omitidos,
-        "resta_negativa_articulos_otros_omitidos": resta_negativa_articulos_otros_omitidos,
-        "resta_negativa_articulos_omitidos": resta_negativa_articulos_omitidos,
-        "resta_negativa_referencias_omitidas": resta_negativa_referencias_omitidas,
-        "resta_negativa_cifras_omitidas": resta_negativa_cifras_omitidas,
-        "articulos_extra_detectados": articulos_extra_detectados,
-        "cifras_ok": cifras_ok,
-        "cifras_faltan": cifras_faltan,
-        "puntos_cubiertos": puntos_cubiertos,
-        "puntos_parciales": puntos_parciales,
-        "detalles_parciales": detalles_parciales,
-        "aportaciones_temario_completo": aportaciones_temario_completo_detectadas,
-        "puntos_omitidos": puntos_omitidos,
-        "texto_sugerido": texto_sugerido,
-        "motivos_resta": motivos_resta,
-        "bonificacion_complementarias": bonificacion_complementarias,
-        "palabras_alumno": palabras_al_num,
-        "palabras_oficial": palabras_ref_num
+        "supera_umbral_20": supera_umbral_20
     }
-
-def generar_dictamen_tribunal_inteligente(ev, respuesta_alumno, respuesta_oficial, explicacion_oficial):
-    bloques = []
-    n_comp = len(ev["puntos_cubiertos"])
-    n_parc = len(ev.get("puntos_parciales", []))
-    n_tc = len(ev.get("aportaciones_temario_completo", []))
-    n_omit = len(ev["puntos_omitidos"])
-    tot_ideas = n_comp + n_parc + n_omit
-
-    etiquetas_acertadas = [_extraer_etiqueta_breve_apartado(p) for p in ev["puntos_cubiertos"] if _extraer_etiqueta_breve_apartado(p)]
-    etiquetas_parciales = [tit for tit, _, _ in ev.get("detalles_parciales", [])]
-    etiquetas_omitidas = [_extraer_etiqueta_breve_apartado(p) for p in ev["puntos_omitidos"][:6] if _extraer_etiqueta_breve_apartado(p)]
-
-    resumen_aciertos_txt = (
-        f"Has desarrollado con acierto **{n_comp} subapartados directos** del resumen "
-        + (f"(*{'; '.join(etiquetas_acertadas)}*)" if etiquetas_acertadas else "")
-        + (f", otros **{n_parc} subapartados de forma parcial** (*{'; '.join(etiquetas_parciales)}*)" if n_parc else "")
-        + (f", y además has incorporado **{n_tc} bloques de alto valor procedentes del Tema Completo de Oposiciona** (*{'; '.join(ev['aportaciones_temario_completo'])}*)." if n_tc else ".")
-    )
-    resumen_brecha_txt = (
-        f"En conjunto demuestras una buena base del tema. Para dar el salto hacia los 40-45 puntos ante el Tribunal, necesitas completar tu esquema con los "
-        f"**{n_omit} subapartados del resumen que quedaron sin mencionar** (*{'; '.join(etiquetas_omitidas)}*)"
-        + (f" y precisar algunos plazos o cuantías ({', '.join(ev['cifras_faltan'][:4])})." if ev["cifras_faltan"] else ".")
-        if (ev["puntos_omitidos"] or ev["cifras_faltan"]) else
-        "Tu exposición cubre con gran solidez tanto el esquema del resumen como los contenidos del Tema Completo."
-    )
-
-    bloques.append(
-        "1. **✅ Valoración conjunta (Resumen de Epígrafes + Tema Completo de Oposiciona):**\n"
-        f"   - **Lo que has resuelto bien (+{ev.get('pts_brutos_criterio_1', 0.0):.2f} / 45,00 ptos brutos):** {resumen_aciertos_txt}\n"
-        f"   - **Comparativa global y margen de mejora:** {resumen_brecha_txt}"
-    )
-
-    lineas_b2 = []
-    if ev.get("aportaciones_temario_completo"):
-        lineas_b2.append("   - **🌟 Aportaciones del Tema Completo de Oposiciona muy bien incluidas en tu examen:**")
-        for ap_tc in ev["aportaciones_temario_completo"]:
-            lineas_b2.append(f"     • ✔️ {ap_tc}")
-    if ev.get("detalles_parciales"):
-        lineas_b2.append("   - **🟡 Subapartados bien encaminados que puedes redondear aún más (puntuados al 65%):**")
-        for tit_p, mot_p, _ in ev["detalles_parciales"]:
-            lineas_b2.append(f"     • **{tit_p}:** {mot_p}")
-    if ev["puntos_omitidos"]:
-        lineas_b2.append(f"   - **🔴 Subapartados del resumen de exposición que te faltó incluir ({n_omit} de {tot_ideas}):**")
-        for idx_om, p_om in enumerate(ev["puntos_omitidos"], 1):
-            lineas_b2.append(f"     • **Pendiente {idx_om}:** *{p_om}*")
-    if ev["cifras_faltan"]:
-        lineas_b2.append(
-            f"   - **⏱️ Plazos o cuantías que conviene precisar (-{ev.get('resta_negativa_cifras_omitidas', 0.0):.2f} ptos, a razón de -0,15 ptos c/u):** {', '.join(ev['cifras_faltan'])}."
-        )
-    if not lineas_b2:
-        lineas_b2.append("   - ¡Excelente trabajo! Has desarrollado todos los subapartados y plazos del epígrafe oficial.")
-
-    bloques.append("2. **⚠️ Análisis detallado de lo incluido, lo mejorable y lo omitido:**\n" + "\n".join(lineas_b2))
-
-    rev_normas = []
-    if ev["citas_ok"]:
-        rev_normas.append(f"- ✔️ **Normativa correctamente citada en tu texto:** {'; '.join(ev['citas_ok'])}.")
-    for ref_ley in ev.get("leyes_rd_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Ley, Real Decreto u Orden omitido (-0,15 ptos):** *{ref_ley}*.")
-    for ref_art_trlgss in ev.get("articulos_trlgss_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Artículo esencial del RDL 8/2015 (TRLGSS) omitido (-0,15 ptos: -0,10 base + -0,05 suplemento TRLGSS):** *{ref_art_trlgss}*.")
-    for ref_art_otro in ev.get("articulos_otros_omitidos_lista", []):
-        rev_normas.append(f"- 🔸 **Artículo reglamentario/legal omitido (-0,10 ptos):** *{ref_art_otro}*.")
-    if ev["citas_erroneas"]:
-        for err_art in ev["citas_erroneas"]:
-            rev_normas.append(f"- ❌ **Cita improcedente (contraste con el BOE):** {err_art}")
-    if ev.get("siglas_sin_definir"):
-        sig_str = "; ".join([f"**{s}** → preséntala la primera vez como *«{ej}»*" for s, ej in ev["siglas_sin_definir"]])
-        rev_normas.append(
-            f"- ✍️ **Rigor formal en siglas (-{ev.get('penalizacion_siglas', 0.0):.2f} ptos en Criterio 3):** {sig_str}."
-        )
-    if not rev_normas:
-        rev_normas.append("- ✔️ Todas las normas, artículos esenciales y siglas del epígrafe han sido correctamente citados.")
-    bloques.append("3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos) y siglas:**\n" + "\n".join(rev_normas))
-
-    c1_bruto = ev.get("pts_brutos_criterio_1", 0.0)
-    c1 = ev.get("pts_criterio_1", 0.0)
-    resta_efectiva = round(max(0.0, c1_bruto - c1), 2)
-    c2 = ev.get("pts_criterio_2", 0.0)
-    c3 = ev.get("pts_criterio_3", 0.0)
-    n50 = ev.get("nota_50", 0.0)
-    n10 = ev.get("nota", 0.0)
-    motivos_txt = "\n".join([f"   - {m}" for m in ev.get("motivos_resta", [])]) if ev.get("motivos_resta") else "   - ✔️ Sin deducciones."
-
-    paso_1_estructura = (
-        "Conserva todo lo que ya dominas (como la clasificación de las altas, los efectos de las altas y las altas/bajas indebidas de los arts. 60 y 61 RIA) y añade al inicio el bloque de **encuadramiento múltiple (pluriempleo y pluriactividad)** y el **Sistema RED / SEDESS**."
-    )
-    paso_2_arts = (
-        f"Cuando expliques las bajas, no digas solo «iguales circunstancias se producen en las bajas»: añade expresamente el **plazo de 6 días naturales (art. 32.3 RIA tras el RD 643/2026)** y que **la baja fuera de plazo no extingue la obligación de cotizar sino hasta que la TGSS conozca el cese (art. 35.2 RIA)**, citando además {'; '.join((ev.get('articulos_trlgss_omitidos_lista') or ev.get('articulos_otros_omitidos_lista'))[:2])}."
-        if (ev.get("articulos_omitidos_lista") or ev.get("cifras_faltan")) else
-        "Mantén la conexión directa entre cada institución jurídica y sus preceptos del TRLGSS y del RIA."
-    )
-    paso_3_modelo = (
-        f"Añade este párrafo clave a tu esquema para subir tu nota por encima de 40/50: *«{ev['texto_sugerido'][:380]}{'...' if len(ev['texto_sugerido']) > 380 else ''}»*"
-        if ev.get("puntos_omitidos") else
-        "Tu cobertura de contenidos es muy completa; cuida únicamente los conectores para asegurar el pleno en los Criterios 2 y 3."
-    )
-
-    bloques.append(
-        "4. **🎓 Valoración por Criterios, Liquidación de Puntos y Plan de Progreso:**\n"
-        f"   - **Criterio 1 — Puntuación ganada por tus aciertos (Resumen + Tema Completo):** `+{c1_bruto:.2f} / 45,00 puntos`\n"
-        f"   - **Criterio 1 — Ajuste por citas/plazos pendientes (-0,15 Ley/RD; -0,15 art. esencial TRLGSS; -0,10 otro art.; -0,15 plazo):** `-{resta_efectiva:.2f} puntos`\n"
-        f"   - **Criterio 1 — Puntuación neta resultante (0 a 45 ptos):** **`{c1:.2f} / 45,00 puntos`**\n"
-        f"   - **Criterio 2 — Orden de las ideas y exposición estructurada (0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
-        f"   - **Criterio 3 — Calidad de expresión escrita y siglas (0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
-        f"   - 🏆 **CALIFICACIÓN FINAL DEL EPÍGRAFE:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia sobre 10: **`{n10:.2f} / 10`**)*\n"
-        f"   - **📉 Desglose de ajustes aplicados:**\n{motivos_txt}\n\n"
-        "💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**\n"
-        f"   1. **Cómo completar tu estructura:** {paso_1_estructura}\n"
-        f"   2. **Precisión normativa y plazos clave:** {paso_2_arts}\n"
-        f"   3. **Párrafo de mejora para tu próximo intento:** {paso_3_modelo}"
-    )
-
-    return "\n\n".join(bloques)
 
 def obtener_gemini_api_key_activa():
     try:
@@ -3608,6 +2522,64 @@ def obtener_gemini_api_key_activa():
         return str(sess_k).strip()
     return GEMINI_API_KEY_DEFAULT
 
+def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
+    """
+    Extrae las puntuaciones decididas por la IA (Criterio 1, Criterio 2 y Criterio 3)
+    para que la tarjeta superior y el registro de resultados reflejen exactamente la nota de la IA.
+    Devuelve: (ev_actualizado, texto_ia_limpio)
+    """
+    ev_out = dict(ev_respaldo or {})
+    if not texto_ia:
+        return ev_out, ""
+
+    c1_val = c2_val = c3_val = None
+
+    # 1. Buscar bloque estructurado [[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]
+    m_tag = re.search(
+        r'\[\[NOTAS_TRIBUNAL:\s*C1\s*=\s*(\d+(?:[\.,]\d+)?)\s*\|\s*C2\s*=\s*(\d+(?:[\.,]\d+)?)\s*\|\s*C3\s*=\s*(\d+(?:[\.,]\d+)?)\s*\]\]',
+        texto_ia,
+        flags=re.IGNORECASE
+    )
+    if m_tag:
+        c1_val = float(m_tag.group(1).replace(",", "."))
+        c2_val = float(m_tag.group(2).replace(",", "."))
+        c3_val = float(m_tag.group(3).replace(",", "."))
+        texto_ia = re.sub(r'\[\[NOTAS_TRIBUNAL:[^\]]*\]\]\s*', '', texto_ia, flags=re.IGNORECASE).strip()
+    else:
+        # 2. Respaldo por expresión regular sobre el texto si la IA omitió la etiqueta superior
+        m_c1 = re.search(r'Criterio\s*1[^\d\n]{0,60}(\d{1,2}(?:[\.,]\d{1,2})?)\s*/\s*45', texto_ia, flags=re.IGNORECASE)
+        m_c2 = re.search(r'Criterio\s*2[^\d\n]{0,60}(\d{1}(?:[\.,]\d{1,2})?)\s*/\s*3', texto_ia, flags=re.IGNORECASE)
+        m_c3 = re.search(r'Criterio\s*3[^\d\n]{0,60}(\d{1}(?:[\.,]\d{1,2})?)\s*/\s*2', texto_ia, flags=re.IGNORECASE)
+        if m_c1:
+            c1_val = float(m_c1.group(1).replace(",", "."))
+        if m_c2:
+            c2_val = float(m_c2.group(1).replace(",", "."))
+        if m_c3:
+            c3_val = float(m_c3.group(1).replace(",", "."))
+
+    if c1_val is not None:
+        c1_val = round(max(0.0, min(45.0, c1_val)), 2)
+        if c1_val < 20.0:
+            c2_val = 0.0
+            c3_val = 0.0
+        else:
+            c2_val = round(max(0.0, min(3.0, c2_val if c2_val is not None else 2.0)), 2)
+            c3_val = round(max(0.0, min(2.0, c3_val if c3_val is not None else 1.5)), 2)
+
+        nota_50 = round(min(50.0, c1_val + c2_val + c3_val), 2)
+        nota_10 = round((nota_50 / 50.0) * 10.0, 2)
+
+        ev_out.update({
+            "pts_criterio_1": c1_val,
+            "pts_criterio_2": c2_val,
+            "pts_criterio_3": c3_val,
+            "nota_50": nota_50,
+            "nota": nota_10,
+            "supera_umbral_20": c1_val >= 20.0
+        })
+
+    return ev_out, texto_ia
+
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
     aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
     if aviso_elegante:
@@ -3617,80 +2589,69 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
-    motivos_calculados = "\n".join(ev_fallback.get("motivos_resta", [])) or "Ninguna deducción relevante."
-    citas_erroneas_boe = "\n".join(ev_fallback.get("citas_erroneas", []))
-    citas_faltan_items = []
-    for c_ley in ev_fallback.get("leyes_rd_omitidos_lista", []):
-        citas_faltan_items.append(f"- {c_ley} (Ley/RD omitido: -0,15 ptos)")
-    for c_trlgss in ev_fallback.get("articulos_trlgss_omitidos_lista", []):
-        citas_faltan_items.append(f"- {c_trlgss} (Artículo esencial del RDL 8/2015 - TRLGSS omitido: -0,15 ptos [-0,10 base + -0,05 suplemento TRLGSS])")
-    for c_otro in ev_fallback.get("articulos_otros_omitidos_lista", []):
-        citas_faltan_items.append(f"- {c_otro} (Artículo reglamentario/legal omitido: -0,10 ptos)")
-    citas_faltan_lista = "\n".join(citas_faltan_items) or "Ninguna (ha citado todas las normas y artículos obligatorios)."
-
-    siglas_mal = ev_fallback.get("siglas_sin_definir", [])
-    n_comp = len(ev_fallback["puntos_cubiertos"])
-    n_parc = len(ev_fallback.get("puntos_parciales", []))
-    n_tc = len(ev_fallback.get("aportaciones_temario_completo", []))
-    n_omit = len(ev_fallback["puntos_omitidos"])
-    tot_ideas = n_comp + n_parc + n_omit
-
-    acertados_resumen = "\n".join([f"- {_extraer_etiqueta_breve_apartado(p)}" for p in ev_fallback["puntos_cubiertos"]]) or "Ninguno completo."
-    aportaciones_tc_txt = "\n".join([f"- {ap}" for ap in ev_fallback.get("aportaciones_temario_completo", [])]) or "Ninguna adicional."
-    parciales_resumen = "\n".join([f"- {tit}: {mot}" for tit, mot, _ in ev_fallback.get("detalles_parciales", [])]) or "Ninguno parcial."
-    omitidos_lista = "\n".join([f"- {p}" for p in ev_fallback["puntos_omitidos"]]) or "Ninguno (ha cubierto todos los apartados)."
-    resta_efectiva = round(max(0.0, ev_fallback.get('pts_brutos_criterio_1', 0.0) - ev_fallback['pts_criterio_1']), 2)
-
-    instruccion_extra = (
-        f"\n- VALORACIÓN CONJUNTA DEL TEMA COMPLETO Y DEL RESUMEN: Reconoce y valora muy positivamente no solo los {n_comp} subapartados del resumen y los {n_parc} parciales, sino también los {n_tc} bloques procedentes del Tema Completo de Oposiciona que el alumno ha incluido en su respuesta (por ejemplo, cuando explica las Altas Indebidas del art. 60 RIA y las Bajas Indebidas del art. 61 RIA, o los ejemplos de situaciones asimiladas al alta del art. 36 RIA). Todo ello suma +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 puntos brutos."
-        f"\n- EN EL APARTADO 2: Distingue claramente entre: 1) 🌟 Aportaciones del Tema Completo bien incluidas; 2) 🟡 Subapartados bien encaminados pero mejorables (ej. explicar en el alta de pleno derecho qué contingencias cubre: AT/EP, desempleo, asistencia sanitaria...); y 3) 🔴 Subapartados omitidos que debe añadir para sacar sobresaliente (como pluriempleo/pluriactividad, Sistema RED/SEDESS, plazo de 6 días naturales de las bajas del RD 643/2026 y que la baja fuera de plazo no extingue la cotización hasta que la TGSS conozca el cese)."
-        "\n- EN EL APARTADO 3: Enumera las normas acertadas, las Leyes/RD omitidos (-0,15 ptos c/u), los 'artículos esenciales del TRLGSS (RDL 8/2015)' omitidos (-0,15 ptos c/u: -0,10 base + -0,05 adicional por ser del RDL 8/2015), los demás artículos omitidos (-0,10 ptos c/u) y las siglas sin presentar ('...en adelante, XXXX')."
-        "\n- EN EL APARTADO 4: Respeta exactamente las puntuaciones auditadas inamovibles y cierra con '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' en 3 pasos prácticos y motivadores. PROHIBIDO usar 'Orientación del Tribunal' o 'Consejo del Tribunal'."
-    )
-    if citas_erroneas_boe:
-        instruccion_extra += (
-            f"\n- ARTÍCULOS INDEBIDOS CON SU LITERAL DEL BOE (incluye su literalidad exacta en el apartado 3):\n{citas_erroneas_boe}"
-        )
-    if siglas_mal:
-        instruccion_extra += (
-            f"\n- SIGLAS SIN FÓRMULA INTRODUCTORIA PREVIA: {', '.join(f'{s} (debió poner «{ej}»)' for s, ej in siglas_mal)} -> resta en Criterio 3: -{ev_fallback.get('penalizacion_siglas', 0.0):.2f} ptos."
-        )
 
     prompt = (
-        "Actúa como el equipo de preparadores expertos de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Realiza una evaluación justa, rigurosa y motivadora que valore conjuntamente el Resumen de Exposición y el Tema Completo de Oposiciona:\n"
-        f"- Puntuaciones auditadas inamovibles: Criterio 1 Ganado por aciertos = +{ev_fallback.get('pts_brutos_criterio_1', 0.0):.2f}/45 | Ajuste por citas/plazos pendientes = -{resta_efectiva:.2f} | Criterio 1 Neto = {ev_fallback['pts_criterio_1']:.2f}/45 | Criterio 2 = {ev_fallback['pts_criterio_2']:.2f}/3 | Criterio 3 = {ev_fallback['pts_criterio_3']:.2f}/2 | TOTAL = {ev_fallback['nota_50']:.2f}/50 ({ev_fallback['nota']:.2f}/10)."
-        f"{instruccion_extra}\n\n"
-        f"=== EPÍGRAFE / CUESTIÓN ===\n{pregunta}\n\n"
-        f"=== EXPLICACIÓN OFICIAL DEL EPÍGRAFE ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
-        f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== SUBAPARTADOS COMPLETOS ({n_comp}) ===\n{acertados_resumen}\n\n"
-        f"=== BLOQUES DEL TEMA COMPLETO DE OPOSICIONA INCLUIDOS POR EL ALUMNO ({n_tc}) ===\n{aportaciones_tc_txt}\n\n"
-        f"=== SUBAPARTADOS PARCIALES O MEJORABLES ({n_parc}) ===\n{parciales_resumen}\n\n"
-        f"=== SUBAPARTADOS OMITIDOS ({n_omit}) ===\n{omitidos_lista}\n\n"
-        f"=== REFERENCIAS NORMATIVAS OMITIDAS ===\n{citas_faltan_lista}\n\n"
-        f"=== DESGLOSE DE AJUSTES APLICADOS ===\n{motivos_calculados}\n\n"
-        "Estructura tu respuesta únicamente con estos 4 apartados exactos (NO incluyas nota metodológica previa porque ya se muestra en un recuadro aparte):\n"
-        "1. **✅ Valoración conjunta (Resumen de Epígrafes + Tema Completo de Oposiciona)**\n"
-        "2. **⚠️ Análisis detallado de lo incluido, lo mejorable y lo omitido**\n"
-        "3. **⚖️ Auditoría de referencias legales (-0,15 ptos Ley/RD; -0,15 ptos Artículo esencial TRLGSS; -0,10 ptos otros artículos) y siglas**\n"
-        "4. **🎓 Valoración por Criterios, Liquidación de Puntos y Plan de Progreso** (mostrando las puntuaciones exactas y cerrando con '💡 **Plan de progreso de tus preparadores para dominar este epígrafe:**' en 3 pasos prácticos)"
+        "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+        "Tu tarea es analizar en profundidad el texto escrito por el alumno, compararlo directamente con la respuesta/explicación oficial de referencia "
+        "y realizar tú mismo una valoración justa, rigurosa, constructiva y pedagógica aplicando EXCLUSIVAMENTE los Criterios Oficiales del Tribunal "
+        "(sin aplicar restas mecánicas prefabricadas por elemento omitido):\n\n"
+        "=== CRITERIOS OFICIALES DEL TRIBUNAL CALIFICADOR ===\n"
+        "- Puntuación total del ejercicio: de 0 a 50 puntos (mínimo 25,00 puntos para superar el ejercicio).\n"
+        "- Criterio 1 (de 0 a 45 puntos): Conocimiento, grado de comprensión y cobertura de los contenidos del epígrafe o cuestión, precisión técnico-jurídica y fundamentación normativa. "
+        "Valora el conjunto de lo que el alumno ha desarrollado bien (incluso si lo expresa con sus propias palabras o incluye desarrollos doctrinales o legales válidos del temario como altas/bajas indebidas, ejemplos de situaciones asimiladas, etc.) "
+        "y pondera con criterio de Tribunal qué parte del contenido oficial ha quedado incompleta u omitida.\n"
+        "- Criterio 2 (de 0 a 3 puntos): Orden de las ideas, claridad expositiva y estructura sistemática. IMPORTANTE: Conforme a las bases del Tribunal, solo puntúa si el alumno alcanza al menos 20,00 puntos en el Criterio 1 (si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
+        "- Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita, propiedad terminológica y rigor en el uso de siglas. IMPORTANTE: Solo puntúa si el alumno alcanza al menos 20,00 puntos en el Criterio 1 (si Criterio 1 < 20,00, Criterio 3 = 0,00).\n\n"
+        f"=== EPÍGRAFE / CUESTIÓN PLANTEADA ===\n{enunciado_supuesto}\n{pregunta}\n\n"
+        f"=== RESPUESTA / EXPLICACIÓN OFICIAL DE REFERENCIA ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+        f"=== RESPUESTA ESCRITA POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
+        "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
+        "En la PRIMERA LÍNEA de tu respuesta escribe siempre esta etiqueta exacta con las puntuaciones numéricas (usando punto decimal) que tú hayas decidido otorgar tras tu análisis:\n"
+        "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
+        "A continuación, redacta tu valoración estructurada en estos 4 apartados claros:\n"
+        "1. **✅ Valoración general y análisis de lo acertado:** Analiza qué partes, conceptos, instituciones jurídicas y normas ha desarrollado bien el alumno en comparación con la explicación oficial, reconociendo el mérito de lo aportado.\n"
+        "2. **⚠️ Comparativa con la explicación oficial (lo incompleto, impreciso u omitido):** Contrasta de forma razonada la respuesta del alumno con la explicación de referencia, explicándole qué bloques conceptuales, matices jurídicos, plazos o referencias normativas le han faltado o han quedado incompletos.\n"
+        "3. **⚖️ Análisis del rigor normativo, estructura y expresión escrita:** Valora cómo ha integrado las leyes, reglamentos y artículos en su exposición, así como el orden de sus ideas y la claridad de su redacción.\n"
+        "4. **🎓 Calificación razonada por Criterios del Tribunal y Orientación para progresar:**\n"
+        "   - Desglosa y justifica brevemente la puntuación que le otorgas en:\n"
+        "     • **Criterio 1 (Conocimiento y fundamentación normativa: 0 a 45 ptos)**\n"
+        "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos)**\n"
+        "     • **Criterio 3 (Calidad de la expresión escrita: 0 a 2 ptos)**\n"
+        "     • **🏆 CALIFICACIÓN TOTAL SOBRE 50 PUNTOS (y su equivalencia sobre 10)**\n"
+        "   - Cierra con **💡 Orientación de tus preparadores para mejorar este epígrafe:** dándole pautas concretas y motivadoras para perfeccionar su respuesta en el próximo intento."
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
     for modelo in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
-            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=18)
+            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=22)
             if r.status_code == 200:
                 data = r.json()
-                texto_ia = data["candidates"][0]["content"]["parts"][0]["text"]
-                texto_ia = re.sub(r'^ℹ️\s*\*?Nota metodológica.*?\n+', '', texto_ia.strip(), flags=re.IGNORECASE)
-                return texto_ia
+                texto_ia = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
+                if isinstance(ev_fallback, dict):
+                    ev_fallback.update(ev_actualizado)
+                return texto_ia_limpio
         except Exception:
             continue
 
-    return generar_dictamen_tribunal_inteligente(ev_fallback, respuesta_alumno, respuesta_oficial, explicacion_oficial)
+    # Respaldo solo si fallase la conexión a Internet / API
+    c1 = ev_fallback.get("pts_criterio_1", 0.0)
+    c2 = ev_fallback.get("pts_criterio_2", 0.0)
+    c3 = ev_fallback.get("pts_criterio_3", 0.0)
+    n50 = ev_fallback.get("nota_50", 0.0)
+    n10 = ev_fallback.get("nota", 0.0)
+    return (
+        "1. **✅ Valoración general:**\n"
+        "Se ha analizado tu respuesta contrastándola con el contenido oficial del epígrafe.\n\n"
+        "2. **🎓 Calificación por Criterios Oficiales del Tribunal:**\n"
+        f"- **Criterio 1 (Conocimiento y normativa):** `{c1:.2f} / 45,00 puntos`\n"
+        f"- **Criterio 2 (Orden de ideas):** `{c2:.2f} / 3,00 puntos`\n"
+        f"- **Criterio 3 (Expresión escrita):** `{c3:.2f} / 2,00 puntos`\n"
+        f"- 🏆 **CALIFICACIÓN TOTAL:** **`{n50:.2f} / 50,00 puntos`** *(Equivalencia: **`{n10:.2f} / 10`**)*\n\n"
+        "💡 **Orientación de tus preparadores:** Revisa el texto oficial inferior para contrastar los apartados y referencias normativas que puedes incorporar en tu próxima vuelta."
+    )
 
 def sincronizar_progreso_navegador():
     try:
@@ -3768,7 +2729,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     )
 
     placeholder_txt = (
-        "Ejemplo: He citado el artículo con otra redacción y no me lo ha detectado, hay una errata en el texto mínimo del epígrafe, o tengo duda sobre una deducción..."
+        "Ejemplo: Tengo una duda sobre la valoración de este epígrafe o hay una errata en el texto oficial..."
         if es_abierta else
         "Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta debería ser la b), o se ha cortado una frase..."
     )
@@ -3952,13 +2913,13 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
                 if cat_actual == "DESARROLLO":
                     raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
                     if not raw_qs:
-                        st.error("No se encontraron preguntas o epígrafes de desarrollo en este PDF.")
+                        st.error("No se encontraron preguntas o epígrafes de desarrollo en este documento.")
                     else:
                         procesar_preguntas(raw_qs, barajar=False)
                 elif cat_actual in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
                     raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
                     if not raw_qs:
-                        st.error("No se encontraron supuestos prácticos en este PDF.")
+                        st.error("No se encontraron supuestos prácticos en este documento.")
                     else:
                         procesar_preguntas(raw_qs, barajar=False)
                 else:
@@ -4256,7 +3217,7 @@ def procesar_preguntas(raw_qs, barajar=True):
         current_index=0,
         finished=False,
         checked=False,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'last_evaluated_text': None} for i in range(len(qs_listas))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None} for i in range(len(qs_listas))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
         do_scroll=True
@@ -4268,7 +3229,7 @@ def action_repetir_test():
     limpiar_estados_reportes_error()
     st.session_state.update(
         current_index=0,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'last_evaluated_text': None} for i in range(len(st.session_state.questions))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None} for i in range(len(st.session_state.questions))},
         finished=False, checked=False, celebracion_mostrada=False, do_scroll=True
     )
     iniciar_cronometro_test()
@@ -4286,7 +3247,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
@@ -4356,7 +3316,7 @@ if not st.session_state.questions:
     st.markdown(f"<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
-        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Corrección asistida con IA aplicando los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y literalidad normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
+        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Soporta indistintamente archivos Word (`.docx`) y PDF (`.pdf`). Valoración integral por IA comparando el texto del alumno con la explicación oficial según los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -4448,42 +3408,43 @@ if not st.session_state.questions:
                         else: st.error("No se pudo extraer ninguna pregunta.")
 
     if rol != "INVITADO":
-        with st.expander("Opcional: Subir un PDF manualmente desde tu dispositivo"):
-            uf = st.file_uploader("", type="pdf")
+        with st.expander("Opcional: Subir un PDF o Word (.docx) manualmente desde tu dispositivo"):
+            uf = st.file_uploader("", type=["pdf", "docx"])
             if uf is not None:
                 limpiar_estados_reportes_error()
-                cat_local = "DESARROLLO" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else (categoria if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else "ARCHIVO LOCAL")
+                es_docx_subido = uf.name.lower().endswith(".docx")
+                cat_local = "DESARROLLO" if (categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] or es_docx_subido) else (categoria if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else "ARCHIVO LOCAL")
                 st.session_state.update(modo_avance=modo_avance, test_name=uf.name, test_esp=especialidad, test_cat=cat_local)
                 max_op_local = 3 if "GESTI" in especialidad.upper() else 4
                 with st.spinner("Procesando documento local..."):
-                    pdf_bytes_local = uf.read()
-                    if cat_local == "DESARROLLO":
-                        rqs = PDFQuizParser.parse_abiertas_gestion(pdf_bytes_local, modo="DESARROLLO")
-                        if not rqs: st.error("No se encontraron preguntas de desarrollo en este PDF.")
+                    file_bytes_local = uf.read()
+                    if cat_local == "DESARROLLO" or PDFQuizParser.es_archivo_docx(file_bytes_local):
+                        rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="DESARROLLO")
+                        if not rqs: st.error("No se encontraron preguntas o epígrafes de desarrollo en este documento.")
                         else: procesar_preguntas(rqs, barajar=False)
                     elif cat_local in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
-                        rqs = PDFQuizParser.parse_abiertas_gestion(pdf_bytes_local, modo="SUPUESTOS")
-                        if not rqs: st.error("No se encontraron supuestos prácticos en este PDF.")
+                        rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="SUPUESTOS")
+                        if not rqs: st.error("No se encontraron supuestos prácticos en este documento.")
                         else: procesar_preguntas(rqs, barajar=False)
                     else:
-                        rqs = PDFQuizParser.parse(pdf_bytes_local, max_options=max_op_local)
+                        rqs = PDFQuizParser.parse(file_bytes_local, max_options=max_op_local)
                         if not rqs: st.error("No se encontraron preguntas válidas en este PDF.")
                         else: procesar_preguntas(rqs, barajar=True)
 
     if es_admin:
         with st.expander("📊 Herramienta Admin: Auditoría de Extracción Real y Recuento de Preguntas, Supuestos y Epígrafes"):
             st.info(
-                "Esta herramienta ejecuta exactamente el mismo motor de extracción y procesado de opciones que cuando un alumno abre cada test, "
-                "auditando pregunta por pregunta si hay cortes en explicaciones, preguntas fusionadas, opciones faltantes o respuestas sin marcar."
+                "Esta herramienta ejecuta exactamente el mismo motor de extracción y procesado que cuando un alumno abre cada test o documento (PDF o Word .docx), "
+                "auditando si hay cortes en explicaciones, preguntas fusionadas, opciones faltantes o respuestas sin marcar."
             )
             st.checkbox(
                 "🧪 Probar desenfoque antirrecortes en mi sesión de Administrador (desmárcalo para trabajar sin desenfoque)",
                 key="admin_test_blur"
             )
-            if st.button("🔍 Auditar extracción real y contar todos los PDFs", use_container_width=True, type="primary"):
+            if st.button("🔍 Auditar extracción real y contar todos los documentos", use_container_width=True, type="primary"):
                 nuevos_hoy = globals().get("NUEVOS_HOY", [])
                 tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
-                bp, proc, txt_copiar = st.progress(0, text="Extrayendo y auditando PDFs con el motor real..."), 0, ""
+                bp, proc, txt_copiar = st.progress(0, text="Extrayendo y auditando documentos con el motor real..."), 0, ""
                 alertas_globales = []
 
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
@@ -4534,7 +3495,7 @@ if not st.session_state.questions:
                                 if r.status_code == 200:
                                     qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
                                     qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
-                                    if not qs_sup:
+                                    if not qs_sup and not PDFQuizParser.es_archivo_docx(r.content):
                                         qs_sup = preparar_preguntas_como_en_test(PDFQuizParser.parse(r.content, max_options=max_op_adm), barajar=False)
                                     n_sup = len(qs_sup)
                                     tot_cuestiones_sup += n_sup
@@ -4546,9 +3507,9 @@ if not st.session_state.questions:
                                 n_sup_str, est_s = "-", f"❌ {e_s}"
                             et_tema_s = obtener_etiqueta_tema_visible(nom_s)
                             s_md += f"| **SUPUESTOS** | **{nom_s}** — *{et_tema_s}* | **{n_sup_str}** | {est_s} |\n"
-                        s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} PDFs incluidos** | **{tot_cuestiones_sup} cuestiones** | — |\n"
+                        s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} documentos incluidos** | **{tot_cuestiones_sup} cuestiones** | — |\n"
                     else:
-                        s_md = "*Actualmente no hay ningún PDF cargado en la categoría SUPUESTOS de esta especialidad.*\n"
+                        s_md = "*Actualmente no hay ningún documento cargado en la categoría SUPUESTOS de esta especialidad.*\n"
                     st.markdown(s_md)
                     txt_copiar += f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} incluidos)\n\n" + s_md + "\n"
 
@@ -4556,15 +3517,17 @@ if not st.session_state.questions:
                         desarrollo_dict = {k: v for k, v in cats.get("DESARROLLO", {}).items() if v is not None}
                         st.markdown(f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} {'tema incluido' if len(desarrollo_dict)==1 else 'temas incluidos'})")
                         if desarrollo_dict:
-                            d_md = "| Categoría | PDF Incluido | Tema Correspondiente | Nº de Epígrafes Extraídos | Auditoría Epígrafes |\n| :--- | :--- | :--- | :---: | :--- |\n"
+                            d_md = "| Categoría | Documento Incluido | Formato | Tema Correspondiente | Nº de Epígrafes Extraídos | Auditoría Epígrafes |\n| :--- | :--- | :---: | :--- | :---: | :--- |\n"
                             tot_epigrafes_des = 0
                             for nom_d, url_d in desarrollo_dict.items():
                                 proc += 1
                                 bp.progress(proc / max(1, tot_pdfs), text=f"Auditando Epígrafes de Desarrollo ({proc}/{tot_pdfs}): {nom_d}...")
                                 et_tema_d = obtener_etiqueta_tema_visible(nom_d)
+                                fmt_doc = "-"
                                 try:
                                     r = descargar_pdf_fresco(url_d)
                                     if r.status_code == 200:
+                                        fmt_doc = "📘 Word (.docx)" if PDFQuizParser.es_archivo_docx(r.content) else "📕 PDF"
                                         qs_des = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
                                         qs_des = preparar_preguntas_como_en_test(qs_des, barajar=False)
                                         n_ep = len(qs_des)
@@ -4583,10 +3546,10 @@ if not st.session_state.questions:
                                         n_ep_str, est_d = "Error", "❌ Error de descarga"
                                 except Exception as e_d:
                                     n_ep_str, est_d = "-", f"❌ {e_d}"
-                                d_md += f"| **DESARROLLO** | **{nom_d}** | {et_tema_d} | **{n_ep_str}** | {est_d} |\n"
-                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} PDFs incluidos** | **Relación completa de temas de desarrollo** | **{tot_epigrafes_des} epígrafes en total** | — |\n"
+                                d_md += f"| **DESARROLLO** | **{nom_d}** | {fmt_doc} | {et_tema_d} | **{n_ep_str}** | {est_d} |\n"
+                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} documentos incluidos** | **Word / PDF** | **Relación completa de temas de desarrollo** | **{tot_epigrafes_des} epígrafes en total** | — |\n"
                         else:
-                            d_md = "*Actualmente no hay ningún PDF cargado en la categoría DESARROLLO de esta especialidad.*\n"
+                            d_md = "*Actualmente no hay ningún documento cargado en la categoría DESARROLLO de esta especialidad.*\n"
                         st.markdown(d_md)
                         txt_copiar += f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} temas incluidos)\n\n" + d_md + "\n"
 
@@ -4595,10 +3558,10 @@ if not st.session_state.questions:
                 bp.empty()
                 st.success("✅ ¡Auditoría real de extracción y recuento completados con éxito!")
                 if alertas_globales:
-                    st.warning(f"⚠️ **Se han detectado incidencias de extracción en {len(alertas_globales)} PDF(s) que conviene revisar:**\n\n" + "\n".join([f"- {a}" for a in alertas_globales]))
+                    st.warning(f"⚠️ **Se han detectado incidencias de extracción en {len(alertas_globales)} documento(s) que conviene revisar:**\n\n" + "\n".join([f"- {a}" for a in alertas_globales]))
                 else:
                     st.balloons()
-                    st.success("🎉 ¡Todos los PDFs han superado la auditoría de extracción sin preguntas fusionadas ni explicaciones cortadas!")
+                    st.success("🎉 ¡Todos los documentos han superado la auditoría de extracción sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
 
 elif not st.session_state.finished:
@@ -4634,7 +3597,7 @@ elif not st.session_state.finished:
             value=stat.get("selected") or "",
             height=altura_caja,
             key=f"open_txt_{idx}",
-            placeholder="Redacta aquí tu contestación indicando la conclusión jurídica, requisitos, plazos, porcentajes y los artículos o normas aplicables..."
+            placeholder="Redacta aquí tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
         )
         if st.session_state.get(f"open_txt_{idx}") is not None:
             sel_opt = st.session_state.get(f"open_txt_{idx}")
@@ -4699,11 +3662,12 @@ elif not st.session_state.finished:
             exp_of = (q.get("explanation") or "").strip()
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
             if not txt_alumno:
-                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que tus preparadores analicen qué te falta.")
+                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que la IA evalúe tu ejercicio.")
             else:
                 aviso_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(txt_alumno)
                 if aviso_inapropiado:
                     stat["open_score"] = 0.0
+                    stat["ai_eval"] = None
                     st.markdown(
                         f"<div style='background-color:#fff8e1; border:2px solid #d97706; border-radius:8px; padding:16px; margin-top:10px; margin-bottom:10px; font-size:15px; color:#1E293B !important; line-height:1.55; text-align:justify;'>"
                         f"{aviso_inapropiado}"
@@ -4711,16 +3675,18 @@ elif not st.session_state.finished:
                         unsafe_allow_html=True
                     )
                 else:
-                    ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
-                    stat["open_score"] = ev["nota"]
-
-                    if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback"):
+                    if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
+                        ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
                         stat["last_evaluated_text"] = txt_alumno
                         clave_activa = obtener_gemini_api_key_activa()
-                        with st.spinner("🤖 Evaluando tu respuesta frente al epígrafe oficial..."):
+                        with st.spinner("🤖 Analizando y valorando tu respuesta frente a la explicación oficial según los Criterios del Tribunal..."):
                             stat["ai_feedback"] = consultar_ia_gemini_correccion(
                                 clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
                             )
+                        stat["ai_eval"] = ev
+                        stat["open_score"] = ev.get("nota", 0.0)
+                    else:
+                        ev = stat["ai_eval"]
 
                     n50_q = ev.get("nota_50", 0.0)
                     n10_q = ev.get("nota", 0.0)
@@ -4735,13 +3701,13 @@ elif not st.session_state.finished:
 
                     st.markdown(
                         f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OBTENIDA EN ESTE EPÍGRAFE</div>"
+                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
                         f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
                         f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
                         f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
-                        f"<b>Criterio 1 (Conocimiento y literalidad):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
+                        f"<b>Criterio 1 (Conocimiento y normativa):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
                         f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
-                        f"<b>Criterio 3 (Expresión y siglas):</b> {c3_q:.2f} / 2,00 ptos"
+                        f"<b>Criterio 3 (Expresión escrita):</b> {c3_q:.2f} / 2,00 ptos"
                         f"</div>"
                         f"</div>",
                         unsafe_allow_html=True
@@ -4756,7 +3722,7 @@ elif not st.session_state.finished:
 
                     st.markdown(
                         "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS RESUMIDO Y VALORACIÓN POR CRITERIOS</div>"
+                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -4826,7 +3792,16 @@ else:
                 stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
             else:
                 ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
-                ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
+                if stat.get("last_evaluated_text") == txt_al and stat.get("ai_eval"):
+                    ev = stat["ai_eval"]
+                else:
+                    ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
+                    clave_activa = obtener_gemini_api_key_activa()
+                    stat["ai_feedback"] = consultar_ia_gemini_correccion(
+                        clave_activa, q.get("preamble", ""), q["question_text"], txt_al, q.get("answer_text", ""), q.get("explanation", ""), ev_fallback=ev
+                    )
+                    stat["last_evaluated_text"] = txt_al
+                    stat["ai_eval"] = ev
                 nota_q = ev["nota"]
                 nota_q_50 = ev["nota_50"]
                 suma_notas_abiertas += nota_q
@@ -4981,7 +3956,7 @@ else:
             f"🎓 Equivalencia sobre 10: {nota_oposicion_10:.2f} / 10"
             f"</div>"
             f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.4;'>"
-            f"<b>Criterios Oficiales (Resolución 22/12/2025):</b> Cada parte del Segundo Ejercicio se califica de 0 a 50 puntos (0-45 ptos conocimiento, literalidad normativa y precisión práctica; 0-3 ptos orden de ideas y 0-2 ptos calidad de expresión escrita siempre que se alcancen al menos 20/45 ptos en el apartado 1). Es necesario obtener al menos <b>25 puntos directos</b> en cada parte para sumar ambas sin posibilidad de compensación."
+            f"<b>Criterios Oficiales (Resolución 22/12/2025):</b> Cada parte del Segundo Ejercicio se califica de 0 a 50 puntos (0-45 ptos conocimiento, fundamentación normativa y precisión; 0-3 ptos orden de ideas y 0-2 ptos calidad de expresión escrita siempre que se alcancen al menos 20/45 ptos en el apartado 1). Es necesario obtener al menos <b>25 puntos directos</b> en cada parte para sumar ambas sin posibilidad de compensación."
             f"</div></div>",
             unsafe_allow_html=True
         )
@@ -5063,6 +4038,9 @@ else:
             f"</div>",
             unsafe_allow_html=True
         )
+        if q.get("is_open") and stat.get("ai_feedback"):
+            with st.expander(f"🤖 Ver valoración detallada de la IA para {tipo_lbl_res} {i + 1}"):
+                st.markdown(stat["ai_feedback"])
         if puede_rep:
             key_rep_res = f"rep_open_res_{id_test_fin}_{i + 1}"
             if key_rep_res not in st.session_state:
@@ -5082,3 +4060,4 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
