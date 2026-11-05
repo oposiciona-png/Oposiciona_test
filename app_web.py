@@ -2223,6 +2223,7 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
+
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -2486,198 +2487,6 @@ CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCI
 - Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas ("Nombre completo (SIGLA)" o "Nombre completo, en adelante, SIGLA").
 """
 
-# Mapa de identificadores oficiales de Legislación Consolidada en el BOE
-MAPA_NORMA_A_BOE_ID = {
-    "TRLGSS": ("BOE-A-2015-11724", "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-    "LGSS": ("BOE-A-2015-11724", "Real Decreto Legislativo 8/2015 (TRLGSS)"),
-    "RIA": ("BOE-A-1996-4447", "Real Decreto 84/1996 (Reglamento General sobre inscripción de empresas y afiliación, altas y bajas - RIA)"),
-    "RGCL": ("BOE-A-1996-1579", "Real Decreto 2064/1995 (Reglamento General sobre Cotización y Liquidación - RGCL)"),
-    "RGR": ("BOE-A-2004-11273", "Real Decreto 1415/2004 (Reglamento General de Recaudación de la Seguridad Social - RGR)"),
-    "CE": ("BOE-A-1978-31229", "Constitución Española de 1978"),
-    "ET": ("BOE-A-2015-11430", "Real Decreto Legislativo 2/2015 (Estatuto de los Trabajadores)"),
-    "TRET": ("BOE-A-2015-11430", "Real Decreto Legislativo 2/2015 (Estatuto de los Trabajadores)"),
-    "LISOS": ("BOE-A-2000-15060", "Real Decreto Legislativo 5/2000 (Ley sobre Infracciones y Sanciones en el Orden Social - LISOS)"),
-    "LETA": ("BOE-A-2007-13409", "Ley 20/2007 (Estatuto del trabajo autónomo)"),
-    "ORDEN TAS/2865/2003": ("BOE-A-2003-19209", "Orden TAS/2865/2003 (Convenio Especial en el Sistema de la Seguridad Social)"),
-    "LEY 19/2021": ("BOE-A-2021-21007", "Ley 19/2021 (Ingreso Mínimo Vital)"),
-    "LEY 47/2015": ("BOE-A-2015-11346", "Ley 47/2015 (Protección social de las personas trabajadoras del sector marítimo-pesquero)"),
-}
-
-def _resolver_id_boe_de_norma(norma_txt):
-    nt = (norma_txt or "").strip().upper()
-    if not nt or "TRLGSS" in nt or "LGSS" in nt or "8/2015" in nt:
-        return MAPA_NORMA_A_BOE_ID["TRLGSS"]
-    if "RIA" in nt or "84/1996" in nt:
-        return MAPA_NORMA_A_BOE_ID["RIA"]
-    if "RGCL" in nt or "2064/1995" in nt:
-        return MAPA_NORMA_A_BOE_ID["RGCL"]
-    if "RGR" in nt or "1415/2004" in nt:
-        return MAPA_NORMA_A_BOE_ID["RGR"]
-    if nt == "CE" or "CONSTITUCI" in nt:
-        return MAPA_NORMA_A_BOE_ID["CE"]
-    if nt in ("ET", "TRET") or "2/2015" in nt or "ESTATUTO" in nt:
-        return MAPA_NORMA_A_BOE_ID["ET"]
-    if "LISOS" in nt or "5/2000" in nt:
-        return MAPA_NORMA_A_BOE_ID["LISOS"]
-    if "LETA" in nt or "20/2007" in nt:
-        return MAPA_NORMA_A_BOE_ID["LETA"]
-    if "2865/2003" in nt:
-        return MAPA_NORMA_A_BOE_ID["ORDEN TAS/2865/2003"]
-    if "19/2021" in nt:
-        return MAPA_NORMA_A_BOE_ID["LEY 19/2021"]
-    if "47/2015" in nt:
-        return MAPA_NORMA_A_BOE_ID["LEY 47/2015"]
-    return None, norma_txt
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def consultar_bloque_boe_completo(num_o_token, id_boe="BOE-A-2015-11724"):
-    """
-    Descarga de la API de Datos Abiertos del BOE el texto consolidado oficial de un artículo o disposición,
-    conservando la división en párrafos para mostrarlo en el anexo desplegable de estudio.
-    Devuelve: (titulo_bloque, lista_parrafos_limpios, url_consulta_boe)
-    """
-    if not id_boe or not num_o_token:
-        return "", [], ""
-
-    tk = str(num_o_token).strip()
-    if tk.upper().startswith("DA_"):
-        num_da = re.sub(r'\D+', '', tk)
-        id_bloque = f"da{num_da}" if num_da else "da"
-    elif tk.upper().startswith("DT_"):
-        num_dt = re.sub(r'\D+', '', tk)
-        id_bloque = f"dt{num_dt}" if num_dt else "dt"
-    else:
-        num_art = re.match(r'^(\d{1,3})', tk)
-        if not num_art:
-            return "", [], ""
-        id_bloque = f"a{num_art.group(1)}"
-
-    url_api = f"https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/{id_boe}/texto/bloque/{id_bloque}"
-    url_web_boe = f"https://www.boe.es/buscar/act.php?id={id_boe}#{id_bloque}"
-    try:
-        r_boe = requests.get(url_api, headers={"Accept": "application/xml"}, timeout=4)
-        if r_boe.status_code == 200 and "<p" in r_boe.text:
-            parrafos_raw = re.findall(r'<p[^>]*>(.*?)</p>', r_boe.text, flags=re.DOTALL)
-            parrafos_limpios = []
-            titulo_precepto = ""
-            for p in parrafos_raw:
-                p_txt = re.sub(r'<[^>]+>', '', p).strip()
-                p_txt = re.sub(r'\s+', ' ', p_txt).strip()
-                if not p_txt:
-                    continue
-                if not titulo_precepto and re.match(r'^(?:Art[íi]culo|Disposici[óo]n)\b', p_txt, re.IGNORECASE) and len(p_txt) < 160:
-                    titulo_precepto = p_txt
-                else:
-                    parrafos_limpios.append(p_txt)
-            return titulo_precepto, parrafos_limpios, url_web_boe
-    except Exception:
-        pass
-    return "", [], url_web_boe
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def consultar_literal_boe_trlgss(num_art_str):
-    """Versión breve para verificaciones internas de artículos del TRLGSS."""
-    tit, parrs, _ = consultar_bloque_boe_completo(num_art_str, "BOE-A-2015-11724")
-    texto_unido = " ".join(([tit] if tit else []) + parrs).strip()
-    if len(texto_unido) > 25:
-        if len(texto_unido) > 320:
-            texto_unido = texto_unido[:320].rsplit(" ", 1)[0] + "...»"
-        else:
-            texto_unido = texto_unido + "»"
-        return f"«{texto_unido}"
-    return ""
-
-def construir_anexo_desplegable_boe_epigrafe(respuesta_oficial, explicacion_oficial, nums_citados_alumno=None):
-    """
-    Construye un bloque desplegable interactivo (<details><summary>) al final de la valoración
-    con la literalidad oficial obtenida en tiempo real del BOE de todos los artículos que aparecen
-    en la explicación oficial del epígrafe, indicando cuáles citó el alumno y cuáles omitió.
-    """
-    ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
-    if not ref_completa:
-        return ""
-
-    etiquetas_ref, _ = _extraer_articulos_detallados_de_texto(ref_completa)
-    if not etiquetas_ref:
-        return ""
-
-    nums_al_set = set(nums_citados_alumno or [])
-    preceptos_individuales = []
-    vistos_boe = set()
-
-    for nums_grupo, norma_g, lbl_art in etiquetas_ref:
-        id_boe, nombre_norma_largo = _resolver_id_boe_de_norma(norma_g)
-        if not id_boe:
-            continue
-        norma_corta = norma_g if norma_g else "TRLGSS"
-        for n_item in nums_grupo:
-            clave_unica = (id_boe, str(n_item))
-            if clave_unica in vistos_boe:
-                continue
-            vistos_boe.add(clave_unica)
-            preceptos_individuales.append((n_item, norma_corta, id_boe, nombre_norma_largo, n_item in nums_al_set))
-
-    if not preceptos_individuales:
-        return ""
-
-    tarjetas_html = []
-    for n_item, norma_corta, id_boe, nombre_norma_largo, fue_citado in preceptos_individuales[:16]:
-        tit_boe, parrs_boe, url_web = consultar_bloque_boe_completo(n_item, id_boe)
-        if not parrs_boe and not tit_boe:
-            continue
-
-        estado_badge = (
-            "<span style='background:#DCFCE7; color:#166534 !important; border:1px solid #86EFAC; padding:2px 8px; border-radius:12px; font-size:11.5px; font-weight:700; margin-left:8px;'>✅ Citado en tu respuesta</span>"
-            if fue_citado else
-            "<span style='background:#FEF3C7; color:#92400E !important; border:1px solid #FDE68A; padding:2px 8px; border-radius:12px; font-size:11.5px; font-weight:700; margin-left:8px;'>🔸 Omitido en tu respuesta</span>"
-        )
-
-        etiqueta_art = tit_boe if tit_boe else (f"Disposición {n_item}" if str(n_item).startswith("DA") else f"Artículo {n_item}")
-        if norma_corta and norma_corta.upper() not in etiqueta_art.upper():
-            etiqueta_cabecera = f"{etiqueta_art} ({norma_corta})"
-        else:
-            etiqueta_cabecera = etiqueta_art
-
-        cuerpo_parrafos_html = "".join(
-            f"<p style='margin:0 0 8px 0; font-size:13.8px; line-height:1.52; color:#1E293B !important; text-align:justify;'>{p}</p>"
-            for p in parrs_boe[:14]
-        )
-        if len(parrs_boe) > 14:
-            cuerpo_parrafos_html += (
-                f"<p style='margin:4px 0 0 0; font-size:12.5px; font-style:italic; color:#475569 !important;'>"
-                f"Texto extenso ({len(parrs_boe)} párrafos). <a href='{url_web}' target='_blank' style='color:#1D4ED8 !important; font-weight:600;'>Ver artículo completo en boe.es ↗</a></p>"
-            )
-
-        tarjetas_html.append(
-            f"<details style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid {'#16A34A' if fue_citado else '#F59E0B'}; border-radius:6px; margin-top:8px; margin-bottom:8px; padding:8px 12px;'>"
-            f"<summary style='cursor:pointer; font-weight:700; font-size:14px; color:#0F172A !important; outline:none;'>"
-            f"⚖️ {etiqueta_cabecera} {estado_badge}"
-            f"<div style='font-size:11.5px; font-weight:500; color:#64748B !important; margin-top:2px;'>{nombre_norma_largo}</div>"
-            f"</summary>"
-            f"<div style='margin-top:10px; padding-top:8px; border-top:1px dashed #E2E8F0;'>"
-            f"{cuerpo_parrafos_html}"
-            f"<div style='text-align:right; margin-top:4px;'><a href='{url_web}' target='_blank' style='font-size:12px; color:#1D4ED8 !important; text-decoration:none; font-weight:600;'>🔗 Consultar en el BOE oficial ↗</a></div>"
-            f"</div>"
-            f"</details>"
-        )
-
-    if not tarjetas_html:
-        return ""
-
-    n_tot_boe = len(tarjetas_html)
-    anexo_html = (
-        f"\n\n<details style='background-color:#F8FAFC; border:2px solid #3B82F6; border-radius:10px; padding:12px 16px; margin-top:16px; margin-bottom:10px;'>"
-        f"<summary style='cursor:pointer; font-size:15.5px; font-weight:800; color:#1E3A8A !important; outline:none;'>"
-        f"📚 Anexo de repaso BOE: Literalidad de los artículos del epígrafe ({n_tot_boe} {'precepto oficial' if n_tot_boe == 1 else 'preceptos oficiales'} — pulsa para desplegar)"
-        f"</summary>"
-        f"<div style='margin-top:10px; font-size:13px; color:#334155 !important;'>"
-        f"Pulsa sobre cada artículo para leer su redacción oficial consolidada extraída directamente del <b>Boletín Oficial del Estado (BOE)</b> y repasar los preceptos de este epígrafe:"
-        f"{''.join(tarjetas_html)}"
-        f"</div>"
-        f"</details>"
-    )
-    return anexo_html
-
 def auditar_siglas_sin_definir_previa(texto_alumno):
     """
     Analiza EXCLUSIVAMENTE las siglas que el alumno ha escrito en su propio texto y comprueba si
@@ -2796,10 +2605,9 @@ def _extraer_articulos_detallados_de_texto(texto):
             numeros_base.add(nh)
         if re.search(r'\b(a|al|\-|–)\b', rango_txt) and len(nums_hallados) == 2:
             ini, fin = int(nums_hallados[0]), int(nums_hallados[1])
-            if ini <= fin and (fin - ini) <= 25:
-                nums_hallados = [str(k_n) for k_n in range(ini, fin + 1)]
-                for k_s in nums_hallados:
-                    numeros_base.add(k_s)
+            if ini <= fin and (fin - ini) <= 60:
+                for k_n in range(ini, fin + 1):
+                    numeros_base.add(str(k_n))
         lbl = f"Arts. {rango_txt}" + (f" {norma_txt}" if norma_txt else "")
         clave_v = lbl.lower()
         if clave_v not in vistos_norm:
@@ -2822,9 +2630,7 @@ def _extraer_articulos_detallados_de_texto(texto):
         d_txt = re.sub(r'\s+', ' ', m.group(1).strip())
         norma_txt = (m.group(2) or "").strip()
         num_d = re.findall(r'\d+', d_txt)
-        es_dt = bool(re.match(r'^(?:DT|Disposici[óo]n\s+transitoria)', d_txt, re.IGNORECASE))
-        pref_d = "DT" if es_dt else "DA"
-        token_d = f"{pref_d}_{num_d[0]}" if num_d else d_txt.lower()
+        token_d = f"DA_{num_d[0]}" if num_d else d_txt.lower()
         numeros_base.add(token_d)
         lbl = f"{d_txt}" + (f" {norma_txt}" if norma_txt else "")
         if lbl.lower() not in vistos_norm:
@@ -3002,17 +2808,8 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
                 n_int = int(num_p)
                 if norma_al in ("TRLGSS", "LGSS", "") and n_int > 373:
                     articulos_extra_erroneos.append(f"{lbl_al} (inexistente: el TRLGSS consta de 373 artículos)")
-                elif norma_al == "RIA":
-                    if n_int <= 64:
-                        articulos_extra_validos.append(f"{lbl_al} (precepto del Reglamento General de Afiliación RD 84/1996)")
-                    else:
-                        articulos_extra_erroneos.append(f"{lbl_al} (inexistente en el RD 84/1996)")
-                elif norma_al in ("TRLGSS", "LGSS"):
-                    lit_boe = consultar_literal_boe_trlgss(num_p)
-                    if lit_boe:
-                        articulos_extra_validos.append(f"{lbl_al} (verificado en BOE TRLGSS: {lit_boe[:140]}...)")
-                    else:
-                        articulos_extra_validos.append(f"{lbl_al}")
+                elif norma_al == "RIA" and n_int > 64:
+                    articulos_extra_erroneos.append(f"{lbl_al} (inexistente en el RD 84/1996)")
                 else:
                     articulos_extra_validos.append(f"{lbl_al}")
             else:
@@ -3026,7 +2823,6 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
         "articulos_extra_validos": articulos_extra_validos,
         "articulos_extra_erroneos": articulos_extra_erroneos,
         "siglas_sin_presentar": siglas_sin_presentar,
-        "nums_citados_alumno": nums_al,
         "auditoria_bloques": aud_bloques
     }
 
@@ -3194,7 +2990,7 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
 
     return ev_out, texto_ia
 
-def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, anexo_boe_html=""):
+def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
     """Alternativa analítica de respaldo por si en algún momento no hubiera conexión con los servidores de Google."""
     aud_b = aud.get("auditoria_bloques") or {}
     desv = aud_b.get("desviacion_epigrafe", False)
@@ -3266,7 +3062,7 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, anexo_boe_htm
         "💡 **Orientación de tus preparadores para mejorar este epígrafe:** Vas por buen camino; completa tu esquema incorporando los apartados pendientes y asegurando las citas normativas principales."
     )
 
-    return "\n\n".join(partes) + anexo_boe_html
+    return "\n\n".join(partes)
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
     aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
@@ -3280,10 +3076,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}"
     )
     aud_b = aud.get("auditoria_bloques") or {}
-
-    anexo_boe_html = construir_anexo_desplegable_boe_epigrafe(
-        respuesta_oficial, explicacion_oficial, nums_citados_alumno=aud.get("nums_citados_alumno")
-    )
 
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
@@ -3374,11 +3166,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
                 ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
                 if isinstance(ev_fallback, dict):
                     ev_fallback.update(ev_actualizado)
-                return texto_ia_limpio + anexo_boe_html
+                return texto_ia_limpio
         except Exception:
             continue
 
-    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, anexo_boe_html=anexo_boe_html)
+    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud)
 
 def sincronizar_progreso_navegador():
     try:
@@ -3974,7 +3766,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
