@@ -2562,7 +2562,6 @@ def _extraer_articulos_detallados_de_texto(texto):
         norma_txt = (m.group(2) or "").strip()
         numeros_base.add(num_base)
         lbl = f"Art. {num_completo}" + (f" {norma_txt}" if norma_txt else "")
-        # Evitar duplicar si ese número ya quedó representado con la misma norma
         ya_incluido = any(num_base in nums_g and (not norma_txt or norma_txt.lower() in l_g.lower()) for nums_g, l_g in etiquetas)
         if not ya_incluido:
             etiquetas.append(([num_base], lbl))
@@ -2573,7 +2572,7 @@ def _extraer_articulos_detallados_de_texto(texto):
         d_txt = re.sub(r'\s+', ' ', m.group(1).strip())
         norma_txt = (m.group(2) or "").strip()
         num_d = re.findall(r'\d+', d_txt)
-         token_d = f"DA_{num_d[0]}" if num_d else d_txt.lower()
+        token_d = f"DA_{num_d[0]}" if num_d else d_txt.lower()
         numeros_base.add(token_d)
         lbl = f"{d_txt}" + (f" {norma_txt}" if norma_txt else "")
         if lbl.lower() not in vistos_norm:
@@ -2597,7 +2596,6 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
     articulos_omitidos_limpios = []
     articulos_acertados_limpios = []
     for nums_grupo, lbl_art in etiquetas_ref:
-        # Si el alumno citó alguno de los números principales de ese precepto, se da por cubierto
         if any(n in nums_al for n in nums_grupo):
             articulos_acertados_limpios.append(lbl_art)
         else:
