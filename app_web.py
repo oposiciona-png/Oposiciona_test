@@ -2056,6 +2056,21 @@ TESTS_DISPONIBLES = {
     "GESTION": {
         "DESARROLLO": {
             "Elige un test de desarrollo...": None,
+            "Tema_51_Seguridad_Social_CE_y_TRLGSS": "https://drive.google.com/uc?export=download&id=1QzmhKlHNyv75TbL1ztW4HoG6bQHTLn5b",
+            "Tema_52_Campo_Aplicacion_y_Composicion_SS": "https://drive.google.com/uc?export=download&id=1G3B8VJ5B-1pnMNyppVgpzMXgnhNVBbZL",
+            "Tema_53_Afiliacion_Altas_Bajas_Convenio_Especial_Inscripcion": "https://drive.google.com/uc?export=download&id=1yEed2dlJZay1YHCbcpcC5VcADMGMrAQY",
+            "Tema_55_Accion_Protectora_Prestaciones_Revalorizacion_Complementos": "https://drive.google.com/uc?export=download&id=1xJRnf86Ek4xmSGZMrKl7Y-Y1g8P8-KW2",
+            "Tema_56_Requisitos_Generales_Responsabilidad_Empresarial_Automaticidad": "https://drive.google.com/uc?export=download&id=15GGBAgafDRCM5aBUMhMZ-9UdFodAf8F8",
+            "Tema_57_Incapacidad_Temporal": "https://drive.google.com/uc?export=download&id=1-miLA9Tk7gUE-juwDvPcea1Wor_n_M8i",
+            "Tema_58_Nacimiento_Corresponsabilidad_Riesgo_Embarazo_Lactancia_Menor_Cancer-v2": "https://drive.google.com/uc?export=download&id=1JAyEYB8RjPqRQHn1TsRjXREyINcy5EFg",
+            "Tema_59_Incapacidad_Permanente_Contributiva_Cuantia_Compatibilidad-v2": "https://drive.google.com/uc?export=download&id=1lO2T5P4VcJVhGybReIeviRrBNmpIfhOb",
+            "Tema_60_Calificacion_Revision_Incapacidad_Permanente_Lesiones_No_Invalidantes-v2": "https://drive.google.com/uc?export=download&id=1RnO7YfTph25VusZAvmDejPmvI0BA-c_R",
+            "Tema_61_Jubilacion_Contributiva_Modalidades_Ley_27_2011_Vejez_SOVI-v2": "https://drive.google.com/uc?export=download&id=1NuEgPTYZmEals8Wv5ILmmyswT12Owfuu",
+            "Tema_62_Proteccion_Muerte_y_Supervivencia": "https://drive.google.com/uc?export=download&id=1ATIGJ-0SxfOnN2tJHpQ1Hm6g7LPHAx2s",
+            "Tema_67_Asistencia_Sanitaria_Prestaciones_y_Gestion": "https://drive.google.com/uc?export=download&id=1fmLaDtnKASH6GjGATrz363bn26B1BURw",
+            "Tema_73_Regimenes_Integrados_Sistema_Especial_Agrario_y_Empleados_de_Hogar": "https://drive.google.com/uc?export=download&id=1geoGjR6csLIc78aJeU13zQTdt7DPZuYb",
+            "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2": "https://drive.google.com/uc?export=download&id=1hx4PKcE0NALdBWdvQi1OxqgBzuC4eqFf",
+            "Tema_75_Mineria_del_Carbon_Seguro_Escolar_y_Regimenes_Externos": "https://drive.google.com/uc?export=download&id=1RSXfx-Jzri8G0D42JobMx9tVe3DWhQG1",
         },
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
