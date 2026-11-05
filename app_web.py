@@ -2223,7 +2223,6 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -2398,12 +2397,18 @@ def obtener_tests_segun_rol():
         return TESTS_DISPONIBLES_INVITADO
 
     es_adm = usuario_es_admin()
-    orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"] if es_adm else ["ESPECIFICO", "EXAMENES", "GENERAL"]
-
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
 
     for esp in ["ADMINISTRATIVOS", "GESTION"]:
         origen_esp = catalogo_base.get(esp, {})
+        if es_adm:
+            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]
+        elif esp == "GESTION":
+            # Abierto DESARROLLO para todos los alumnos de Gestión
+            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "DESARROLLO"]
+        else:
+            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL"]
+
         for cat in orden_categorias:
             if cat in origen_esp:
                 resultado[esp][cat] = dict(origen_esp[cat])
@@ -3766,7 +3771,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
