@@ -2405,7 +2405,6 @@ def activar_proteccion_antirecortes_alumno():
                 if (ov) ov.style.display = 'none';
             };
 
-            /* Detector continuo de foco y de apertura del Inspector de Elementos (DevTools) por menú del navegador */
             if (pw.__oposiciona_focus_timer) clearInterval(pw.__oposiciona_focus_timer);
             pw.__oposiciona_focus_timer = setInterval(function() {
                 if (pw.__oposiciona_blur_disabled) return;
@@ -2460,7 +2459,6 @@ def activar_proteccion_antirecortes_alumno():
                     if (pw.__oposiciona_blur_disabled) return;
                     var k = (e.key || '').toLowerCase();
                     var code = e.keyCode || e.which || 0;
-                    /* Bloquear F12, Ctrl+S, Ctrl+U, Ctrl+P, Ctrl+Shift+I/J/C/S y activar escudo visual */
                     if (
                         code === 123 || k === 'f12' ||
                         ((e.metaKey || e.ctrlKey) && !e.shiftKey && (k === 's' || k === 'u' || k === 'p')) ||
@@ -2482,7 +2480,13 @@ def activar_proteccion_antirecortes_alumno():
 def obtener_tests_segun_rol():
     catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
     if st.session_state.get('rol') == 'INVITADO':
-        return TESTS_DISPONIBLES_INVITADO
+        inv_res = {
+            "ADMINISTRATIVOS": dict(TESTS_DISPONIBLES_INVITADO.get("ADMINISTRATIVOS", {})),
+            "GESTION": dict(TESTS_DISPONIBLES_INVITADO.get("GESTION", {})),
+        }
+        # El invitado ve la opción DESARROLLO en GESTIÓN, pero vacía (sin acceso a los documentos)
+        inv_res["GESTION"]["DESARROLLO"] = {}
+        return inv_res
 
     es_adm = usuario_es_admin()
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
@@ -2492,7 +2496,6 @@ def obtener_tests_segun_rol():
         if es_adm:
             orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]
         elif esp == "GESTION":
-            # Abierto DESARROLLO para todos los alumnos de Gestión
             orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "DESARROLLO"]
         else:
             orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL"]
@@ -2581,13 +2584,6 @@ CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCI
 """
 
 def auditar_siglas_sin_definir_previa(texto_alumno):
-    """
-    Analiza EXCLUSIVAMENTE las siglas que el alumno ha escrito en su propio texto y comprueba si
-    el alumno ha escrito su denominación completa antes o justo después entre paréntesis:
-    - Acepta tanto «Reglamento General sobre inscripción de empresas... (RIA)»
-      como «Reglamento General sobre inscripción de empresas..., en adelante, RIA».
-    - Jamás incluye siglas que el alumno NO haya utilizado en su respuesta.
-    """
     if not texto_alumno:
         return []
     t_norm = ''.join(c for c in unicodedata.normalize('NFD', texto_alumno) if unicodedata.category(c) != 'Mn')
@@ -2648,10 +2644,6 @@ def auditar_siglas_sin_definir_previa(texto_alumno):
     return siglas_sin_definir
 
 def _extraer_articulos_detallados_de_texto(texto):
-    """
-    Extrae los artículos citados en un texto manteniendo siempre unida su norma (TRLGSS, RIA, ET, CE, etc.)
-    para no confundir jamás un artículo del RIA (ej. Art. 36 RIA) con el artículo del mismo número del TRLGSS.
-    """
     if not texto:
         return [], set()
 
@@ -3084,7 +3076,6 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     return ev_out, texto_ia
 
 def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
-    """Alternativa analítica de respaldo por si en algún momento no hubiera conexión con los servidores de Google."""
     aud_b = aud.get("auditoria_bloques") or {}
     desv = aud_b.get("desviacion_epigrafe", False)
     mot_desv = aud_b.get("motivo_desviacion", "")
@@ -3860,6 +3851,7 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
+
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 activar_proteccion_antirecortes_alumno()
@@ -3932,7 +3924,26 @@ if not st.session_state.questions:
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
     if rol == "INVITADO":
-        if not tests_reales:
+        if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
+            st.markdown(
+                "<div style='background-color:#EFF6FF; border:2px solid #2563EB; border-radius:10px; padding:18px 20px; margin-top:8px; margin-bottom:14px; line-height:1.55; color:#1E293B !important;'>"
+                "<div style='font-size:17px; font-weight:800; color:#1E3A8A !important; margin-bottom:8px;'>📝 ¿En qué consiste la categoría DESARROLLO de Oposiciona 5.0?</div>"
+                "<p style='font-size:14.5px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
+                "Este módulo interactivo está diseñado específicamente para preparar la <b>1.ª Parte del Segundo Ejercicio del Cuerpo de Gestión de la Administración de la Seguridad Social</b> (desarrollo escrito de epígrafes oficiales del temario). "
+                "El alumno redacta su contestación directamente en la plataforma y nuestro sistema de <b>Inteligencia Artificial entrenado con los Criterios Oficiales del Tribunal Calificador</b> analiza su respuesta en tiempo real comparándola con el texto mínimo oficial elaborado por los preparadores."
+                "</p>"
+                "<ul style='font-size:14px; color:#1E293B !important; margin-bottom:12px; padding-left:20px;'>"
+                "<li><b>Calificación oficial de 0 a 50 puntos</b> desglosada en <b>Criterio 1 (0 a 45 ptos)</b> de conocimiento y rigor normativo, <b>Criterio 2 (0 a 3 ptos)</b> de estructura y orden expositivo, y <b>Criterio 3 (0 a 2 ptos)</b> de expresión escrita y presentación formal de siglas.</li>"
+                "<li><b>Informe analítico personalizado:</b> Detalla qué apartados has desarrollado correctamente, qué conceptos o artículos adicionales han enriquecido tu respuesta, qué puntos te han faltado por completar y la relación de artículos omitidos, junto con el texto mínimo oficial completo para tu estudio.</li>"
+                "</ul>"
+                "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:14px; color:#92400E !important;'>"
+                "🔒 <b>Acceso exclusivo para alumnos de Oposiciona 5.0:</b> Esta funcionalidad no está disponible para usuarios invitados. "
+                "Puedes solicitar más información y matricularte escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
+                "</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+        elif not tests_reales:
             st.warning("⚠️ CATEGORÍA NO DISPONIBLE PARA USUARIOS INVITADOS")
         else:
             st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
@@ -4001,7 +4012,7 @@ if not st.session_state.questions:
     with st.container():
         st.markdown('<div class="cargar-test-container"></div><div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;"><div style="font-size: 18px; font-weight: 700; color: #856404 !important; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</div><p style="color: #856404 !important; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio cruzando preguntas de los distintos temas disponibles en esta especialidad.</p></div>', unsafe_allow_html=True)
         if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
-            if rol == "INVITADO": st.error("🔒 Función no disponible para usuarios invitados. Matricúlate para acceder al Simulacro Global Experto.")
+            if rol == "INVITADO": st.error("🔒 Función no disponible para usuarios invitados. Solicita información en info@oposiciona.es para acceder al Simulacro Global Experto.")
             else: st.session_state.mostrar_opciones_simulacro = True
 
         if rol != "INVITADO" and st.session_state.get('mostrar_opciones_simulacro', False):
