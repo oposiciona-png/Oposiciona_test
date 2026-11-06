@@ -3851,7 +3851,6 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 activar_proteccion_antirecortes_alumno()
@@ -3860,6 +3859,7 @@ if not st.session_state.questions:
     st.markdown("""<style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
     html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
+    .block-container { max-width: 820px !important; }
     div[data-testid="stVerticalBlock"]:has(.marcador-cat-grid) div[role="radiogroup"] {
         display: flex !important;
         flex-wrap: wrap !important;
@@ -3870,6 +3870,30 @@ if not st.session_state.questions:
         min-width: 135px !important;
         margin-right: 12px !important;
     }
+    /* Botones compactos dentro de los desplegables de temas para que ocupen menos y entren mejor en pantalla */
+    [data-testid="stExpanderDetails"] div.stButton > button {
+        background-color: #2e7d32 !important;
+        border-color: #2e7d32 !important;
+        padding: 2px 10px !important;
+        min-height: 31px !important;
+        height: 31px !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stExpanderDetails"] div.stButton > button p,
+    [data-testid="stExpanderDetails"] div.stButton > button span {
+        color: #FFFFFF !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        line-height: 1.1 !important;
+    }
+    [data-testid="stExpanderDetails"] div.stButton > button:hover {
+        background-color: #1b5e20 !important;
+        border-color: #1b5e20 !important;
+    }
+    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+        gap: 0.5rem !important;
+    }
     </style>""", unsafe_allow_html=True)
     es_admin = usuario_es_admin()
     col_texto, col_img = st.columns([2.5, 1])
@@ -3877,10 +3901,10 @@ if not st.session_state.questions:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
         except: pass
     with col_texto:
-        st.markdown("<div style='font-size:24px; font-weight:700; color:#2C3E50 !important; margin-top: -10px; margin-bottom: 10px;'>📚 Comienza a practicar</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:22px; font-weight:700; color:#2C3E50 !important; margin-top: -10px; margin-bottom: 8px;'>📚 Comienza a practicar</div>", unsafe_allow_html=True)
         rol = st.session_state.rol
         TESTS_DISPONIBLES = obtener_tests_segun_rol()
-        st.markdown("<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>1. Especialidad</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px;'>1. Especialidad</div>", unsafe_allow_html=True)
         if rol in ["ACCESO TOTAL", "INVITADO"]:
             l_esp = list(TESTS_DISPONIBLES.keys())
             i_esp = l_esp.index(st.session_state.saved_esp) if st.session_state.get("saved_esp") in l_esp else 0
@@ -3894,13 +3918,13 @@ if not st.session_state.questions:
             st.error("Error en los permisos de usuario."); st.stop()
 
         with st.container():
-            st.markdown("<div class='marcador-cat-grid'></div><div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>2. Categoría</div>", unsafe_allow_html=True)
+            st.markdown("<div class='marcador-cat-grid'></div><div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px;'>2. Categoría</div>", unsafe_allow_html=True)
             l_cat = list(TESTS_DISPONIBLES[especialidad].keys())
             i_cat = l_cat.index(st.session_state.saved_cat) if st.session_state.get("saved_cat") in l_cat else 0
             categoria = st.radio("Selecciona el tipo de test:", l_cat, index=i_cat, horizontal=True, key="radio_categoria", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad)
             st.session_state.saved_cat = categoria
 
-    st.markdown("<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>3. Modo de avance</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px;'>3. Modo de avance</div>", unsafe_allow_html=True)
     op_av = [
         "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)",
         "**Modo metralleta** (pasa a la pregunta siguiente al pulsar una opción)"
@@ -3916,7 +3940,7 @@ if not st.session_state.questions:
     else:
         titulo_paso_4 = "4. Selección de Test"
 
-    st.markdown(f"<div style='font-size:18px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
         ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
         st.info(f"🔒 **Modo Administrador — {ej_txt}:** Soporta indistintamente archivos Word (`.docx`) y PDF (`.pdf`). Valoración integral por IA comparando el texto del alumno con la explicación oficial según los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
@@ -3926,17 +3950,17 @@ if not st.session_state.questions:
     if rol == "INVITADO":
         if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
             st.markdown(
-                "<div style='background-color:#EFF6FF; border:2px solid #2563EB; border-radius:10px; padding:18px 20px; margin-top:8px; margin-bottom:14px; line-height:1.55; color:#1E293B !important;'>"
-                "<div style='font-size:17px; font-weight:800; color:#1E3A8A !important; margin-bottom:8px;'>📝 ¿En qué consiste la categoría DESARROLLO de Oposiciona 5.0?</div>"
-                "<p style='font-size:14.5px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
+                "<div style='background-color:#EFF6FF; border:2px solid #2563EB; border-radius:10px; padding:16px 18px; margin-top:8px; margin-bottom:14px; line-height:1.5; color:#1E293B !important;'>"
+                "<div style='font-size:16px; font-weight:800; color:#1E3A8A !important; margin-bottom:8px;'>📝 ¿En qué consiste la categoría DESARROLLO de Oposiciona 5.0?</div>"
+                "<p style='font-size:14px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
                 "Este módulo interactivo está diseñado específicamente para preparar la <b>1.ª Parte del Segundo Ejercicio del Cuerpo de Gestión de la Administración de la Seguridad Social</b> (desarrollo escrito de epígrafes oficiales del temario). "
                 "El alumno redacta su contestación directamente en la plataforma y nuestro sistema de <b>Inteligencia Artificial entrenado con los Criterios Oficiales del Tribunal Calificador</b> analiza su respuesta en tiempo real comparándola con el texto mínimo oficial elaborado por los preparadores."
                 "</p>"
-                "<ul style='font-size:14px; color:#1E293B !important; margin-bottom:12px; padding-left:20px;'>"
+                "<ul style='font-size:13.5px; color:#1E293B !important; margin-bottom:12px; padding-left:20px;'>"
                 "<li><b>Calificación oficial de 0 a 50 puntos</b> desglosada en <b>Criterio 1 (0 a 45 ptos)</b> de conocimiento y rigor normativo, <b>Criterio 2 (0 a 3 ptos)</b> de estructura y orden expositivo, y <b>Criterio 3 (0 a 2 ptos)</b> de expresión escrita y presentación formal de siglas.</li>"
                 "<li><b>Informe analítico personalizado:</b> Detalla qué apartados has desarrollado correctamente, qué conceptos o artículos adicionales han enriquecido tu respuesta, qué puntos te han faltado por completar y la relación de artículos omitidos, junto con el texto mínimo oficial completo para tu estudio.</li>"
                 "</ul>"
-                "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:14px; color:#92400E !important;'>"
+                "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:13.5px; color:#92400E !important;'>"
                 "🔒 <b>Acceso exclusivo para alumnos de Oposiciona 5.0:</b> Esta funcionalidad no está disponible para usuarios invitados. "
                 "Puedes solicitar más información y matricularte escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</div>"
@@ -4001,22 +4025,29 @@ if not st.session_state.questions:
                     for it, (tn, tu) in enumerate(lt):
                         es_r = ("repaso" in tn.lower()) and (categoria not in ["EXAMENES", "DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"])
                         ic = "📝" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else ("📋" if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else ("🔄" if es_r else ("🏆" if categoria == "EXAMENES" else "📘")))
-                        et = "<span style='background:#fff3cd; color:#856404 !important; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:6px;'>REPASO</span>" if es_r else ""
-                        cn, cb = st.columns([3.2, 1])
-                        with cn: st.markdown(f"<div style='padding-top:6px; font-size:15px; color:#1E293B !important;'>{ic} <b style='color:#1E293B !important;'>{tn}</b> {et}</div>", unsafe_allow_html=True)
+                        et = "<span style='background:#fff3cd; color:#856404 !important; padding:1px 5px; border-radius:4px; font-size:10.5px; margin-left:5px;'>REPASO</span>" if es_r else ""
+                        cn, cb = st.columns([4.6, 1])
+                        with cn:
+                            st.markdown(
+                                f"<div style='display:flex; align-items:center; gap:6px; padding:1px 0; font-size:13.2px; line-height:1.25; color:#1E293B !important;'>"
+                                f"<span style='flex-shrink:0; font-size:14px;'>{ic}</span>"
+                                f"<span style='font-weight:600; color:#1E293B !important; word-break:break-word;'>{tn}{et}</span>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
                         with cb:
                             if st.button("🚀 Iniciar", key=f"btn_grp_{especialidad}_{categoria}_{ig}_{it}", use_container_width=True, type="primary"):
                                 cargar_test_desde_url(tn, tu, especialidad, categoria)
 
     total_deseadas = 95 if especialidad == "GESTION" else 75
     with st.container():
-        st.markdown('<div class="cargar-test-container"></div><div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 15px 15px 5px 15px; text-align: center; margin: 15px 0 10px 0;"><div style="font-size: 18px; font-weight: 700; color: #856404 !important; margin-top: 0; margin-bottom: 5px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</div><p style="color: #856404 !important; font-size: 14px; margin-bottom: 10px;">Genera un examen aleatorio cruzando preguntas de los distintos temas disponibles en esta especialidad.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="cargar-test-container"></div><div style="background-color: #fff3cd; border: 2px dashed #ffc107; border-radius: 8px; padding: 12px 15px 4px 15px; text-align: center; margin: 14px 0 8px 0;"><div style="font-size: 16.5px; font-weight: 700; color: #856404 !important; margin-top: 0; margin-bottom: 4px;">🔥 SIMULACRO GLOBAL EXPERTO 🔥</div><p style="color: #856404 !important; font-size: 13.5px; margin-bottom: 8px;">Genera un examen aleatorio cruzando preguntas de los distintos temas disponibles en esta especialidad.</p></div>', unsafe_allow_html=True)
         if st.button(f"🚨 INICIAR SIMULACRO ({total_deseadas} PREGUNTAS) 🚨", use_container_width=True, type="primary"):
             if rol == "INVITADO": st.error("🔒 Función no disponible para usuarios invitados. Solicita información en info@oposiciona.es para acceder al Simulacro Global Experto.")
             else: st.session_state.mostrar_opciones_simulacro = True
 
         if rol != "INVITADO" and st.session_state.get('mostrar_opciones_simulacro', False):
-            st.markdown("<div style='background-color:#eef6ff; border:2px solid #1f77b4; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:10px; text-align:center;'><b style='color:#1f77b4 !important; font-size:16px;'>🎯 ¿Sobre qué bloques quieres realizar el Simulacro?</b></div>", unsafe_allow_html=True)
+            st.markdown("<div style='background-color:#eef6ff; border:2px solid #1f77b4; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:10px; text-align:center;'><b style='color:#1f77b4 !important; font-size:15.5px;'>🎯 ¿Sobre qué bloques quieres realizar el Simulacro?</b></div>", unsafe_allow_html=True)
             cs1, cs2, cs3 = st.columns(3)
             for col_b, lbl, amb, t_lbl in [(cs1, "🌐 TODO", "TODO", "SIMULACRO GLOBAL"), (cs2, "📘 GENERAL", "GENERAL", "SIMULACRO"), (cs3, "🎯 ESPECÍFICO", "ESPECIFICO", "SIMULACRO")]:
                 if col_b.button(lbl, use_container_width=True, type="primary"):
