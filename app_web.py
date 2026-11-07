@@ -563,1528 +563,215 @@ if not st.session_state.autenticado:
     st.stop()
 # === FIN SECCIÓN 1 ===
 
-# === SECCIÓN 2: LECTOR DE PDF Y WORD DOCX (PDFQuizParser) ===
-import io
-import zipfile
-import xml.etree.ElementTree as ET
-
-class PDFQuizParser:
-    REEMPLAZOS_INGLES_RAE = [
-        (r'\band\b', 'y'),
-        (r'\bor\b', 'o'),
-        (r'\bbut\b', 'pero'),
-        (r'\bwith\b', 'con'),
-        (r'\bwithout\b', 'sin'),
-        (r'\bbetween\b', 'entre'),
-        (r'\bfrom\b', 'desde'),
-        (r'\buntil\b', 'hasta'),
-        (r'\bsince\b', 'desde'),
-        (r'\bduring\b', 'durante'),
-        (r'\bbefore\b', 'antes de'),
-        (r'\bafter\b', 'después de'),
-        (r'\bunder\b', 'bajo'),
-        (r'\bover\b', 'sobre'),
-        (r'\bthrough\b', 'a través de'),
-        (r'\bwithin\b', 'dentro de'),
-        (r'\bagainst\b', 'contra'),
-        (r'\bamong\b', 'entre'),
-        (r'\bbecause\b', 'porque'),
-        (r'\balthough\b', 'aunque'),
-        (r'\bhowever\b', 'sin embargo'),
-        (r'\btherefore\b', 'por tanto'),
-        (r'\bmoreover\b', 'además'),
-        (r'\bfurthermore\b', 'además'),
-        (r'\bnevertheless\b', 'no obstante'),
-        (r'\botherwise\b', 'en caso contrario'),
-        (r'\binstead\b', 'en su lugar'),
-        (r'\balso\b', 'también'),
-        (r'\bonly\b', 'solo'),
-        (r'\balways\b', 'siempre'),
-        (r'\bnever\b', 'nunca'),
-        (r'\bboth\b', 'ambos'),
-        (r'\beach\b', 'cada'),
-        (r'\bevery\b', 'cada'),
-        (r'\bother\b', 'otro'),
-        (r'\banother\b', 'otro'),
-        (r'\bsuch\b', 'tal'),
-        (r'\bsame\b', 'mismo'),
-        (r'\bwhile\b', 'mientras'),
-        (r'\bwhen\b', 'cuando'),
-        (r'\bwhere\b', 'donde'),
-        (r'\bwhich\b', 'el cual'),
-        (r'\bwhose\b', 'cuyo'),
-        (r'\bwho\b', 'quien'),
-        (r'\bwhom\b', 'a quien'),
-        (r'\bthat\b', 'que'),
-        (r'\bthis\b', 'este'),
-        (r'\bthese\b', 'estos'),
-        (r'\bthose\b', 'aquellos'),
-        (r'\bthe\b', 'el'),
-        (r'\bmust\b', 'debe'),
-        (r'\bshould\b', 'debería'),
-        (r'\bcould\b', 'podría'),
-        (r'\bwould\b', 'haría'),
-        (r'\bcan\b', 'puede'),
-        (r'\bcannot\b', 'no puede'),
-        (r'\bmay\b', 'puede'),
-        (r'\bmight\b', 'podría'),
-        (r'\bshall\b', 'deberá'),
-        (r'\bwill\b', 'será'),
-        (r'\bis\b', 'es'),
-        (r'\bare\b', 'son'),
-        (r'\bwas\b', 'fue'),
-        (r'\bwere\b', 'fueron'),
-        (r'\bbeen\b', 'sido'),
-        (r'\bbeing\b', 'siendo'),
-        (r'\bhave\b', 'tienen'),
-        (r'\bhad\b', 'tenía'),
-        (r'\bnot\b', 'no'),
-        (r'\btrue\b', 'verdadero'),
-        (r'\bfalse\b', 'falso'),
-        (r'\bnull\b', 'nulo'),
-        (r'\btrust\s+fideicomiso\b', 'fideicomiso'),
-        (r'\btrusts?\b', 'fideicomiso'),
-        (r'\bknow[\-\s]?how\b', 'saber hacer'),
-        (r'\bholdings?\b', 'grupo de sociedades'),
-        (r'\bleasing\b', 'arrendamiento financiero'),
-        (r'\brenting\b', 'alquiler a largo plazo'),
-        (r'\bfactoring\b', 'cesión de créditos'),
-        (r'\bfranchising\b', 'franquicia'),
-        (r'\bjoint[\-\s]?venture\b', 'empresa conjunta'),
-        (r'\boutsourcing\b', 'externalización'),
-        (r'\bcrowdfunding\b', 'financiación colectiva'),
-        (r'\bcompliance\b', 'cumplimiento normativo'),
-        (r'\bdeadlines?\b', 'plazo límite'),
-        (r'\btargets?\b', 'objetivo'),
-        (r'\bfeedback\b', 'retroalimentación'),
-        (r'\bstaff\b', 'personal'),
-        (r'\bmanagement\b', 'dirección'),
-        (r'\bmanagers?\b', 'director'),
-        (r'\bceo\b', 'consejero delegado'),
-        (r'\bdefault\b', 'impago'),
-        (r'\binputs?\b', 'aportación'),
-        (r'\boutputs?\b', 'resultado'),
-        (r'\bchecks?\b', 'comprobación'),
-        (r'\blinks?\b', 'enlace'),
-        (r'\be[\-\s]?mails?\b', 'correo electrónico'),
-        (r'\bon[\-\s]?line\b', 'en línea'),
-        (r'\boff[\-\s]?line\b', 'fuera de línea'),
-        (r'\bfull[\-\s]?time\b', 'a tiempo completo'),
-        (r'\bpart[\-\s]?time\b', 'a tiempo parcial'),
-        (r'\bback[\-\s]?office\b', 'administración interna'),
-        (r'\bfront[\-\s]?office\b', 'atención al público'),
-        (r'\bcall[\-\s]?center\b', 'centro de llamadas'),
-        (r'\bpen[\-\s]?drive\b', 'memoria USB'),
-        (r'\bpasswords?\b', 'contraseña'),
-        (r'\blogin\b', 'inicio de sesión'),
-        (r'\blogout\b', 'cierre de sesión'),
-        (r'\bstreaming\b', 'transmisión en directo'),
-        (r'\bplanning\b', 'planificación'),
-        (r'\btiming\b', 'calendario'),
-        (r'\branking\b', 'clasificación'),
-    ]
-
-    @classmethod
-    def traducir_ingles_no_rae(cls, texto):
-        if not texto:
-            return texto
-        for patron, reemplazo in cls.REEMPLAZOS_INGLES_RAE:
-            def _reemplazar_respetando_mayus(m):
-                orig = m.group(0)
-                if orig.isupper() and len(orig) > 1:
-                    return reemplazo.upper()
-                if orig[0].isupper():
-                    return reemplazo.capitalize()
-                return reemplazo
-            texto = re.sub(patron, _reemplazar_respetando_mayus, texto, flags=re.IGNORECASE)
-        return texto
-
-    @staticmethod
-    def es_archivo_docx(file_bytes):
-        """Detecta si los bytes recibidos corresponden a un documento Word (.docx)."""
-        if not file_bytes or len(file_bytes) < 4:
-            return False
-        if file_bytes[:4] != b'PK\x03\x04':
-            return False
-        try:
-            with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
-                return "word/document.xml" in zf.namelist()
-        except Exception:
-            return False
-
-    @staticmethod
-    def _extraer_lineas_desde_docx(docx_bytes):
-        """
-        Extrae los párrafos de un archivo Word (.docx) de forma nativa sin librerías externas,
-        conservando la estructura de párrafos reales, listas y negritas de cabecera.
-        Devuelve: (all_clean_lines, raw_lines, tema_detectado)
-        """
-        all_clean_lines = []
-        raw_lines = []
-        in_abiertas = False
-        tema_detectado = ""
-        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-
-        try:
-            with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zf:
-                xml_content = zf.read("word/document.xml")
-            root = ET.fromstring(xml_content)
-        except Exception:
-            return [], [], ""
-
-        for p in root.iter(f"{{{ns['w']}}}p"):
-            runs_texto = []
-            runs_con_texto = 0
-            runs_bold = 0
-
-            # Detectar si el párrafo tiene estilo de título o lista en Word
-            p_style_val = ""
-            es_item_lista_word = False
-            pPr = p.find("w:pPr", ns)
-            if pPr is not None:
-                pStyle = pPr.find("w:pStyle", ns)
-                if pStyle is not None:
-                    p_style_val = (pStyle.attrib.get(f"{{{ns['w']}}}val") or "").lower()
-                if pPr.find("w:numPr", ns) is not None or "list" in p_style_val or "vieta" in p_style_val:
-                    es_item_lista_word = True
-
-            for r in p.iter(f"{{{ns['w']}}}r"):
-                partes_r = []
-                for child in r:
-                    tag_local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-                    if tag_local == "t" and child.text:
-                        partes_r.append(child.text)
-                    elif tag_local == "tab":
-                        partes_r.append(" ")
-                    elif tag_local in ("br", "cr"):
-                        partes_r.append("\n")
-                t_r = "".join(partes_r)
-                if not t_r.strip():
-                    if t_r:
-                        runs_texto.append(t_r)
-                    continue
-                runs_texto.append(t_r)
-                runs_con_texto += 1
-                rPr = r.find("w:rPr", ns)
-                es_r_bold = False
-                if rPr is not None:
-                    b_el = rPr.find("w:b", ns)
-                    if b_el is not None:
-                        val_b = b_el.attrib.get(f"{{{ns['w']}}}val", "true").lower()
-                        if val_b not in ("0", "false", "off"):
-                            es_r_bold = True
-                if es_r_bold:
-                    runs_bold += 1
-
-            lt = "".join(runs_texto).strip()
-            if not lt:
-                continue
-
-            linea_es_bold = (
-                (runs_con_texto > 0 and runs_bold == runs_con_texto)
-                or ("heading" in p_style_val or "titulo" in p_style_val or "ttulo" in p_style_val)
-            )
-
-            lt = re.sub(r'<{2,}', '«', lt)
-            lt = re.sub(r'>{2,}', '»', lt)
-            lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
-            lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
-
-            if not tema_detectado and re.match(r'^TEMA\s+\d+[\.\:\-–]\s*\S+', lt, re.IGNORECASE):
-                t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
-                if t_cand and len(t_cand) > 8:
-                    tema_detectado = t_cand
-
-            lt = PDFQuizParser._limpiar_cabeceras_incrustadas(lt, tema_detectado)
-            if not lt or PDFQuizParser._es_basura_cabecera_o_pie(lt, tema_detectado):
-                continue
-
-            tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
-            tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
-
-            lt_proc = PDFQuizParser.traducir_ingles_no_rae(lt)
-            lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
-            lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
-            lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
-            lt_proc = re.sub(r'(?<=[.?!:;])\s+(?=(?:[■▪•\*]\s*)?EP[IÍ]GRAFE\s+\d+)', '\n', lt_proc, flags=re.IGNORECASE)
-
-            for sub_l in lt_proc.split('\n'):
-                sub_l = sub_l.strip()
-                if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l, tema_detectado):
-                    continue
-                if es_item_lista_word and not re.match(r'^(?:[•\*■▪\-–]|\d{1,2}[\.\)]|[a-g]\)|EP[IÍ]GRAFE\b)', sub_l, re.IGNORECASE):
-                    sub_l = f"• {sub_l}"
-                es_cabecera_apartado_bold = (
-                    linea_es_bold
-                    and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', sub_l)
-                    and not re.match(r'^EP[IÍ]GRAFE\b', sub_l, re.IGNORECASE)
-                    and len(sub_l) < 140
-                )
-                # En un DOCX cada párrafo es un bloque real; añadimos salto de línea final para preservar la separación de párrafos
-                linea_guardar = f"[[H]]{sub_l}" if es_cabecera_apartado_bold else sub_l
-                all_clean_lines.append(linea_guardar)
-                if not in_abiertas:
-                    if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
-                        if sub_l.isupper() or len(tl_clean) < 95:
-                            in_abiertas = True
-                if in_abiertas:
-                    raw_lines.append(linea_guardar)
-
-        return all_clean_lines, raw_lines, tema_detectado
-
-    @staticmethod
-    def _reducir_opciones_pregunta(q, limite):
-        pat_fija = r'(todas\s+(las\s+respuestas?\s+)?son\s+(correctas|incorrectas|falsas|verdaderas)|ninguna\s+(de\s+las\s+(anteriores|respuestas?)\s+)?es\s+correcta|ambas\s+son\s+correctas)'
-        while len(q["options"]) > limite:
-            ans = q.get("answer", -1)
-            candidatos = [
-                i for i in range(len(q["options"]) - 1, -1, -1)
-                if i != ans and not re.search(pat_fija, q["options"][i], re.IGNORECASE)
-            ]
-            if not candidatos:
-                candidatos = [i for i in range(len(q["options"]) - 1, -1, -1) if i != ans]
-            idx_del = candidatos[0] if candidatos else (len(q["options"]) - 1)
-            del q["options"][idx_del]
-            if ans > idx_del:
-                q["answer"] = ans - 1
-        nuevas_opts = []
-        for i, opt in enumerate(q["options"]):
-            limpia = re.sub(r'^[a-eA-E][\)\.\-]\s*', '', opt).strip()
-            nuevas_opts.append(f"{chr(97 + i)}) {limpia}")
-        q["options"] = nuevas_opts
-
-    @staticmethod
-    def _limpiar_cabeceras_incrustadas(texto, tema_cabecera=""):
-        """Limpia cabeceras y pies de página respetando siempre los saltos de línea (\n)."""
-        if not texto:
-            return ""
-        t = texto
-        if tema_cabecera:
-            t = re.sub(re.escape(tema_cabecera), ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'CUERPO\s+DE\s+GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s*\|\s*TEMA\s+\d+', ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'Tema\s+\d+\s*[\-–—]?\s*Oposiciones\s+Gesti[oó]n\s+de\s+la\s+Seguridad\s+Social\s*\|?(?:\s*P[aá]gina\s+\d+)?', ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'\bTEMA\s+\d+\s*[:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/]{6,95}?(?=\s+[a-záéíóúñ]|\s+[•\*■▪]|\s*$)', ' ', t)
-        t = re.sub(r'[■▪▫◆●]\s*S[IÍ]NTESIS\s+DE[L\s]+[A-ZÁÉÍÓÚÑÜ0-9\s,\.\(\)\/\-–]{4,95}?(?=\s+[A-ZÁÉÍÓÚÑa-záéíóúñ•\*]|\s*$)', ' ', t)
-        t = re.sub(r'\bRESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES\b', ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', ' ', t, flags=re.IGNORECASE)
-        t = re.sub(r'[ \t]{2,}', ' ', t)
-        t = re.sub(r' *\n *', '\n', t).strip()
-        return t
-
-    @staticmethod
-    def _es_basura_cabecera_o_pie(linea, tema_cabecera=""):
-        if not linea:
-            return True
-        s = linea.replace("[[H]]", "").strip()
-        if not s:
-            return True
-        if tema_cabecera and s.upper() == tema_cabecera.strip().upper():
-            return True
-        if re.match(r'^(?:P[aá]g(?:ina)?\.?\s*)?\d{1,3}(?:\s*(?:de|/)\s*\d{1,3})?$', s, re.IGNORECASE):
-            return True
-        if re.match(r'^TEMA\s+\d+$', s, re.IGNORECASE):
-            return True
-        if re.match(r'^Tema\s+\d+\s*[\-–—]?\s*Oposiciones\s+Gesti[oó]n\s+de\s+la\s+Seguridad\s+Social\b', s, re.IGNORECASE):
-            return True
-        if re.match(r'^CUERPO\s+DE\s+GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', s, re.IGNORECASE):
-            return True
-        if re.match(r'^PROGRAMA\s+OFICIAL\s+BLOQUE\b', s, re.IGNORECASE):
-            return True
-        if re.match(r'^DESGLOSE\s+OFICIAL\s+DE\s+EP[IÍ]GRAFES\b', s, re.IGNORECASE):
-            return True
-        if re.match(r'^TEMA\s+\d+[\.\:\-–]\s*[A-ZÁÉÍÓÚÑÜ0-9\s,\.\-–\(\)\/]+$', s) and s.isupper():
-            return True
-        patrones_cabecera = [
-            r'^OPOSICIONA\b',
-            r'^ADMINISTRATIVOS?\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL$',
-            r'^GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEST\s+TEMA\s+\d+.*)?$',
-            r'^CUERPO\s+DE\s+GESTI[OÓ]N\b',
-            r'^TEMA\s+\d+\s*[:\-–]\s*RESUMEN\b',
-            r'^RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES\b',
-            r'^RESUMEN\s+DE\s+EP[IÍ]GRAFES\b',
-            r'^[■▪▫◆●•\*]?\s*S[IÍ]NTESIS\s+DEL?\s+',
-            r'^BLOQUE\s+[IVX0-9]+\b',
-        ]
-        for pat in patrones_cabecera:
-            if re.match(pat, s, re.IGNORECASE) and (s.isupper() or len(s) < 115):
-                return True
-        if "RESUMEN ANALÍTICO DE EPÍGRAFES" in s.upper() or "RESUMEN ANALITICO DE EPIGRAFES" in s.upper():
-            return True
-        return False
-
-    @staticmethod
-    def _separar_titulo_numerado_pegado(texto):
-        if not texto:
-            return None, texto
-        s = texto.replace("[[H]]", "").strip()
-        if not re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', s):
-            return None, texto
-
-        # Si es un ítem de lista numerada con dos puntos ("1) Pluriempleo: Es la situación..."), no es una cabecera general sino un ítem de lista
-        if re.match(r'^\d{1,2}\)\s+[^:]{2,85}:\s+', s):
-            return None, texto
-
-        m_bullet = re.match(r'^(\d{1,2}[\.\)]\s+[^•\*▪◆]{4,135}?)\s*([•\*▪◆].*)$', s)
-        if m_bullet:
-            return m_bullet.group(1).strip(), m_bullet.group(2).strip()
-
-        if len(s) < 140 and not s.endswith('.'):
-            return s, ""
-
-        m_def = re.match(
-            r'^(\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ][^\.?!]{4,120}?)\s+([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ\s,\(\)\/]{2,55}:\s+[A-ZÁÉÍÓÚÑ].*)$',
-            s
-        )
-        if m_def:
-            cand_t = m_def.group(1).strip()
-            if not cand_t.endswith(':'):
-                return cand_t, m_def.group(2).strip()
-
-        inicios_oracion = (
-            r'(?:El|La|Los|Las|Un|Una|En|De\s+conformidad|Con|Por|Para|Seg[úu]n|Conforme|Mediante|Durante|Cuando|Si|Toda|Todo|Existe|Existen|Se\s+[a-záéíóúñ]+|Constituye|Supone|Consiste|Comprende|Regulado|Ostenta|A\s+efectos)\b'
-        )
-        m_peg = re.match(
-            rf'^(\d{{1,2}}[\.\)]\s+[A-ZÁÉÍÓÚÑ][^\.?!]{{4,125}}?)\s+({inicios_oracion}\s+[a-záéíóúñA-ZÁÉÍÓÚÑ].*)$',
-            s
-        )
-        if m_peg:
-            cand_tit = m_peg.group(1).strip()
-            resto = m_peg.group(2).strip()
-            if not re.search(r'\b(de|del|en|con|por|para|a|al|la|las|el|los|un|una|y|o|e|u)$', cand_tit, re.IGNORECASE):
-                return cand_tit, resto
-
-        return None, texto
-
-    @staticmethod
-    def _dividir_definiciones_internas(linea):
-        """
-        Divide una línea o párrafo en sub-bloques cuando detecta:
-        - Viñetas (•, *, ▪)
-        - Enumeraciones numéricas con paréntesis o punto: 1) ..., 2) ..., 3) ... o 1. ..., 2. ...
-        - Enumeraciones por letras: a) ..., b) ..., c) ..., d) ...
-        - Definiciones con título en negrita + dos puntos tras punto.
-        """
-        if not linea:
-            return []
-        s = re.sub(r'(?<=[.?!:;\)])\s+(?=[•\*▪◆]\s*)', '\n', linea)
-        s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\)\s+[A-ZÁÉÍÓÚÑ¿¡])', '\n', s)
-        s = re.sub(r'(?<=[.?!:;\)])\s+(?=[a-g]\)\s+[A-ZÁÉÍÓÚÑ¿¡])', '\n', s)
-        s = re.sub(r'(?<=[.?!:;\)])\s+(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])', '\n', s)
-        s = re.sub(
-            r'(?<=\.)\s+(?=[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-–—]{3,85}:\s+[A-ZÁÉÍÓÚÑ])',
-            '\n• ',
-            s
-        )
-        return [p.strip() for p in s.split('\n') if p.strip()]
-
-    @staticmethod
-    def _formatear_explicacion_estructurada(lista_lineas, tema_cabecera="", es_docx=False):
-        if not lista_lineas:
-            return ""
-
-        lineas_limpias = []
-        pendiente_bullet = False
-        pendiente_num_item = ""
-        for l in lista_lineas:
-            l_s = l.strip()
-            es_bold_header = l_s.startswith("[[H]]")
-            l_sin_marca = l_s.replace("[[H]]", "").strip()
-            if not l_sin_marca or PDFQuizParser._es_basura_cabecera_o_pie(l_sin_marca, tema_cabecera):
-                continue
-            l_sin_marca = PDFQuizParser._limpiar_cabeceras_incrustadas(l_sin_marca, tema_cabecera)
-            if not l_sin_marca or PDFQuizParser._es_basura_cabecera_o_pie(l_sin_marca, tema_cabecera):
-                continue
-            m_trail_enum = re.search(r'(?<=[.?!:;\)])\s+(\d{1,2}\)|[a-g]\))\s*$', l_sin_marca)
-            if m_trail_enum:
-                token_enum = m_trail_enum.group(1)
-                l_sin_marca = l_sin_marca[:m_trail_enum.start()].strip()
-                if l_sin_marca:
-                    lineas_limpias.append(("[[H]]" + l_sin_marca) if es_bold_header else l_sin_marca)
-                pendiente_num_item = token_enum
-                continue
-
-            if pendiente_num_item:
-                l_sin_marca = f"{pendiente_num_item} {l_sin_marca}"
-                pendiente_num_item = ""
-                es_bold_header = False
-
-            if re.match(r'^(?:[•\*▪◆\-–]\s*)+$', l_sin_marca):
-                pendiente_bullet = True
-                continue
-            if pendiente_bullet:
-                if not re.match(r'^[•\*▪◆\-–]', l_sin_marca) and not re.match(r'^\d{1,2}[\.\)]\s+', l_sin_marca):
-                    l_sin_marca = f"• {l_sin_marca}"
-                    es_bold_header = False
-                pendiente_bullet = False
-            lineas_limpias.append(("[[H]]" + l_sin_marca) if es_bold_header else l_sin_marca)
-
-        if not lineas_limpias:
-            return ""
-
-        # Si proviene de un Word (.docx), cada elemento de lineas_limpias ya es un párrafo completo y real;
-        # si proviene de un PDF, unimos las líneas continuas antes de dividir por apartados y enumeraciones.
-        if es_docx:
-            bloques_pre = list(lineas_limpias)
-        else:
-            texto_corrido = ""
-            bloques_pre = []
-            for l_raw in lineas_limpias:
-                forzada_cabecera = l_raw.startswith("[[H]]")
-                l_str = l_raw.replace("[[H]]", "").strip()
-                if forzada_cabecera:
-                    if texto_corrido:
-                        bloques_pre.append(texto_corrido.strip())
-                        texto_corrido = ""
-                    bloques_pre.append(f"[[H]]{l_str}")
-                else:
-                    if not texto_corrido:
-                        texto_corrido = l_str
-                    else:
-                        texto_corrido += " " + l_str
-            if texto_corrido:
-                bloques_pre.append(texto_corrido.strip())
-
-        parrafos = []
-        for b_raw in bloques_pre:
-            if b_raw.startswith("[[H]]"):
-                parrafos.append(b_raw)
-                continue
-            for sub_p in PDFQuizParser._dividir_definiciones_internas(b_raw):
-                tit_detectado, resto_parrafo = PDFQuizParser._separar_titulo_numerado_pegado(sub_p)
-                if tit_detectado:
-                    parrafos.append(f"[[H]]{tit_detectado}")
-                    if resto_parrafo:
-                        for sp2 in PDFQuizParser._dividir_definiciones_internas(resto_parrafo):
-                            parrafos.append(sp2)
-                else:
-                    parrafos.append(sub_p)
-
-        parrafos_finales = []
-        for p in parrafos:
-            es_h = p.startswith("[[H]]")
-            p_clean = PDFQuizParser._limpiar_cabeceras_incrustadas(p.replace("[[H]]", ""), tema_cabecera)
-            if p_clean:
-                parrafos_finales.append((f"[[H]]{p_clean}") if es_h else p_clean)
-
-        return "\n\n".join(parrafos_finales)
-
-    @staticmethod
-    def renderizar_explicacion_html(texto_explicacion, etiqueta_tema=""):
-        if not texto_explicacion:
-            return ""
-
-        t_limpio = PDFQuizParser._limpiar_cabeceras_incrustadas(texto_explicacion, etiqueta_tema)
-        lineas_entrada = [b.strip() for b in t_limpio.split('\n') if b.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(b.strip(), etiqueta_tema)]
-
-        bloques_expandidos = []
-        for b in lineas_entrada:
-            es_h_forzado = b.startswith("[[H]]")
-            b_sin_h = b.replace("[[H]]", "").strip()
-
-            partes_num = re.split(
-                r'(?:(?<=^)|(?<=[\.\:\;\)\»]))\s+(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚÑ])',
-                b_sin_h
-            )
-            for pn in partes_num:
-                pn = pn.strip()
-                if not pn:
-                    continue
-                tit_s, resto_s = PDFQuizParser._separar_titulo_numerado_pegado(pn)
-                if tit_s:
-                    bloques_expandidos.append(f"[[H]]{tit_s}")
-                    if resto_s:
-                        for sub_def in PDFQuizParser._dividir_definiciones_internas(resto_s):
-                            bloques_expandidos.append(sub_def)
-                elif es_h_forzado and len(partes_num) == 1:
-                    bloques_expandidos.append(f"[[H]]{pn}")
-                else:
-                    for sub_def in PDFQuizParser._dividir_definiciones_internas(pn):
-                        tit_s2, resto_s2 = PDFQuizParser._separar_titulo_numerado_pegado(sub_def)
-                        if tit_s2:
-                            bloques_expandidos.append(f"[[H]]{tit_s2}")
-                            if resto_s2:
-                                bloques_expandidos.append(resto_s2)
-                        else:
-                            bloques_expandidos.append(sub_def)
-
-        html_partes = []
-        for blq in bloques_expandidos:
-            es_cabecera_num = blq.startswith("[[H]]")
-            blq_txt = blq.replace("[[H]]", "").strip()
-            if not blq_txt:
-                continue
-            if not es_cabecera_num and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', blq_txt) and len(blq_txt) < 140 and not blq_txt.endswith('.') and ":" not in blq_txt:
-                es_cabecera_num = True
-
-            if es_cabecera_num:
-                html_partes.append(
-                    f"<div style='font-size:15.5px; font-weight:800; color:#0A3641 !important; margin-top:14px; margin-bottom:6px; line-height:1.35;'>{blq_txt}</div>"
-                )
-                continue
-
-            m_enum_item = re.match(r'^(\d{1,2}\)|[a-g]\))\s*([^:]{2,90}):\s*(.+)$', blq_txt)
-            if m_enum_item:
-                num_lbl = m_enum_item.group(1).strip()
-                tit_lbl = m_enum_item.group(2).strip()
-                cuerpo_lbl = m_enum_item.group(3).strip()
-                html_partes.append(
-                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:22px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
-                    f"<b style='color:#083B46 !important;'>{num_lbl} {tit_lbl}:</b> {cuerpo_lbl}</div>"
-                )
-                continue
-
-            m_enum_simple = re.match(r'^(\d{1,2}\)|[a-g]\))\s+(.+)$', blq_txt)
-            if m_enum_simple:
-                num_lbl = m_enum_simple.group(1).strip()
-                cuerpo_lbl = m_enum_simple.group(2).strip()
-                html_partes.append(
-                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:22px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
-                    f"<b style='color:#083B46 !important;'>{num_lbl}</b> {cuerpo_lbl}</div>"
-                )
-                continue
-
-            m_bullet_def = re.match(r'^([•\*▪◆\-–])\s*([^:]{2,95}):\s*(.+)$', blq_txt)
-            if m_bullet_def:
-                term = m_bullet_def.group(2).strip()
-                resto = m_bullet_def.group(3).strip()
-                html_partes.append(
-                    f"<div style='margin-top:10px; margin-bottom:6px; padding-left:10px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
-                    f"▪ <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
-                )
-                continue
-
-            m_def_sola = re.match(r'^([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s,\(\)\/\-–—]{2,88}):\s+(.+)$', blq_txt)
-            if m_def_sola and not re.match(r'^(Conforme|De\s+conformidad|Seg[úu]n|Por\s+tanto|No\s+obstante|Nota\s+metodol[óo]gica)\b', blq_txt, re.IGNORECASE):
-                term = m_def_sola.group(1).strip()
-                resto = m_def_sola.group(2).strip()
-                html_partes.append(
-                    f"<div style='margin-top:10px; margin-bottom:6px; padding-left:10px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>"
-                    f"▪ <b style='color:#083B46 !important;'>{term}:</b> {resto}</div>"
-                )
-                continue
-
-            html_partes.append(
-                f"<div style='margin-top:6px; margin-bottom:8px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>{blq_txt}</div>"
-            )
-
-        return "".join(html_partes)
-
-    @staticmethod
-    def _limpiar_titulo_epigrafe(titulo):
-        if not titulo:
-            return ""
-        t = titulo.replace("[[H]]", "").strip()
-        t = re.sub(r'^[•\*■▪▫◆\-–]\s*', '', t).strip()
-        t = re.sub(r'[■▪▫◆]\s*S[IÍ]NTESIS.*$', '', t, flags=re.IGNORECASE).strip()
-        t = re.split(
-            r'\s+(?:S[IÍ]NTESIS\s+DEL?\b|RESUMEN\s+ANAL[IÍ]TICO\b|RESUMEN\s+DEL?\b|ESQUEMA\s+DEL?\b|Nota\s+metodol[óo]gica\b)',
-            t,
-            maxsplit=1,
-            flags=re.IGNORECASE
-        )[0].strip()
-        return t
-
-    @staticmethod
-    def parse_abiertas_gestion(file_bytes, modo="TODOS"):
-        """
-        Lee indistintamente archivos Word (.docx) o PDF (.pdf) para extraer
-        Preguntas de Desarrollo (Epígrafes) y Supuestos Prácticos.
-        """
-        es_formato_docx = PDFQuizParser.es_archivo_docx(file_bytes)
-
-        if es_formato_docx:
-            all_clean_lines, raw_lines, tema_detectado = PDFQuizParser._extraer_lineas_desde_docx(file_bytes)
-        else:
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            raw_lines = []
-            all_clean_lines = []
-            in_abiertas = False
-            tema_detectado = ""
-
-            for page in doc:
-                for b in page.get_text("dict")["blocks"]:
-                    if b.get("type", 0) == 0:
-                        for l in b["lines"]:
-                            spans_validos = [s for s in l["spans"] if s["text"].strip()]
-                            if not spans_validos:
-                                continue
-                            lt = " ".join(s["text"].strip() for s in spans_validos).strip()
-                            if not lt:
-                                continue
-                            linea_es_bold = all(
-                                ("bold" in s.get("font", "").lower()) or (s.get("flags", 0) & 2 != 0)
-                                for s in spans_validos
-                            )
-
-                            lt = re.sub(r'<{2,}', '«', lt)
-                            lt = re.sub(r'>{2,}', '»', lt)
-                            lt = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', lt, flags=re.IGNORECASE).strip()
-                            lt = re.sub(r'\bP[aá]gina\s+\d+(?:\s+de\s+\d+)?\b', '', lt, flags=re.IGNORECASE).strip()
-
-                            if not tema_detectado and re.match(r'^TEMA\s+\d+[\.\:\-–]\s*\S+', lt, re.IGNORECASE):
-                                t_cand = re.sub(r'\s*[:\-–]?\s*RESUMEN\s+ANAL[IÍ]TICO\s+DE\s+EP[IÍ]GRAFES.*$', '', lt, flags=re.IGNORECASE).strip()
-                                if t_cand and len(t_cand) > 8:
-                                    tema_detectado = t_cand
-
-                            lt = PDFQuizParser._limpiar_cabeceras_incrustadas(lt, tema_detectado)
-                            if not lt or PDFQuizParser._es_basura_cabecera_o_pie(lt, tema_detectado):
-                                continue
-
-                            tl = lt.lower().translate(str.maketrans("áéíóú", "aeiou"))
-                            tl_clean = re.sub(r'[^a-z0-9\s]', '', tl).strip()
-
-                            lt_proc = PDFQuizParser.traducir_ingles_no_rae(lt)
-                            lt_proc = re.sub(r'(\d+\.)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
-                            lt_proc = re.sub(r'(\d+)\s*\^\s*\{?([ºª°a])\}?', lambda m: m.group(1) + ('ª' if m.group(2) == 'a' else m.group(2)), lt_proc)
-                            lt_proc = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', lt_proc)
-
-                            lt_proc = re.sub(r'(?<=[.?!:;])\s+(?=(?:[■▪•\*]\s*)?EP[IÍ]GRAFE\s+\d+)', '\n', lt_proc, flags=re.IGNORECASE)
-
-                            for sub_l in lt_proc.split('\n'):
-                                sub_l = sub_l.strip()
-                                if not sub_l or PDFQuizParser._es_basura_cabecera_o_pie(sub_l, tema_detectado):
-                                    continue
-                                es_cabecera_apartado_bold = (
-                                    linea_es_bold
-                                    and re.match(r'^\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]', sub_l)
-                                    and not re.match(r'^EP[IÍ]GRAFE\b', sub_l, re.IGNORECASE)
-                                    and len(sub_l) < 140
-                                )
-                                linea_guardar = f"[[H]]{sub_l}" if es_cabecera_apartado_bold else sub_l
-                                all_clean_lines.append(linea_guardar)
-                                if not in_abiertas:
-                                    if any(x in tl_clean for x in ["supuesto practico", "supuestos practicos", "pregunta de desarrollo", "preguntas de desarrollo", "caso practico", "casos practicos"]):
-                                        if sub_l.isupper() or len(tl_clean) < 95:
-                                            in_abiertas = True
-                                if in_abiertas:
-                                    raw_lines.append(linea_guardar)
-
-        desarrollo_qs = []
-        supuestos_qs = []
-
-        if raw_lines:
-            idx = 0
-            current_context = ""
-            current_q = None
-
-            while idx < len(raw_lines):
-                line = raw_lines[idx].replace("[[H]]", "").strip()
-
-                if re.match(r'^PREGUNTAS?\s+DE\s+DESARROLLO\b', line, re.IGNORECASE):
-                    if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                        supuestos_qs.append(current_q)
-                        current_q = None
-                    partes_titulo = []
-                    t_ini = re.sub(r'^PREGUNTAS?\s+DE\s+DESARROLLO\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
-                    if t_ini:
-                        partes_titulo.append(t_ini)
-                    idx += 1
-                    while idx < len(raw_lines):
-                        cand_t = raw_lines[idx].replace("[[H]]", "").strip()
-                        if (
-                            cand_t.isupper()
-                            and not re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b)', cand_t, re.IGNORECASE)
-                            and (not partes_titulo or not partes_titulo[-1].endswith('.'))
-                        ):
-                            partes_titulo.append(cand_t)
-                            idx += 1
-                        else:
-                            break
-                    titulo_des = PDFQuizParser._limpiar_titulo_epigrafe(" ".join(partes_titulo).strip())
-
-                    cuerpo_des = []
-                    while idx < len(raw_lines):
-                        l_next_raw = raw_lines[idx].strip()
-                        l_next = l_next_raw.replace("[[H]]", "").strip()
-                        if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|PREGUNTAS?\s+DE\s+DESARROLLO)\b', l_next, re.IGNORECASE) and (l_next.isupper() or len(l_next) < 85):
-                            break
-                        if not PDFQuizParser._es_basura_cabecera_o_pie(l_next, tema_detectado):
-                            cuerpo_des.append(l_next_raw)
-                        idx += 1
-                    texto_oficial = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_des, tema_detectado, es_docx=es_formato_docx)
-                    if texto_oficial:
-                        desarrollo_qs.append({
-                            "is_open": True,
-                            "tipo_abierta": "DESARROLLO",
-                            "tema_titulo": tema_detectado,
-                            "preamble": "",
-                            "question_text": titulo_des,
-                            "options": [],
-                            "answer": -1,
-                            "answer_text": "",
-                            "explanation": texto_oficial
-                        })
-                    continue
-
-                if re.match(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\b', line, re.IGNORECASE) and (line.isupper() or len(line) < 80):
-                    if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                        supuestos_qs.append(current_q)
-                        current_q = None
-                    resto_cab = re.sub(r'^(SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?)\s*[:\-–]?\s*', '', line, flags=re.IGNORECASE).strip()
-                    current_context = resto_cab if resto_cab else ""
-                    idx += 1
-                    continue
-
-                if current_q and current_q["state"] == "E" and not re.match(r'^\d+[\.\-\)]', line):
-                    if re.match(r'^(La\s+familia|La\s+empresa|La\s+mercantil|Don\s+|Doña\s+|El\s+trabajador|En\s+el\s+ejercicio)\b', line) and "?" not in line:
-                        hay_preg_despues = any(re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[k].replace("[[H]]", "").strip()) for k in range(idx + 1, min(idx + 20, len(raw_lines))))
-                        if hay_preg_despues and len(current_q["explanation"]) > 120:
-                            supuestos_qs.append(current_q)
-                            current_q = None
-                            current_context = line
-                            idx += 1
-                            while idx < len(raw_lines) and not re.match(r'^\d{1,2}[\.\-\)]\s+', raw_lines[idx].replace("[[H]]", "").strip()):
-                                current_context += " " + raw_lines[idx].replace("[[H]]", "").strip()
-                                idx += 1
-                            continue
-
-                m_q = re.match(r'^(\d{1,2})[\.\-\)]\s+(.+)$', line)
-                if m_q:
-                    if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                        supuestos_qs.append(current_q)
-                    q_txt = m_q.group(2).strip()
-                    ans_initial = ""
-                    if "?" in q_txt and not q_txt.endswith("?"):
-                        partes_q = q_txt.split("?", 1)
-                        q_txt = partes_q[0].strip() + "?"
-                        ans_initial = partes_q[1].strip()
-                    current_q = {
-                        "is_open": True,
-                        "tipo_abierta": "SUPUESTO",
-                        "tema_titulo": tema_detectado,
-                        "preamble": f"📋 **PLANTEAMIENTO DEL SUPUESTO PRÁCTICO:**\n\n{current_context.strip()}" if current_context.strip() else "📋 **SUPUESTO PRÁCTICO**",
-                        "question_text": f"Cuestión {m_q.group(1)}. {q_txt}",
-                        "options": [],
-                        "answer": -1,
-                        "answer_text": ans_initial,
-                        "explanation": "",
-                        "state": "A" if ans_initial else "Q"
-                    }
-                    idx += 1
-                    continue
-
-                if current_q is None:
-                    current_context = (current_context + " " + line).strip() if current_context else line
-                    idx += 1
-                    continue
-
-                if re.match(r'^(Explicaci[óo]n|Fundamentaci[óo]n|Soluci[óo]n|Respuesta)\s*[:\.]', line, re.IGNORECASE):
-                    exp_clean = re.sub(r'^(Explicaci[óo]n|Fundamentaci[óo]n|Soluci[óo]n|Respuesta)\s*[:\.]\s*', '', line, flags=re.IGNORECASE).strip()
-                    current_q["explanation"] = exp_clean
-                    current_q["state"] = "E"
-                    idx += 1
-                    continue
-
-                if current_q["state"] == "Q":
-                    if "?" in line:
-                        partes_q = line.split("?", 1)
-                        current_q["question_text"] += " " + partes_q[0].strip() + "?"
-                        resto_a = partes_q[1].strip()
-                        if resto_a:
-                            current_q["answer_text"] = resto_a
-                        current_q["state"] = "A"
-                    else:
-                        current_q["question_text"] += " " + line
-                elif current_q["state"] == "A":
-                    current_q["answer_text"] = (current_q["answer_text"] + " " + line).strip() if current_q["answer_text"] else line
-                elif current_q["state"] == "E":
-                    current_q["explanation"] = (current_q["explanation"] + " " + line).strip() if current_q["explanation"] else line
-
-                idx += 1
-
-            if current_q and (current_q["answer_text"] or current_q["explanation"]):
-                supuestos_qs.append(current_q)
-
-        # 5. EXTRACCIÓN LIMPIA, EN ORDEN NUMÉRICO Y SIN FALSOS POSITIVOS DE ÍNDICE PARA RESÚMENES (WORD .DOCX O .PDF)
-        if modo in ["DESARROLLO", "TODOS"] and not desarrollo_qs and all_clean_lines:
-            lineas_utiles = [
-                l.strip() for l in all_clean_lines
-                if l.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(l.strip(), tema_detectado)
-            ]
-
-            tiene_epigrafe_sin_bullet = any(
-                re.match(r'^(?:[■▪]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l.replace("[[H]]", "").strip(), re.IGNORECASE)
-                for l in lineas_utiles
-            )
-            tiene_palabra_epigrafe = tiene_epigrafe_sin_bullet or any(
-                re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', l.replace("[[H]]", "").strip(), re.IGNORECASE)
-                for l in lineas_utiles
-            )
-
-            def _es_inicio_epigrafe(linea):
-                lin_clean = linea.replace("[[H]]", "").strip()
-                if tiene_epigrafe_sin_bullet:
-                    return bool(re.match(r'^(?:[■▪]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', lin_clean, re.IGNORECASE))
-                if tiene_palabra_epigrafe:
-                    return bool(re.match(r'^(?:[■▪•\*\-–]\s*)?EP[IÍ]GRAFE\s*(?:\d+|[I|V|X]+)\b', lin_clean, re.IGNORECASE))
-                return bool(
-                    re.match(r'^(?:\d{1,2}[\.\-\)]|[I|V|X]{1,4}[\.\-\)])\s+[A-ZÁÉÍÓÚÑ0-9\s,\.\-–:\(\)\/«»"]+$', lin_clean)
-                    and lin_clean.isupper()
-                    and len(lin_clean) >= 12
-                )
-
-            epigrafes_detectados = []
-            idx_l = 0
-            n_lineas = len(lineas_utiles)
-
-            while idx_l < n_lineas:
-                l_actual = lineas_utiles[idx_l].replace("[[H]]", "").strip()
-                if _es_inicio_epigrafe(l_actual):
-                    partes_tit = [l_actual]
-                    idx_l += 1
-                    while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
-                        cand = lineas_utiles[idx_l].replace("[[H]]", "").strip()
-                        if PDFQuizParser._es_basura_cabecera_o_pie(cand, tema_detectado):
-                            idx_l += 1
-                            continue
-                        if ":" in cand or not cand.isupper():
-                            break
-                        if re.match(r'^(?:[■▪•\*\-–]|\d+[\.\-\)]|[a-e][\)\.\-]|S[IÍ]NTESIS\b|RESUMEN\b|INTRODUCCI[ÓO]N\b|Nota\s+metodol[óo]gica\b)', cand, re.IGNORECASE):
-                            break
-                        if not partes_tit[-1].endswith('.') and len(cand) < 95 and len(" ".join(partes_tit)) < 160:
-                            partes_tit.append(cand)
-                            idx_l += 1
-                        else:
-                            break
-
-                    titulo_ep = PDFQuizParser._limpiar_titulo_epigrafe(" ".join(partes_tit).strip())
-
-                    cuerpo_ep = []
-                    while idx_l < n_lineas and not _es_inicio_epigrafe(lineas_utiles[idx_l]):
-                        l_cuerpo = lineas_utiles[idx_l]
-                        l_cuerpo_clean = l_cuerpo.replace("[[H]]", "").strip()
-                        if re.match(r'^Nota\s+metodol[óo]gica\s*:', l_cuerpo_clean, re.IGNORECASE):
-                            idx_l += 1
-                            continue
-                        if not PDFQuizParser._es_basura_cabecera_o_pie(l_cuerpo, tema_detectado):
-                            cuerpo_ep.append(l_cuerpo)
-                        idx_l += 1
-
-                    texto_ep = PDFQuizParser._formatear_explicacion_estructurada(cuerpo_ep, tema_cabecera=tema_detectado, es_docx=es_formato_docx)
-                    if texto_ep and len(texto_ep) >= 200:
-                        epigrafes_detectados.append((titulo_ep, texto_ep))
-                else:
-                    idx_l += 1
-
-            if epigrafes_detectados:
-                def _clave_orden_epigrafe(par_ep):
-                    tit = par_ep[0]
-                    m_n = re.search(r'EP[IÍ]GRAFE\s+(\d+)', tit, re.IGNORECASE)
-                    if m_n:
-                        return int(m_n.group(1))
-                    m_ini = re.match(r'^(\d+)', tit)
-                    if m_ini:
-                        return int(m_ini.group(1))
-                    return 999
-
-                epigrafes_detectados.sort(key=_clave_orden_epigrafe)
-
-                for i_ep, (tit_ep, txt_ep) in enumerate(epigrafes_detectados, 1):
-                    desarrollo_qs.append({
-                        "is_open": True,
-                        "tipo_abierta": "DESARROLLO",
-                        "tema_titulo": tema_detectado,
-                        "preamble": "",
-                        "question_text": tit_ep,
-                        "options": [],
-                        "answer": -1,
-                        "answer_text": "",
-                        "explanation": txt_ep
-                    })
-            elif lineas_utiles:
-                texto_integro = PDFQuizParser._formatear_explicacion_estructurada(lineas_utiles, tema_detectado, es_docx=es_formato_docx)
-                tit_gen = PDFQuizParser._limpiar_titulo_epigrafe(lineas_utiles[0][:120])
-                desarrollo_qs.append({
-                    "is_open": True,
-                    "tipo_abierta": "DESARROLLO",
-                    "tema_titulo": tema_detectado,
-                    "preamble": "",
-                    "question_text": tit_gen,
-                    "options": [],
-                    "answer": -1,
-                    "answer_text": "",
-                    "explanation": texto_integro
-                })
-
-        if modo == "DESARROLLO":
-            return desarrollo_qs
-        if modo == "SUPUESTOS":
-            return supuestos_qs
-        return desarrollo_qs + supuestos_qs
-
-    @staticmethod
-    def parse(pdf_bytes, max_options=None):
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        questions, lines = [], []
-        stop_reading = ignoring_mode = entered_supuestos = False
-        detected_gestion_header = False
-        detected_adm_header = False
-
-        PAT_MARCADOR_EXP = r'(?:Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?[:\.]?|Respuest[as]?:|Resp:|El\s+n[úu]cleo\s+de\s+la\s+trampa:|La\s+trampa\s+del\s+examinador:|La\s+trampa\s+del\s+examen:)'
-
-        for page in doc:
-            if stop_reading: break
-            for b in page.get_text("dict")["blocks"]:
-                if stop_reading: break
-                if b.get("type", 0) == 0:
-                    for l in b["lines"]:
-                        if stop_reading: break
-                        line_text, is_bold = "", False
-                        for s in l["spans"]:
-                            t = s["text"].strip()
-                            if not t: continue
-                            line_text += t + " "
-                            if "bold" in s["font"].lower() or (s["flags"] & 2 != 0):
-                                if not re.match(r'^[a-dA-D][\)\.-]?$', t): is_bold = True
-                        line_text = line_text.strip()
-                        if line_text:
-                            if line_text.isupper():
-                                if re.search(r'\bADMINISTRATIVOS?\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', line_text):
-                                    detected_adm_header = True
-                                elif re.search(r'\bGESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\b', line_text):
-                                    detected_gestion_header = True
-                            line_text = re.sub(r'<{2,}', '«', line_text)
-                            line_text = re.sub(r'>{2,}', '»', line_text)
-                            line_text = re.sub(r'<(?=[A-ZÁÉÍÓÚÑa-záéíóúñ"«])', '«', line_text)
-                            line_text = re.sub(r'(?<=[.?!;:"»a-zA-Z])>', '»', line_text)
-                            line_text = re.sub(r'(?:https?://)?(?:www\.)?oposiciona\.es\b', '', line_text, flags=re.IGNORECASE).strip()
-                            line_text = re.sub(r'\bP[aá]gina\s+\d+\s+de\s+\d+\b', '', line_text, flags=re.IGNORECASE).strip()
-                            for pat in [
-                                r'^(?:OPOSICIONA\s*)+', r'^POSICIO\s*',
-                                r'^RESPUESTAS\s+TEST\s+TEMA\s+\d+\s+ADMINISTRATIVOS\.?\s+PARTE\s+GENERAL\.?\s*[A-ZÁÉÍÓÚÑ\s]*',
-                                r'^GESTI[OÓ]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEST\s+TEMA\s+\d+\s+GENERAL\s*[\-–]?\s*[A-ZÁÉÍÓÚÑ\s]+)?\s*',
-                                r'^ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s*',
-                                r'^EXAMEN\s+REPASO\s+ADMINISTRATIVO\s+\d+\s+[A-ZÁÉÍÓÚÑ]+\s+202\d\s*',
-                                r'^EXAMEN\s+REPASO\s+TEMA\s+\d+\s+COMPLETO\s*',
-                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*(?:ADMINISTRATIVO|GESTI[OÓ]N)\s+202\d\s*',
-                                r'^(?:GENERAL\s+|ESPEC[IÍ]FICO\s+|EXAMEN\s+|TEST\s+|RESPUESTAS\s+)?TEMAS?\s+\d+[a-zA-Z]?\s*[\-–:]\s*[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
-                                r'^ESPECIAL\s+SIMULACROS?\s+\d+\s*[\-–]\s*\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\s*',
-                                r'^TEST\s+ADMINISTRATIVO\s+\d+\s+TODO\s+EL\s+TEMARIO\s*',
-                                r'^RESPUESTAS\s+(?:TIPO\s+)?TEST:?\s+TEMAS?\s+\d+\s+[A-ZÁÉÍÓÚÑ0-9\s\-–:,\.\(\)\/]+\b\.?\s*',
-                                r'^EXAMEN\s+[A-ZÁÉÍÓÚÑ0-9\s]+\s*202\d\s*'
-                            ]:
-                                m = re.match(pat, line_text, flags=re.IGNORECASE)
-                                if m and m.group(0).isupper(): line_text = line_text[m.end():].strip()
-                        if not line_text: continue
-                        tl = line_text.lower().translate(str.maketrans("áéíóúäτεμα", "aeiouatema"))
-                        tl_clean_spaces = re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9\s]', '', tl).strip())
-
-                        if "plantilla de respuesta" in tl_clean_spaces or "plantillas de respuesta" in tl_clean_spaces:
-                            stop_reading = True; break
-                        if not re.match(r'^\s*(?:Pregunta\s+)?\d+\s*[\.\-\):]', line_text, re.IGNORECASE):
-                            if any(x in tl_clean_spaces for x in ["supuesto practico", "supuestos practicos", "supuestos de reserva", "pregunta de desarrollo", "preguntas de desarrollo", "casos practicos", "caso practico"]):
-                                if line_text.isupper() or len(tl_clean_spaces) < 45:
-                                    ignoring_mode = entered_supuestos = True
-                        if any(x in tl_clean_spaces for x in ["preguntas de reserva", "pregunta de reserva"]) or tl_clean_spaces == "reserva":
-                            if not entered_supuestos: ignoring_mode = False
-                        if not ignoring_mode and questions and questions[-1].get("state") == "E":
-                            for pat in [
-                                r'^(La mercantil|La empresa)\s+["\'«][A-ZÁÉÍÓÚÑ]', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+y\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+son\s+',
-                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+de\s+\d+\s+(y\s+\d+\s+)?años', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+forma\s+una\s+familia',
-                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+cumple\s+\d+\s+años\s+el', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+nacid[ao]\s+el\s+\d+',
-                                r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+camarer[ao]\s+desde', r'^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+,\s+trabaja\s+en\s+la\s+empresa'
-                            ]:
-                                if re.match(pat, line_text): ignoring_mode = entered_supuestos = True; break
-                        if ignoring_mode: continue
-
-                        is_header = bool(line_text.isupper() and re.match(r'^(RESPUESTAS\s+|GENERAL\s+|ESPECIFICO\s+|EXAMEN\s+|TEST\s+|BLOQUE\s+\d+\s*[\-–]?\s*)?(?:TEST\s+DE\s+REPASO\s+)?TEMAS?\s+\d+', line_text))
-                        is_page_ref = bool(re.match(r'^\(p[aá]gina\s+\d+', line_text.strip(), re.IGNORECASE))
-                        if not is_header and not is_page_ref and len(tl_clean_spaces) < 120:
-                            for pat in [
-                                r'^oposiciona', r'oposicionaes', r'^pagina\s+\d+\s+de\s+\d+$', r'^(administrativo|gestion)\s+de\s+la\s+seguridad\s+social',
-                                r'^(administrativo|gestion)\s+202\d\s+tema\s+\d+[a-z]?', r'^tema\s+\d+[a-z]?\s+(administrativo|gestion)\s+202\d$',
-                                r'^tema\s+\d+[a-z]?\s+campo\s+de\s+aplicacion\s+y\s+composicion',
-                                r'^tema\s+\d+\s+derecho\s+mercantil',
-                                r'^(general|especifico|examen|test|respuestas|respuestas\s+(tipo\s+)?test:?|test\s+profesor)\s+temas?\s+\d+',
-                                r'^bloque\s+\d+\s+test\s+de\s+repaso\s+temas?\s+\d+',
-                                r'^examen\s+repaso', r'^examen\s+[a-záéíóúñ0-9\s]+\s*202\d', r'^normas\s+para\s+la\s+realizacion', r'^especial\s+simulacros?',
-                                r'^test\s+administrativo\s+\d+\s+todo\s+el\s+temario', r'^respuestas\s+tipo\s+test:\s+temas?\s+\d+'
-                            ]:
-                                if re.search(pat, tl_clean_spaces): is_header = True; break
-                        if is_header: continue
-
-                        line_text = PDFQuizParser.traducir_ingles_no_rae(line_text)
-                        line_text = re.sub(r'(\d+\.)\s+([ºª°])', r'\1\2', line_text)
-
-                        line_text = re.sub(rf'(?<=[.?!;\)\]"\'”»])\s*({PAT_MARCADOR_EXP})(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(rf'(?<=\S)\s{{2,}}({PAT_MARCADOR_EXP})(\s|$)', r'\n\1\2', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=\S)\s*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?):', r'\n\1:', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=[.?!;”"\'\)])\s*(?<!"\s)(?<!«\s)(Art[íi]culo\s+aplicable:|Art[íi]culo\s+de\s+aplicaci[óo]n:|Art[íi]culo|Art\.)\s', r'\n\1 ', line_text, flags=re.IGNORECASE)
-                        line_text = re.sub(r'(?<=\S)\s+([•\*])(\s|$)', r'\n\1\2', line_text)
-                        line_text = re.sub(r'(?<=[a-zA-ZáéíóúñÁÉÍÓÚÑ\)\."\'”»])(?<![0-9]\.)(?<!\d)(\d{1,3}(?:[\.\-]+:?|:))(?!\s*[ºª°\d])\s*(?=[A-ZÁÉÍÓÚÑ¿¡"\'«])', r'\n\1 ', line_text)
-                        line_text = re.sub(r'(?<![0-9]\.)(?<!\d)([.?!;:"»”\)])\s*([a-d][\)\.\-]|[A-D][\)\-])\s+(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<![0-9]\.)(?<![\dA-ZÁÉÍÓÚÑ])([.?!;:"»”\)])([a-d][\)\.\-]|[A-D][\)\-])(?!\s*\.)\s*(?=[A-ZÁÉÍÓÚÑ0-9¿¡"\'«])', r'\1\n\2 ', line_text)
-                        line_text = re.sub(r'(?<=\S)\s*(\(p[aá]pages?\s+\d+[^)]*\)|\(p[aá]ginas?\s+\d+[^)]*\))', r'\n\1', line_text, flags=re.IGNORECASE)
-
-                        for part in line_text.split('\n'):
-                            part = part.strip()
-                            if part:
-                                lines.append({"text": re.sub(r'^([a-d][\)\.-]|[A-D][\)\-])(?=[^\s])', r'\1 ', part), "bold": is_bold})
-                    lines.append({"text": "<NEW_BLOCK>", "bold": False})
-
-        cleaned_num_lines, k = [], 0
-        while k < len(lines):
-            curr = lines[k]
-            txt = curr["text"].strip()
-            if re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+[\"\'»\)]*$', txt, re.IGNORECASE):
-                m = k + 1
-                while m < len(lines) and lines[m]["text"] == "<NEW_BLOCK>":
-                    m += 1
-                prev_idx = len(cleaned_num_lines) - 1
-                while prev_idx >= 0 and cleaned_num_lines[prev_idx]["text"] == "<NEW_BLOCK>":
-                    prev_idx -= 1
-                prev_txt_s = cleaned_num_lines[prev_idx]["text"].strip() if prev_idx >= 0 else ""
-                prev_termina_en_continuacion = bool(
-                    prev_idx >= 0 and (
-                        re.search(
-                            r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|cap[íi]tulo|t[íi]tulo|apartado|ordinal|disposici[óo]n|por|de|del|en|entre|hasta|a|al|con)\s*$',
-                            prev_txt_s,
-                            re.IGNORECASE
-                        ) or
-                        prev_txt_s.endswith('(') or
-                        (prev_txt_s.count("(") > prev_txt_s.count(")"))
-                    )
-                )
-                if cleaned_num_lines and (
-                    prev_termina_en_continuacion or
-                    (m < len(lines) and re.match(r'^[a-d][\)\.\-](\s|$)', lines[m]["text"].strip(), re.IGNORECASE)) or
-                    (m < len(lines) and re.match(r'^(?:explicaci[óo]n|respuesta|resp)\b', lines[m]["text"].strip(), re.IGNORECASE))
-                ):
-                    if prev_idx >= 0:
-                        cleaned_num_lines[prev_idx]["text"] = cleaned_num_lines[prev_idx]["text"].rstrip() + " " + txt
-                        k += 1
-                        continue
-                if m < len(lines):
-                    next_txt = lines[m]["text"].strip()
-                    if re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+(\s|$)', next_txt, re.IGNORECASE):
-                        k = m
-                        continue
-                    else:
-                        lines[m]["text"] = txt + " " + next_txt
-                        lines[m]["bold"] = curr["bold"] or lines[m]["bold"]
-                        k = m
-                        continue
-            cleaned_num_lines.append(curr)
-            k += 1
-        lines = cleaned_num_lines
-
-        reordered_lines, r_idx = [], 0
-        while r_idx < len(lines):
-            t_curr = lines[r_idx]["text"].strip()
-            if re.match(r'^a[\)\.\-]\s*$', t_curr, re.IGNORECASE):
-                n_b = r_idx + 1
-                while n_b < len(lines) and lines[n_b]["text"] == "<NEW_BLOCK>":
-                    n_b += 1
-                if n_b < len(lines) and re.match(r'^b[\)\.\-]\s*$', lines[n_b]["text"].strip(), re.IGNORECASE):
-                    n_c = n_b + 1
-                    while n_c < len(lines) and lines[n_c]["text"] == "<NEW_BLOCK>":
-                        n_c += 1
-                    if n_c < len(lines) and re.match(r'^c[\)\.\-]\s*$', lines[n_c]["text"].strip(), re.IGNORECASE):
-                        chunk_3 = []
-                        scan_3 = n_c + 1
-                        while scan_3 < len(lines) and len(chunk_3) < 12:
-                            tk3 = lines[scan_3]["text"].strip()
-                            if tk3 != "<NEW_BLOCK>":
-                                if re.match(r'^d[\)\.\-](\s|$)', tk3, re.IGNORECASE):
-                                    break
-                                chunk_3.append(lines[scan_3])
-                            scan_3 += 1
-                        if len(chunk_3) >= 3:
-                            combined_3 = " ".join(x["text"].strip() for x in chunk_3)
-                            m_three = re.match(r'^(.+?\.)\s+([A-ZÁÉÍÓÚÑ].+?\.)\s+([A-ZÁÉÍÓÚÑ].*)$', combined_3)
-                            if m_three:
-                                reordered_lines.append({"text": "a) " + m_three.group(1).strip(), "bold": lines[r_idx]["bold"] or chunk_3[0]["bold"]})
-                                reordered_lines.append({"text": "b) " + m_three.group(2).strip(), "bold": lines[n_b]["bold"]})
-                                reordered_lines.append({"text": "c) " + m_three.group(3).strip(), "bold": lines[n_c]["bold"] or chunk_3[-1]["bold"]})
-                                r_idx = scan_3
-                                continue
-
-                    chunk_lines = []
-                    scan_k = n_b + 1
-                    while scan_k < len(lines) and len(chunk_lines) < 8:
-                        tk = lines[scan_k]["text"].strip()
-                        if tk != "<NEW_BLOCK>":
-                            if re.match(r'^[c-d][\)\.\-](\s|$)', tk, re.IGNORECASE):
-                                break
-                            chunk_lines.append(lines[scan_k])
-                        scan_k += 1
-                    prev_real = len(reordered_lines) - 1
-                    while prev_real >= 0 and reordered_lines[prev_real]["text"] == "<NEW_BLOCK>":
-                        prev_real -= 1
-                    if prev_real >= 0:
-                        prev_txt = reordered_lines[prev_real]["text"].strip()
-                        prev_prev = prev_real - 1
-                        while prev_prev >= 0 and reordered_lines[prev_prev]["text"] == "<NEW_BLOCK>":
-                            prev_prev -= 1
-                        if prev_prev >= 0 and reordered_lines[prev_prev]["text"].strip().endswith(":") and not prev_txt.endswith(":") and not prev_txt.endswith("?"):
-                            orphan_line = reordered_lines.pop(prev_real)
-                            if len(chunk_lines) >= 2:
-                                txt_b = chunk_lines[0]["text"].strip()
-                                txt_a = orphan_line["text"].strip() + " " + " ".join(x["text"].strip() for x in chunk_lines[1:])
-                                bold_a = lines[r_idx]["bold"] or orphan_line["bold"] or chunk_lines[-1]["bold"]
-                                bold_b = lines[n_b]["bold"] or chunk_lines[0]["bold"]
-                                reordered_lines.append({"text": "a) " + txt_a, "bold": bold_a})
-                                reordered_lines.append({"text": "b) " + txt_b, "bold": bold_b})
-                                r_idx = scan_k
-                                continue
-                    if len(chunk_lines) >= 1:
-                        combined_txt = " ".join(x["text"].strip() for x in chunk_lines)
-                        m_two = re.match(r'^(.+?\.)\s+([A-ZÁÉÍÓÚÑ¿¡0-9].*)$', combined_txt)
-                        if m_two:
-                            bold_a = lines[r_idx]["bold"] or chunk_lines[0]["bold"]
-                            bold_b = lines[n_b]["bold"] or chunk_lines[-1]["bold"]
-                            reordered_lines.append({"text": "a) " + m_two.group(1).strip(), "bold": bold_a})
-                            reordered_lines.append({"text": "b) " + m_two.group(2).strip(), "bold": bold_b})
-                            r_idx = scan_k
-                            continue
-            if re.match(r'^b[\)\.\-]\s*$', t_curr, re.IGNORECASE):
-                n_a = r_idx + 1
-                while n_a < len(lines) and lines[n_a]["text"] == "<NEW_BLOCK>":
-                    n_a += 1
-                if n_a < len(lines) and re.match(r'^a[\)\.\-]\s+\S', lines[n_a]["text"].strip(), re.IGNORECASE):
-                    n_b_txt = n_a + 1
-                    while n_b_txt < len(lines) and lines[n_b_txt]["text"] == "<NEW_BLOCK>":
-                        n_b_txt += 1
-                    if n_b_txt < len(lines) and not re.match(r'^[a-d][\)\.\-](\s|$)', lines[n_b_txt]["text"].strip(), re.IGNORECASE):
-                        reordered_lines.append(lines[n_a])
-                        reordered_lines.append({
-                            "text": "b) " + lines[n_b_txt]["text"].strip(),
-                            "bold": lines[r_idx]["bold"] or lines[n_b_txt]["bold"]
-                        })
-                        r_idx = n_b_txt + 1
-                        continue
-            reordered_lines.append(lines[r_idx])
-            r_idx += 1
-        lines = reordered_lines
-
-        merged_lines, i = [], 0
-        while i < len(lines):
-            curr = lines[i]
-            txt = curr["text"].strip()
-            if txt != "<NEW_BLOCK>" and (
-                re.search(r'(?:«|"|“|\(|\b)(?:Art[íi]culos?|Art\.|Ley|Real\s+Decreto(?:\s+Legislativo|\-ley)?|Decreto(?:\s+Legislativo|\-ley)?)\s*$', txt, re.IGNORECASE) or
-                re.search(r'\b(?:art[íi]culos?|arts\.)\s+\d+(?:\s*,\s*\d+)*\s*,\s*$', txt, re.IGNORECASE) or
-                re.search(r'\b(?:\d+\s+por|parto\s+de|materias\s+del|art[íi]culos?\s+del|apartados?\s+del)\s*$', txt, re.IGNORECASE)
-            ):
-                j = i + 1
-                while j < len(lines) and lines[j]["text"] == "<NEW_BLOCK>": j += 1
-                if j < len(lines):
-                    nxt_s = lines[j]["text"].strip()
-                    termina_en_frase_incompleta = bool(re.search(r'\b(?:\d+\s+por|parto\s+de|materias\s+del|art[íi]culos?\s+del|apartados?\s+del|\(Art\.)\s*$', txt, re.IGNORECASE))
-                    es_inicio_nueva_pregunta = bool(
-                        not termina_en_frase_incompleta and
-                        re.match(r'^(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', nxt_s)
-                    )
-                    if re.match(r'^\d+', nxt_s) and not es_inicio_nueva_pregunta:
-                        curr["text"] = txt + " " + nxt_s
-                        curr["bold"] = curr["bold"] or lines[j]["bold"]
-                        merged_lines.append(curr); i = j + 1; continue
-            merged_lines.append(curr); i += 1
-        lines = merged_lines
-
-        for i in range(len(lines)):
-            txt = lines[i]["text"].strip()
-            if txt.endswith("carenci") and i + 1 < len(lines) and lines[i + 1]["text"].strip().startswith("a) se exige"):
-                lines[i]["text"] = lines[i]["text"].replace("carenci", "carencia)")
-                lines[i + 1]["text"] = lines[i + 1]["text"].replace("a) se exige", "se exige", 1)
-            if txt.startswith("D. Carlos"):
-                lines[i]["text"] = lines[i]["text"].replace("D. Carlos", "Don Carlos", 1)
-
-        def is_exp_marker(s):
-            return bool(
-                re.match(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?|respuestas?|resp)\s*[:\.]+', s, re.IGNORECASE) or
-                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?\s+[A-ZÁÉÍÓÚÑ"«\']', s) or
-                re.match(r'^EXPLICACI[ÓO]N\b', s) or
-                re.match(r'^explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?\s*$', s, re.IGNORECASE) or
-                re.match(r'^(?:el\s+n[úu]cleo\s+de\s+la\s+trampa|la\s+trampa\s+del\s+examinador|la\s+trampa\s+del\s+examen|regla\s+mnemot[ée]cnica(?:\s+para\s+el\s+examen)?)\s*:', s, re.IGNORECASE)
-            )
-
-        def match_q_num(s):
-            if re.match(r'^\s*\d{1,3}\s*,\s*\d{1,3}\b', s):
-                return None
-            if re.match(r'^\s*\d{1,4}[\.\-\),\s]+(?:de\s+enero|de\s+febrero|de\s+marzo|de\s+abril|de\s+mayo|de\s+junio|de\s+julio|de\s+agosto|de\s+septiembre|de\s+octubre|de\s+noviembre|de\s+diciembre|meses|años|días|horas|euros|por\s+ciento|y\s+\d+|del\s+t[íi]tulo|del\s+art[íi]culo|del\s+real|de\s+la\s+ley)\b', s, re.IGNORECASE):
-                return None
-            if re.match(r'^\s*(?:19\d\d|20\d\d)\b', s):
-                return None
-            return (
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[\.\-\):]+(?![\dºª°])\s+\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s+[\.\-\):]+(?![\dºª°])\s*\S', s, re.IGNORECASE) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)[\.\-\):]+(?![\dºª°])\s*(?=[¿¡A-ZÁÉÍÓÚÑ«"\'\[\(])', s) or
-                re.match(r'^\s*(?:Pregunta\s+)?(\d+)\s*¿', s, re.IGNORECASE)
-            )
-
-        pdf_uses_explicit_exp = sum(1 for l in lines if is_exp_marker(l["text"].strip())) >= 10
-        current_q, preamble, expected_q_num = None, "", 1
-
-        for idx, line in enumerate(lines):
-            text, is_bold = line["text"], line["bold"]
-            if text == "<NEW_BLOCK>":
-                if current_q and current_q["state"] == "E" and current_q["explanation"]:
-                    if current_q["explanation"].strip()[-1:] in ['.', ':', '?', '!', '"', '”', '»', ')'] and not current_q["explanation"].endswith("\n\n"):
-                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n"
-                continue
-
-            text_lower = text.lower()
-            is_option = bool(re.match(r'^([a-d][\)\.\-]|[A-D][\)\-])(\s|$)', text))
-            is_explanation = False if (current_q and current_q["state"] == "E") else is_exp_marker(text.strip())
-
-            forced_not_option = False
-            if is_option and current_q and current_q["state"] == "Q" and not current_q["options"]:
-                if text.strip().endswith('?') and not re.match(r'^([a-d][\)\.\-]|[A-D][\)\-])\s*[¿A-ZÁÉÍÓÚÑ]', text):
-                    is_option, forced_not_option = False, True
-
-            is_reserve = bool(
-                re.match(r'^\s*(?:preguntas?\s+de\s+reserva|supuestos?\s+de\s+reserva|reserva)\s*:?\s*$', text_lower)
-            )
-            is_case_study = bool(re.match(r'^\s*(supuestos?\s+pr[áa]cticos?)\b', text_lower) and (text.isupper() or len(text.strip()) < 45))
-            is_letter_block = bool(re.match(r'^[A-ZÑ][\)\.-]+\s*[A-ZÁÉÍÓÚÑ]', text))
-            if is_letter_block and (re.search(r'\b(fals[ao]|verdader[ao]|correct[ao]|incorrect[ao])\b', text_lower) or (current_q and current_q["state"] == "E" and pdf_uses_explicit_exp)):
-                is_letter_block = False
-
-            if (is_reserve or is_case_study or is_letter_block) and (not current_q or current_q["state"] == "E"):
-                is_real_preamble = any(
-                    match_q_num(lines[j]["text"].strip()) or
-                    (re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', lines[j]["text"].strip(), re.IGNORECASE) and lines[j]["text"].strip().endswith('?'))
-                    for j in range(idx + 1, min(idx + 30, len(lines)))
-                )
-                if is_real_preamble or is_reserve or is_case_study:
-                    if current_q and current_q["options"]: questions.append(current_q)
-                    current_q = None
-                    if not is_reserve:
-                        preamble += text + "\n"
-                        expected_q_num = 1
-                    continue
-
-            is_new_q = False
-            m_num = match_q_num(text)
-
-            if m_num and current_q and current_q["state"] == "E":
-                exp_so_far = current_q["explanation"].strip()
-                exp_termina_incompleta = bool(
-                    re.search(r'\b(?:art[íi]culos?|arts?\.|ley|real\s+decreto|decreto|por|de|del|en|con|para|entre|hasta)\s*$', exp_so_far[-40:], re.IGNORECASE) or
-                    exp_so_far.endswith(('(', ','))
-                )
-                parece_enunciado_real = bool(
-                    not exp_termina_incompleta and
-                    re.match(r'^\s*(?:Pregunta\s+)?\d{1,3}[\.\-\):]+\s+[¿¡A-ZÁÉÍÓÚÑ]', text)
-                )
-                if exp_termina_incompleta:
-                    m_num = None
-                elif (
-                    not parece_enunciado_real
-                    and exp_so_far.count("«") > exp_so_far.count("»")
-                    and not exp_so_far.endswith('.')
-                    and not re.search(r'\(p[aá]ginas?\s+\d+', exp_so_far[-80:], re.IGNORECASE)
-                ):
-                    m_num = None
-
-            m_rescue = False
-            if not m_num and not is_option and not is_explanation and not pdf_uses_explicit_exp:
-                tc = text.strip()
-                if ((current_q and current_q["state"] in ["E", "O"]) or not current_q) and re.match(r'^\s*(¿|C[óo]mo|Cu[áa]l|Cu[áa]ntos|Qu[ée])\b', tc, re.IGNORECASE) and tc.endswith('?'):
-                    m_rescue = True
-
-            if m_num or m_rescue:
-                is_real_q_candidate = found_a = found_b = found_c = aborted = False
-                cand_num = int(m_num.group(1)) if m_num else expected_q_num
-                for j in range(idx + 1, min(idx + 140, len(lines))):
-                    ft = lines[j]["text"].strip()
-                    if ft == "<NEW_BLOCK>": continue
-                    m_fnum = match_q_num(ft)
-                    if m_fnum and (
-                        re.match(r'^\d+\.\d+', ft) or
-                        re.match(r'^\d+\s+a\s+\d+\s+del\b', ft, re.IGNORECASE)
-                    ):
-                        m_fnum = None
-                    if not found_a:
-                        if is_exp_marker(ft):
-                            aborted = True; break
-                        if m_fnum and int(m_fnum.group(1)) == cand_num + 1:
-                            aborted = True; break
-                        if re.match(r'^a[\)\.\-](\s|$)', ft, re.IGNORECASE):
-                            found_a = True
-                            if re.search(r'(?:^|\s)b[\)\.\-](\s|$)', ft, re.IGNORECASE): found_b = True
-                            if re.search(r'(?:^|\s)c[\)\.\-](\s|$)', ft, re.IGNORECASE): found_c = True
-                    elif not found_b:
-                        if is_exp_marker(ft):
-                            aborted = True; break
-                        if re.match(r'^b[\)\.\-](\s|$)', ft, re.IGNORECASE) or re.search(r'(?:^|\s)b[\)\.\-](\s|$)', ft, re.IGNORECASE):
-                            found_b = True
-                            if re.search(r'(?:^|\s)c[\)\.\-](\s|$)', ft, re.IGNORECASE): found_c = True
-                            if not pdf_uses_explicit_exp: is_real_q_candidate = True; break
-                    else:
-                        if re.match(r'^c[\)\.\-](\s|$)', ft, re.IGNORECASE) or re.search(r'(?:^|\s)c[\)\.\-](\s|$)', ft, re.IGNORECASE):
-                            found_c = True
-                        if is_exp_marker(ft):
-                            is_real_q_candidate = True; break
-                        if m_fnum:
-                            if not pdf_uses_explicit_exp and found_c and (int(m_fnum.group(1)) == cand_num + 1 or int(m_fnum.group(1)) == 1):
-                                is_real_q_candidate = True; break
-                            if not pdf_uses_explicit_exp:
-                                aborted = True; break
-                        if re.match(r'^\(p[aá]ginas?\s+\d+', ft, re.IGNORECASE):
-                            if not pdf_uses_explicit_exp and found_c:
-                                is_real_q_candidate = True; break
-                            aborted = True; break
-
-                if is_real_q_candidate and not aborted:
-                    if m_num:
-                        num = int(m_num.group(1))
-                        prev_closed_with_pageref = bool(current_q and current_q["state"] == "E" and re.search(r'\(p[aá]ginas?\s+\d+', current_q["explanation"], re.IGNORECASE))
-                        if current_q is None:
-                            is_new_q, expected_q_num = True, num + 1
-                        elif expected_q_num - 1 <= num <= expected_q_num + 15:
-                            is_new_q, expected_q_num = True, num + 1
-                        elif num in [1, 2] and current_q["state"] in ["O", "E"] and expected_q_num >= 5:
-                            is_new_q, expected_q_num = True, num + 1
-                        elif prev_closed_with_pageref and 1 <= num <= 250:
-                            is_new_q, expected_q_num = True, num + 1
-                        elif pdf_uses_explicit_exp and current_q["state"] in ["O", "E"] and 1 <= num <= 250:
-                            is_new_q, expected_q_num = True, num + 1
-                    elif m_rescue:
-                        is_new_q = True; expected_q_num += 1
-
-            if is_new_q:
-                ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+\s*¿', '¿', re.sub(r'^\s*(?:Pregunta\s+)?\d+[\.\-\):]+\s*(-*\s*)?', '', text, flags=re.IGNORECASE), flags=re.IGNORECASE)
-                if m_rescue and current_q and current_q["state"] == "E" and current_q["explanation"]:
-                    exp_parts = current_q["explanation"].rstrip().split("\n\n")
-                    last_part = exp_parts[-1].strip()
-                    if last_part.endswith(",") and len(last_part) < 180:
-                        ct = re.sub(r'^\s*(?:Pregunta\s+)?\d+[\.\-\):]*\s*', '', last_part, flags=re.IGNORECASE) + " " + ct
-                        current_q["explanation"] = "\n\n".join(exp_parts[:-1]).strip()
-                if current_q and current_q["options"]: questions.append(current_q)
-                current_q, preamble = {"preamble": preamble.strip(), "question_text": ct, "options": [], "answer": -1, "explanation": "", "state": "Q"}, ""
-                continue
-
-            if not current_q:
-                if not is_reserve: preamble += text + "\n"
-                continue
-
-            if is_option and current_q["state"] in ["Q", "O"] and len(current_q["options"]) < 4 and re.match(r'^([a-d][\)\.-]|[A-D][\)\-])(\s|$)', text):
-                opt_letter = text.strip()[0].lower()
-                expected_letter = chr(ord('a') + len(current_q["options"]))
-                if opt_letter == expected_letter:
-                    only_marker = bool(re.match(r'^([a-d][\)\.-]|[A-D][\)\-])\s*$', text.strip()))
-                    if only_marker and current_q["options"]:
-                        prev_opt = current_q["options"][-1]
-                        m_split = re.match(r'^([a-dA-D][\)\.-]\s*.+?\.)\s+([A-ZÁÉÍÓÚÑ].*)$', prev_opt)
-                        if m_split:
-                            current_q["options"][-1] = m_split.group(1)
-                            text = f"{text.strip()} {m_split.group(2)}"
-                    current_q["options"].append(text)
-                    current_q["state"] = "O"
-                    if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
-                    continue
-
-            if is_explanation:
-                exp_clean_line = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?|respuestas?|resp)\s*[:\.]*\s*', '', text.strip(), flags=re.IGNORECASE).strip()
-                exp_clean_line = re.sub(r'\bExplicaci[óo]n\s*:\s*', '', exp_clean_line, flags=re.IGNORECASE).strip()
-                if exp_clean_line:
-                    current_q["explanation"] = (current_q["explanation"].rstrip() + "\n\n" + exp_clean_line) if current_q["explanation"] else exp_clean_line
-                current_q["state"] = "E"
-                continue
-
-            if current_q["state"] == "Q":
-                if forced_not_option and re.search(r'[a-zA-Z]$', current_q["question_text"].strip()):
-                    m = re.match(r'^([a-zA-Z])([\)\.\-])\s*(.*)', text)
-                    current_q["question_text"] = (current_q["question_text"].strip() + m.group(1) + m.group(2) + " " + m.group(3)) if m else (current_q["question_text"] + " " + text)
-                else:
-                    current_q["question_text"] += " " + text
-            elif current_q["state"] == "O":
-                if re.search(r'\(Art\.\s*$', text.strip()):
-                    continue
-                next_expected_opt = chr(ord('a') + len(current_q["options"]))
-                has_more_opts_ahead = False
-                if len(current_q["options"]) < 4:
-                    for k_ah in range(idx + 1, min(idx + 12, len(lines))):
-                        t_ah = lines[k_ah]["text"].strip()
-                        if t_ah == "<NEW_BLOCK>": continue
-                        if is_exp_marker(t_ah) or match_q_num(t_ah): break
-                        if re.match(rf'^{next_expected_opt}[\)\.\-](\s|$)', t_ah, re.IGNORECASE):
-                            has_more_opts_ahead = True; break
-
-                lo = current_q["options"][-1].strip()
-                ep = bool(re.search(r'[\.;\?]$', lo))
-                ec = bool(re.search(r'(,| y| o| que| de| a| con| en| por| para| el| la| los| las| un| una)$', lo, re.IGNORECASE))
-                inp = not has_more_opts_ahead and len(current_q["options"]) >= 3 and ep and bool(re.match(r'^[A-Z0-9¿¡"\'«]', text))
-                ilr = not has_more_opts_ahead and bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n)\b', text_lower))
-                iie = not has_more_opts_ahead and len(current_q["options"]) >= 3 and bool(re.match(r'^[A-ZÁÉÍÓÚ¿¡"\'«]', text)) and (
-                    bool(re.match(r'^(art[íi]culo|ley|real decreto|orden|disposici[óo]n|seg[úu]n|normativa|de conformidad|conforme|en virtud)\b', text_lower)) or
-                    (bool(re.match(r'^(el\b|la\b|los\b|las\b|para\b|de\b|en\b|cuando\b|se\b|es\b|esta\b|este\b|al\b|por\b|si\b)', text_lower)) and (ep or not ec))
-                )
-                implicit_after_4_opts = len(current_q["options"]) >= 4 and ep and ilr
-                if len(current_q["options"]) < 3 or ec or len(lo) <= 5: inp = ilr = iie = False
-                if ((inp or ilr or iie) and not pdf_uses_explicit_exp) or implicit_after_4_opts:
-                    current_q["state"], current_q["explanation"] = "E", text
-                else:
-                    if is_bold and current_q["answer"] == -1: current_q["answer"] = len(current_q["options"]) - 1
-                    current_q["options"][-1] += " " + text
-            elif current_q["state"] == "E":
-                text_clean_e = re.sub(r'^(?:explicaci[óo]n|respuesta)\s*:\s*', '', text.strip(), flags=re.IGNORECASE)
-                text_clean_e = re.sub(r'\bExplicaci[óo]n\s*:\s*', '', text_clean_e).strip()
-                if not text_clean_e:
-                    continue
-                if current_q["explanation"].endswith("\n\n"):
-                    current_q["explanation"] += text_clean_e
-                else:
-                    lc = current_q["explanation"].strip()[-1:] if current_q["explanation"].strip() else ""
-                    ib = bool(re.match(r'^[\s]*[•\*]', text_clean_e))
-                    io = bool(re.match(r'^[\s]*(OJO|NOTA|IMPORTANTE|RECUERDA|Regla\s+mnemot[ée]cnica)[\s:]', text_clean_e, re.IGNORECASE))
-                    ipr = bool(re.match(r'^\(p[aá]ginas?\s+\d+', text_clean_e, re.IGNORECASE))
-                    termina_en_abrev = bool(re.search(r'(?:\bArt\.|\barts?\.|\bnúm\.|\bpág\.)\s*$', current_q["explanation"].strip(), re.IGNORECASE))
-                    ins = (not termina_en_abrev) and lc in ['.', ':', '?', '!', '"', '”', '»'] and bool(re.match(r'^[\s]*([A-ZÁÉÍÓÚ¿¡"\'«]|\d)', text_clean_e))
-                    if ipr or ib or io or ins:
-                        current_q["explanation"] = current_q["explanation"].rstrip() + "\n\n" + text_clean_e
-                    else:
-                        current_q["explanation"] += (" " + text_clean_e) if current_q["explanation"] else text_clean_e
-
-        if current_q and current_q["options"]: questions.append(current_q)
-
-        for q in questions:
-            if not q.get("explanation") and q.get("options"):
-                ult_opt = q["options"][-1]
-                m_pegada = re.search(rf'\s+({PAT_MARCADOR_EXP})\s*(.+)$', ult_opt, flags=re.IGNORECASE | re.DOTALL)
-                if m_pegada:
-                    q["options"][-1] = ult_opt[:m_pegada.start()].strip()
-                    q["explanation"] = m_pegada.group(2).strip()
-
-            if q.get("explanation"):
-                q["explanation"] = re.sub(r'(?<=[»”\)])\s+\d{1,3}\.\s*$', '', q["explanation"].strip())
-
-            if q["answer"] == -1 and q.get("explanation"):
-                m_ans = re.search(r'(?:respuesta\s+correcta\s+es\s+la|opci[óo]n\s+([a-d])\s+es\s+la\s+correcta|correcta\s*:\s*([a-d])|respuesta\s*\(?([a-d])\)?\s+añade)\s*([a-d])?', q["explanation"], re.IGNORECASE)
-                if m_ans:
-                    letra_det = (m_ans.group(1) or m_ans.group(2) or m_ans.group(3) or m_ans.group(4) or "").lower()
-                    if letra_det and 0 <= (ord(letra_det) - ord('a')) < len(q["options"]):
-                        q["answer"] = ord(letra_det) - ord('a')
-
-                if q["answer"] == -1 and q.get("options"):
-                    exp_words = set(re.findall(r'\b[a-záéíóúñ]{4,}\b', q["explanation"].lower()))
-                    mejor_idx, mejor_score = -1, 0
-                    for i_o, opt_txt in enumerate(q["options"]):
-                        opt_words = set(re.findall(r'\b[a-záéíóúñ]{4,}\b', opt_txt.lower()))
-                        score = len(opt_words.intersection(exp_words))
-                        if score > mejor_score:
-                            mejor_score = score
-                            mejor_idx = i_o
-                    if mejor_idx != -1 and mejor_score >= 2:
-                        q["answer"] = mejor_idx
-
-        target_max = max_options
-        if target_max is None:
-            if detected_gestion_header and not detected_adm_header:
-                target_max = 3
-            elif len(questions) >= 5:
-                count_3_opts = sum(1 for q in questions if len(q["options"]) == 3)
-                if count_3_opts / len(questions) >= 0.80:
-                    target_max = 3
-
-        if target_max is not None:
-            for q in questions:
-                if len(q["options"]) > target_max:
-                    PDFQuizParser._reducir_opciones_pregunta(q, target_max)
-
-        return questions
+# === SECCIÓN 2: CATÁLOGO DE TESTS DISPONIBLES ===
+
+TESTS_DISPONIBLES = {
+    "ADMINISTRATIVOS": {
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 01 ESPECIFICO_ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13LzbXP5OknUY9NGZAdVMMN3F1Zl57glS",
+            "TEMA 02A ACTUALIZADO": "https://drive.google.com/uc?export=download&id=11fAALQB33q5kGOn7VCW-5z6z83WWmP0Z",
+            "TEMA 02B ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1VODyD_gdbg7pINDKdIxJpQ_D246dRMVO",
+            "TEMA 02C ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1QGfK-_TUQhjbQddcTM9uARR0OHX-KIjw",
+            "TEMA 02D ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1X6qx6h8AQS9gD7oGTHf9_GDsvCCXv5NT",
+            "TEMA 03 AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fhJxtDHNTVgEIjQYRPGDsuIMiqRC4SBQ",
+            "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML",
+            "Tema 04 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oirjNXzELp4sCZ-2woU6SU-aLVZT2Lpi",
+            "TEMA 08 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1JUb9ndQ7MIaTagpQztXnrv1rsVxTE6im",
+            "TEMA 08 REPASO 1 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1M3rydnWydxk_IkiL5-M3lOb8YrHASHXk",
+            "TEMA 08 REPASO 2 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1mbLqDw1Z30I5BNVEXRDdAiUuBya9jn1G",
+            "TEMA 08A IT ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10QRftoDQI2qIN7ANeF_Nc689wlhyzDWc",
+            "TEMA 09 NYCM ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1ns2r9zRvdbcTT3PqY1atS1RIUeVPFDpH",
+            "TEMA 09 REPASO 1 NYCM ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1vw0GIL5VZKbGH4jNafCi2DvrY8dqgCNJ",
+            "TEMA 09 REPASO 2 NYCM ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1HBpE6Xo0pljlQMvc2ny5kdz3EHgRkokG",
+            "TEMA 10 JUBILACIÓN ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1V_oqlMqAUmE0ZNkAxgqTlco_Bb6wdIuN",
+            "TEMA 10 REPASO 1 JUBILACIÓN ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gPop5SOvriVEjUdTcYabrXis5DtxOwOl",
+            "TEMA 10 REPASO 2 JUBILACIÓN ESPECÏFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1uCSBQBiX05aXIa_srEf-TP2mcqnqIVw3",
+            "TEMA 11 MUERTE Y SUPERVIVENCIA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=19ueHQsspJTQ1geqPm79kgnCgQO0zvgHt",
+            "TEMA 11 REPASO 1 MUERTE Y SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1OFCPOGSZUdIwXdwYXX8lSFIESHTHnM7c",
+            "TEMA 11 REPASO 2 MUERTE Y SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=19NIPI-Sh8adW9Xui5QSBVE9-PxCCm9l6",
+            "TEMA 12 IMV": "https://drive.google.com/uc?export=download&id=1na10IZg8Ys6SQz6mKg__x3VDaoF7ZOJH",
+            "TEMA 12 PNC": "https://drive.google.com/uc?export=download&id=1gP9vTETlURWw47btnomZNj6MKJdsKbdP",
+            "TEMA 12 REPASO 1 IMV ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1GnVkEUXfN2OS2j96nxOu2jhl1OVSEEvx",
+            "TEMA 12 REPASO 2 IMV ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Uo7K8giiosHapdoWpnq5Vy7WaTpHUWg2",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None,
+            "✨ NOVEDADES RDL 31_2026 adm": "https://drive.google.com/uc?export=download&id=1B0Ff30-Hao-HsG2CkXTHYiuJ-1tkQwmK",
+            "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026 (RDL 31_2026)": "https://drive.google.com/uc?export=download&id=1WbIpgWBSDDPY9A6a6J5rKGVYgR72p8IT",
+            "EXAMEN OFICIAL 2026 B ROJO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1VRUncb1rKn8O1cIOiIqZAEaVmkfSvC5l",
+            "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
+            "EXAMEN REPASO 1 TEMA 08 a 12 ESPECIFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1m06sF7_F_sZVlfRQq3Uv0egrvo44gcmX",
+            "EXAMEN REPASO TEMA 2 COMPLETO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sixOo5p9R_WeuL_mg8LliJScO1ljnNV0",
+            "EXAMEN SABADO 31 OCTUBRE 2026": "https://drive.google.com/uc?export=download&id=1Yh_1mNSQNgQ6m-L-V2r6gaahKoWar0Oi",
+            "SABADO 10 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qtDZt9e2KsrnvElHWkSaN3wYnI1gT9Eq",
+            "SABADO 5 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17KWYOcGCSQR49cR7KMwqOKFi6QDsPkbh",
+        },
+        "GENERAL": {
+            "Elige un test de general...": None,
+            "TEMA 01 a 03 CONSTITUCIONAL": "https://drive.google.com/uc?export=download&id=14z3ZzvLLVZQ0XiUKx4qmiyneMoldZIB2",
+            "TEMA 01 a 03 REPASO CONSTITUCION GENERAL": "https://drive.google.com/uc?export=download&id=153p-VAMdsxaXu47tqkkNOIjhO9mWhxVX",
+            "TEMA 04 LA JEFATURA DEL ESTADO": "https://drive.google.com/uc?export=download&id=1y-u-_wTqfIyB_fn0he0cvyKAPLjsM06A",
+            "TEMA 04 REPASO LA CORONA GENERAL": "https://drive.google.com/uc?export=download&id=1yeSHcMWRBtuotYSqUXUMgLQ-9KLXKbmG",
+            "TEMA 05 REPASO CORTES GENERALES GENERAL": "https://drive.google.com/uc?export=download&id=1gGNUiRh7Ia1rS-sCEr8B1et94OXOOc2k",
+            "TEMA 05 y 06 PODER LEGISLATIVO Y JUDICIAL": "https://drive.google.com/uc?export=download&id=1Hog53fH7CsG1FCk6CC0X4m4tIXZ2tPYd",
+            "TEMA 06 REPASO PODER JUDICIAL GENERAL": "https://drive.google.com/uc?export=download&id=1SQoWQlO1Cnoc_WpP0VTmUlPSumT5FgkG",
+            "TEMA 07 PODER EJECUTIVO": "https://drive.google.com/uc?export=download&id=1BXKLo950u1GSODuag-lds2SCbBTYF2UD",
+            "TEMA 07 REPASO PODER EJECUTIVO GENERAL": "https://drive.google.com/uc?export=download&id=1v9ms7CaSFNyZAPM2qQoC_3_TO9gQ8wC7",
+            "Tema 08 ADM GRAL ESTADO": "https://drive.google.com/uc?export=download&id=1sjO0bi2IwPJpPcESpQkWvqROPAHJ12L6",
+            "TEMA 08 REPASO AGE GENRAL": "https://drive.google.com/uc?export=download&id=1PnGmAEZwJkVOwfzG4YMgs3LRNZa19KIz",
+            "TEMA 09 CCAA Y MUNICIPIOS general": "https://drive.google.com/uc?export=download&id=1zk4mZRrMPIb8AnOD_8pFAPL-utUeFGKZ",
+            "TEMA 09 REPASO CCAA GENERAL": "https://drive.google.com/uc?export=download&id=198XcxyyIPDFTJe22rsqYkXmfE1CTsjDH",
+            "TEMA 10 INSTITUCIONES DE LA UE general": "https://drive.google.com/uc?export=download&id=1IGcXDNtMwW7MuhPon95EycFwOHrVQbW7",
+            "TEMA 10 REPASO INSTITUCIONES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1Hw1l1-2_zsGfX4tbjUuw1DDokmE682e9",
+            "TEMA 11  FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1gFNuLkKNhX8iq7GUrZzDj5xCSdKUPzCB",
+            "TEMA 11 REPASO FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1OzmfuJkQooMX7ld_KFrNRnLj4xH9XHD1",
+            "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
+            "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
+        },
+        "SUPUESTOS": {
+            "Elige un test de supuestos...": None,
+        },
+    },
+    "GESTION": {
+        "DESARROLLO": {
+            "Elige un test de desarrollo...": None,
+            "Tema_51_Seguridad_Social_CE_y_TRLGSS": "https://drive.google.com/uc?export=download&id=1QzmhKlHNyv75TbL1ztW4HoG6bQHTLn5b",
+            "Tema_52_Campo_Aplicacion_y_Composicion_SS": "https://drive.google.com/uc?export=download&id=1G3B8VJ5B-1pnMNyppVgpzMXgnhNVBbZL",
+            "Tema_53_Afiliacion_Altas_Bajas_Convenio_Especial_Inscripcion": "https://drive.google.com/uc?export=download&id=1yEed2dlJZay1YHCbcpcC5VcADMGMrAQY",
+            "Tema_55_Accion_Protectora_Prestaciones_Revalorizacion_Complementos": "https://drive.google.com/uc?export=download&id=1xJRnf86Ek4xmSGZMrKl7Y-Y1g8P8-KW2",
+            "Tema_56_Requisitos_Generales_Responsabilidad_Empresarial_Automaticidad": "https://drive.google.com/uc?export=download&id=15GGBAgafDRCM5aBUMhMZ-9UdFodAf8F8",
+            "Tema_57_Incapacidad_Temporal": "https://drive.google.com/uc?export=download&id=1-miLA9Tk7gUE-juwDvPcea1Wor_n_M8i",
+            "Tema_58_Nacimiento_Corresponsabilidad_Riesgo_Embarazo_Lactancia_Menor_Cancer-v2": "https://drive.google.com/uc?export=download&id=1JAyEYB8RjPqRQHn1TsRjXREyINcy5EFg",
+            "Tema_59_Incapacidad_Permanente_Contributiva_Cuantia_Compatibilidad-v2": "https://drive.google.com/uc?export=download&id=1lO2T5P4VcJVhGybReIeviRrBNmpIfhOb",
+            "Tema_60_Calificacion_Revision_Incapacidad_Permanente_Lesiones_No_Invalidantes-v2": "https://drive.google.com/uc?export=download&id=1RnO7YfTph25VusZAvmDejPmvI0BA-c_R",
+            "Tema_61_Jubilacion_Contributiva_Modalidades_Ley_27_2011_Vejez_SOVI-v2": "https://drive.google.com/uc?export=download&id=1NuEgPTYZmEals8Wv5ILmmyswT12Owfuu",
+            "Tema_62_Proteccion_Muerte_y_Supervivencia": "https://drive.google.com/uc?export=download&id=1ATIGJ-0SxfOnN2tJHpQ1Hm6g7LPHAx2s",
+            "Tema_67_Asistencia_Sanitaria_Prestaciones_y_Gestion": "https://drive.google.com/uc?export=download&id=1fmLaDtnKASH6GjGATrz363bn26B1BURw",
+            "Tema_73_Regimenes_Integrados_Sistema_Especial_Agrario_y_Empleados_de_Hogar": "https://drive.google.com/uc?export=download&id=1geoGjR6csLIc78aJeU13zQTdt7DPZuYb",
+            "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2": "https://drive.google.com/uc?export=download&id=1hx4PKcE0NALdBWdvQi1OxqgBzuC4eqFf",
+            "Tema_75_Mineria_del_Carbon_Seguro_Escolar_y_Regimenes_Externos": "https://drive.google.com/uc?export=download&id=1RSXfx-Jzri8G0D42JobMx9tVe3DWhQG1",
+        },
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
+            "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-5Rm3LkOugs5dVSYdURRAfLVR0FIVnmz",
+            "TEMA 52 - REPASO 1 - CAMPO APLICACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YLYxtBUxnyqcqRonpnOZBH1gs4BiOM1_",
+            "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf",
+            "TEMA 53 - REPASO 1 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1_CJEGRuBVlSNa65SOD9N6oey7ZzbNvXb",
+            "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oN_zQjZndYyv6Vqb23RSwnbc3kOLr_qG",
+            "TEMA 55 REPASO PRESTACIONES ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-s-CC-bmKNxORvrB_fojQJzYri0ghLnm",
+            "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1KemtXXZhcBEjA_D3-4MzrVqMcX3LTprK",
+            "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1dNoTqgXlXHmNK1YJEZVMb5K6ml5gKv9V",
+            "TEMA 57 INCAPACIDAD TEMPORAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1X5vyIIDpecxuu3OjUSg5UM3bOVjgKFjd",
+            "TEMA 57 REPASO INCAPACIDAD TEMPORAL ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13H8QscCgfCTJ2HPCmNwE7g_1pmn2WPWX",
+            "TEMA 58 REPASO NACIMIENTO Y CUIDADO DEL MENOR ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Vpa3ITJ-U-gT53nfJBZFbW7M-5QSMbZm",
+            "TEMA 59 y 60 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1POaTzuPYzbWlZyXnfwVaGjA0V_UqwDwb",
+            "TEMA 59 y 60 IP y LESIONES PERMANENTES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1eQdN_fTcyn_T605iUc9FjpqFf64uDa0A",
+            "TEMA 59 y 60 REPASO INCAPACIDAD PERMANETE ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18C0alZZHd4iGVGRaFOHivbUOBzyEdksV",
+            "TEMA 61 JUBILACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1nKrr7F0EeskM4NNFc4vY3qmBdWb9qpg5",
+            "TEMA 61 REPASO  JUBILACIÓN ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YXAiZqWdlEpdXUCnqjennX2hHwT87N-8",
+            "TEMA 62 MUERTE Y SUPERVIVENCIA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1z0iTZLKWW49SF_TDCZ5TzAikHIw0Dl96",
+            "TEMA 62 REPASO MUERTE SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18UwNzRcHE-XTJWy8Va58krL_65MNgQEZ",
+            "TEMA 64 IMV REPASO ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fsmjqL8jeCPS_mMLP0Svuq3IWAr_BVd-",
+            "TEMA 67 - REPASO 1 - COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1XfUA3JPXNS3AiDLU0x3m18D2FV8aLuR2",
+            "Tema 67 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10oRTI6Rw_yF0yFZTQXhP8f8cHrZUWxK6",
+            "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
+            "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Cct-h4j1Pn9g5YUg27ihZ0bNk9dKNUQO",
+            "TEMA 74 - RETA, SETA  Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18N_VW51u8AsyPx57fBzQ9TUAacy4YEw6",
+            "TEMA 74.- REPASO 1 - RETA SETA Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1IKx62YjsGUH_Ph7hAsYDcBreVWAuJ7SA",
+            "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1syZMOnCoJ3MEydEK2r7Due7b37FM9ywt",
+            "TEMA 75- REPASO 1 - MINERÍA DEL CARBÓN - SEGURO ESCOLAR - FUNCIONARIOS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fM7zE6644urC4osPFd_zJCzQpbdlteB3",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None,
+            "✨NOVEDADES RDL_31_2026 gestion": "https://drive.google.com/uc?export=download&id=1Sfsqc1wV7rCfTaaoVbWOOLlDai5f7sMm",
+            "DOMINGO 11 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1cQ9aPHfcpZmJrP3nOv52GNaY3ag9KVZ0",
+            "DOMINGO 6 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17Sn2tH9MnBKs4waafXN5NvLEJW8Dieq4",
+            "Examen oficial 17 de mayo de 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sZT_v_KQE1R0kyKxojAbpxMssu9vkdnG",
+            "EXAMEN PRESENCIAL 01 NOV 2026": "https://drive.google.com/uc?export=download&id=1H6gXzNqQlleHzWOq_4N32wiGR7sZPHWP",
+            "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1h_08kcGUlybuOk-VXUA6Ca6h11UFWBT2",
+            "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1jwafdNNaw4H9IgkjW7-TJgzcSaUkKFHm",
+            "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1QT7rmZPvuuNr7SradBQGCk3ieIi8n9V0",
+        },
+        "GENERAL": {
+            "Elige un test de general...": None,
+            "TEMA 01 y 02 CIVIL general": "https://drive.google.com/uc?export=download&id=1YsqXQvC-dWW6ybnrP3vgwfphjHwwPHuk",
+            "TEMA 03 CIVIL general": "https://drive.google.com/uc?export=download&id=1hkwMefSXTe4Vj6gqLZ2gpzpK8Imn8LA9",
+            "TEMA 04 CIVIL": "https://drive.google.com/uc?export=download&id=1qDVfPe3VWD1dPqdFb-ePnjKy5_MXO7Nc",
+            "TEMA 06 -  LA EMPRESA MERCANTIL": "https://drive.google.com/uc?export=download&id=17myj2PoQaWv_wZn7OV13wESOS7gBVNSN",
+            "TEMA 07 - SOCIEDAD ANONIMA": "https://drive.google.com/uc?export=download&id=1_vZNRIHwJIcoPHdGyhbg7s-UEQEGrvMK",
+            "TEMA 08 - TITULOS VALORES": "https://drive.google.com/uc?export=download&id=1JjPfA7i3yP1Xuqx19IBJQrYYZMYh6MoS",
+            "TEMA 09 - LAS OBLIGACIONES MERCANTILES": "https://drive.google.com/uc?export=download&id=1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
+            "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
+            "TEMA 40 - IGUALDAD": "https://drive.google.com/uc?export=download&id=1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
+            "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": "https://drive.google.com/uc?export=download&id=1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
+            "TEMA 42 a 50 REPASO LABORAL GENERAL": "https://drive.google.com/uc?export=download&id=1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
+            "TEMA 42 EL DERECHO DEL TRABAJO": "https://drive.google.com/uc?export=download&id=1ARQ8PoNtyTykdcbixOxWgEr4SZ7sZV6c",
+            "TEMA 42 REPASO DERECHO DEL TRABAJO GENERAL": "https://drive.google.com/uc?export=download&id=1_CNXYhEr-9WeBn-w9TA-iH3fG8VwII_N",
+            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=11uc4s9pZP5-vAnbUY7klhQOVR10rCpYg",
+            "TEMA 43 REPASO CONVENIOS COLECTIVOS GENERAL": "https://drive.google.com/uc?export=download&id=1euDzEZfvjhx_3jGFaTo5kbNBP7aynypY",
+            "TEMA 44 CONTRATOS": "https://drive.google.com/uc?export=download&id=1LRLQAx8Ql3MnMEe1kksaBQIiXUvuR2VT",
+            "TEMA 44 REPASO CONTRATOS GENERAL": "https://drive.google.com/uc?export=download&id=1IBvudhfW61OhkBC_MZuTskWyEoLjcIJR",
+            "TEMA 45 REPASO SALARIO Y JORNADA 2 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1FX3BQmFY5JNJtcTERwUFoLF9RA4F0pnw",
+            "TEMA 45 REPASO SALARIO Y JORNADA GENERAL": "https://drive.google.com/uc?export=download&id=1QbifFgtRs2xui2vOPNeLbtBW5uVGTZE_",
+            "TEMA 45 SALARIO Y JORNADA": "https://drive.google.com/uc?export=download&id=1RRl35OdPYxOVs4f2L1GZkQO4EAgZoSWm",
+            "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
+            "TEMA 46 REPASO PODER DE DIRECCIÓN 2 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1ldFdccng8WcRE1kdua-WcmxvmE3k_JyO",
+            "TEMA 46 REPASO PODER DE DIRECCIÓN GENERAL": "https://drive.google.com/uc?export=download&id=1tz8uIUPD5Re1GgzgUh2TjhVryNeZGj-I",
+            "TEMA 47 REPASO SUSPENSIÓN DEL CONTRATO GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1o7JnwcNBFN_81VZWRbVDIQL2Mx72kexY",
+            "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
+            "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
+            "TEMA 48 REPASO DESPIDO COLECTIVO GENERAL": "https://drive.google.com/uc?export=download&id=1N66XYQvXIWdiEbd7B3E_yFn97a4nnf-_",
+            "TEMA 49 REPASO DESPIDO GENERAL": "https://drive.google.com/uc?export=download&id=1FXOlDF71QbID0Z9THcf8hO899XIWjtyu",
+            "TEMA 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
+            "TEMA 50 REPASO CONFLICTOS COLECTIVOS GENERAL": "https://drive.google.com/uc?export=download&id=10A9Fx_wO7Y-_Mw27YxR153ketgZ3WUB_",
+        },
+        "SUPUESTOS": {
+            "Elige un test de supuestos...": None,
+        },
+    },
+}
+
+TESTS_DISPONIBLES_COMPLETO = TESTS_DISPONIBLES
+
+TESTS_DISPONIBLES_INVITADO = {
+    "ADMINISTRATIVOS": {
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 01 ESPECIFICO_ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13LzbXP5OknUY9NGZAdVMMN3F1Zl57glS",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None,
+        },
+        "GENERAL": {
+            "Elige un test de general...": None,
+        },
+    },
+    "GESTION": {
+        "ESPECIFICO": {
+            "Elige un test de especifico...": None,
+            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
+        },
+        "EXAMENES": {
+            "Elige un test de examenes...": None,
+        },
+        "GENERAL": {
+            "Elige un test de general...": None,
+        },
+        "DESARROLLO": {
+            "Elige un test de desarrollo...": None,
+        },
+    },
+}
+
+NUEVOS_HOY = [
+    "Tema_58_Nacimiento_Corresponsabilidad_Riesgo_Embarazo_Lactancia_Menor_Cancer-v2",
+    "Tema_59_Incapacidad_Permanente_Contributiva_Cuantia_Compatibilidad-v2",
+    "Tema_60_Calificacion_Revision_Incapacidad_Permanente_Lesiones_No_Invalidantes-v2",
+    "Tema_61_Jubilacion_Contributiva_Modalidades_Ley_27_2011_Vejez_SOVI-v2",
+    "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2",
+]
 # === FIN SECCIÓN 2 ===
 
 # === SECCIÓN 3: CATÁLOGO DE TESTS ===
