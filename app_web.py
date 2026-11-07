@@ -774,205 +774,439 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
-# === SECCIÓN 3: CATÁLOGO DE TESTS ===
-_D = "https://drive.google.com/uc?export=download&id="
+# === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
+import io, zipfile
+import xml.etree.ElementTree as ET
 
-NUEVOS_HOY = [
-    "✨ NOVEDADES RDL 31_2026 adm",
-    "✨NOVEDADES RDL_31_2026 gestion",
-    "EXAMEN SABADO 31 OCTUBRE 2026",
-    "EXAMEN PRESENCIAL 01 NOV 2026",
-]
+class PDFQuizParser:
+    @staticmethod
+    def es_archivo_docx(file_bytes):
+        if not file_bytes or len(file_bytes) < 4:
+            return False
+        if file_bytes[:4] == b'PK\x03\x04':
+            try:
+                with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
+                    return "word/document.xml" in zf.namelist()
+            except Exception:
+                return False
+        return False
 
-TESTS_DISPONIBLES = {
-    "ADMINISTRATIVOS": {
-        "ESPECIFICO": {
-            "Elige un test de especifico...": None,
-            "TEMA 01 ESPECIFICO_ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13LzbXP5OknUY9NGZAdVMMN3F1Zl57glS",
-            "TEMA 02A ACTUALIZADO": "https://drive.google.com/uc?export=download&id=11fAALQB33q5kGOn7VCW-5z6z83WWmP0Z",
-            "TEMA 02B ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1VODyD_gdbg7pINDKdIxJpQ_D246dRMVO",
-            "TEMA 02C ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1QGfK-_TUQhjbQddcTM9uARR0OHX-KIjw",
-            "TEMA 02D ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1X6qx6h8AQS9gD7oGTHf9_GDsvCCXv5NT",
-            "TEMA 03 AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fhJxtDHNTVgEIjQYRPGDsuIMiqRC4SBQ",
-            "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML",
-            "Tema 04 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oirjNXzELp4sCZ-2woU6SU-aLVZT2Lpi",
-            "TEMA 08 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1JUb9ndQ7MIaTagpQztXnrv1rsVxTE6im",
-            "TEMA 08 REPASO 1 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1M3rydnWydxk_IkiL5-M3lOb8YrHASHXk",
-            "TEMA 08 REPASO 2 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1mbLqDw1Z30I5BNVEXRDdAiUuBya9jn1G",
-            "TEMA 08A IT ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10QRftoDQI2qIN7ANeF_Nc689wlhyzDWc",
-            "TEMA 09 NYCM ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1ns2r9zRvdbcTT3PqY1atS1RIUeVPFDpH",
-            "TEMA 09 REPASO 1 NYCM ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1vw0GIL5VZKbGH4jNafCi2DvrY8dqgCNJ",
-            "TEMA 09 REPASO 2 NYCM ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1HBpE6Xo0pljlQMvc2ny5kdz3EHgRkokG",
-            "TEMA 10 JUBILACIÓN ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1V_oqlMqAUmE0ZNkAxgqTlco_Bb6wdIuN",
-            "TEMA 10 REPASO 1 JUBILACIÓN ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gPop5SOvriVEjUdTcYabrXis5DtxOwOl",
-            "TEMA 10 REPASO 2 JUBILACIÓN ESPECÏFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1uCSBQBiX05aXIa_srEf-TP2mcqnqIVw3",
-            "TEMA 11 MUERTE Y SUPERVIVENCIA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=19ueHQsspJTQ1geqPm79kgnCgQO0zvgHt",
-            "TEMA 11 REPASO 1 MUERTE Y SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1OFCPOGSZUdIwXdwYXX8lSFIESHTHnM7c",
-            "TEMA 11 REPASO 2 MUERTE Y SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=19NIPI-Sh8adW9Xui5QSBVE9-PxCCm9l6",
-            "TEMA 11 REPASO FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1OzmfuJkQooMX7ld_KFrNRnLj4xH9XHD1",
-            "TEMA 12 IMV": "https://drive.google.com/uc?export=download&id=1na10IZg8Ys6SQz6mKg__x3VDaoF7ZOJH",
-            "TEMA 12 PNC": "https://drive.google.com/uc?export=download&id=1gP9vTETlURWw47btnomZNj6MKJdsKbdP",
-            "TEMA 12 REPASO 1 IMV ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1GnVkEUXfN2OS2j96nxOu2jhl1OVSEEvx",
-            "TEMA 12 REPASO 2 IMV ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Uo7K8giiosHapdoWpnq5Vy7WaTpHUWg2",
-        },
-        "EXAMENES": {
-            "Elige un test de examenes...": None,
-            "✨ NOVEDADES RDL 31_2026 adm": "https://drive.google.com/uc?export=download&id=1B0Ff30-Hao-HsG2CkXTHYiuJ-1tkQwmK",
-            "EXAMEN OFICIAL 2023 ACTUALIZADO A 2026 (RDL 31_2026)": "https://drive.google.com/uc?export=download&id=1WbIpgWBSDDPY9A6a6J5rKGVYgR72p8IT",
-            "EXAMEN OFICIAL 2026 B ROJO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1VRUncb1rKn8O1cIOiIqZAEaVmkfSvC5l",
-            "EXAMEN REPASO 1 TEMA 01 a 14 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qEfrgrJeiJnH29GpjyEf8Ya0pwoyiJWw",
-            "EXAMEN REPASO 1 TEMA 08 a 12 ESPECIFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1m06sF7_F_sZVlfRQq3Uv0egrvo44gcmX",
-            "EXAMEN REPASO TEMA 2 COMPLETO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sixOo5p9R_WeuL_mg8LliJScO1ljnNV0",
-            "EXAMEN SABADO 31 OCTUBRE 2026": "https://drive.google.com/uc?export=download&id=1Yh_1mNSQNgQ6m-L-V2r6gaahKoWar0Oi",
-            "SABADO 10 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1qtDZt9e2KsrnvElHWkSaN3wYnI1gT9Eq",
-            "SABADO 5 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17KWYOcGCSQR49cR7KMwqOKFi6QDsPkbh",
-        },
-        "GENERAL": {
-            "Elige un test de general...": None,
-            "TEMA 01 a 03 CONSTITUCIONAL": "https://drive.google.com/uc?export=download&id=14z3ZzvLLVZQ0XiUKx4qmiyneMoldZIB2",
-            "TEMA 01 a 03 REPASO CONSTITUCION GENERAL": "https://drive.google.com/uc?export=download&id=153p-VAMdsxaXu47tqkkNOIjhO9mWhxVX",
-            "TEMA 04 LA JEFATURA DEL ESTADO": "https://drive.google.com/uc?export=download&id=1y-u-_wTqfIyB_fn0he0cvyKAPLjsM06A",
-            "TEMA 04 REPASO LA CORONA GENERAL": "https://drive.google.com/uc?export=download&id=1yeSHcMWRBtuotYSqUXUMgLQ-9KLXKbmG",
-            "TEMA 05 REPASO CORTES GENERALES GENERAL": "https://drive.google.com/uc?export=download&id=1gGNUiRh7Ia1rS-sCEr8B1et94OXOOc2k",
-            "TEMA 05 y 06 PODER LEGISLATIVO Y JUDICIAL": "https://drive.google.com/uc?export=download&id=1Hog53fH7CsG1FCk6CC0X4m4tIXZ2tPYd",
-            "TEMA 06 REPASO PODER JUDICIAL GENERAL": "https://drive.google.com/uc?export=download&id=1SQoWQlO1Cnoc_WpP0VTmUlPSumT5FgkG",
-            "TEMA 07 PODER EJECUTIVO": "https://drive.google.com/uc?export=download&id=1BXKLo950u1GSODuag-lds2SCbBTYF2UD",
-            "TEMA 07 REPASO PODER EJECUTIVO GENERAL": "https://drive.google.com/uc?export=download&id=1v9ms7CaSFNyZAPM2qQoC_3_TO9gQ8wC7",
-            "Tema 08 ADM GRAL ESTADO": "https://drive.google.com/uc?export=download&id=1sjO0bi2IwPJpPcESpQkWvqROPAHJ12L6",
-            "TEMA 08 REPASO AGE GENRAL": "https://drive.google.com/uc?export=download&id=1PnGmAEZwJkVOwfzG4YMgs3LRNZa19KIz",
-            "TEMA 09 CCAA Y MUNICIPIOS general": "https://drive.google.com/uc?export=download&id=1zk4mZRrMPIb8AnOD_8pFAPL-utUeFGKZ",
-            "TEMA 09 REPASO CCAA GENERAL": "https://drive.google.com/uc?export=download&id=198XcxyyIPDFTJe22rsqYkXmfE1CTsjDH",
-            "TEMA 10 INSTITUCIONES DE LA UE general": "https://drive.google.com/uc?export=download&id=1IGcXDNtMwW7MuhPon95EycFwOHrVQbW7",
-            "TEMA 10 REPASO INSTITUCIONES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1Hw1l1-2_zsGfX4tbjUuw1DDokmE682e9",
-            "TEMA 11  FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1gFNuLkKNhX8iq7GUrZzDj5xCSdKUPzCB",
-            "TEMA 11 REPASO FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1YLmKCK14-W0TfRwndlhUSkeWoOMtWxY-",
-            "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
-            "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
-        },
-        "SUPUESTOS": {
-            "Elige un test de supuestos...": None,
-        },
-    },
-    "GESTION": {
-        "DESARROLLO": {
-            "Elige un test de desarrollo...": None,
-            "Tema_51_Seguridad_Social_CE_y_TRLGSS": "https://drive.google.com/uc?export=download&id=1QzmhKlHNyv75TbL1ztW4HoG6bQHTLn5b",
-            "Tema_52_Campo_Aplicacion_y_Composicion_SS": "https://drive.google.com/uc?export=download&id=1G3B8VJ5B-1pnMNyppVgpzMXgnhNVBbZL",
-            "Tema_53_Afiliacion_Altas_Bajas_Convenio_Especial_Inscripcion": "https://drive.google.com/uc?export=download&id=1yEed2dlJZay1YHCbcpcC5VcADMGMrAQY",
-            "Tema_55_Accion_Protectora_Prestaciones_Revalorizacion_Complementos": "https://drive.google.com/uc?export=download&id=1xJRnf86Ek4xmSGZMrKl7Y-Y1g8P8-KW2",
-            "Tema_56_Requisitos_Generales_Responsabilidad_Empresarial_Automaticidad": "https://drive.google.com/uc?export=download&id=15GGBAgafDRCM5aBUMhMZ-9UdFodAf8F8",
-            "Tema_57_Incapacidad_Temporal": "https://drive.google.com/uc?export=download&id=1-miLA9Tk7gUE-juwDvPcea1Wor_n_M8i",
-            "Tema_58_Nacimiento_Corresponsabilidad_Riesgo_Embarazo_Lactancia_Menor_Cancer-v2": "https://drive.google.com/uc?export=download&id=1JAyEYB8RjPqRQHn1TsRjXREyINcy5EFg",
-            "Tema_59_Incapacidad_Permanente_Contributiva_Cuantia_Compatibilidad-v2": "https://drive.google.com/uc?export=download&id=1lO2T5P4VcJVhGybReIeviRrBNmpIfhOb",
-            "Tema_60_Calificacion_Revision_Incapacidad_Permanente_Lesiones_No_Invalidantes-v2": "https://drive.google.com/uc?export=download&id=1RnO7YfTph25VusZAvmDejPmvI0BA-c_R",
-            "Tema_61_Jubilacion_Contributiva_Modalidades_Ley_27_2011_Vejez_SOVI-v2": "https://drive.google.com/uc?export=download&id=1NuEgPTYZmEals8Wv5ILmmyswT12Owfuu",
-            "Tema_62_Proteccion_Muerte_y_Supervivencia": "https://drive.google.com/uc?export=download&id=1ATIGJ-0SxfOnN2tJHpQ1Hm6g7LPHAx2s",
-            "Tema_67_Asistencia_Sanitaria_Prestaciones_y_Gestion": "https://drive.google.com/uc?export=download&id=1fmLaDtnKASH6GjGATrz363bn26B1BURw",
-            "Tema_73_Regimenes_Integrados_Sistema_Especial_Agrario_y_Empleados_de_Hogar": "https://drive.google.com/uc?export=download&id=1geoGjR6csLIc78aJeU13zQTdt7DPZuYb",
-            "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2": "https://drive.google.com/uc?export=download&id=1hx4PKcE0NALdBWdvQi1OxqgBzuC4eqFf",
-            "Tema_75_Mineria_del_Carbon_Seguro_Escolar_y_Regimenes_Externos": "https://drive.google.com/uc?export=download&id=1RSXfx-Jzri8G0D42JobMx9tVe3DWhQG1",
-        },
-        "ESPECIFICO": {
-            "Elige un test de especifico...": None,
-            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
-            "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-5Rm3LkOugs5dVSYdURRAfLVR0FIVnmz",
-            "TEMA 52 - REPASO 1 - CAMPO APLICACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YLYxtBUxnyqcqRonpnOZBH1gs4BiOM1_",
-            "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf",
-            "TEMA 53 - REPASO 1 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1_CJEGRuBVlSNa65SOD9N6oey7ZzbNvXb",
-            "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oN_zQjZndYyv6Vqb23RSwnbc3kOLr_qG",
-            "TEMA 55 REPASO PRESTACIONES ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-s-CC-bmKNxORvrB_fojQJzYri0ghLnm",
-            "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1KemtXXZhcBEjA_D3-4MzrVqMcX3LTprK",
-            "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1dNoTqgXlXHmNK1YJEZVMb5K6ml5gKv9V",
-            "TEMA 57 INCAPACIDAD TEMPORAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1X5vyIIDpecxuu3OjUSg5UM3bOVjgKFjd",
-            "TEMA 57 REPASO INCAPACIDAD TEMPORAL ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13H8QscCgfCTJ2HPCmNwE7g_1pmn2WPWX",
-            "TEMA 58 REPASO NACIMIENTO Y CUIDADO DEL MENOR ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Vpa3ITJ-U-gT53nfJBZFbW7M-5QSMbZm",
-            "TEMA 59 y 60 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1POaTzuPYzbWlZyXnfwVaGjA0V_UqwDwb",
-            "TEMA 59 y 60 IP y LESIONES PERMANENTES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1eQdN_fTcyn_T605iUc9FjpqFf64uDa0A",
-            "TEMA 59 y 60 REPASO INCAPACIDAD PERMANETE ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18C0alZZHd4iGVGRaFOHivbUOBzyEdksV",
-            "TEMA 61 JUBILACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1nKrr7F0EeskM4NNFc4vY3qmBdWb9qpg5",
-            "TEMA 61 REPASO  JUBILACIÓN ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YXAiZqWdlEpdXUCnqjennX2hHwT87N-8",
-            "TEMA 62 MUERTE Y SUPERVIVENCIA ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1z0iTZLKWW49SF_TDCZ5TzAikHIw0Dl96",
-            "TEMA 62 REPASO MUERTE SUPERVIVENCIA ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18UwNzRcHE-XTJWy8Va58krL_65MNgQEZ",
-            "TEMA 64 IMV REPASO ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fsmjqL8jeCPS_mMLP0Svuq3IWAr_BVd-",
-            "TEMA 67 - REPASO 1 - COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1XfUA3JPXNS3AiDLU0x3m18D2FV8aLuR2",
-            "Tema 67 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10oRTI6Rw_yF0yFZTQXhP8f8cHrZUWxK6",
-            "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
-            "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Cct-h4j1Pn9g5YUg27ihZ0bNk9dKNUQO",
-            "TEMA 74 - RETA, SETA  Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18N_VW51u8AsyPx57fBzQ9TUAacy4YEw6",
-            "TEMA 74.- REPASO 1 - RETA SETA Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1IKx62YjsGUH_Ph7hAsYDcBreVWAuJ7SA",
-            "TEMA 75 - MINERIA - SEGURO ESCOLAR FUNCIONARIOS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1syZMOnCoJ3MEydEK2r7Due7b37FM9ywt",
-            "TEMA 75- REPASO 1 - MINERÍA DEL CARBÓN - SEGURO ESCOLAR - FUNCIONARIOS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fM7zE6644urC4osPFd_zJCzQpbdlteB3",
-        },
-        "EXAMENES": {
-            "Elige un test de examenes...": None,
-            "✨NOVEDADES RDL_31_2026 gestion": "https://drive.google.com/uc?export=download&id=1Sfsqc1wV7rCfTaaoVbWOOLlDai5f7sMm",
-            "DOMINGO 11 OCT 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1cQ9aPHfcpZmJrP3nOv52GNaY3ag9KVZ0",
-            "DOMINGO 6 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17Sn2tH9MnBKs4waafXN5NvLEJW8Dieq4",
-            "Examen oficial 17 de mayo de 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1sZT_v_KQE1R0kyKxojAbpxMssu9vkdnG",
-            "EXAMEN PRESENCIAL 01 NOV 2026": "https://drive.google.com/uc?export=download&id=1H6gXzNqQlleHzWOq_4N32wiGR7sZPHWP",
-            "EXAMEN REPASO 1 TEMA 42 a 50 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1h_08kcGUlybuOk-VXUA6Ca6h11UFWBT2",
-            "EXAMEN REPASO 1 TEMA 55 a 65 ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1jwafdNNaw4H9IgkjW7-TJgzcSaUkKFHm",
-            "EXAMEN REPASO TEMA 6 a 10 DERECHO MERCANTIL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1QT7rmZPvuuNr7SradBQGCk3ieIi8n9V0",
-        },
-        "GENERAL": {
-            "Elige un test de general...": None,
-            "TEMA 01 y 02 CIVIL general": "https://drive.google.com/uc?export=download&id=1YsqXQvC-dWW6ybnrP3vgwfphjHwwPHuk",
-            "TEMA 03 CIVIL general": "https://drive.google.com/uc?export=download&id=1hkwMefSXTe4Vj6gqLZ2gpzpK8Imn8LA9",
-            "TEMA 04 CIVIL": "https://drive.google.com/uc?export=download&id=1qDVfPe3VWD1dPqdFb-ePnjKy5_MXO7Nc",
-            "TEMA 06 -  LA EMPRESA MERCANTIL": "https://drive.google.com/uc?export=download&id=17myj2PoQaWv_wZn7OV13wESOS7gBVNSN",
-            "TEMA 07 - SOCIEDAD ANONIMA": "https://drive.google.com/uc?export=download&id=1_vZNRIHwJIcoPHdGyhbg7s-UEQEGrvMK",
-            "TEMA 08 - TITULOS VALORES": "https://drive.google.com/uc?export=download&id=1JjPfA7i3yP1Xuqx19IBJQrYYZMYh6MoS",
-            "TEMA 09 - LAS OBLIGACIONES MERCANTILES": "https://drive.google.com/uc?export=download&id=1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
-            "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
-            "TEMA 40 - IGUALDAD": "https://drive.google.com/uc?export=download&id=1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
-            "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": "https://drive.google.com/uc?export=download&id=1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
-            "TEMA 42 a 50 REPASO LABORAL GENERAL": "https://drive.google.com/uc?export=download&id=1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
-            "TEMA 42 EL DERECHO DEL TRABAJO": "https://drive.google.com/uc?export=download&id=1ARQ8PoNtyTykdcbixOxWgEr4SZ7sZV6c",
-            "TEMA 42 REPASO DERECHO DEL TRABAJO GENERAL": "https://drive.google.com/uc?export=download&id=1_CNXYhEr-9WeBn-w9TA-iH3fG8VwII_N",
-            "TEMA 43 CONVENIOS COLECTIVOS": "https://drive.google.com/uc?export=download&id=11uc4s9pZP5-vAnbUY7klhQOVR10rCpYg",
-            "TEMA 43 REPASO CONVENIOS COLECTIVOS GENERAL": "https://drive.google.com/uc?export=download&id=1euDzEZfvjhx_3jGFaTo5kbNBP7aynypY",
-            "TEMA 44 CONTRATOS": "https://drive.google.com/uc?export=download&id=1LRLQAx8Ql3MnMEe1kksaBQIiXUvuR2VT",
-            "TEMA 44 REPASO CONTRATOS GENERAL": "https://drive.google.com/uc?export=download&id=1IBvudhfW61OhkBC_MZuTskWyEoLjcIJR",
-            "TEMA 45 REPASO SALARIO Y JORNADA 2 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1FX3BQmFY5JNJtcTERwUFoLF9RA4F0pnw",
-            "TEMA 45 REPASO SALARIO Y JORNADA GENERAL": "https://drive.google.com/uc?export=download&id=1QbifFgtRs2xui2vOPNeLbtBW5uVGTZE_",
-            "TEMA 45 SALARIO Y JORNADA": "https://drive.google.com/uc?export=download&id=1RRl35OdPYxOVs4f2L1GZkQO4EAgZoSWm",
-            "TEMA 46 MODIFICACIÓN SUSTANCIAL": "https://drive.google.com/uc?export=download&id=1LGFdvQcFjuinwdXWf6AM66QKoOL9_dn6",
-            "TEMA 46 REPASO PODER DE DIRECCIÓN 2 GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1ldFdccng8WcRE1kdua-WcmxvmE3k_JyO",
-            "TEMA 46 REPASO PODER DE DIRECCIÓN GENERAL": "https://drive.google.com/uc?export=download&id=1tz8uIUPD5Re1GgzgUh2TjhVryNeZGj-I",
-            "TEMA 47 REPASO SUSPENSIÓN DEL CONTRATO GENERAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1o7JnwcNBFN_81VZWRbVDIQL2Mx72kexY",
-            "TEMA 47 SUSPENSIÓN": "https://drive.google.com/uc?export=download&id=1-kTGpXGLGBbbdKe26Lhq9gPXxZKCc44L",
-            "Tema 48 - Extinción del Contrato": "https://drive.google.com/uc?export=download&id=1mbE4W0EnqJa9IosTYk2iEHbs2aBQOFdH",
-            "TEMA 48 REPASO DESPIDO COLECTIVO GENERAL": "https://drive.google.com/uc?export=download&id=1N66XYQvXIWdiEbd7B3E_yFn97a4nnf-_",
-            "TEMA 49 REPASO DESPIDO GENERAL": "https://drive.google.com/uc?export=download&id=1FXOlDF71QbID0Z9THcf8hO899XIWjtyu",
-            "TEMA 49 y 50 DESPIDO Y HUELGA": "https://drive.google.com/uc?export=download&id=1FFt9QtwAeTz-U0VvCZQMaf15xS4s33bd",
-            "TEMA 50 REPASO CONFLICTOS COLECTIVOS GENERAL": "https://drive.google.com/uc?export=download&id=10A9Fx_wO7Y-_Mw27YxR153ketgZ3WUB_",
-        },
-        "SUPUESTOS": {
-            "Elige un test de supuestos...": None,
-        },
-    },
-}
+    @staticmethod
+    def _extraer_lineas_estructuradas_docx(docx_bytes):
+        lineas_info = []
+        try:
+            with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zf:
+                xml_content = zf.read("word/document.xml")
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            root = ET.fromstring(xml_content)
+            body = root.find("w:body", ns)
+            if body is None:
+                return []
 
-TESTS_DISPONIBLES_COMPLETO = TESTS_DISPONIBLES
+            for p in body.iter(f"{{{ns['w']}}}p"):
+                pPr = p.find("w:pPr", ns)
+                pStyle = ""
+                es_lista = False
+                if pPr is not None:
+                    st_el = pPr.find("w:pStyle", ns)
+                    if st_el is not None:
+                        pStyle = st_el.attrib.get(f"{{{ns['w']}}}val", "")
+                    if pPr.find("w:numPr", ns) is not None:
+                        es_lista = True
 
-TESTS_DISPONIBLES_INVITADO = {
-    "ADMINISTRATIVOS": {
-        "ESPECIFICO": {
-            "Elige un test de especifico...": None,
-            "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML"
-        },
-        "EXAMENES": {"Elige un test de examenes...": None},
-        "GENERAL": {"Elige un test de general...": None},
-    },
-    "GESTION": {
-        "ESPECIFICO": {
-            "Elige un test de especifico...": None,
-            "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf"
-        },
-        "EXAMENES": {"Elige un test de examenes...": None},
-        "GENERAL": {"Elige un test de general...": None},
-    },
-}
+                partes_txt = []
+                chars_totales = 0
+                chars_negrita = 0
+
+                for r in p.findall("w:r", ns):
+                    rPr = r.find("w:rPr", ns)
+                    r_bold = False
+                    if rPr is not None:
+                        b_el = rPr.find("w:b", ns)
+                        if b_el is not None:
+                            val_b = b_el.attrib.get(f"{{{ns['w']}}}val", "true").lower()
+                            r_bold = val_b not in ("0", "false", "off")
+                    t_runs = []
+                    for child in r:
+                        tag_loc = child.tag.split("}")[-1]
+                        if tag_loc == "t" and child.text:
+                            t_runs.append(child.text)
+                        elif tag_loc == "tab":
+                            t_runs.append(" ")
+                        elif tag_loc in ("br", "cr"):
+                            t_runs.append("\n")
+                    txt_r = "".join(t_runs)
+                    if txt_r:
+                        partes_txt.append(txt_r)
+                        n_ch = len(txt_r.strip())
+                        chars_totales += n_ch
+                        if r_bold:
+                            chars_negrita += n_ch
+
+                texto_p = "".join(partes_txt).strip()
+                if not texto_p:
+                    continue
+
+                es_heading = bool(re.search(r'heading|titulo|encabezado|title', pStyle, re.IGNORECASE))
+                es_negrita = es_heading or (chars_totales > 0 and (chars_negrita / chars_totales) >= 0.65)
+
+                for sub_l in texto_p.split("\n"):
+                    sub_l = sub_l.strip()
+                    if sub_l:
+                        if es_lista and not re.match(r'^(?:[•\-\*▪■]|\d+[\.\)]|[a-zA-Z][\.\)])\s+', sub_l):
+                            sub_l = f"• {sub_l}"
+                        lineas_info.append({
+                            "text": sub_l,
+                            "is_bold": es_negrita,
+                            "is_heading": es_heading,
+                            "style": pStyle
+                        })
+        except Exception:
+            return []
+        return lineas_info
+
+    @staticmethod
+    def _es_basura_cabecera_o_pie(linea, titulo_tema=""):
+        l = (linea or "").strip()
+        if not l:
+            return True
+        if re.match(r'^(?:p[áa]gina\s*)?\d{1,3}(?:\s+de\s+\d{1,3})?$', l, re.IGNORECASE):
+            return True
+        if re.match(r'^oposiciona(?:\.es|\s+5\.0)?$', l, re.IGNORECASE):
+            return True
+        if titulo_tema and len(l) < 120:
+            t_n = re.sub(r'\W+', '', titulo_tema.lower())
+            l_n = re.sub(r'\W+', '', l.lower())
+            if t_n and l_n == t_n:
+                return True
+        return False
+
+    @staticmethod
+    def _limpiar_cabeceras_incrustadas(texto, titulo_tema=""):
+        if not texto:
+            return ""
+        lineas_out = []
+        for l in texto.split("\n"):
+            ls = l.strip()
+            if not ls:
+                continue
+            if PDFQuizParser._es_basura_cabecera_o_pie(ls, titulo_tema):
+                continue
+            lineas_out.append(ls)
+        return "\n".join(lineas_out)
+
+    @staticmethod
+    def renderizar_explicacion_html(texto_explicacion, titulo_tema=""):
+        if not texto_explicacion:
+            return "<div>Sin explicación disponible.</div>"
+        txt_limpio = PDFQuizParser._limpiar_cabeceras_incrustadas(texto_explicacion, titulo_tema)
+        bloques_html = []
+        for linea in txt_limpio.split("\n"):
+            l = linea.strip()
+            if not l:
+                continue
+            es_cabecera_h = False
+            if l.startswith("[[H]]"):
+                es_cabecera_h = True
+                l = l.replace("[[H]]", "").strip()
+            elif re.match(r'^(?:\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]|EP[ÍI]GRAFE\s+\d+|APARTADO\s+\d+)', l) and len(l) < 135 and not l.endswith("."):
+                es_cabecera_h = True
+
+            if es_cabecera_h:
+                bloques_html.append(
+                    f"<div style='font-size:15px; font-weight:800; color:#083B46 !important; margin-top:12px; margin-bottom:5px;'>{l}</div>"
+                )
+            elif re.match(r'^(?:[•\-\*▪■]|\d{1,2}\)|\([a-z0-9]+\)|[a-g]\))\s+', l):
+                 l_fmt = re.sub(r'^([•\-\*▪■]\s*[^:\.]{3,75}:)', r'<b>\1</b>', l)
+                bloques_html.append(
+                    f"<div style='margin-top:5px; margin-bottom:5px; padding-left:12px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
+                )
+            else:
+                l_fmt = re.sub(r'^([A-ZÁÉÍÓÚÑ][^:\.]{2,75}:)', r'<b>\1</b>', l)
+                bloques_html.append(
+                    f"<div style='margin-top:6px; margin-bottom:6px; line-height:1.52; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
+                )
+        return "".join(bloques_html)
+
+    @staticmethod
+    def parse_abiertas_gestion(file_bytes, modo="DESARROLLO"):
+        lineas_estructuradas = []
+        if PDFQuizParser.es_archivo_docx(file_bytes):
+            lineas_estructuradas = PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes)
+        else:
+            try:
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                for page in doc:
+                    blocks = page.get_text("dict").get("blocks", [])
+                    for b in blocks:
+                        for l in b.get("lines", []):
+                            spans = l.get("spans", [])
+                            txt_l = "".join(s.get("text", "") for s in spans).strip()
+                            if not txt_l:
+                                continue
+                            chars_tot = sum(len(s.get("text", "").strip()) for s in spans)
+                            chars_b = sum(
+                                len(s.get("text", "").strip())
+                                for s in spans
+                                if "bold" in (s.get("font", "") or "").lower() or (s.get("flags", 0) & 16)
+                            )
+                            is_b = chars_tot > 0 and (chars_b / chars_tot) >= 0.65
+                            lineas_estructuradas.append({
+                                "text": txt_l,
+                                "is_bold": is_b,
+                                "is_heading": False
+                            })
+                doc.close()
+            except Exception:
+                return []
+
+        if not lineas_estructuradas:
+            return []
+
+        # Unir líneas partidas dentro de un mismo párrafo en PDF
+        parrafos = []
+        buf_txt = ""
+        buf_bold = False
+        for item in lineas_estructuradas:
+            t = re.sub(r'\s+', ' ', item["text"]).strip()
+            if not t or PDFQuizParser._es_basura_cabecera_o_pie(t):
+                continue
+            es_nuevo_bloque = (
+                item.get("is_heading") or
+                item.get("is_bold") != buf_bold or
+                bool(re.match(r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|SUPUESTO\s+\d+|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+|[•\-\*▪■]\s+|[a-g]\)\s+)', t, re.IGNORECASE))
+            )
+            if not buf_txt:
+                buf_txt = t
+                buf_bold = item.get("is_bold", False)
+            elif es_nuevo_bloque or buf_txt.endswith((".", ":", "?", "!", "»", '"')):
+                parrafos.append({"text": buf_txt, "is_bold": buf_bold})
+                buf_txt = t
+                buf_bold = item.get("is_bold", False)
+            else:
+                buf_txt += " " + t
+        if buf_txt:
+            parrafos.append({"text": buf_txt, "is_bold": buf_bold})
+
+        tema_titulo = ""
+        for p in parrafos[:6]:
+            if re.match(r'^TEMA\s+\d+', p["text"], re.IGNORECASE):
+                tema_titulo = p["text"].strip()
+                break
+
+        pat_epigrafe = re.compile(
+            r'^(?:EP[ÍI]GRAFE\s+\d+[\.\:\-\s]*|PREGUNTA(?:\s+DE\s+DESARROLLO)?\s+\d+[\.\:\-\s]*|CUESTI[ÓO]N\s+\d+[\.\:\-\s]*|SUPUESTO(?:\s+PR[ÁA]CTICO)?\s+\d+[\.\:\-\s]*)(.+)$',
+            re.IGNORECASE
+        )
+
+        questions = []
+        curr_title = ""
+        curr_body = []
+
+        for p in parrafos:
+            txt = p["text"].strip()
+            if txt == tema_titulo:
+                continue
+            m_ep = pat_epigrafe.match(txt)
+            if m_ep:
+                if curr_title and curr_body:
+                    questions.append({
+                        "question_text": curr_title,
+                        "preamble": "",
+                        "options": [],
+                        "answer": -1,
+                        "answer_text": "",
+                        "explanation": "\n".join(curr_body),
+                        "is_open": True,
+                        "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                        "tema_titulo": tema_titulo
+                    })
+                curr_title = txt
+                curr_body = []
+            else:
+                if curr_title:
+                    if p.get("is_bold") and len(txt) < 135 and not txt.endswith("."):
+                        curr_body.append(f"[[H]]{txt}")
+                    else:
+                        curr_body.append(txt)
+
+        if curr_title and curr_body:
+            questions.append({
+                "question_text": curr_title,
+                "preamble": "",
+                "options": [],
+                "answer": -1,
+                "answer_text": "",
+                "explanation": "\n".join(curr_body),
+                "is_open": True,
+                "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                "tema_titulo": tema_titulo
+            })
+
+        # Si el documento no usaba la palabra "EPÍGRAFE X" explícita, agrupar por encabezados principales numerados en negrita
+        if not questions and parrafos:
+            for p in parrafos:
+                txt = p["text"].strip()
+                if txt == tema_titulo:
+                    continue
+                es_titulo_num = p.get("is_bold") and bool(re.match(r'^(?:\d{1,2}[\.\-\)]\s+|[IVX]+[\.\-\)]\s+)[A-ZÁÉÍÓÚÑ]', txt)) and len(txt) < 160
+                if es_titulo_num:
+                    if curr_title and curr_body:
+                        questions.append({
+                            "question_text": curr_title,
+                            "preamble": "",
+                            "options": [],
+                            "answer": -1,
+                            "answer_text": "",
+                            "explanation": "\n".join(curr_body),
+                            "is_open": True,
+                            "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                            "tema_titulo": tema_titulo
+                        })
+                    curr_title = txt
+                    curr_body = []
+                elif curr_title:
+                    curr_body.append(f"[[H]]{txt}" if (p.get("is_bold") and len(txt) < 130) else txt)
+
+            if curr_title and curr_body:
+                questions.append({
+                    "question_text": curr_title,
+                    "preamble": "",
+                    "options": [],
+                    "answer": -1,
+                    "answer_text": "",
+                    "explanation": "\n".join(curr_body),
+                    "is_open": True,
+                    "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                    "tema_titulo": tema_titulo
+                })
+
+        return questions
+
+    @staticmethod
+    def parse(file_bytes, max_options=None):
+        """Extrae preguntas tipo test (a, b, c, d) tanto de PDF como de Word (.docx)."""
+        lineas_doc = []
+        if PDFQuizParser.es_archivo_docx(file_bytes):
+            for item in PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes):
+                lineas_doc.append((item["text"], item["is_bold"]))
+        else:
+            try:
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                for page in doc:
+                    blocks = page.get_text("dict").get("blocks", [])
+                    for b in blocks:
+                        for l in b.get("lines", []):
+                            spans = l.get("spans", [])
+                            txt_l = "".join(s.get("text", "") for s in spans).strip()
+                            if not txt_l:
+                                continue
+                            chars_tot = sum(len(s.get("text", "").strip()) for s in spans)
+                            chars_b = sum(
+                                len(s.get("text", "").strip())
+                                for s in spans
+                                if "bold" in (s.get("font", "") or "").lower() or (s.get("flags", 0) & 16)
+                            )
+                            is_b = chars_tot > 0 and (chars_b / chars_tot) >= 0.55
+                            lineas_doc.append((txt_l, is_b))
+                doc.close()
+            except Exception:
+                return []
+
+        questions = []
+        curr_q = None
+        state = " IDLE"
+        preamble_buf = []
+
+        pat_q = re.compile(r'^(?:Pregunta\s+)?(\d{1,3})[\.\-\)]\s*(.+)$', re.IGNORECASE)
+        pat_opt = re.compile(r'^([a-dA-D])[\)\.\-]\s*(.+)$')
+        pat_exp = re.compile(r'^(?:Explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*(.*)$', re.IGNORECASE)
+        pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
+
+        for raw_line, is_bold in lineas_doc:
+            line = re.sub(r'\s+', ' ', raw_line).strip()
+            if not line or PDFQuizParser._es_basura_cabecera_o_pie(line):
+                continue
+
+            if re.match(r'^(?:SUPUESTO\s+PR[ÁA]CTICO|CASO\s+PR[ÁA]CTICO|ENUNCIADO\s+DEL\s+SUPUESTO)\b', line, re.IGNORECASE):
+                if curr_q and curr_q.get("options"):
+                    questions.append(curr_q)
+                    curr_q = None
+                preamble_buf = [line]
+                state = "PREAMBLE"
+                continue
+
+            m_q = pat_q.match(line)
+            m_opt = pat_opt.match(line)
+            m_exp = pat_exp.match(line)
+
+            if m_q and not m_opt:
+                if curr_q and len(curr_q.get("options", [])) >= 2:
+                    questions.append(curr_q)
+                curr_q = {
+                    "question_text": f"{m_q.group(1)}. {m_q.group(2).strip()}",
+                    "preamble": "\n".join(preamble_buf).strip() if preamble_buf else "",
+                    "options": [],
+                    "options_bold": [],
+                    "answer": -1,
+                    "explanation": ""
+                }
+                state = "QUESTION"
+                continue
+
+            if state == "PREAMBLE" and curr_q is None:
+                preamble_buf.append(line)
+                continue
+
+            if curr_q is None:
+                continue
+
+            if m_exp:
+                state = "EXPLANATION"
+                resto_exp = m_exp.group(1).strip()
+                m_let = pat_ans_letter.match(line)
+                if m_let and curr_q["answer"] == -1:
+                    idx_l = ord(m_let.group(1).lower()) - ord('a')
+                    if 0 <= idx_l < len(curr_q["options"]):
+                        curr_q["answer"] = idx_l
+                if resto_exp:
+                    curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
+                continue
+
+            if m_opt and state in ("QUESTION", "OPTIONS"):
+                letra = m_opt.group(1).lower()
+                idx_esperado = len(curr_q["options"])
+                if ord(letra) - ord('a') == idx_esperado or (idx_esperado < 4 and letra in "abcd"):
+                    if max_options is None or len(curr_q["options"]) < max_options:
+                        curr_q["options"].append(f"{letra}) {m_opt.group(2).strip()}")
+                        curr_q["options_bold"].append(is_bold)
+                        if is_bold and curr_q["answer"] == -1:
+                            curr_q["answer"] = len(curr_q["options"]) - 1
+                        state = "OPTIONS"
+                        continue
+
+            if state == "QUESTION":
+                curr_q["question_text"] += " " + line
+            elif state == "OPTIONS" and curr_q["options"]:
+                curr_q["options"][-1] += " " + line
+                if is_bold and curr_q["answer"] == -1:
+                    curr_q["answer"] = len(curr_q["options"]) - 1
+            elif state == "EXPLANATION":
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + line).strip()
+
+        if curr_q and len(curr_q.get("options", [])) >= 2:
+            questions.append(curr_q)
+
+        for q in questions:
+            if q["answer"] == -1 and q.get("explanation"):
+                m_ans = re.search(r'(?:respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*([a-dA-D])\b', q["explanation"], re.IGNORECASE)
+                if m_ans:
+                    idx_a = ord(m_ans.group(1).lower()) - ord('a')
+                    if 0 <= idx_a < len(q["options"]):
+                        q["answer"] = idx_a
+            q.pop("options_bold", None)
+
+        return questions
 # === FIN SECCIÓN 3 ===
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
