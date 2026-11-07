@@ -917,7 +917,7 @@ class PDFQuizParser:
                     f"<div style='font-size:15px; font-weight:800; color:#083B46 !important; margin-top:12px; margin-bottom:5px;'>{l}</div>"
                 )
             elif re.match(r'^(?:[•\-\*▪■]|\d{1,2}\)|\([a-z0-9]+\)|[a-g]\))\s+', l):
-                 l_fmt = re.sub(r'^([•\-\*▪■]\s*[^:\.]{3,75}:)', r'<b>\1</b>', l)
+                l_fmt = re.sub(r'^([•\-\*▪■]\s*[^:\.]{3,75}:)', r'<b>\1</b>', l)
                 bloques_html.append(
                     f"<div style='margin-top:5px; margin-bottom:5px; padding-left:12px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
                 )
@@ -963,7 +963,6 @@ class PDFQuizParser:
         if not lineas_estructuradas:
             return []
 
-        # Unir líneas partidas dentro de un mismo párrafo en PDF
         parrafos = []
         buf_txt = ""
         buf_bold = False
@@ -1043,7 +1042,6 @@ class PDFQuizParser:
                 "tema_titulo": tema_titulo
             })
 
-        # Si el documento no usaba la palabra "EPÍGRAFE X" explícita, agrupar por encabezados principales numerados en negrita
         if not questions and parrafos:
             for p in parrafos:
                 txt = p["text"].strip()
@@ -1115,7 +1113,7 @@ class PDFQuizParser:
 
         questions = []
         curr_q = None
-        state = " IDLE"
+        state = "IDLE"
         preamble_buf = []
 
         pat_q = re.compile(r'^(?:Pregunta\s+)?(\d{1,3})[\.\-\)]\s*(.+)$', re.IGNORECASE)
