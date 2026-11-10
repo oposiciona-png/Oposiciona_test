@@ -3517,7 +3517,6 @@ elif not st.session_state.finished:
 
     if q.get('preamble'):
         if es_supuesto_q:
-            # Planteamiento fijo del Supuesto Práctico manteniendo su formato original y con letra máxima de 10pt
             st.markdown(
                 f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:10pt !important; line-height:1.42; text-align:justify; color:#1E293B !important;'>"
                 f"<div style='font-size:10pt !important; font-weight:800; color:#1E3A8A !important; margin-bottom:6px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;'>📋 PLANTEAMIENTO DEL SUPUESTO PRÁCTICO</div>"
@@ -3654,7 +3653,6 @@ elif not st.session_state.finished:
                     c3_q = ev.get("pts_criterio_3", 0.0)
 
                     if es_supuesto_q:
-                        # En SUPUESTOS se muestra directamente la nota sobre 10 y el porqué (sin Criterios de Tribunal)
                         aprobado_s = n10_q >= 5.0
                         bg_card = "#ecfdf5" if aprobado_s else "#fff7ed"
                         border_card = "#16a34a" if aprobado_s else "#ea580c"
@@ -3762,6 +3760,8 @@ else:
     aciertos_por_intento = {}
     suma_notas_abiertas = 0.0
     suma_notas_50 = 0.0
+    notas_individuales_10 = []
+    notas_individuales_50 = []
     es_test_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
     es_test_supuestos = any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions)
 
@@ -3774,9 +3774,13 @@ else:
             txt_al = (stat.get("selected") or "").strip()
             if not txt_al:
                 blancos += 1
+                notas_individuales_10.append((i + 1, 0.0))
+                notas_individuales_50.append((i + 1, 0.0))
                 stat['final_status'] = "⚪ En blanco (0,00 / 10)" if es_sup_i else "⚪ En blanco (0,00 / 50 ptos)"
             elif detectar_respuesta_inapropiada_o_sin_interes(txt_al):
                 fallos += 1
+                notas_individuales_10.append((i + 1, 0.0))
+                notas_individuales_50.append((i + 1, 0.0))
                 stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 10)" if es_sup_i else "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
             else:
                 ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
@@ -3790,10 +3794,12 @@ else:
                     )
                     stat["last_evaluated_text"] = txt_al
                     stat["ai_eval"] = ev
-                nota_q = ev["nota"]
-                nota_q_50 = ev["nota_50"]
+                nota_q = float(ev.get("nota", 0.0))
+                nota_q_50 = float(ev.get("nota_50", 0.0))
                 suma_notas_abiertas += nota_q
                 suma_notas_50 += nota_q_50
+                notas_individuales_10.append((i + 1, nota_q))
+                notas_individuales_50.append((i + 1, nota_q_50))
                 if es_sup_i:
                     if nota_q >= 5.0:
                         aciertos += 1
@@ -3830,14 +3836,15 @@ else:
                 stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
     if es_test_abierto:
-        preg_contestadas = max(1, aciertos + fallos)
-        nota_referencia = suma_notas_abiertas / preg_contestadas if (aciertos + fallos) > 0 else 0.0
-        nota_media_50 = suma_notas_50 / preg_contestadas if (aciertos + fallos) > 0 else 0.0
+        # La nota final es la media aritmética de las notas individuales de todas las preguntas/epígrafes del ejercicio
+        total_items_abiertos = max(1, preg_eval)
+        nota_referencia = round(suma_notas_abiertas / total_items_abiertos, 2)
+        nota_media_50 = round(suma_notas_50 / total_items_abiertos, 2)
         nota_oposicion_10 = nota_referencia
         aciertos_netos = aciertos
         puntos_restados = 0.0
         divisor_penalizacion = 1
-        penalizacion_texto = "Mínimo eliminatorio de 25,00 / 50 puntos en cada parte (sin compensación)"
+        penalizacion_texto = "Media aritmética de las calificaciones obtenidas individualmente en cada pregunta"
         nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL — SEGUNDO EJERCICIO (ACCESO LIBRE)"
     else:
         nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
@@ -3889,7 +3896,11 @@ else:
             else:
                 aciertos_sheets_str = str(aciertos)
 
-            nota_sheets_str = f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
+            nota_sheets_str = (
+                f"{nota_oposicion_10:.2f}/10".replace(".", ",")
+                if es_test_supuestos else
+                f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
+            )
             registrar_actividad_sheets(
                 evento="✅ Completado",
                 nombre_test=st.session_state.get("test_name") or "Test",
@@ -3940,33 +3951,42 @@ else:
     st.markdown(f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1f77b4 !important; margin-bottom: 15px;'>📘 {etiqueta_tema_fin}</div>", unsafe_allow_html=True)
 
     if es_test_supuestos:
+        desglose_indiv_sup = " &nbsp;•&nbsp; ".join([f"<b>P{num_i}:</b> {val_i:.2f}/10" for num_i, val_i in notas_individuales_10])
         st.markdown(
             f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
-            f"✅ Cuestiones superadas (≥ 5/10): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ A reforzar (< 5/10): <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
+            f"✅ Cuestiones superadas (≥ 5/10): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ A reforzar (< 5/10): <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco (0/10): <b style='color:#000000 !important;'>{blancos}</b>"
             f"</div>"
             f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 CALIFICACIÓN MEDIA DEL SUPUESTO PRÁCTICO</div>"
-            f"<div style='text-align: center; font-size: 24px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
-            f"🎓 NOTA MEDIA: {nota_oposicion_10:.2f} / 10 PUNTOS"
+            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 NOTA FINAL DEL SUPUESTO PRÁCTICO (MEDIA DE LAS {preg_eval} CUESTIONES)</div>"
+            f"<div style='text-align: center; font-size: 25px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 6px;'>"
+            f"🎓 NOTA MEDIA FINAL: {nota_oposicion_10:.2f} / 10 PUNTOS"
+            f"</div>"
+            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.45;'>"
+            f"<b>Cálculo de la nota final:</b> Media aritmética de las notas individuales obtenidas en las {preg_eval} cuestiones del supuesto "
+            f"({suma_notas_abiertas:.2f} puntos totales ÷ {preg_eval} cuestiones = <b>{nota_oposicion_10:.2f} / 10</b>).<br>"
+            f"<span style='font-size:12.5px; color:#475569 !important;'>{desglose_indiv_sup}</span>"
             f"</div>"
             f"</div>",
             unsafe_allow_html=True
         )
     elif es_test_abierto:
+        desglose_indiv_des = " &nbsp;•&nbsp; ".join([f"<b>Ep.{num_i}:</b> {val_i:.2f}/50" for num_i, val_i in notas_individuales_50])
         st.markdown(
             f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
-            f"✅ Superadas (≥ 25/50): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Inferiores a 25/50: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
+            f"✅ Superadas (≥ 25/50): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Inferiores a 25/50: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco (0/50): <b style='color:#000000 !important;'>{blancos}</b>"
             f"</div>"
             f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 BAREMO OFICIAL DEL TRIBUNAL ({nombre_cuerpo})</div>"
+            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 NOTA MEDIA FINAL ({nombre_cuerpo})</div>"
             f"<div style='text-align: center; font-size: 22px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
-            f"🏛️ PUNTUACIÓN DIRECTA DE LA PARTE: {nota_media_50:.2f} / 50,00 PUNTOS"
+            f"🏛️ PUNTUACIÓN MEDIA DIRECTA: {nota_media_50:.2f} / 50,00 PUNTOS"
             f"</div>"
             f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1565c0 !important; margin-bottom: 8px;'>"
-            f"🎓 Equivalencia sobre 10: {nota_oposicion_10:.2f} / 10"
+            f"🎓 Equivalencia media sobre 10: {nota_oposicion_10:.2f} / 10"
             f"</div>"
-            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.4;'>"
-            f"<b>Criterios Oficiales (Resolución 22/12/2025):</b> Cada parte del Segundo Ejercicio se califica de 0 a 50 puntos (0-45 ptos conocimiento, fundamentación normativa y precisión; 0-3 ptos orden de ideas y 0-2 ptos calidad de expresión escrita siempre que se alcancen al menos 20/45 ptos en el apartado 1). Es necesario obtener al menos <b>25 puntos directos</b> en cada parte para sumar ambas sin posibilidad de compensación."
+            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.45;'>"
+            f"<b>Cálculo de la nota final:</b> Media aritmética de las calificaciones obtenidas individualmente en los {preg_eval} epígrafes del tema "
+            f"({suma_notas_50:.2f} ÷ {preg_eval} = <b>{nota_media_50:.2f} / 50 ptos</b> | Equivalencia: <b>{nota_oposicion_10:.2f} / 10</b>).<br>"
+            f"<span style='font-size:12.5px; color:#475569 !important;'>{desglose_indiv_des}</span>"
             f"</div></div>",
             unsafe_allow_html=True
         )
