@@ -4146,8 +4146,8 @@ elif not st.session_state.finished:
             else:
                 st.warning("⚪ EN BLANCO. La correcta no se detectó automáticamente en el PDF.") if not sel_opt else st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
             et = re.sub(r'(?i)^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
-            eh = "".join([f"<div style='margin-top: 5px; line-height: 1.4; color: #0c5460 !important;'>{p.strip()}</div>" for p in et.split('\n') if p.strip()])
-            st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px; border-radius: 4px; margin-top: 10px;'><div style='font-size: 14px; font-weight: 600; margin-bottom: 3px; color: #0c5460 !important;'>Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
+            eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema)
+            st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px 15px; border-radius: 6px; margin-top: 10px;'><div style='font-size: 14.5px; font-weight: 800; margin-bottom: 4px; color: #083B46 !important;'>📖 Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
 
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
@@ -4234,7 +4234,6 @@ else:
                 stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
 
     if es_test_abierto:
-        # La nota final es la media aritmética de las notas individuales de todas las preguntas/epígrafes del ejercicio
         total_items_abiertos = max(1, preg_eval)
         nota_referencia = round(suma_notas_abiertas / total_items_abiertos, 2)
         nota_media_50 = round(suma_notas_50 / total_items_abiertos, 2)
@@ -4440,24 +4439,17 @@ else:
         co = (q.get('answer_text') or "Ver solución y explicación debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
-        if q.get("tipo_abierta") in ("DESARROLLO", "SUPUESTO"):
-            eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema_fin)
-            if q.get("tipo_abierta") == "DESARROLLO":
-                cabecera_res_html = (
-                    f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
-                    f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
-                )
-            else:
-                cabecera_res_html = (
-                    f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>📖 Solución y Explicación Oficial de la Cuestión {i+1}:</div>"
-                )
+        eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema_fin)
+        if q.get("tipo_abierta") == "DESARROLLO":
+            cabecera_res_html = (
+                f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
+                f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
+            )
+        elif q.get("tipo_abierta") == "SUPUESTO":
+            cabecera_res_html = (
+                f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>📖 Solución y Explicación Oficial de la Cuestión {i+1}:</div>"
+            )
         else:
-            et_limpia = PDFQuizParser._limpiar_cabeceras_incrustadas(et, etiqueta_tema_fin)
-            lineas_res_limpias = [
-                p.strip() for p in et_limpia.split('\n')
-                if p.strip() and not PDFQuizParser._es_basura_cabecera_o_pie(p.strip(), etiqueta_tema_fin)
-            ]
-            eh = "".join([f"<div style='margin-top: 6px; margin-bottom: 4px; line-height: 1.45; color: #0c5460 !important;'>{p}</div>" for p in lineas_res_limpias])
             cabecera_res_html = "<div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>📖 Explicación:</div>"
 
         ph = ""
