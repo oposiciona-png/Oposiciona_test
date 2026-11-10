@@ -639,6 +639,7 @@ TESTS_DISPONIBLES = {
             "Tema_51_Seguridad_Social_CE_y_TRLGSS": "https://drive.google.com/uc?export=download&id=1QzmhKlHNyv75TbL1ztW4HoG6bQHTLn5b",
             "Tema_52_Campo_Aplicacion_y_Composicion_SS": "https://drive.google.com/uc?export=download&id=1G3B8VJ5B-1pnMNyppVgpzMXgnhNVBbZL",
             "Tema_53_Afiliacion_Altas_Bajas_Convenio_Especial_Inscripcion": "https://drive.google.com/uc?export=download&id=1yEed2dlJZay1YHCbcpcC5VcADMGMrAQY",
+            "Tema_54_Contingencias_Accidente_Trabajo_In_Itinere_Enfermedad_Profesional_Terrorismo": "https://drive.google.com/uc?export=download&id=1UiESIO2DsO76Opv1O99rlriFUUff6NdL",
             "Tema_55_Accion_Protectora_Prestaciones_Revalorizacion_Complementos": "https://drive.google.com/uc?export=download&id=1xJRnf86Ek4xmSGZMrKl7Y-Y1g8P8-KW2",
             "Tema_56_Requisitos_Generales_Responsabilidad_Empresarial_Automaticidad": "https://drive.google.com/uc?export=download&id=15GGBAgafDRCM5aBUMhMZ-9UdFodAf8F8",
             "Tema_57_Incapacidad_Temporal": "https://drive.google.com/uc?export=download&id=1-miLA9Tk7gUE-juwDvPcea1Wor_n_M8i",
@@ -659,6 +660,7 @@ TESTS_DISPONIBLES = {
             "TEMA 52 - REPASO 1 - CAMPO APLICACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1YLYxtBUxnyqcqRonpnOZBH1gs4BiOM1_",
             "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf",
             "TEMA 53 - REPASO 1 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1_CJEGRuBVlSNa65SOD9N6oey7ZzbNvXb",
+            "TEMA 54 - TEST - ACCIDENTE DE TRABAJO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1c2KfUMB2teOEKxN8y_gVZyKxUNdDT5Bb",
             "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oN_zQjZndYyv6Vqb23RSwnbc3kOLr_qG",
             "TEMA 55 REPASO PRESTACIONES ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1-s-CC-bmKNxORvrB_fojQJzYri0ghLnm",
             "TEMA 56 REPASO ACCION PROTECTORA ESPECÏFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1KemtXXZhcBEjA_D3-4MzrVqMcX3LTprK",
@@ -704,6 +706,7 @@ TESTS_DISPONIBLES = {
             "TEMA 08 - TITULOS VALORES": "https://drive.google.com/uc?export=download&id=1JjPfA7i3yP1Xuqx19IBJQrYYZMYh6MoS",
             "TEMA 09 - LAS OBLIGACIONES MERCANTILES": "https://drive.google.com/uc?export=download&id=1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
             "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
+            "TEMA 25 EL DERECHO PRESUPUESTARIO": "https://drive.google.com/uc?export=download&id=1laSQ9V_KWQsADQ3ltO9TheF3kHOrlJnF",
             "TEMA 40 - IGUALDAD": "https://drive.google.com/uc?export=download&id=1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
             "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": "https://drive.google.com/uc?export=download&id=1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
             "TEMA 42 a 50 REPASO LABORAL GENERAL": "https://drive.google.com/uc?export=download&id=1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
@@ -729,6 +732,7 @@ TESTS_DISPONIBLES = {
         },
         "SUPUESTOS": {
             "Elige un test de supuestos...": None,
+            "PROFESOR TEMA 54 - PREGUNTA + SUPUESTO PRÁCTICO": "https://drive.google.com/uc?export=download&id=1_pcP-rkh-8vXr5zViCY1XsCntnxlc4Yw",
         },
     },
 }
@@ -766,11 +770,10 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 
 NUEVOS_HOY = [
-    "Tema_58_Nacimiento_Corresponsabilidad_Riesgo_Embarazo_Lactancia_Menor_Cancer-v2",
-    "Tema_59_Incapacidad_Permanente_Contributiva_Cuantia_Compatibilidad-v2",
-    "Tema_60_Calificacion_Revision_Incapacidad_Permanente_Lesiones_No_Invalidantes-v2",
-    "Tema_61_Jubilacion_Contributiva_Modalidades_Ley_27_2011_Vejez_SOVI-v2",
-    "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2",
+    "Tema_54_Contingencias_Accidente_Trabajo_In_Itinere_Enfermedad_Profesional_Terrorismo",
+    "TEMA 54 - TEST - ACCIDENTE DE TRABAJO ACTUALIZADO",
+    "TEMA 25 EL DERECHO PRESUPUESTARIO",
+    "PROFESOR TEMA 54 - PREGUNTA + SUPUESTO PRÁCTICO",
 ]
 # === FIN SECCIÓN 2 ===
 
