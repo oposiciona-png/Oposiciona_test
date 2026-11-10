@@ -876,13 +876,26 @@ class PDFQuizParser:
         return lineas_info
 
     @staticmethod
+    def _limpiar_marca_agua_linea(linea):
+        if not linea:
+            return ""
+        # Elimina cabeceras incrustadas tipo "GESTION DE LA SEGURIDAD SOCIAL www.oposiciona.es"
+        l = re.sub(
+            r'(?:GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s*)?(?:https?://)?(?:www\.)?oposiciona\.es\s*[•·\-]*\s*',
+            '',
+            linea,
+            flags=re.IGNORECASE
+        ).strip()
+        return l
+
+    @staticmethod
     def _es_basura_cabecera_o_pie(linea, titulo_tema=""):
-        l = (linea or "").strip()
+        l = PDFQuizParser._limpiar_marca_agua_linea(linea)
         if not l:
             return True
         if re.match(r'^(?:p[áa]gina\s*)?\d{1,3}(?:\s+de\s+\d{1,3})?$', l, re.IGNORECASE):
             return True
-        if re.match(r'^oposiciona(?:\.es|\s+5\.0)?$', l, re.IGNORECASE):
+        if re.match(r'^(?:GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL|oposiciona(?:\.es|\s+5\.0)?)$', l, re.IGNORECASE):
             return True
         if titulo_tema and len(l) < 120:
             t_n = re.sub(r'\W+', '', titulo_tema.lower())
@@ -897,7 +910,7 @@ class PDFQuizParser:
             return ""
         lineas_out = []
         for l in texto.split("\n"):
-            ls = l.strip()
+            ls = PDFQuizParser._limpiar_marca_agua_linea(l.strip())
             if not ls:
                 continue
             if PDFQuizParser._es_basura_cabecera_o_pie(ls, titulo_tema):
@@ -943,39 +956,38 @@ class PDFQuizParser:
     @staticmethod
     def _formatear_html_planteamiento_supuesto(lineas_planteamiento):
         """
-        Construye el HTML del enunciado único del Supuesto Práctico respetando sus párrafos
-        y sus viñetas ('· En primer lugar...', '· En segundo lugar...', etc.) con tamaño máximo de 10pt.
+        Construye el HTML del enunciado único del Supuesto Práctico manteniendo sus párrafos
+        y sus 10 viñetas ('· En primer lugar...', '· En segundo lugar...', etc.) en tamaño 10pt máximo.
         """
         bloques = []
         pat_ordinal_caso = re.compile(
-            r'^(?:[•·\-\*▪■]\s*)?(En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo|und[ée]cimo|duod[ée]cimo)[^,]*,)(.*)$',
+            r'^(?:[•·\-\*▪■]\s*)?(En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo(?:\s+y\s+[úu]ltimo)?)\s+lugar\b.*)$',
             re.IGNORECASE
         )
         for item in lineas_planteamiento:
-            txt_p = (item.get("text") or "").strip()
-            html_p = (item.get("html") or txt_p).strip()
+            txt_p = PDFQuizParser._limpiar_marca_agua_linea(item.get("text") or "")
+            html_p = PDFQuizParser._limpiar_marca_agua_linea(item.get("html") or txt_p)
             es_lista = bool(item.get("is_list", False))
             if not txt_p:
                 continue
 
             m_ord = pat_ordinal_caso.match(txt_p)
             if m_ord or txt_p.startswith(("·", "•", "▪", "■")):
-                # Asegurar que lleve el punto medio '· ' y sangría francesa limpia en tamaño 10pt
                 html_limpio = re.sub(r'^(?:<[^>]+>)*\s*[•·\-\*▪■]\s*', '', html_p).strip()
                 bloques.append(
-                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify;'>"
+                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
                     f"·&nbsp;&nbsp;{html_limpio}"
                     f"</div>"
                 )
             elif es_lista:
                 bloques.append(
-                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify;'>"
+                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
                     f"·&nbsp;&nbsp;{html_p}"
                     f"</div>"
                 )
             else:
                 bloques.append(
-                    f"<p style='margin:0 0 6px 0; font-size:10pt !important; line-height:1.4; color:#1E293B !important; text-align:justify;'>"
+                    f"<p style='margin:0 0 6px 0; font-size:10pt !important; line-height:1.4; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
                     f"{html_p}"
                     f"</p>"
                 )
@@ -984,25 +996,58 @@ class PDFQuizParser:
     @staticmethod
     def _parse_supuestos_practicos(parrafos, tema_titulo=""):
         """
-        1. Obvia todo el texto anterior a 'SUPUESTO PRÁCTICO' (o 'SUPUESTOS PRÁCTICOS').
-           Si no existe ese encabezado en todo el documento, toma desde el inicio.
-        2. Captura el enunciado único completo (incluidos todos los puntos '· En primer lugar...'
-           hasta 'Con base en los hechos expuestos... responda a las siguientes cuestiones prácticas:').
-        3. Extrae cada una de las preguntas (1 a 10) e inyecta antes de cada pregunta ese enunciado único en 10pt.
+        1. Busca la frase 'SUPUESTO PRÁCTICO' (o 'SUPUESTOS PRÁCTICOS') aunque esté pegada al inicio de un párrafo,
+           y descarta absolutamente todo el texto anterior (como la PREGUNTA DE DESARROLLO).
+        2. Captura el enunciado único del supuesto (desde 'La sociedad mercantil...' pasando por los 10 casos
+           '· En primer lugar...' hasta '...responda de forma razonada y con arreglo a derecho a las siguientes diez cuestiones prácticas:').
+        3. Separa cada una de las 10 cuestiones prácticas con su EXPLICACION y RESPUESTA TÉCNICA,
+           mostrando antes de cada pregunta el enunciado único del supuesto en 10pt.
         """
-        pat_inicio_supuesto = re.compile(
-            r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+|\s*[:\.\-].*)?$',
+        pat_marca_supuesto = re.compile(
+            r'(?:^|\b)(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?\s*[:\.\-]?\s*',
             re.IGNORECASE
         )
 
-        idx_inicio = 0
-        for idx_p, p in enumerate(parrafos):
-            txt_p = re.sub(r'^[•·\-\*▪■\s]+', '', p["text"].strip())
-            if pat_inicio_supuesto.match(txt_p):
-                idx_inicio = idx_p + 1
-                break
+        parrafos_utiles = []
+        encontrado_supuesto = False
 
-        parrafos_utiles = parrafos[idx_inicio:] if idx_inicio < len(parrafos) else parrafos
+        for p in parrafos:
+            txt_p = PDFQuizParser._limpiar_marca_agua_linea(p["text"])
+            html_p = PDFQuizParser._limpiar_marca_agua_linea(p.get("html") or txt_p)
+            if not txt_p:
+                continue
+            if not encontrado_supuesto:
+                m_sup = pat_marca_supuesto.search(txt_p)
+                # Evitar falsos positivos si la palabra "supuesto práctico" aparece en minúsculas dentro de una frase normal
+                if m_sup and (txt_p[m_sup.start():m_sup.end()].isupper() or m_sup.start() == 0):
+                    encontrado_supuesto = True
+                    resto_txt = txt_p[m_sup.end():].strip()
+                    if resto_txt:
+                        resto_html = re.sub(
+                            r'^.*?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?\s*[:\.\-]?\s*)(?:</b>)?\s*',
+                            '',
+                            html_p,
+                            flags=re.IGNORECASE
+                        ).strip()
+                        parrafos_utiles.append({
+                            "text": resto_txt,
+                            "html": resto_html if resto_html else resto_txt,
+                            "is_bold": False,
+                            "is_list": p.get("is_list", False)
+                        })
+                continue
+            else:
+                parrafos_utiles.append({
+                    "text": txt_p,
+                    "html": html_p,
+                    "is_bold": p.get("is_bold", False),
+                    "is_list": p.get("is_list", False)
+                })
+
+        # Si el archivo no tenía encabezado "SUPUESTO PRÁCTICO" en ningún sitio, se entiende que es supuesto desde el inicio
+        if not encontrado_supuesto:
+            parrafos_utiles = parrafos
+
         if not parrafos_utiles:
             return []
 
@@ -1012,7 +1057,7 @@ class PDFQuizParser:
             re.IGNORECASE
         )
         pat_ordinal_enunciado = re.compile(
-            r'^(?:[•·\-\*▪■]\s*)?En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\b',
+            r'^(?:[•·\-\*▪■]\s*)?En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo(?:\s+y\s+[úu]ltimo)?)\s+lugar\b',
             re.IGNORECASE
         )
         pat_verbo_pregunta = re.compile(
@@ -1030,24 +1075,13 @@ class PDFQuizParser:
         contador_preguntas = 0
 
         for p in parrafos_utiles:
-            txt_raw = p["text"].strip()
+            txt_raw = PDFQuizParser._limpiar_marca_agua_linea(p["text"])
             txt = re.sub(r'^[•·\-\*▪■]\s*', '', txt_raw).strip()
-            html_p = (p.get("html") or txt_raw).strip()
+            html_p = PDFQuizParser._limpiar_marca_agua_linea(p.get("html") or txt_raw)
             es_bold = bool(p.get("is_bold", False))
             es_lista = bool(p.get("is_list", False))
 
             if not txt or txt == tema_titulo:
-                continue
-
-            # Si hubiera otro bloque "SUPUESTO PRÁCTICO" más adelante
-            if pat_inicio_supuesto.match(txt):
-                if curr_q is not None:
-                    questions.append(curr_q)
-                    curr_q = None
-                lineas_planteamiento = []
-                leyendo_planteamiento = True
-                cierre_planteamiento_visto = False
-                contador_preguntas = 0
                 continue
 
             m_exp = pat_explicacion.match(txt)
@@ -1065,17 +1099,17 @@ class PDFQuizParser:
                     curr_q["explanation_lines"].append(m_rt.group(1).strip())
                 continue
 
-            # Mientras estamos leyendo el planteamiento, nunca cortar en los puntos "En primer lugar... En décimo lugar..."
+            # Los párrafos del planteamiento ("En primer lugar, don Alejandro...", etc.) forman siempre parte del enunciado
             if leyendo_planteamiento and pat_ordinal_enunciado.match(txt_raw):
                 lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": True})
                 continue
 
             if leyendo_planteamiento and pat_cierre_planteamiento.search(txt):
+                # Por si en PDF la frase "Con base en los hechos expuestos... cuestiones prácticas:" viniera pegada al punto 10
                 lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": False})
                 cierre_planteamiento_visto = True
                 continue
 
-            # Detectar si la línea actual es una de las 10 preguntas del supuesto
             m_q = pat_pregunta_explicita.match(txt)
             es_subapartado_respuesta = bool(re.match(r'^\d{1,2}\.[ºª°]', txt))
             es_nueva_pregunta = False
@@ -1087,14 +1121,13 @@ class PDFQuizParser:
                 cuerpo_cand = m_q.group(2).strip()
                 if (
                     cierre_planteamiento_visto or
-                    not leyendo_planteamiento and len(curr_q["explanation_lines"]) > 0 or
+                    (not leyendo_planteamiento and curr_q is not None and len(curr_q["explanation_lines"]) > 0) or
                     pat_verbo_pregunta.match(cuerpo_cand)
                 ):
                     es_nueva_pregunta = True
                     num_q = num_cand
                     cuerpo_q = cuerpo_cand
             elif not es_subapartado_respuesta and (cierre_planteamiento_visto or (curr_q is not None and len(curr_q["explanation_lines"]) > 0)):
-                # En archivos .docx donde el número "1." viene en numeración automática de Word (w:numPr) y el texto empieza en negrita ("Determine con exactitud...")
                 if (es_bold or es_lista) and pat_verbo_pregunta.match(txt) and len(txt) > 35:
                     es_nueva_pregunta = True
                     num_q = contador_preguntas + 1
@@ -1157,6 +1190,7 @@ class PDFQuizParser:
                         for l in b.get("lines", []):
                             spans = l.get("spans", [])
                             txt_l = "".join(s.get("text", "") for s in spans).strip()
+                            txt_l = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
                             if not txt_l:
                                 continue
                             chars_tot = sum(len(s.get("text", "").strip()) for s in spans)
@@ -1188,9 +1222,14 @@ class PDFQuizParser:
         buf_list = False
         es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
 
+        pat_corte_estructural_pdf = re.compile(
+            r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|[•\-\*▪■·]\s+|[a-g]\)\s+)',
+            re.IGNORECASE
+        )
+
         for item in lineas_estructuradas:
-            t = re.sub(r'\s+', ' ', item["text"]).strip()
-            h = re.sub(r'\s+', ' ', item.get("html") or t).strip()
+            t = re.sub(r'\s+', ' ', PDFQuizParser._limpiar_marca_agua_linea(item["text"])).strip()
+            h = re.sub(r'\s+', ' ', PDFQuizParser._limpiar_marca_agua_linea(item.get("html") or t)).strip()
             if not t or PDFQuizParser._es_basura_cabecera_o_pie(t):
                 continue
             if es_docx:
@@ -1205,7 +1244,7 @@ class PDFQuizParser:
             es_nuevo_bloque = (
                 item.get("is_heading") or
                 item.get("is_bold") != buf_bold or
-                bool(re.match(r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+|[•\-\*▪■·]\s+|[a-g]\)\s+)', t, re.IGNORECASE))
+                bool(pat_corte_estructural_pdf.match(t))
             )
             if not buf_txt:
                 buf_txt = t
@@ -1241,7 +1280,7 @@ class PDFQuizParser:
 
         parrafos_desarrollo = []
         for p in parrafos:
-            if re.match(r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+|\s*[:\.\-].*)?$', p["text"].strip(), re.IGNORECASE):
+            if re.search(r'(?:^|\b)SUPUESTOS?\s+PR[ÁA]CTICOS?\b', p["text"].strip()):
                 break
             parrafos_desarrollo.append(p)
 
