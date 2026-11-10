@@ -919,7 +919,6 @@ class PDFQuizParser:
         if not texto_explicacion:
             return ""
 
-        # Si "¡PREGUNTA TRAMPA!:" o "EXPLICACION PARA ESTUDIO:" vienen pegados tras un punto en la misma línea, separarlos en nueva línea
         txt_prep = re.sub(
             r'(?<=[.?!»"])\s+(?=¡?\s*PREGUNTA\s+TRAMPA\b|EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b)',
             '\n',
@@ -927,12 +926,12 @@ class PDFQuizParser:
             flags=re.IGNORECASE
         )
 
-        lineas_ crudas = [l.strip() for l in txt_prep.split("\n") if l.strip()]
+        lineas_crudas = [l.strip() for l in txt_prep.split("\n") if l.strip()]
         if not lineas_crudas:
             return ""
 
         parrafos = []
-        pendiente_viñeta = False
+        pendiente_vineta = False
 
         pat_inicio_bloque = re.compile(
             r'^(?:\[\[H\]\]|¡?\s*PREGUNTA\s+TRAMPA\b|EXPLICACI[ÓO]N(?:\s+PARA\s+ESTUDIO|\s+Y\s+BASE\s+LEGAL|\s+DETALLADA)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|[•·▪■\*]\s+|\d{1,2}[\.\º\ª\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|En\s+el\s+Derecho\s+(?:Civil|Mercantil)\s*[\(:])',
@@ -941,11 +940,11 @@ class PDFQuizParser:
 
         for l in lineas_crudas:
             if l in ("•", "·", "▪", "■", "-"):
-                pendiente_viñeta = True
+                pendiente_vineta = True
                 continue
-            if pendiente_viñeta:
+            if pendiente_vineta:
                 l = f"• {l}"
-                pendiente_viñeta = False
+                pendiente_vineta = False
 
             if not parrafos:
                 parrafos.append(l)
@@ -955,11 +954,9 @@ class PDFQuizParser:
                 parrafos.append(l)
             else:
                 prev = parrafos[-1]
-                # Si la línea anterior era un título corto de apartado (ej. "1. El punto de partida: ¿Qué es una obligación pura?")
                 if re.match(r'^(?:\[\[H\]\]|\d{1,2}[\.\)]\s+[^.]{4,95}\??|EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\s*:?)$', prev, re.IGNORECASE):
                     parrafos.append(l)
                 else:
-                    # Si termina en guion de palabra partida al final de línea, unir sin espacio
                     if prev.endswith("-") and not prev.endswith(" -") and re.match(r'^[a-záéíóúñ]', l):
                         parrafos[-1] = prev[:-1] + l
                     else:
@@ -1429,7 +1426,6 @@ class PDFQuizParser:
             return []
 
         segmentos = []
-        # 1. Separar si 'Explicación:' o 'EXPLICACIÓN Y BASE LEGAL:' viene pegada al final de una opción
         m_exp_inline = re.search(
             r'(?<=[.?!»"\)\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*.*)$',
             l,
@@ -1440,7 +1436,6 @@ class PDFQuizParser:
             cola_exp = l[m_exp_inline.start():].strip()
             l = l[:m_exp_inline.start()].strip()
 
-        # 2. Separar si la opción 'a)' / 'A)' viene pegada al final del enunciado de una pregunta
         m_q_with_a = re.match(
             r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}\s*[\.\-\)]\s*.*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
@@ -1451,7 +1446,6 @@ class PDFQuizParser:
             segmentos.append((q_part, False))
             l = opts_part
 
-        # 3. Separar múltiples opciones pegadas en una sola línea:
         partes_opt = re.split(
             r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
             l
@@ -1663,7 +1657,6 @@ class PDFQuizParser:
             q_obj["options"] = opts_limpias
             q_obj["answer"] = ans_final if 0 <= ans_final < len(opts_limpias) else -1
 
-            # Reconstruir los párrafos de la explicación eliminando cortes de renglón a mitad de frase
             if q_obj.get("explanation"):
                 q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
 
