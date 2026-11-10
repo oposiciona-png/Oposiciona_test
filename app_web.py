@@ -19,8 +19,13 @@ GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw_B-g4pwxu
 _K_PARTS = ("QVEuQWI4Uk42", "TDRmWVhWNHg0", "Vi1FWVlIbmRk", "bWxob0llcTZIRXNC", "S1BPUENDUHZDVkJ4RXc=")
 GEMINI_API_KEY_DEFAULT = "".join(base64.b64decode(p).decode("utf-8") for p in _K_PARTS)
 
-# Clave interna del servidor para cifrar el backup de sesión en localStorage y evitar que nadie extraiga el JSON de preguntas
+# Clave interna del servidor para cifrar el backup de sesión y evitar que nadie extraiga el JSON de preguntas
 _BACKUP_SECRET_BYTES = b"Oposiciona_5.0_Blindaje_Privado_2026_SS#Key"
+
+# Almacén en memoria del servidor indexado por token de sesión para no depender del límite de tamaño de la URL
+@st.cache_resource
+def _obtener_almacen_sesiones_servidor():
+    return {}
 
 def _cifrar_backup_sesion(datos_dict):
     raw = zlib.compress(json.dumps(datos_dict, ensure_ascii=False).encode("utf-8"), level=9)
@@ -31,6 +36,9 @@ def _cifrar_backup_sesion(datos_dict):
 def _descifrar_backup_sesion(token_str):
     if not token_str:
         return {}
+    if token_str.startswith("sid_"):
+        almacen = _obtener_almacen_sesiones_servidor()
+        return dict(almacen.get(token_str, {}))
     if token_str.startswith("v2_"):
         xored = base64.urlsafe_b64decode(token_str[3:].encode("ascii"))
         klen = len(_BACKUP_SECRET_BYTES)
@@ -142,7 +150,6 @@ st.markdown("""<style>
     opacity: 0 !important;
     pointer-events: none !important;
 }
-/* Textos generales, títulos, párrafos y etiquetas siempre oscuros incluso en Modo Oscuro de iPhone/iPad */
 h1, h2, h3, h4, h5, h6, p, span, label, li, summary,
 [data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2,
@@ -153,7 +160,6 @@ h1, h2, h3, h4, h5, h6, p, span, label, li, summary,
 [data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p {
     color: #1E293B !important;
 }
-/* Carpetas / Desplegables (Expanders) siempre con fondo claro y texto negro */
 [data-testid="stExpander"], details {
     background-color: #FFFFFF !important;
     border: 1px solid #CBD5E1 !important;
@@ -172,7 +178,6 @@ h1, h2, h3, h4, h5, h6, p, span, label, li, summary,
     color: #1E293B !important;
     fill: #1E293B !important;
 }
-/* Campos de texto, buscador y contraseñas siempre claros con letra negra */
 input, textarea, [data-baseweb="input"], [data-baseweb="base-input"], [data-baseweb="textarea"] {
     background-color: #FFFFFF !important;
     color: #000000 !important;
@@ -194,7 +199,6 @@ input::placeholder, textarea::placeholder {
     color: #1E293B !important;
     fill: #1E293B !important;
 }
-/* Botones secundarios (Anterior, Comprobar, Siguiente, Repetir, Cambiar, Reportar en resumen) */
 div.stButton > button, button[kind="secondary"] {
     background-color: #F1F5F9 !important;
     color: #1E293B !important;
@@ -208,7 +212,6 @@ div.stButton > button:hover, button[kind="secondary"]:hover {
     border-color: #94A3B8 !important;
     color: #000000 !important;
 }
-/* Botones primarios (Entrar, Iniciar Test, Enviar reporte, Finalizar sesión) */
 div.stButton > button[kind="primary"], button[kind="primary"] {
     background-color: #1F77B4 !important;
     color: #FFFFFF !important;
@@ -222,7 +225,6 @@ div.stButton > button[kind="primary"]:hover, button[kind="primary"]:hover {
     background-color: #155A8A !important;
     border-color: #155A8A !important;
 }
-/* Botón verde de Simulacro Global */
 div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button {
     background-color: #2e7d32 !important;
     border-color: #2e7d32 !important;
@@ -237,7 +239,6 @@ div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button:hover {
     background-color: #1b5e20 !important;
     border-color: #1b5e20 !important;
 }
-/* Opciones de respuesta tipo Radio */
 div[role="radiogroup"] label {
     margin-bottom: 12px !important;
 }
@@ -257,11 +258,9 @@ div[data-baseweb="radio"] > div:first-child {
 div[data-baseweb="radio"][data-checked="true"] > div:first-child > div {
     background-color: #000000 !important;
 }
-/* Alertas e info boxes legibles en modo oscuro */
 [data-testid="stAlert"] p, [data-testid="stAlert"] span, [data-testid="stAlert"] div {
     color: #1E293B !important;
 }
-/* Subida de archivos local */
 [data-testid="stFileUploader"] section {
     background-color: #F8FAFC !important;
     border: 1px dashed #CBD5E1 !important;
@@ -288,7 +287,6 @@ try {{
             var script = parentDoc.createElement("script");
             script.id = "escudo-oposiciona";
             script.innerHTML = `
-                /* 1. Bloqueo de menú contextual (clic derecho) y arrastrar elementos */
                 document.addEventListener('contextmenu', function(e) {{
                     if (window.__oposiciona_es_admin) return;
                     e.preventDefault();
@@ -299,7 +297,6 @@ try {{
                     e.preventDefault();
                 }}, true);
 
-                /* 2. Bloqueo de copiado / cortado fuera de campos de escritura (textarea/input) */
                 document.addEventListener('copy', function(e) {{
                     if (window.__oposiciona_es_admin) return;
                     var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
@@ -315,31 +312,26 @@ try {{
                     e.preventDefault();
                 }}, true);
 
-                /* 3. Bloqueo de atajos de descarga HTML (Ctrl+S), código fuente (Ctrl+U), impresión (Ctrl+P) e Inspector DevTools (F12 / Ctrl+Shift+I/J/C/K) */
                 window.addEventListener('keydown', function(e) {{
                     if (window.__oposiciona_es_admin) return;
                     var k = (e.key || '').toLowerCase();
                     var code = e.keyCode || e.which || 0;
 
-                    /* F12 */
                     if (code === 123 || k === 'f12') {{
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }}
-                    /* Ctrl+S (Guardar HTML), Ctrl+U (Ver fuente), Ctrl+P (Imprimir) */
                     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (k === 's' || k === 'u' || k === 'p')) {{
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }}
-                    /* Ctrl+Shift+I / J / C / K (Herramientas de Desarrollador en Windows/Linux) */
                     if (e.ctrlKey && e.shiftKey && (k === 'i' || k === 'j' || k === 'c' || k === 'k')) {{
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }}
-                    /* Cmd+Option+I / J / C / U (Herramientas de Desarrollador y Ver fuente en Mac) */
                     if (e.metaKey && e.altKey && (k === 'i' || k === 'j' || k === 'c' || k === 'u')) {{
                         e.preventDefault();
                         e.stopPropagation();
@@ -347,13 +339,25 @@ try {{
                     }}
                 }}, true);
 
-                /* Latido anti-desconexión cada 25s y WakeLock */
+                /* Autoguardado continuo en vivo de cualquier respuesta escrita en un textarea (Desarrollo / Supuestos) */
+                document.addEventListener('input', function(e) {{
+                    try {{
+                        if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'textarea') {{
+                            sessionStorage.setItem('oposiciona_live_draft_txt', e.target.value || '');
+                            localStorage.setItem('oposiciona_live_draft_txt', e.target.value || '');
+                        }}
+                    }} catch(err) {{}}
+                }}, true);
+
+                /* Latido reforzado cada 15s para impedir desconexión por inactividad mientras la pestaña esté abierta */
                 setInterval(function() {{
                     try {{
-                        fetch(window.location.origin + "/_stcore/health", {{ method: "GET", cache: "no-store" }}).catch(function(){{}});
+                        var tsNow = Date.now();
+                        fetch(window.location.origin + "/_stcore/health?_t=" + tsNow, {{ method: "GET", cache: "no-store", credentials: "same-origin" }}).catch(function(){{}});
+                        fetch(window.location.origin + "/_stcore/host-config?_t=" + tsNow, {{ method: "GET", cache: "no-store", credentials: "same-origin" }}).catch(function(){{}});
                         document.dispatchEvent(new CustomEvent("oposiciona_keepalive"));
                     }} catch(err) {{}}
-                }}, 25000);
+                }}, 15000);
 
                 var wakeLockObj = null;
                 function activarWakeLock() {{
@@ -361,12 +365,17 @@ try {{
                         navigator.wakeLock.request('screen').then(function(wl) {{ wakeLockObj = wl; }}).catch(function(){{}});
                     }}
                 }}
-                document.addEventListener('visibilitychange', activarWakeLock);
+                document.addEventListener('visibilitychange', function() {{
+                    activarWakeLock();
+                    if (document.visibilityState === 'visible') {{
+                        fetch(window.location.origin + "/_stcore/health?_t=" + Date.now(), {{ method: "GET", cache: "no-store", credentials: "same-origin" }}).catch(function(){{}});
+                    }}
+                }});
                 document.addEventListener('click', activarWakeLock, {{ once: true }});
             `;
             parentDoc.head.appendChild(script);
         }}
-    }}, 300);
+    }}, 250);
 }} catch(e) {{}}
 </script>""", height=0)
 
@@ -468,6 +477,12 @@ if st.session_state.get("borrar_backup_ls", False):
     try {
         window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
         window.parent.localStorage.removeItem("oposiciona_auth_backup_v1");
+        window.parent.localStorage.removeItem("oposiciona_sid_v1");
+        window.parent.localStorage.removeItem("oposiciona_live_draft_txt");
+        window.parent.sessionStorage.removeItem("oposiciona_test_backup_v1");
+        window.parent.sessionStorage.removeItem("oposiciona_auth_backup_v1");
+        window.parent.sessionStorage.removeItem("oposiciona_sid_v1");
+        window.parent.sessionStorage.removeItem("oposiciona_live_draft_txt");
     } catch(e) {}
     </script>""", height=0)
 
@@ -490,6 +505,7 @@ st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; bord
 
 if not st.session_state.autenticado:
     qp_restore = st.query_params.get("restore_session", "")
+    qp_draft = st.query_params.get("draft_txt", "")
     if qp_restore:
         try:
             datos_rec = _descifrar_backup_sesion(qp_restore)
@@ -518,6 +534,12 @@ if not st.session_state.autenticado:
                     st.session_state.hora_inicio_str = datos_rec.get("hora_inicio_str", "")
                     st.session_state.inicio_registrado_sheets = bool(datos_rec.get("inicio_registrado_sheets", False))
                     st.session_state.resultado_registrado = bool(datos_rec.get("resultado_registrado", False))
+                    # Si el alumno estaba escribiendo un texto en vivo cuando hubo un microcorte de red, restaurarlo
+                    idx_r = st.session_state.current_index
+                    if qp_draft and idx_r in st.session_state.stats:
+                        if not st.session_state.stats[idx_r].get("selected"):
+                            st.session_state.stats[idx_r]["selected"] = qp_draft
+                            st.session_state[f"open_txt_{idx_r}"] = qp_draft
                 st.query_params.clear()
                 st.rerun()
         except Exception:
@@ -526,11 +548,21 @@ if not st.session_state.autenticado:
     components.html("""<script>
     (function() {
         try {
+            var ss = window.parent.sessionStorage;
             var ls = window.parent.localStorage;
-            var savedTest = ls.getItem("oposiciona_test_backup_v1") || ls.getItem("oposiciona_auth_backup_v1");
-            if (savedTest && window.parent.location.search.indexOf("restore_session=") === -1) {
+            /* Priorizar el ID corto de sesión en servidor (sid_) para no superar jamás el límite de URL del navegador */
+            var savedSid = ss.getItem("oposiciona_sid_v1") || ls.getItem("oposiciona_sid_v1");
+            var savedTest = ss.getItem("oposiciona_test_backup_v1") || ls.getItem("oposiciona_test_backup_v1");
+            var savedAuth = ss.getItem("oposiciona_auth_backup_v1") || ls.getItem("oposiciona_auth_backup_v1");
+            var draftTxt = ss.getItem("oposiciona_live_draft_txt") || ls.getItem("oposiciona_live_draft_txt") || "";
+
+            var tokenToRestore = savedSid || ((savedTest && savedTest.length < 3500) ? savedTest : savedAuth);
+            if (tokenToRestore && window.parent.location.search.indexOf("restore_session=") === -1) {
                 var url = new URL(window.parent.location.href);
-                url.searchParams.set("restore_session", savedTest);
+                url.searchParams.set("restore_session", tokenToRestore);
+                if (draftTxt && draftTxt.length < 1500) {
+                    url.searchParams.set("draft_txt", draftTxt);
+                }
                 window.parent.location.replace(url.toString());
             }
         } catch(e) {}
@@ -564,7 +596,6 @@ if not st.session_state.autenticado:
 # === FIN SECCIÓN 1 ===
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS DISPONIBLES ===
-
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -2834,8 +2865,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
 def sincronizar_progreso_navegador():
     try:
+        correo_usr = (st.session_state.get("email") or "").lower().strip()
+        if not correo_usr:
+            return
         datos_auth = {
-            "email": st.session_state.get("email"),
+            "email": correo_usr,
             "rol": st.session_state.get("rol"),
             "es_admin": st.session_state.get("es_admin", False),
             "saved_esp": st.session_state.get("saved_esp", "ADMINISTRATIVOS"),
@@ -2843,6 +2877,8 @@ def sincronizar_progreso_navegador():
             "modo_avance": st.session_state.get("modo_avance", "")
         }
         b64_auth = _cifrar_backup_sesion(datos_auth)
+        sid_key = "sid_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
+        almacen_srv = _obtener_almacen_sesiones_servidor()
 
         if st.session_state.get("questions"):
             datos_test = dict(datos_auth)
@@ -2861,18 +2897,35 @@ def sincronizar_progreso_navegador():
                 "inicio_registrado_sheets": st.session_state.get("inicio_registrado_sheets", False),
                 "resultado_registrado": st.session_state.get("resultado_registrado", False)
             })
+            almacen_srv[sid_key] = datos_test
             b64_test = _cifrar_backup_sesion(datos_test)
+            idx_act = st.session_state.get("current_index", 0)
+            borrador_actual = (st.session_state.get("stats", {}).get(idx_act, {}).get("selected") or "") if st.session_state.get("questions", [{}])[idx_act].get("is_open") else ""
+            borrador_js = json.dumps(str(borrador_actual))
             components.html(f"""<script>
             try {{
+                window.parent.sessionStorage.setItem("oposiciona_sid_v1", "{sid_key}");
+                window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.sessionStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
+                window.parent.sessionStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
+                window.parent.localStorage.setItem("oposiciona_sid_v1", "{sid_key}");
                 window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
                 window.parent.localStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
+                window.parent.localStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
             }} catch(e) {{}}
             </script>""", height=0)
         else:
+            almacen_srv[sid_key] = datos_auth
             components.html(f"""<script>
             try {{
+                window.parent.sessionStorage.setItem("oposiciona_sid_v1", "{sid_key}");
+                window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.sessionStorage.removeItem("oposiciona_test_backup_v1");
+                window.parent.sessionStorage.removeItem("oposiciona_live_draft_txt");
+                window.parent.localStorage.setItem("oposiciona_sid_v1", "{sid_key}");
                 window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
                 window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
+                window.parent.localStorage.removeItem("oposiciona_live_draft_txt");
             }} catch(e) {{}}
             </script>""", height=0)
     except Exception:
@@ -3288,12 +3341,6 @@ def handle_radio_change():
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
 
 def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_correcta_final=None):
-    """
-    Actualiza en la explicación cualquier referencia a las letras de opción ('a', 'b', 'c', 'd')
-    para que tras barajar las opciones coincidan siempre con las letras reales en pantalla:
-    - 'La respuesta correcta es la b)' -> 'La respuesta correcta es la a)'
-    - '(opción a)', "opción 'b'", 'opciones a, b y d' -> actualizadas según el nuevo orden.
-    """
     if not texto_exp:
         return ""
 
@@ -3304,7 +3351,6 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
         nuevo = mapa_letras.get(c_low, c_low)
         return nuevo.upper() if ch.isupper() else nuevo
 
-    # 1. Actualizar 'La respuesta correcta es la X)' / 'Opción correcta: X' con la letra correcta real en pantalla
     if letra_correcta_final:
         txt = re.sub(
             r'((?:la\s+)?(?:respuesta|opci[óo]n)\s+correcta\s+(?:es\s+la|es)\s*[:\s]*[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|$))',
@@ -3313,7 +3359,6 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
             flags=re.IGNORECASE
         )
 
-    # 2. Actualizar expresiones singulares del tipo: "opción 'b'", "opción b)", "(opción a)"
     txt = re.sub(
         r'\b(opci[óo]n\s+[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|\)|$))',
         lambda m: f"{m.group(1)}{_map_char(m.group(2))}{m.group(3)}",
@@ -3321,7 +3366,6 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
         flags=re.IGNORECASE
     )
 
-    # 3. Actualizar listas del tipo: "Las opciones a, b y d"
     def _reemplazar_lista_opciones(m):
         pref = m.group(1)
         cuerpo_lista = m.group(2)
@@ -3381,7 +3425,6 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
         else:
             q["answer"] = -1
 
-        # Construir el mapa de cómo han cambiado las letras respecto al orden previo al barajado
         mapa_letras = {}
         for let_orig, txt_orig in opciones_originales:
             if txt_orig in cleaned_options:
@@ -3400,7 +3443,6 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
     if barajar:
         random.shuffle(qs_preparadas)
 
-    # Renumerar todas las preguntas cerradas según el orden real (1, 2, 3, 4...) que ocupan en el test actual
     for idx_final, q_item in enumerate(qs_preparadas, 1):
         if not q_item.get("is_open", False):
             txt_sin_num = re.sub(
@@ -3517,10 +3559,15 @@ def action_subir_otro():
     )
 
 def action_finalizar_sesion():
+    correo_usr = (st.session_state.get("email") or "").lower().strip()
+    if correo_usr:
+        sid_key = "sid_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
+        _obtener_almacen_sesiones_servidor().pop(sid_key, None)
     st.session_state.clear()
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
