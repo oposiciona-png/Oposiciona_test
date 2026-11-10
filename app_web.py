@@ -863,14 +863,12 @@ class PDFQuizParser:
                     sub_l = sub_l.strip()
                     sub_h = sub_lineas_html[idx_sl].strip() if idx_sl < len(sub_lineas_html) else sub_l
                     if sub_l:
-                        if es_lista and not re.match(r'^(?:[•\-\*▪■·]|\d+[\.\)]|[a-zA-Z][\.\)])\s+', sub_l):
-                            sub_l = f"• {sub_l}"
-                            sub_h = f"• {sub_h}"
                         lineas_info.append({
                             "text": sub_l,
                             "html": sub_h,
                             "is_bold": es_negrita,
                             "is_heading": es_heading,
+                            "is_list": es_lista,
                             "style": pStyle
                         })
         except Exception:
@@ -943,12 +941,54 @@ class PDFQuizParser:
         return "".join(bloques_html)
 
     @staticmethod
+    def _formatear_html_planteamiento_supuesto(lineas_planteamiento):
+        """
+        Construye el HTML del enunciado único del Supuesto Práctico respetando sus párrafos
+        y sus viñetas ('· En primer lugar...', '· En segundo lugar...', etc.) con tamaño máximo de 10pt.
+        """
+        bloques = []
+        pat_ordinal_caso = re.compile(
+            r'^(?:[•·\-\*▪■]\s*)?(En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo|und[ée]cimo|duod[ée]cimo)[^,]*,)(.*)$',
+            re.IGNORECASE
+        )
+        for item in lineas_planteamiento:
+            txt_p = (item.get("text") or "").strip()
+            html_p = (item.get("html") or txt_p).strip()
+            es_lista = bool(item.get("is_list", False))
+            if not txt_p:
+                continue
+
+            m_ord = pat_ordinal_caso.match(txt_p)
+            if m_ord or txt_p.startswith(("·", "•", "▪", "■")):
+                # Asegurar que lleve el punto medio '· ' y sangría francesa limpia en tamaño 10pt
+                html_limpio = re.sub(r'^(?:<[^>]+>)*\s*[•·\-\*▪■]\s*', '', html_p).strip()
+                bloques.append(
+                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify;'>"
+                    f"·&nbsp;&nbsp;{html_limpio}"
+                    f"</div>"
+                )
+            elif es_lista:
+                bloques.append(
+                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify;'>"
+                    f"·&nbsp;&nbsp;{html_p}"
+                    f"</div>"
+                )
+            else:
+                bloques.append(
+                    f"<p style='margin:0 0 6px 0; font-size:10pt !important; line-height:1.4; color:#1E293B !important; text-align:justify;'>"
+                    f"{html_p}"
+                    f"</p>"
+                )
+        return "".join(bloques)
+
+    @staticmethod
     def _parse_supuestos_practicos(parrafos, tema_titulo=""):
         """
-        Extrae un Supuesto Práctico descartando cualquier texto previo (como Preguntas de Desarrollo)
-        que anteceda al encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS'.
-        Si no existe dicho encabezado, se entiende que el documento es un supuesto práctico desde el inicio.
-        Conserva el planteamiento con su formato original para mostrarlo en cada pregunta con letra de 10pt máximo.
+        1. Obvia todo el texto anterior a 'SUPUESTO PRÁCTICO' (o 'SUPUESTOS PRÁCTICOS').
+           Si no existe ese encabezado en todo el documento, toma desde el inicio.
+        2. Captura el enunciado único completo (incluidos todos los puntos '· En primer lugar...'
+           hasta 'Con base en los hechos expuestos... responda a las siguientes cuestiones prácticas:').
+        3. Extrae cada una de las preguntas (1 a 10) e inyecta antes de cada pregunta ese enunciado único en 10pt.
         """
         pat_inicio_supuesto = re.compile(
             r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+|\s*[:\.\-].*)?$',
@@ -957,7 +997,7 @@ class PDFQuizParser:
 
         idx_inicio = 0
         for idx_p, p in enumerate(parrafos):
-            txt_p = p["text"].strip()
+            txt_p = re.sub(r'^[•·\-\*▪■\s]+', '', p["text"].strip())
             if pat_inicio_supuesto.match(txt_p):
                 idx_inicio = idx_p + 1
                 break
@@ -966,28 +1006,48 @@ class PDFQuizParser:
         if not parrafos_utiles:
             return []
 
-        pat_pregunta_num = re.compile(r'^(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})[\.\-\)]\s+(.+)$', re.IGNORECASE)
+        pat_pregunta_explicita = re.compile(r'^(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})[\.\-\)]\s+(.+)$', re.IGNORECASE)
+        pat_cierre_planteamiento = re.compile(
+            r'(?:responda\s+de\s+forma\s+razonada|siguientes\s+(?:\w+\s+)?cuestiones\s+pr[áa]cticas|responda\s+a\s+las\s+siguientes\s+preguntas)\s*:\s*$',
+            re.IGNORECASE
+        )
+        pat_ordinal_enunciado = re.compile(
+            r'^(?:[•·\-\*▪■]\s*)?En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\b',
+            re.IGNORECASE
+        )
+        pat_verbo_pregunta = re.compile(
+            r'^(?:Determine|Analice|Calcule|Indique|Precise|Razone|Justifique|Explique|Señale|Resuelva|En\s+relaci[óo]n\s+con|Respecto\s+(?:de|a)|Ante\s+la)\b',
+            re.IGNORECASE
+        )
         pat_explicacion = re.compile(r'^EXPLICACI[ÓO]N\s*:\s*(.*)$', re.IGNORECASE)
         pat_resp_tecnica = re.compile(r'^RESPUESTA\s+T[ÉE]CNICA\s*:\s*(.*)$', re.IGNORECASE)
 
-        planteamiento_actual_html = []
+        lineas_planteamiento = []
         questions = []
         curr_q = None
         leyendo_planteamiento = True
+        cierre_planteamiento_visto = False
+        contador_preguntas = 0
 
         for p in parrafos_utiles:
-            txt = p["text"].strip()
-            html_p = (p.get("html") or txt).strip()
+            txt_raw = p["text"].strip()
+            txt = re.sub(r'^[•·\-\*▪■]\s*', '', txt_raw).strip()
+            html_p = (p.get("html") or txt_raw).strip()
+            es_bold = bool(p.get("is_bold", False))
+            es_lista = bool(p.get("is_list", False))
+
             if not txt or txt == tema_titulo:
                 continue
 
-            # Si aparece un segundo "SUPUESTO PRÁCTICO 2" dentro del mismo archivo
+            # Si hubiera otro bloque "SUPUESTO PRÁCTICO" más adelante
             if pat_inicio_supuesto.match(txt):
-                if curr_q and (curr_q["explanation_lines"] or curr_q["question_text"]):
+                if curr_q is not None:
                     questions.append(curr_q)
                     curr_q = None
-                planteamiento_actual_html = []
+                lineas_planteamiento = []
                 leyendo_planteamiento = True
+                cierre_planteamiento_visto = False
+                contador_preguntas = 0
                 continue
 
             m_exp = pat_explicacion.match(txt)
@@ -1005,46 +1065,71 @@ class PDFQuizParser:
                     curr_q["explanation_lines"].append(m_rt.group(1).strip())
                 continue
 
-            m_q = pat_pregunta_num.match(txt)
+            # Mientras estamos leyendo el planteamiento, nunca cortar en los puntos "En primer lugar... En décimo lugar..."
+            if leyendo_planteamiento and pat_ordinal_enunciado.match(txt_raw):
+                lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": True})
+                continue
+
+            if leyendo_planteamiento and pat_cierre_planteamiento.search(txt):
+                lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": False})
+                cierre_planteamiento_visto = True
+                continue
+
+            # Detectar si la línea actual es una de las 10 preguntas del supuesto
+            m_q = pat_pregunta_explicita.match(txt)
             es_subapartado_respuesta = bool(re.match(r'^\d{1,2}\.[ºª°]', txt))
+            es_nueva_pregunta = False
+            num_q = 0
+            cuerpo_q = ""
 
             if m_q and not es_subapartado_respuesta:
-                num_q = int(m_q.group(1))
-                cuerpo_q = m_q.group(2).strip()
-                es_nueva_pregunta_valida = (
-                    leyendo_planteamiento or
-                    (curr_q is not None and len(curr_q["explanation_lines"]) > 0) or
-                    (curr_q is not None and num_q == curr_q.get("num", 0) + 1)
-                )
-                if es_nueva_pregunta_valida:
-                    if curr_q is not None:
-                        questions.append(curr_q)
-                    leyendo_planteamiento = False
-                    preamble_html_str = "".join(
-                        f"<p style='margin:0 0 6px 0; font-size:10pt !important; line-height:1.42; color:#1E293B !important; text-align:justify;'>{linea_h}</p>"
-                        for linea_h in planteamiento_actual_html
-                    )
-                    curr_q = {
-                        "num": num_q,
-                        "question_text": f"{num_q}. {cuerpo_q}",
-                        "preamble": preamble_html_str,
-                        "options": [],
-                        "answer": -1,
-                        "answer_text": "",
-                        "explanation_lines": [],
-                        "is_open": True,
-                        "tipo_abierta": "SUPUESTO",
-                        "tema_titulo": tema_titulo
-                    }
-                    continue
+                num_cand = int(m_q.group(1))
+                cuerpo_cand = m_q.group(2).strip()
+                if (
+                    cierre_planteamiento_visto or
+                    not leyendo_planteamiento and len(curr_q["explanation_lines"]) > 0 or
+                    pat_verbo_pregunta.match(cuerpo_cand)
+                ):
+                    es_nueva_pregunta = True
+                    num_q = num_cand
+                    cuerpo_q = cuerpo_cand
+            elif not es_subapartado_respuesta and (cierre_planteamiento_visto or (curr_q is not None and len(curr_q["explanation_lines"]) > 0)):
+                # En archivos .docx donde el número "1." viene en numeración automática de Word (w:numPr) y el texto empieza en negrita ("Determine con exactitud...")
+                if (es_bold or es_lista) and pat_verbo_pregunta.match(txt) and len(txt) > 35:
+                    es_nueva_pregunta = True
+                    num_q = contador_preguntas + 1
+                    cuerpo_q = txt
+
+            if es_nueva_pregunta:
+                if curr_q is not None:
+                    questions.append(curr_q)
+                leyendo_planteamiento = False
+                contador_preguntas = num_q
+                preamble_html_str = PDFQuizParser._formatear_html_planteamiento_supuesto(lineas_planteamiento)
+                curr_q = {
+                    "num": num_q,
+                    "question_text": f"{num_q}. {cuerpo_q}",
+                    "preamble": preamble_html_str,
+                    "options": [],
+                    "answer": -1,
+                    "answer_text": "",
+                    "explanation_lines": [],
+                    "is_open": True,
+                    "tipo_abierta": "SUPUESTO",
+                    "tema_titulo": tema_titulo
+                }
+                continue
 
             if leyendo_planteamiento:
-                planteamiento_actual_html.append(html_p)
+                lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": es_lista})
             elif curr_q is not None:
-                if not curr_q["explanation_lines"] and p.get("is_bold") and not txt.startswith(("·", "•", "-", "«", '"', "1.", "2.", "3.")):
+                if not curr_q["explanation_lines"] and es_bold and not txt.startswith(("·", "•", "-", "«", '"', "1.", "2.", "3.")):
                     curr_q["question_text"] += " " + txt
                 else:
-                    curr_q["explanation_lines"].append(txt)
+                    if es_lista and not re.match(r'^(?:[•\-\*▪■·]|\d+[\.\º\ª\)]|[a-zA-Z][\.\)])\s*', txt_raw):
+                        curr_q["explanation_lines"].append(f"· {txt}")
+                    else:
+                        curr_q["explanation_lines"].append(txt_raw)
 
         if curr_q is not None:
             questions.append(curr_q)
@@ -1086,7 +1171,8 @@ class PDFQuizParser:
                                 "text": txt_l,
                                 "html": f"<b>{txt_esc}</b>" if is_b else txt_esc,
                                 "is_bold": is_b,
-                                "is_heading": False
+                                "is_heading": False,
+                                "is_list": txt_l.startswith(("·", "•", "▪", "■"))
                             })
                 doc.close()
             except Exception:
@@ -1099,6 +1185,7 @@ class PDFQuizParser:
         buf_txt = ""
         buf_html = ""
         buf_bold = False
+        buf_list = False
         es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
 
         for item in lineas_estructuradas:
@@ -1107,7 +1194,12 @@ class PDFQuizParser:
             if not t or PDFQuizParser._es_basura_cabecera_o_pie(t):
                 continue
             if es_docx:
-                parrafos.append({"text": t, "html": h, "is_bold": item.get("is_bold", False)})
+                parrafos.append({
+                    "text": t,
+                    "html": h,
+                    "is_bold": item.get("is_bold", False),
+                    "is_list": item.get("is_list", False)
+                })
                 continue
 
             es_nuevo_bloque = (
@@ -1119,31 +1211,34 @@ class PDFQuizParser:
                 buf_txt = t
                 buf_html = h
                 buf_bold = item.get("is_bold", False)
+                buf_list = item.get("is_list", False)
             elif es_nuevo_bloque or buf_txt.endswith((".", ":", "?", "!", "»", '"')):
-                parrafos.append({"text": buf_txt, "html": buf_html, "is_bold": buf_bold})
+                parrafos.append({"text": buf_txt, "html": buf_html, "is_bold": buf_bold, "is_list": buf_list})
                 buf_txt = t
                 buf_html = h
                 buf_bold = item.get("is_bold", False)
+                buf_list = item.get("is_list", False)
             else:
                 buf_txt += " " + t
                 buf_html += " " + h
         if buf_txt:
-            parrafos.append({"text": buf_txt, "html": buf_html, "is_bold": buf_bold})
+            parrafos.append({"text": buf_txt, "html": buf_html, "is_bold": buf_bold, "is_list": buf_list})
 
         tema_titulo = ""
         for p in parrafos[:8]:
             if re.match(r'^TEMA\s+\d+', p["text"], re.IGNORECASE):
                 tema_titulo = p["text"].strip()
                 break
-            m_pag_tema = re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*(tema\s+\d+)\)', p["text"], re.IGNORECASE)
-            if m_pag_tema and not tema_titulo:
-                tema_titulo = m_pag_tema.group(1).upper()
+        if not tema_titulo:
+            for p in parrafos:
+                m_pag_tema = re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*(tema\s+\d+)\)', p["text"], re.IGNORECASE)
+                if m_pag_tema:
+                    tema_titulo = m_pag_tema.group(1).upper()
+                    break
 
-        # Si el modo es SUPUESTOS, usar el extractor específico que ignora lo anterior a SUPUESTO PRÁCTICO
         if modo in ("SUPUESTOS", "SUPUESTO"):
             return PDFQuizParser._parse_supuestos_practicos(parrafos, tema_titulo=tema_titulo)
 
-        # Si el modo es DESARROLLO, cortar si más abajo empieza un SUPUESTO PRÁCTICO para no mezclarlos
         parrafos_desarrollo = []
         for p in parrafos:
             if re.match(r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+|\s*[:\.\-].*)?$', p["text"].strip(), re.IGNORECASE):
