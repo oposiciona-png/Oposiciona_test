@@ -818,6 +818,7 @@ class PDFQuizParser:
                         es_lista = True
 
                 partes_txt = []
+                partes_html = []
                 chars_totales = 0
                 chars_negrita = 0
 
@@ -841,25 +842,33 @@ class PDFQuizParser:
                     txt_r = "".join(t_runs)
                     if txt_r:
                         partes_txt.append(txt_r)
+                        txt_esc = txt_r.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        partes_html.append(f"<b>{txt_esc}</b>" if r_bold else txt_esc)
                         n_ch = len(txt_r.strip())
                         chars_totales += n_ch
                         if r_bold:
                             chars_negrita += n_ch
 
                 texto_p = "".join(partes_txt).strip()
+                html_p = "".join(partes_html).strip()
                 if not texto_p:
                     continue
 
                 es_heading = bool(re.search(r'heading|titulo|encabezado|title', pStyle, re.IGNORECASE))
                 es_negrita = es_heading or (chars_totales > 0 and (chars_negrita / chars_totales) >= 0.65)
 
-                for sub_l in texto_p.split("\n"):
+                sub_lineas_txt = texto_p.split("\n")
+                sub_lineas_html = html_p.split("\n")
+                for idx_sl, sub_l in enumerate(sub_lineas_txt):
                     sub_l = sub_l.strip()
+                    sub_h = sub_lineas_html[idx_sl].strip() if idx_sl < len(sub_lineas_html) else sub_l
                     if sub_l:
-                        if es_lista and not re.match(r'^(?:[•\-\*▪■]|\d+[\.\)]|[a-zA-Z][\.\)])\s+', sub_l):
+                        if es_lista and not re.match(r'^(?:[•\-\*▪■·]|\d+[\.\)]|[a-zA-Z][\.\)])\s+', sub_l):
                             sub_l = f"• {sub_l}"
+                            sub_h = f"• {sub_h}"
                         lineas_info.append({
                             "text": sub_l,
+                            "html": sub_h,
                             "is_bold": es_negrita,
                             "is_heading": es_heading,
                             "style": pStyle
@@ -912,24 +921,142 @@ class PDFQuizParser:
             if l.startswith("[[H]]"):
                 es_cabecera_h = True
                 l = l.replace("[[H]]", "").strip()
+            elif re.match(r'^(?:EXPLICACI[ÓO]N|RESPUESTA\s+T[ÉE]CNICA)\s*:?$', l, re.IGNORECASE):
+                es_cabecera_h = True
             elif re.match(r'^(?:\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ]|EP[ÍI]GRAFE\s+\d+|APARTADO\s+\d+)', l) and len(l) < 135 and not l.endswith("."):
                 es_cabecera_h = True
 
             if es_cabecera_h:
                 bloques_html.append(
-                    f"<div style='font-size:15px; font-weight:800; color:#083B46 !important; margin-top:12px; margin-bottom:5px;'>{l}</div>"
+                    f"<div style='font-size:14.5px; font-weight:800; color:#083B46 !important; margin-top:12px; margin-bottom:5px;'>{l}</div>"
                 )
-            elif re.match(r'^(?:[•\-\*▪■]|\d{1,2}\)|\([a-z0-9]+\)|[a-g]\))\s+', l):
-                l_fmt = re.sub(r'^([•\-\*▪■]\s*[^:\.]{3,75}:)', r'<b>\1</b>', l)
+            elif re.match(r'^(?:[•\-\*▪■·]|\d{1,2}[\.\º\ª]*\)|\([a-z0-9]+\)|[a-g]\))\s*', l):
+                l_fmt = re.sub(r'^([•\-\*▪■·]\s*[^:\.]{3,90}:)', r'<b>\1</b>', l)
                 bloques_html.append(
                     f"<div style='margin-top:5px; margin-bottom:5px; padding-left:12px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
                 )
             else:
-                l_fmt = re.sub(r'^([A-ZÁÉÍÓÚÑ][^:\.]{2,75}:)', r'<b>\1</b>', l)
+                l_fmt = re.sub(r'^(\d{1,2}\.º\s+|(?:EXPLICACI[ÓO]N|RESPUESTA\s+T[ÉE]CNICA)\s*:|[A-ZÁÉÍÓÚÑ][^:\.]{2,75}:)', r'<b>\1</b>', l)
                 bloques_html.append(
                     f"<div style='margin-top:6px; margin-bottom:6px; line-height:1.52; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
                 )
         return "".join(bloques_html)
+
+    @staticmethod
+    def _parse_supuestos_practicos(parrafos, tema_titulo=""):
+        """
+        Extrae un Supuesto Práctico descartando cualquier texto previo (como Preguntas de Desarrollo)
+        que anteceda al encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS'.
+        Si no existe dicho encabezado, se entiende que el documento es un supuesto práctico desde el inicio.
+        Conserva el planteamiento con su formato original para mostrarlo en cada pregunta con letra de 10pt máximo.
+        """
+        pat_inicio_supuesto = re.compile(
+            r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+|\s*[:\.\-].*)?$',
+            re.IGNORECASE
+        )
+
+        idx_inicio = 0
+        for idx_p, p in enumerate(parrafos):
+            txt_p = p["text"].strip()
+            if pat_inicio_supuesto.match(txt_p):
+                idx_inicio = idx_p + 1
+                break
+
+        parrafos_utiles = parrafos[idx_inicio:] if idx_inicio < len(parrafos) else parrafos
+        if not parrafos_utiles:
+            return []
+
+        pat_pregunta_num = re.compile(r'^(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})[\.\-\)]\s+(.+)$', re.IGNORECASE)
+        pat_explicacion = re.compile(r'^EXPLICACI[ÓO]N\s*:\s*(.*)$', re.IGNORECASE)
+        pat_resp_tecnica = re.compile(r'^RESPUESTA\s+T[ÉE]CNICA\s*:\s*(.*)$', re.IGNORECASE)
+
+        planteamiento_actual_html = []
+        questions = []
+        curr_q = None
+        leyendo_planteamiento = True
+
+        for p in parrafos_utiles:
+            txt = p["text"].strip()
+            html_p = (p.get("html") or txt).strip()
+            if not txt or txt == tema_titulo:
+                continue
+
+            # Si aparece un segundo "SUPUESTO PRÁCTICO 2" dentro del mismo archivo
+            if pat_inicio_supuesto.match(txt):
+                if curr_q and (curr_q["explanation_lines"] or curr_q["question_text"]):
+                    questions.append(curr_q)
+                    curr_q = None
+                planteamiento_actual_html = []
+                leyendo_planteamiento = True
+                continue
+
+            m_exp = pat_explicacion.match(txt)
+            m_rt = pat_resp_tecnica.match(txt)
+
+            if m_exp and curr_q is not None:
+                curr_q["explanation_lines"].append("[[H]]📌 EXPLICACIÓN Y ANÁLISIS DEL SUPUESTO:")
+                if m_exp.group(1).strip():
+                    curr_q["explanation_lines"].append(m_exp.group(1).strip())
+                continue
+
+            if m_rt and curr_q is not None:
+                curr_q["explanation_lines"].append("[[H]]⚖️ RESPUESTA TÉCNICA Y FUNDAMENTACIÓN JURÍDICA:")
+                if m_rt.group(1).strip():
+                    curr_q["explanation_lines"].append(m_rt.group(1).strip())
+                continue
+
+            m_q = pat_pregunta_num.match(txt)
+            es_subapartado_respuesta = bool(re.match(r'^\d{1,2}\.[ºª°]', txt))
+
+            if m_q and not es_subapartado_respuesta:
+                num_q = int(m_q.group(1))
+                cuerpo_q = m_q.group(2).strip()
+                es_nueva_pregunta_valida = (
+                    leyendo_planteamiento or
+                    (curr_q is not None and len(curr_q["explanation_lines"]) > 0) or
+                    (curr_q is not None and num_q == curr_q.get("num", 0) + 1)
+                )
+                if es_nueva_pregunta_valida:
+                    if curr_q is not None:
+                        questions.append(curr_q)
+                    leyendo_planteamiento = False
+                    preamble_html_str = "".join(
+                        f"<p style='margin:0 0 6px 0; font-size:10pt !important; line-height:1.42; color:#1E293B !important; text-align:justify;'>{linea_h}</p>"
+                        for linea_h in planteamiento_actual_html
+                    )
+                    curr_q = {
+                        "num": num_q,
+                        "question_text": f"{num_q}. {cuerpo_q}",
+                        "preamble": preamble_html_str,
+                        "options": [],
+                        "answer": -1,
+                        "answer_text": "",
+                        "explanation_lines": [],
+                        "is_open": True,
+                        "tipo_abierta": "SUPUESTO",
+                        "tema_titulo": tema_titulo
+                    }
+                    continue
+
+            if leyendo_planteamiento:
+                planteamiento_actual_html.append(html_p)
+            elif curr_q is not None:
+                if not curr_q["explanation_lines"] and p.get("is_bold") and not txt.startswith(("·", "•", "-", "«", '"', "1.", "2.", "3.")):
+                    curr_q["question_text"] += " " + txt
+                else:
+                    curr_q["explanation_lines"].append(txt)
+
+        if curr_q is not None:
+            questions.append(curr_q)
+
+        salida_final = []
+        for q_item in questions:
+            exp_unida = "\n".join(q_item.pop("explanation_lines", [])).strip()
+            q_item.pop("num", None)
+            q_item["explanation"] = exp_unida
+            salida_final.append(q_item)
+
+        return salida_final
 
     @staticmethod
     def parse_abiertas_gestion(file_bytes, modo="DESARROLLO"):
@@ -954,8 +1081,10 @@ class PDFQuizParser:
                                 if "bold" in (s.get("font", "") or "").lower() or (s.get("flags", 0) & 16)
                             )
                             is_b = chars_tot > 0 and (chars_b / chars_tot) >= 0.65
+                            txt_esc = txt_l.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                             lineas_estructuradas.append({
                                 "text": txt_l,
+                                "html": f"<b>{txt_esc}</b>" if is_b else txt_esc,
                                 "is_bold": is_b,
                                 "is_heading": False
                             })
@@ -968,36 +1097,61 @@ class PDFQuizParser:
 
         parrafos = []
         buf_txt = ""
+        buf_html = ""
         buf_bold = False
+        es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
+
         for item in lineas_estructuradas:
             t = re.sub(r'\s+', ' ', item["text"]).strip()
+            h = re.sub(r'\s+', ' ', item.get("html") or t).strip()
             if not t or PDFQuizParser._es_basura_cabecera_o_pie(t):
                 continue
+            if es_docx:
+                parrafos.append({"text": t, "html": h, "is_bold": item.get("is_bold", False)})
+                continue
+
             es_nuevo_bloque = (
                 item.get("is_heading") or
                 item.get("is_bold") != buf_bold or
-                bool(re.match(r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|SUPUESTO\s+\d+|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+|[•\-\*▪■]\s+|[a-g]\)\s+)', t, re.IGNORECASE))
+                bool(re.match(r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+|[•\-\*▪■·]\s+|[a-g]\)\s+)', t, re.IGNORECASE))
             )
             if not buf_txt:
                 buf_txt = t
+                buf_html = h
                 buf_bold = item.get("is_bold", False)
             elif es_nuevo_bloque or buf_txt.endswith((".", ":", "?", "!", "»", '"')):
-                parrafos.append({"text": buf_txt, "is_bold": buf_bold})
+                parrafos.append({"text": buf_txt, "html": buf_html, "is_bold": buf_bold})
                 buf_txt = t
+                buf_html = h
                 buf_bold = item.get("is_bold", False)
             else:
                 buf_txt += " " + t
+                buf_html += " " + h
         if buf_txt:
-            parrafos.append({"text": buf_txt, "is_bold": buf_bold})
+            parrafos.append({"text": buf_txt, "html": buf_html, "is_bold": buf_bold})
 
         tema_titulo = ""
-        for p in parrafos[:6]:
+        for p in parrafos[:8]:
             if re.match(r'^TEMA\s+\d+', p["text"], re.IGNORECASE):
                 tema_titulo = p["text"].strip()
                 break
+            m_pag_tema = re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*(tema\s+\d+)\)', p["text"], re.IGNORECASE)
+            if m_pag_tema and not tema_titulo:
+                tema_titulo = m_pag_tema.group(1).upper()
+
+        # Si el modo es SUPUESTOS, usar el extractor específico que ignora lo anterior a SUPUESTO PRÁCTICO
+        if modo in ("SUPUESTOS", "SUPUESTO"):
+            return PDFQuizParser._parse_supuestos_practicos(parrafos, tema_titulo=tema_titulo)
+
+        # Si el modo es DESARROLLO, cortar si más abajo empieza un SUPUESTO PRÁCTICO para no mezclarlos
+        parrafos_desarrollo = []
+        for p in parrafos:
+            if re.match(r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+|\s*[:\.\-].*)?$', p["text"].strip(), re.IGNORECASE):
+                break
+            parrafos_desarrollo.append(p)
 
         pat_epigrafe = re.compile(
-            r'^(?:EP[ÍI]GRAFE\s+\d+[\.\:\-\s]*|PREGUNTA(?:\s+DE\s+DESARROLLO)?\s+\d+[\.\:\-\s]*|CUESTI[ÓO]N\s+\d+[\.\:\-\s]*|SUPUESTO(?:\s+PR[ÁA]CTICO)?\s+\d+[\.\:\-\s]*)(.+)$',
+            r'^(?:EP[ÍI]GRAFE\s+\d+[\.\:\-\s]*|PREGUNTA(?:\s+DE\s+DESARROLLO)?(?:\s+\d+)?[\.\:\-\s]*)(.*)$',
             re.IGNORECASE
         )
 
@@ -1005,12 +1159,12 @@ class PDFQuizParser:
         curr_title = ""
         curr_body = []
 
-        for p in parrafos:
+        for p in parrafos_desarrollo:
             txt = p["text"].strip()
             if txt == tema_titulo:
                 continue
             m_ep = pat_epigrafe.match(txt)
-            if m_ep:
+            if m_ep and (txt.upper().startswith("EPÍGRAFE") or txt.upper().startswith("EPIGRAFE") or txt.upper().startswith("PREGUNTA DE DESARROLLO")):
                 if curr_title and curr_body:
                     questions.append({
                         "question_text": curr_title,
@@ -1020,14 +1174,17 @@ class PDFQuizParser:
                         "answer_text": "",
                         "explanation": "\n".join(curr_body),
                         "is_open": True,
-                        "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                        "tipo_abierta": "DESARROLLO",
                         "tema_titulo": tema_titulo
                     })
-                curr_title = txt
+                resto_tit = m_ep.group(1).strip()
+                curr_title = resto_tit if resto_tit else txt
                 curr_body = []
             else:
                 if curr_title:
-                    if p.get("is_bold") and len(txt) < 135 and not txt.endswith("."):
+                    if curr_title.upper() == "PREGUNTA DE DESARROLLO" and not curr_body and len(txt) < 160:
+                        curr_title = f"PREGUNTA DE DESARROLLO: {txt}"
+                    elif p.get("is_bold") and len(txt) < 135 and not txt.endswith("."):
                         curr_body.append(f"[[H]]{txt}")
                     else:
                         curr_body.append(txt)
@@ -1041,12 +1198,12 @@ class PDFQuizParser:
                 "answer_text": "",
                 "explanation": "\n".join(curr_body),
                 "is_open": True,
-                "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                "tipo_abierta": "DESARROLLO",
                 "tema_titulo": tema_titulo
             })
 
-        if not questions and parrafos:
-            for p in parrafos:
+        if not questions and parrafos_desarrollo:
+            for p in parrafos_desarrollo:
                 txt = p["text"].strip()
                 if txt == tema_titulo:
                     continue
@@ -1061,7 +1218,7 @@ class PDFQuizParser:
                             "answer_text": "",
                             "explanation": "\n".join(curr_body),
                             "is_open": True,
-                            "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                            "tipo_abierta": "DESARROLLO",
                             "tema_titulo": tema_titulo
                         })
                     curr_title = txt
@@ -1078,7 +1235,7 @@ class PDFQuizParser:
                     "answer_text": "",
                     "explanation": "\n".join(curr_body),
                     "is_open": True,
-                    "tipo_abierta": "DESARROLLO" if modo == "DESARROLLO" else "SUPUESTO",
+                    "tipo_abierta": "DESARROLLO",
                     "tema_titulo": tema_titulo
                 })
 
@@ -1406,7 +1563,6 @@ def obtener_tests_segun_rol():
             "ADMINISTRATIVOS": dict(TESTS_DISPONIBLES_INVITADO.get("ADMINISTRATIVOS", {})),
             "GESTION": dict(TESTS_DISPONIBLES_INVITADO.get("GESTION", {})),
         }
-        # El invitado ve la opción DESARROLLO en GESTIÓN, pero vacía (sin acceso a los documentos)
         inv_res["GESTION"]["DESARROLLO"] = {}
         return inv_res
 
@@ -1439,6 +1595,7 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
             51: "TEMA 51: LA SEGURIDAD SOCIAL EN LA CONSTITUCIÓN ESPAÑOLA DE 1978 Y EL TRLGSS",
             52: "TEMA 52: CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA DE LA SEGURIDAD SOCIAL",
             53: "TEMA 53: AFILIACIÓN, ALTAS, BAJAS, CONVENIO ESPECIAL E INSCRIPCIÓN",
+            54: "TEMA 54: CONTINGENCIAS PROTEGIBLES: ACCIDENTE DE TRABAJO, ENFERMEDAD PROFESIONAL Y TERRORISMO",
             55: "TEMA 55: ACCIÓN PROTECTORA: CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
             56: "TEMA 56: REQUISITOS GENERALES DEL DERECHO A LAS PRESTACIONES Y RESPONSABILIDAD",
             57: "TEMA 57: INCAPACIDAD TEMPORAL",
@@ -1949,6 +2106,22 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     aud_b = (ev_out.get("auditoria") or {}).get("auditoria_bloques") or {}
     hay_desviacion = bool(aud_b.get("desviacion_epigrafe", False))
 
+    # Si viene etiqueta directa de SUPUESTO PRÁCTICO (sobre 10, sin criterios de tribunal)
+    m_sup = re.search(r'\[\[NOTA_SUPUESTO:\s*(\d+(?:[\.,]\d+)?)\s*\]\]', texto_ia, flags=re.IGNORECASE)
+    if m_sup:
+        nota_10 = round(max(0.0, min(10.0, float(m_sup.group(1).replace(",", ".")))), 2)
+        nota_50 = round(nota_10 * 5.0, 2)
+        texto_ia = re.sub(r'\[\[NOTA_SUPUESTO:[^\]]*\]\]\s*', '', texto_ia, flags=re.IGNORECASE).strip()
+        ev_out.update({
+            "nota": nota_10,
+            "nota_50": nota_50,
+            "pts_criterio_1": round(nota_10 * 4.5, 2),
+            "pts_criterio_2": 0.0,
+            "pts_criterio_3": 0.0,
+            "supera_umbral_20": nota_10 >= 5.0
+        })
+        return ev_out, texto_ia
+
     c1_val = c2_val = c3_val = None
 
     m_tag = re.search(
@@ -1997,7 +2170,8 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
 
     return ev_out, texto_ia
 
-def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
+def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARROLLO"):
+    """Alternativa analítica de respaldo por si en algún momento no hubiera conexión con los servidores de Google."""
     aud_b = aud.get("auditoria_bloques") or {}
     desv = aud_b.get("desviacion_epigrafe", False)
     mot_desv = aud_b.get("motivo_desviacion", "")
@@ -2019,6 +2193,17 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
     c3 = ev_fallback.get("pts_criterio_3", 0.0)
     n50 = ev_fallback.get("nota_50", 0.0)
     n10 = ev_fallback.get("nota", 0.0)
+
+    if modo == "SUPUESTO":
+        return (
+            f"1. **✅ Lo que has acertado en esta cuestión práctica:**\n"
+            f"- **Preceptos y elementos de la solución citados:** {arts_acertados_str}.\n"
+            f"- **Bloques o cálculos identificados:** {len(comp) + len(inc)} de {tot_ap}.\n\n"
+            f"2. **⚠️ Por qué obtienes esta nota (lo que ha faltado o debes revisar frente a la explicación):**\n"
+            f"- **Artículos de la solución no citados:** {arts_omitidos_str}.\n"
+            f"- Revisa a continuación la **Explicación y Respuesta Técnica oficial** para contrastar los cálculos exactos, plazos y fundamentación normativa.\n\n"
+            f"3. **🎯 Calificación de la cuestión práctica:** **`{n10:.2f} / 10 puntos`**"
+        )
 
     partes = []
     if desv:
@@ -2070,7 +2255,7 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud):
 
     return "\n\n".join(partes)
 
-def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None):
+def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None, modo="DESARROLLO"):
     aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
     if aviso_elegante:
         return aviso_elegante
@@ -2090,68 +2275,98 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         ", ".join([f"{s} (no fue presentada con su nombre completo antes)" for s, _ in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas empleadas por el alumno fueron correctamente presentadas)"
     )
-    alerta_desv_str = (
-        f"\n🚨 ATENCIÓN: Se ha detectado incongruencia con el epígrafe preguntado: {aud_b.get('motivo_desviacion')}\n"
-        "Si el alumno ha contestado un epígrafe distinto al preguntado (por ejemplo, hablar de Altas y Bajas cuando se pregunta Afiliación o Convenio Especial), la nota de Criterio 1 no puede superar los 10,00 puntos.\n"
-        if aud_b.get("desviacion_epigrafe") else ""
-    )
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
+    enunciado_limpio = re.sub(r'<[^>]+>', ' ', enunciado_supuesto or "").strip()
 
-    prompt = (
-        "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
-        "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
-        "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
-        "=== REGLAS EQUILIBRADAS DE VALORACIÓN DEL TRIBUNAL ===\n"
-        "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE VS. RESPUESTA PARCIAL PERO PERTINENTE (`" + pregunta + "`):**\n"
-        "   - **Cuándo SÍ debes suspender con firmeza (< 12 / 50 ptos):** Únicamente cuando el alumno conteste un epígrafe distinto al preguntado (por ejemplo, si el epígrafe preguntado es `Normas sobre afiliación`, `El convenio especial` o `Encuadramiento e inscripción` y el alumno pega un texto sobre `Altas y bajas en el Régimen General` omitiendo la institución preguntada) o cuando deje casi todo en blanco.\n"
-        "   - **Cuándo debes ser UN POCO MÁS INDULGENTE Y CONSTRUCTIVO (permitiendo alcanzar o superar los 22-30 / 45 puntos en Criterio 1):** Cuando el alumno SÍ está contestando al epígrafe preguntado, comprende bien el núcleo del tema y desarrolla correctamente una parte relevante (por ejemplo, explica bien las modalidades de alta —real, asimilada, presunta/pleno derecho y especial— y además aporta el procedimiento, efectos o altas/bajas indebidas), aunque haya olvidado algunos subapartados del esquema (como definir pluriempleo/pluriactividad o sujetos obligados) o haya explicado conceptos con sus propias palabras sin recordar todos los números de artículo. En estos casos, **valora con generosidad todo lo que sí sabe y aporta** para que su esfuerzo se vea recompensado y pueda superar el corte eliminatorio de 25/50 si la respuesta demuestra estudio y buena base.\n"
-        "   - **NO EXIJAS COMO OBLIGATORIO LO QUE NO ESTÉ EN LA EXPLICACIÓN OFICIAL DE ESTE EPÍGRAFE:** Si el alumno adelanta o añade conceptos conexos válidos del tema (como plazos de altas previas, efectos de las altas o las altas y bajas indebidas de los arts. 60 y 61 RIA), súmale puntos adicionales en el Criterio 1 por enriquecer la exposición."
-        f"{alerta_desv_str}\n"
-        "2. **REGLA EXACTA SOBRE PRESENTACIÓN DE SIGLAS (PROHIBIDO INVENTAR FALSOS POSITIVOS):**\n"
-        "   - Una sigla está **CORRECTAMENTE PRESENTADA** tanto si el alumno escribe su nombre completo seguido de la sigla entre paréntesis —por ejemplo: *«Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos de trabajadores en la Seguridad Social (RIA)»*— como si utiliza la fórmula *«..., en adelante, SIGLA»*.\n"
-        "   - **PROHIBIDO** acusar al alumno de usar siglas sin presentar si ya puso su nombre completo antes (como en el caso de `(RIA)`), y **PROHIBIDO** mencionar siglas que el alumno ni siquiera ha escrito en su texto.\n"
-        f"   - Auditoría automática verificada sobre el texto del alumno: **Siglas usadas sin presentar detectadas:** `{siglas_mal_str}` (respeta exactamente este dato y resta muy poquito —máximo 0,15 o 0,20 ptos— si hay alguna).\n\n"
-        "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MUY LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
-        "   - Omitir números de artículos incluidos en la explicación oficial debe restar **muy poco** cuando el alumno ha sabido explicar el concepto jurídico.\n"
-        "   - En el apartado 3 de tu informe, escribe en una línea limpia únicamente **`Artículos omitidos:`** seguido directamente de la relación de artículos omitidos.\n"
-        f"   - Relación detectada: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
-        "=== BAREMO OFICIAL DEL TRIBUNAL CALIFICADOR ===\n"
-        "- Puntuación total: de 0 a 50 puntos (mínimo 25,00 puntos para aprobar).\n"
-        "- Criterio 1 (0 a 45 puntos): Conocimiento y desarrollo de los apartados de la explicación oficial de este epígrafe + puntos extra por conceptos o artículos adicionales conexos válidos que mejoren el epígrafe - resta muy leve por los artículos omitidos de la explicación.\n"
-        "- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
-        "- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas (puntúa si Criterio 1 >= 20,00; resta muy levemente solo por las siglas que realmente haya usado el alumno sin presentar su nombre completo).\n\n"
-        f"=== EPÍGRAFE PREGUNTADO ===\n{enunciado_supuesto}\n{pregunta}\n\n"
-        f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (REFERENCIA DE CONTENIDO) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
-        f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-        f"=== DATOS DE AUDITORÍA VERIFICADOS ===\n"
-        f"- Artículos de la explicación citados por el alumno: {arts_acertados_str}\n"
-        f"- Artículos omitidos de la explicación: {arts_omitidos_str}\n"
-        f"- Artículos adicionales aportados por el alumno: {arts_extra_ok_str}\n"
-        f"- Siglas usadas por el alumno sin presentación previa: {siglas_mal_str}\n\n"
-        "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
-        "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con las puntuaciones numéricas (con punto decimal) que otorgas:\n"
-        "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
-        "A continuación, redacta tu dictamen analítico y motivador estructurado en estos 4 apartados:\n"
-        "1. **✅ Análisis de pertinencia, apartados acertados y aportaciones adicionales que enriquecen el epígrafe:**\n"
-        "   - Valora de forma constructiva y positiva todo lo que el alumno ha desarrollado bien respecto al epígrafe y destaca muy favorablemente los conceptos o artículos adicionales conexos (como efectos o altas/bajas indebidas) que ha aportado para enriquecer su respuesta.\n"
-        "2. **⚠️ Análisis constructivo de lo que falta por completar respecto a la explicación oficial:**\n"
-        "   - Explica con detalle analítico pero con tono cercano y pedagógico qué apartados o matices de la `EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE` le han faltado para alcanzar una nota de sobresaliente.\n"
-        "3. **⚖️ Rigor normativo y uso de siglas:**\n"
-        "   - Valora las normas y artículos bien citados (incluyendo la correcta presentación de siglas como `(RIA)` cuando lo haya hecho).\n"
-        f"   - Escribe en una línea limpia: **Artículos omitidos:** {arts_omitidos_str}\n"
-        f"   - Respecto a las siglas sin presentar, indica únicamente: **Siglas sin presentación previa:** {siglas_mal_str}\n"
-        "4. **🎓 Calificación por Criterios del Tribunal y Desglose sencillo de puntos sumados y restados:**\n"
-        "   - Muestra las puntuaciones otorgadas en:\n"
-        "     • **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
-        "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `X,XX / 3,00 puntos`\n"
-        "     • **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
-        "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
-        "   - Añade el bloque **📊 Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
-        "     • **➕ Qué te ha sumado puntos:** viñetas claras con los puntos aportados por cada bloque bien desarrollado, por los conceptos/artículos adicionales que mejoraron el epígrafe y por estructura/expresión.\n"
-        "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras con los puntos que faltaron por los apartados de la explicación oficial no incluidos, la resta leve por **Artículos omitidos** y la resta leve (si procede) por **siglas sin presentación previa**.\n"
-        "   - Cierra con **💡 Orientación motivadora de tus preparadores para seguir subiendo nota en este epígrafe:**."
-    )
+    if modo in ("SUPUESTO", "SUPUESTOS"):
+        prompt = (
+            "Actúa como el equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+            "Evalúa la respuesta del alumno a esta cuestión de un SUPUESTO PRÁCTICO comparándola directamente con la "
+            "EXPLICACIÓN Y RESPUESTA TÉCNICA OFICIAL de la pregunta (SIN aplicar baremos ni criterios formales de Tribunal C1/C2/C3).\n\n"
+            "=== REGLAS DE CORRECCIÓN DEL SUPUESTO PRÁCTICO ===\n"
+            "1. Califica la respuesta de **0,00 a 10,00 puntos** (siendo 5,00 el aprobado), aplicando un criterio justo, constructivo y ligeramente indulgente cuando el alumno identifique bien la solución jurídica o el planteamiento del cálculo.\n"
+            "2. Comprueba si el alumno:\n"
+            "   - Ha detectado la clave o «trampa» jurídica/matemática explicada en el bloque `EXPLICACION`.\n"
+            "   - Ha llegado al resultado numérico, plazo o calificación jurídica correcta indicada en `RESPUESTA TÉCNICA`.\n"
+            "   - Ha fundamentado su respuesta en la normativa aplicable (no penalices en exceso si omite el número exacto de algún artículo pero aplica bien la regla legal).\n\n"
+            f"=== PLANTEAMIENTO DEL SUPUESTO ===\n{enunciado_limpio}\n\n"
+            f"=== PREGUNTA PRÁCTICA ===\n{pregunta}\n\n"
+            f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL DE LA PREGUNTA ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+            f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
+            "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
+            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal):\n"
+            "[[NOTA_SUPUESTO: X.XX]]\n\n"
+            "A continuación, redacta una valoración clara, directa y formativa estructurada en estos 3 puntos:\n"
+            "1. **✅ Lo que has acertado en la resolución de la pregunta:**\n"
+            "   - Destaca los cálculos, plazos, conclusiones jurídicas y preceptos que el alumno ha resuelto correctamente.\n"
+            "2. **⚠️ Por qué obtienes esta nota (qué ha faltado o qué trampa del supuesto debes tener en cuenta):**\n"
+            "   - Explica con claridad qué matiz, cálculo, plazo o precepto de la explicación oficial le ha faltado o en qué punto se ha desviado, justificando de forma transparente el porqué de la nota.\n"
+            f"   - Indica en una línea limpia: **Artículos de la solución no citados:** {arts_omitidos_str}\n"
+            "3. **💡 Consejo práctico para clavar esta pregunta en el examen:**\n"
+            "   - Un consejo breve y directo para recordar la regla o fórmula aplicada."
+        )
+    else:
+        alerta_desv_str = (
+            f"\n🚨 ATENCIÓN: Se ha detectado incongruencia con el epígrafe preguntado: {aud_b.get('motivo_desviacion')}\n"
+            "Si el alumno ha contestado un epígrafe distinto al preguntado (por ejemplo, hablar de Altas y Bajas cuando se pregunta Afiliación o Convenio Especial), la nota de Criterio 1 no puede superar los 10,00 puntos.\n"
+            if aud_b.get("desviacion_epigrafe") else ""
+        )
+
+        prompt = (
+            "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+            "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
+            "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
+            "=== REGLAS EQUILIBRADAS DE VALORACIÓN DEL TRIBUNAL ===\n"
+            "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE VS. RESPUESTA PARCIAL PERO PERTINENTE (`" + pregunta + "`):**\n"
+            "   - **Cuándo SÍ debes suspender con firmeza (< 12 / 50 ptos):** Únicamente cuando el alumno conteste un epígrafe distinto al preguntado (por ejemplo, si el epígrafe preguntado es `Normas sobre afiliación`, `El convenio especial` o `Encuadramiento e inscripción` y el alumno pega un texto sobre `Altas y bajas en el Régimen General` omitiendo la institución preguntada) o cuando deje casi todo en blanco.\n"
+            "   - **Cuándo debes ser UN POCO MÁS INDULGENTE Y CONSTRUCTIVO (permitiendo alcanzar o superar los 22-30 / 45 puntos en Criterio 1):** Cuando el alumno SÍ está contestando al epígrafe preguntado, comprende bien el núcleo del tema y desarrolla correctamente una parte relevante (por ejemplo, explica bien las modalidades de alta —real, asimilada, presunta/pleno derecho y especial— y además aporta el procedimiento, efectos o altas/bajas indebidas), aunque haya olvidado algunos subapartados del esquema (como definir pluriempleo/pluriactividad o sujetos obligados) o haya explicado conceptos con sus propias palabras sin recordar todos los números de artículo. En estos casos, **valora con generosidad todo lo que sí sabe y aporta** para que su esfuerzo se vea recompensado y pueda superar el corte eliminatorio de 25/50 si la respuesta demuestra estudio y buena base.\n"
+            "   - **NO EXIJAS COMO OBLIGATORIO LO QUE NO ESTÉ EN LA EXPLICACIÓN OFICIAL DE ESTE EPÍGRAFE:** Si el alumno adelanta o añade conceptos conexos válidos del tema (como plazos de altas previas, efectos de las altas o las altas y bajas indebidas de los arts. 60 y 61 RIA), súmale puntos adicionales en el Criterio 1 por enriquecer la exposición."
+            f"{alerta_desv_str}\n"
+            "2. **REGLA EXACTA SOBRE PRESENTACIÓN DE SIGLAS (PROHIBIDO INVENTAR FALSOS POSITIVOS):**\n"
+            "   - Una sigla está **CORRECTAMENTE PRESENTADA** tanto si el alumno escribe su nombre completo seguido de la sigla entre paréntesis —por ejemplo: *«Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos de trabajadores en la Seguridad Social (RIA)»*— como si utiliza la fórmula *«..., en adelante, SIGLA»*.\n"
+            "   - **PROHIBIDO** acusar al alumno de usar siglas sin presentar si ya puso su nombre completo antes (como en el caso de `(RIA)`), y **PROHIBIDO** mencionar siglas que el alumno ni siquiera ha escrito en su texto.\n"
+            f"   - Auditoría automática verificada sobre el texto del alumno: **Siglas usadas sin presentar detectadas:** `{siglas_mal_str}` (respeta exactamente este dato y resta muy poquito —máximo 0,15 o 0,20 ptos— si hay alguna).\n\n"
+            "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MUY LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
+            "   - Omitir números de artículos incluidos en la explicación oficial debe restar **muy poco** cuando el alumno ha sabido explicar el concepto jurídico.\n"
+            "   - En el apartado 3 de tu informe, escribe en una línea limpia únicamente **`Artículos omitidos:`** seguido directamente de la relación de artículos omitidos.\n"
+            f"   - Relación detectada: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
+            "=== BAREMO OFICIAL DEL TRIBUNAL CALIFICADOR ===\n"
+            "- Puntuación total: de 0 a 50 puntos (mínimo 25,00 puntos para aprobar).\n"
+            "- Criterio 1 (0 a 45 puntos): Conocimiento y desarrollo de los apartados de la explicación oficial de este epígrafe + puntos extra por conceptos o artículos adicionales conexos válidos que mejoren el epígrafe - resta muy leve por los artículos omitidos de la explicación.\n"
+            "- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
+            "- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas (puntúa si Criterio 1 >= 20,00; resta muy levemente solo por las siglas que realmente haya usado el alumno sin presentar su nombre completo).\n\n"
+            f"=== EPÍGRAFE PREGUNTADO ===\n{enunciado_limpio}\n{pregunta}\n\n"
+            f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (REFERENCIA DE CONTENIDO) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+            f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
+            f"=== DATOS DE AUDITORÍA VERIFICADOS ===\n"
+            f"- Artículos de la explicación citados por el alumno: {arts_acertados_str}\n"
+            f"- Artículos omitidos de la explicación: {arts_omitidos_str}\n"
+            f"- Artículos adicionales aportados por el alumno: {arts_extra_ok_str}\n"
+            f"- Siglas usadas por el alumno sin presentación previa: {siglas_mal_str}\n\n"
+            "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
+            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con las puntuaciones numéricas (con punto decimal) que otorgas:\n"
+            "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
+            "A continuación, redacta tu dictamen analítico y motivador estructurado en estos 4 apartados:\n"
+            "1. **✅ Análisis de pertinencia, apartados acertados y aportaciones adicionales que enriquecen el epígrafe:**\n"
+            "   - Valora de forma constructiva y positiva todo lo que el alumno ha desarrollado bien respecto al epígrafe y destaca muy favorablemente los conceptos o artículos adicionales conexos (como efectos o altas/bajas indebidas) que ha aportado para enriquecer su respuesta.\n"
+            "2. **⚠️ Análisis constructivo de lo que falta por completar respecto a la explicación oficial:**\n"
+            "   - Explica con detalle analítico pero con tono cercano y pedagógico qué apartados o matices de la `EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE` le han faltado para alcanzar una nota de sobresaliente.\n"
+            "3. **⚖️ Rigor normativo y uso de siglas:**\n"
+            "   - Valora las normas y artículos bien citados (incluyendo la correcta presentación de siglas como `(RIA)` cuando lo haya hecho).\n"
+            f"   - Escribe en una línea limpia: **Artículos omitidos:** {arts_omitidos_str}\n"
+            f"   - Respecto a las siglas sin presentar, indica únicamente: **Siglas sin presentación previa:** {siglas_mal_str}\n"
+            "4. **🎓 Calificación por Criterios del Tribunal y Desglose sencillo de puntos sumados y restados:**\n"
+            "   - Muestra las puntuaciones otorgadas en:\n"
+            "     • **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
+            "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `X,XX / 3,00 puntos`\n"
+            "     • **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
+            "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
+            "   - Añade el bloque **📊 Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
+            "     • **➕ Qué te ha sumado puntos:** viñetas claras con los puntos aportados por cada bloque bien desarrollado, por los conceptos/artículos adicionales que mejoraron el epígrafe y por estructura/expresión.\n"
+            "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras con los puntos que faltaron por los apartados de la explicación oficial no incluidos, la resta leve por **Artículos omitidos** y la resta leve (si procede) por **siglas sin presentación previa**.\n"
+            "   - Cierra con **💡 Orientación motivadora de tus preparadores para seguir subiendo nota en este epígrafe:**."
+        )
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -2176,7 +2391,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         except Exception:
             continue
 
-    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud)
+    return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo=modo)
 
 def sincronizar_progreso_navegador():
     try:
@@ -2241,20 +2456,20 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     id_test_limpio = re.sub(r'\W+', '_', nombre_pdf)
     tema_vis = obtener_etiqueta_tema_visible(nombre_pdf, q)
     usuario_rep = (st.session_state.get('email') or "Alumno Oposiciona").strip()
-    preamble_txt = re.sub(r'\*\*|\🏷️', '', q.get('preamble', '')).strip()
+    preamble_txt = re.sub(r'<[^>]+>|\*\*|\🏷️', '', q.get('preamble', '')).strip()
     pregunta_txt = q.get('question_text', '').strip()
     exp_limpia = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').replace("[[H]]", "").strip(), flags=re.IGNORECASE).strip() or "Sin explicación disponible."
 
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
         f"<b style='color:#bf360c !important; font-size:15px;'>🛠️ Reportar Error en {tipo_lbl} {num_pregunta} a info@oposiciona.es</b><br>"
-        f"<span style='font-size:13px; color:#5d4037 !important;'>{'Se enviará una ficha específica con tu comentario, el Tema, el Epígrafe, tu Respuesta escrita, el Dictamen de corrección generado y el Texto mínimo oficial del epígrafe.' if es_abierta else 'Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.'}</span>"
+        f"<span style='font-size:13px; color:#5d4037 !important;'>{'Se enviará una ficha específica con tu comentario, el Tema, el enunciado, tu Respuesta escrita, el Dictamen de corrección generado y la Explicación oficial.' if es_abierta else 'Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.'}</span>"
         "</div>",
         unsafe_allow_html=True
     )
 
     placeholder_txt = (
-        "Ejemplo: Tengo una duda sobre la valoración de este epígrafe o hay una errata en el texto oficial..."
+        "Ejemplo: Tengo una duda sobre la valoración o hay una errata en la explicación oficial..."
         if es_abierta else
         "Ejemplo: Falta un 'NO' en el enunciado, la respuesta correcta debería ser la b), o se ha cortado una frase..."
     )
@@ -2289,10 +2504,10 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                     "_replyto": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
                     "01_COMENTARIO_DEL_ALUMNO": f"🚨 « {motivo.strip()} »",
                     "02_TEMA_Y_ALUMNO": f"📘 Tema: {tema_vis}   |   👤 Alumno: {usuario_rep}   |   Archivo: {nombre_pdf}",
-                    "03_EPIGRAFE": f"📝 {pregunta_txt}",
+                    "03_PREGUNTA_O_EPIGRAFE": f"📝 {pregunta_txt}",
                     "04_RESPUESTA_ESCRITA_POR_EL_ALUMNO": f"✍️ {resp_alumno_env}",
                     "05_DICTAMEN_DE_CORRECCION_GENERADO": f"🤖 {dictamen_env}",
-                    "06_TEXTO_MINIMO_OFICIAL_DEL_EPIGRAFE": f"📖 {exp_limpia}",
+                    "06_EXPLICACION_OFICIAL": f"📖 {exp_limpia}",
                     "_template": "box",
                     "_captcha": "false"
                 }
@@ -2427,6 +2642,8 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
     cat_limpia = categoria_sel or st.session_state.get('saved_cat', '')
     if cat_limpia in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
         cat_limpia = "DESARROLLO"
+    elif cat_limpia in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+        cat_limpia = "SUPUESTOS"
     st.session_state.test_cat = cat_limpia
     st.session_state.mostrar_opciones_simulacro = False
     cat_actual = st.session_state.test_cat
@@ -2441,7 +2658,7 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
                         st.error("No se encontraron preguntas o epígrafes de desarrollo en este documento.")
                     else:
                         procesar_preguntas(raw_qs, barajar=False)
-                elif cat_actual in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+                elif cat_actual == "SUPUESTOS":
                     raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
                     if not raw_qs:
                         st.error("No se encontraron supuestos prácticos en este documento.")
@@ -2792,7 +3009,6 @@ if not st.session_state.questions:
         min-width: 135px !important;
         margin-right: 12px !important;
     }
-    /* Botones compactos dentro de los desplegables de temas para que ocupen menos y entren mejor en pantalla */
     [data-testid="stExpanderDetails"] div.stButton > button {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
@@ -2863,9 +3079,10 @@ if not st.session_state.questions:
         titulo_paso_4 = "4. Selección de Test"
 
     st.markdown(f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
-    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
-        ej_txt = "2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos)" if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] else "2.º Ejercicio — 2.ª Parte (Supuesto Práctico: 0 a 50 ptos)"
-        st.info(f"🔒 **Modo Administrador — {ej_txt}:** Soporta indistintamente archivos Word (`.docx`) y PDF (`.pdf`). Valoración integral por IA comparando el texto del alumno con la explicación oficial según los Criterios Oficiales del Tribunal (0-45 ptos conocimiento y normativa; 0-3 ptos orden de ideas y 0-2 ptos expresión escrita condicionados a alcanzar ≥ 20/45; mínimo eliminatorio 25/50 ptos).")
+    if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] and es_admin:
+        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Valoración por IA según los Criterios Oficiales del Tribunal.")
+    elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
+        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en tamaño 10pt) y valora cada cuestión de 0 a 10 comparándola directamente con la explicación y solución oficial.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -2988,18 +3205,23 @@ if not st.session_state.questions:
             if uf is not None:
                 limpiar_estados_reportes_error()
                 es_docx_subido = uf.name.lower().endswith(".docx")
-                cat_local = "DESARROLLO" if (categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] or es_docx_subido) else (categoria if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] else "ARCHIVO LOCAL")
+                if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+                    cat_local = "SUPUESTOS"
+                elif categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] or es_docx_subido:
+                    cat_local = "DESARROLLO"
+                else:
+                    cat_local = "ARCHIVO LOCAL"
                 st.session_state.update(modo_avance=modo_avance, test_name=uf.name, test_esp=especialidad, test_cat=cat_local)
                 max_op_local = 3 if "GESTI" in especialidad.upper() else 4
                 with st.spinner("Procesando documento local..."):
                     file_bytes_local = uf.read()
-                    if cat_local == "DESARROLLO" or PDFQuizParser.es_archivo_docx(file_bytes_local):
-                        rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="DESARROLLO")
-                        if not rqs: st.error("No se encontraron preguntas o epígrafes de desarrollo en este documento.")
-                        else: procesar_preguntas(rqs, barajar=False)
-                    elif cat_local in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+                    if cat_local == "SUPUESTOS":
                         rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="SUPUESTOS")
                         if not rqs: st.error("No se encontraron supuestos prácticos en este documento.")
+                        else: procesar_preguntas(rqs, barajar=False)
+                    elif cat_local == "DESARROLLO" or PDFQuizParser.es_archivo_docx(file_bytes_local):
+                        rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="DESARROLLO")
+                        if not rqs: st.error("No se encontraron preguntas o epígrafes de desarrollo en este documento.")
                         else: procesar_preguntas(rqs, barajar=False)
                     else:
                         rqs = PDFQuizParser.parse(file_bytes_local, max_options=max_op_local)
@@ -3145,6 +3367,7 @@ elif not st.session_state.finished:
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
     puede_rep = usuario_puede_reportar()
     es_abierta = bool(q.get("is_open", False))
+    es_supuesto_q = bool(q.get("tipo_abierta") == "SUPUESTO")
     nombre_test_act = st.session_state.get("test_name") or "Test"
     id_test_act = re.sub(r'\W+', '_', nombre_test_act)
 
@@ -3159,20 +3382,41 @@ elif not st.session_state.finished:
     )
 
     if q.get('preamble'):
-        st.markdown(
-            f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; font-size:15px; line-height:1.45; text-align:justify; color:#1E293B !important;'>{q['preamble']}</div>",
-            unsafe_allow_html=True
-        )
-    st.markdown(f"<p style='font-size: 19px; font-weight: 600; color: #2C3E50 !important; margin-bottom: 15px; line-height: 1.3; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
+        if es_supuesto_q:
+            # Planteamiento fijo del Supuesto Práctico manteniendo su formato original y con letra máxima de 10pt
+            st.markdown(
+                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:10pt !important; line-height:1.42; text-align:justify; color:#1E293B !important;'>"
+                f"<div style='font-size:10pt !important; font-weight:800; color:#1E3A8A !important; margin-bottom:6px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;'>📋 PLANTEAMIENTO DEL SUPUESTO PRÁCTICO</div>"
+                f"{q['preamble']}"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; font-size:15px; line-height:1.45; text-align:justify; color:#1E293B !important;'>{q['preamble']}</div>",
+                unsafe_allow_html=True
+            )
+
+    st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
 
     if es_abierta:
-        altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 160
+        altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 170
+        lbl_textarea = (
+            "✍️ Escribe aquí tu respuesta razonada a la cuestión planteada (cálculos, plazos, calificación jurídica y normativa aplicable):"
+            if es_supuesto_q else
+            "✍️ Escribe aquí tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):"
+        )
+        placeholder_textarea = (
+            "Redacta aquí tu solución razonada al supuesto práctico, detallando los cálculos y artículos aplicables..."
+            if es_supuesto_q else
+            "Redacta aquí tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
+        )
         sel_opt = st.text_area(
-            "✍️ Escribe aquí tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):",
+            lbl_textarea,
             value=stat.get("selected") or "",
             height=altura_caja,
             key=f"open_txt_{idx}",
-            placeholder="Redacta aquí tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
+            placeholder=placeholder_textarea
         )
         if st.session_state.get(f"open_txt_{idx}") is not None:
             sel_opt = st.session_state.get(f"open_txt_{idx}")
@@ -3236,6 +3480,7 @@ elif not st.session_state.finished:
             resp_of = (q.get("answer_text") or "").strip()
             exp_of = (q.get("explanation") or "").strip()
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
+            modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
             if not txt_alumno:
                 st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que la IA evalúe tu ejercicio.")
             else:
@@ -3254,9 +3499,14 @@ elif not st.session_state.finished:
                         ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
                         stat["last_evaluated_text"] = txt_alumno
                         clave_activa = obtener_gemini_api_key_activa()
-                        with st.spinner("🤖 Analizando y valorando tu respuesta frente a la explicación oficial según los Criterios del Tribunal..."):
+                        msg_spinner = (
+                            "🤖 Comparando tu respuesta con la solución oficial de la pregunta..."
+                            if es_supuesto_q else
+                            "🤖 Analizando y valorando tu respuesta frente a la explicación oficial según los Criterios del Tribunal..."
+                        )
+                        with st.spinner(msg_spinner):
                             stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                                clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev
+                                clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev, modo=modo_corr
                             )
                         stat["ai_eval"] = ev
                         stat["open_score"] = ev.get("nota", 0.0)
@@ -3268,40 +3518,66 @@ elif not st.session_state.finished:
                     c1_q = ev.get("pts_criterio_1", 0.0)
                     c2_q = ev.get("pts_criterio_2", 0.0)
                     c3_q = ev.get("pts_criterio_3", 0.0)
-                    aprobado_q = n50_q >= 25.0
-                    bg_card = "#ecfdf5" if aprobado_q else "#fff7ed"
-                    border_card = "#16a34a" if aprobado_q else "#ea580c"
-                    color_nota = "#15803d" if aprobado_q else "#c2410c"
-                    badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
 
-                    st.markdown(
-                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
-                        f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
-                        f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
-                        f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
-                        f"<b>Criterio 1 (Conocimiento y normativa):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
-                        f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
-                        f"<b>Criterio 3 (Expresión escrita):</b> {c3_q:.2f} / 2,00 ptos"
-                        f"</div>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
+                    if es_supuesto_q:
+                        # En SUPUESTOS se muestra directamente la nota sobre 10 y el porqué (sin Criterios de Tribunal)
+                        aprobado_s = n10_q >= 5.0
+                        bg_card = "#ecfdf5" if aprobado_s else "#fff7ed"
+                        border_card = "#16a34a" if aprobado_s else "#ea580c"
+                        color_nota = "#15803d" if aprobado_s else "#c2410c"
+                        badge_txt = "✅ CUESTIÓN PRÁCTICA SUPERADA" if aprobado_s else "⚠️ CUESTIÓN A REFORZAR"
 
-                    st.markdown(
-                        f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
-                        f"{NOTA_METODOLOGICA_PREPARADORES}"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
+                        st.markdown(
+                            f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:12px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
+                            f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:2px;'>🎯 RESULTADO DE TU RESPUESTA A LA CUESTIÓN PRÁCTICA</div>"
+                            f"<div style='font-size:26px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>NOTA: {n10_q:.2f} / 10 PUNTOS</div>"
+                            f"<div style='font-size:14px; font-weight:700; color:#1E293B !important;'>{badge_txt}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
 
-                    st.markdown(
-                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(stat.get("ai_feedback") or "")
+                        st.markdown(
+                            "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
+                            "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 VALORACIÓN Y PORQUÉ DE TU NOTA (COMPARATIVA CON LA SOLUCIÓN)</div>"
+                            "</div>",
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(stat.get("ai_feedback") or "")
+                    else:
+                        aprobado_q = n50_q >= 25.0
+                        bg_card = "#ecfdf5" if aprobado_q else "#fff7ed"
+                        border_card = "#16a34a" if aprobado_q else "#ea580c"
+                        color_nota = "#15803d" if aprobado_q else "#c2410c"
+                        badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
+
+                        st.markdown(
+                            f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
+                            f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
+                            f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
+                            f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
+                            f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
+                            f"<b>Criterio 1 (Conocimiento y normativa):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
+                            f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
+                            f"<b>Criterio 3 (Expresión escrita):</b> {c3_q:.2f} / 2,00 ptos"
+                            f"</div>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+
+                        st.markdown(
+                            f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
+                            f"{NOTA_METODOLOGICA_PREPARADORES}"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+
+                        st.markdown(
+                            "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
+                            "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
+                            "</div>",
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(stat.get("ai_feedback") or "")
 
                     if resp_of and resp_of != exp_of:
                         st.markdown(
@@ -3319,7 +3595,7 @@ elif not st.session_state.finished:
                             )
                         else:
                             cabecera_exp_html = (
-                                f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>📖 Explicación y Fundamentación Legal:</div>"
+                                f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>📖 Solución y Explicación Oficial de la Pregunta:</div>"
                             )
                         st.markdown(
                             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 16px 18px; border-radius: 6px; margin-top: 10px;'>"
@@ -3353,18 +3629,21 @@ else:
     suma_notas_abiertas = 0.0
     suma_notas_50 = 0.0
     es_test_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
+    es_test_supuestos = any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions)
 
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         if q.get("is_open", False):
             preg_eval += 1
+            es_sup_i = bool(q.get("tipo_abierta") == "SUPUESTO")
+            modo_i = "SUPUESTO" if es_sup_i else "DESARROLLO"
             txt_al = (stat.get("selected") or "").strip()
             if not txt_al:
                 blancos += 1
-                stat['final_status'] = "⚪ En blanco (0,00 / 50 ptos)"
+                stat['final_status'] = "⚪ En blanco (0,00 / 10)" if es_sup_i else "⚪ En blanco (0,00 / 50 ptos)"
             elif detectar_respuesta_inapropiada_o_sin_interes(txt_al):
                 fallos += 1
-                stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
+                stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 10)" if es_sup_i else "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
             else:
                 ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
                 if stat.get("last_evaluated_text") == txt_al and stat.get("ai_eval"):
@@ -3373,7 +3652,7 @@ else:
                     ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
                     clave_activa = obtener_gemini_api_key_activa()
                     stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                        clave_activa, q.get("preamble", ""), q["question_text"], txt_al, q.get("answer_text", ""), q.get("explanation", ""), ev_fallback=ev
+                        clave_activa, q.get("preamble", ""), q["question_text"], txt_al, q.get("answer_text", ""), q.get("explanation", ""), ev_fallback=ev, modo=modo_i
                     )
                     stat["last_evaluated_text"] = txt_al
                     stat["ai_eval"] = ev
@@ -3381,12 +3660,20 @@ else:
                 nota_q_50 = ev["nota_50"]
                 suma_notas_abiertas += nota_q
                 suma_notas_50 += nota_q_50
-                if nota_q_50 >= 25.0:
-                    aciertos += 1
-                    stat['final_status'] = f"✅ Superada ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
+                if es_sup_i:
+                    if nota_q >= 5.0:
+                        aciertos += 1
+                        stat['final_status'] = f"✅ Superada ({nota_q:.2f} / 10)"
+                    else:
+                        fallos += 1
+                        stat['final_status'] = f"⚠️ A reforzar ({nota_q:.2f} / 10)"
                 else:
-                    fallos += 1
-                    stat['final_status'] = f"⚠️ Inferior al corte de 25 ptos ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
+                    if nota_q_50 >= 25.0:
+                        aciertos += 1
+                        stat['final_status'] = f"✅ Superada ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
+                    else:
+                        fallos += 1
+                        stat['final_status'] = f"⚠️ Inferior al corte de 25 ptos ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
         elif q['answer'] != -1:
             preg_eval += 1
             co = q['options'][q['answer']]
@@ -3500,7 +3787,8 @@ else:
                 } else disp();
             })();
             </script>""", height=0)
-        st.markdown("<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><div style='color: #1b5e20 !important; margin: 0; font-size: 22px; font-weight: 700;'>🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉</div><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
+        msg_enhorabuena = "🎉 ¡ENHORABUENA, HAS SUPERADO EL SUPUESTO PRÁCTICO! 🎉" if es_test_supuestos else "🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉"
+        st.markdown(f"<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><div style='color: #1b5e20 !important; margin: 0; font-size: 22px; font-weight: 700;'>{msg_enhorabuena}</div><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
         cr1, cr2, cr3 = st.columns([1, 0.4, 1])
         with cr2:
             try: st.image("test-utiles-768x768.png", use_container_width=True)
@@ -3517,7 +3805,20 @@ else:
     st.markdown("<div style='text-align: center; font-size: 22px; font-weight: 700; color: #2C3E50 !important; margin-top: -10px; margin-bottom: 6px;'>📊 RESULTADOS FINALES</div>", unsafe_allow_html=True)
     st.markdown(f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1f77b4 !important; margin-bottom: 15px;'>📘 {etiqueta_tema_fin}</div>", unsafe_allow_html=True)
 
-    if es_test_abierto:
+    if es_test_supuestos:
+        st.markdown(
+            f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
+            f"✅ Cuestiones superadas (≥ 5/10): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ A reforzar (< 5/10): <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
+            f"</div>"
+            f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
+            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 CALIFICACIÓN MEDIA DEL SUPUESTO PRÁCTICO</div>"
+            f"<div style='text-align: center; font-size: 24px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
+            f"🎓 NOTA MEDIA: {nota_oposicion_10:.2f} / 10 PUNTOS"
+            f"</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+    elif es_test_abierto:
         st.markdown(
             f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
             f"✅ Superadas (≥ 25/50): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Inferiores a 25/50: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
@@ -3584,15 +3885,20 @@ else:
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if q.get("is_open") else "Pregunta")
-        co = (q.get('answer_text') or "Ver texto mínimo del epígrafe debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
+        co = (q.get('answer_text') or "Ver solución y explicación debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
-        if q.get("tipo_abierta") == "DESARROLLO":
+        if q.get("tipo_abierta") in ("DESARROLLO", "SUPUESTO"):
             eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema_fin)
-            cabecera_res_html = (
-                f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
-                f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
-            )
+            if q.get("tipo_abierta") == "DESARROLLO":
+                cabecera_res_html = (
+                    f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
+                    f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
+                )
+            else:
+                cabecera_res_html = (
+                    f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>📖 Solución y Explicación Oficial de la Cuestión {i+1}:</div>"
+                )
         else:
             et_limpia = PDFQuizParser._limpiar_cabeceras_incrustadas(et, etiqueta_tema_fin)
             lineas_res_limpias = [
@@ -3601,11 +3907,17 @@ else:
             ]
             eh = "".join([f"<div style='margin-top: 6px; margin-bottom: 4px; line-height: 1.45; color: #0c5460 !important;'>{p}</div>" for p in lineas_res_limpias])
             cabecera_res_html = "<div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>📖 Explicación:</div>"
-        ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>" if q.get('preamble') else ""
+
+        ph = ""
+        if q.get('preamble') and q.get("tipo_abierta") != "SUPUESTO":
+            ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>"
+        elif q.get('preamble') and q.get("tipo_abierta") == "SUPUESTO" and i == 0:
+            ph = f"<div style='background:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:10px 12px; margin-bottom:8px; font-size:10pt !important; line-height:1.4; text-align:justify; color:#1E293B !important;'><div style='font-weight:800; color:#1E3A8A !important; margin-bottom:4px;'>📋 Planteamiento del Supuesto Práctico:</div>{q['preamble']}</div>"
+
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
-            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
             f"{ph}"
+            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q['question_text']}</div>"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
@@ -3635,4 +3947,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
-
