@@ -2510,7 +2510,6 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     aud_b = (ev_out.get("auditoria") or {}).get("auditoria_bloques") or {}
     hay_desviacion = bool(aud_b.get("desviacion_epigrafe", False))
 
-    # Si viene etiqueta directa de SUPUESTO PRÁCTICO (sobre 10, sin criterios de tribunal)
     m_sup = re.search(r'\[\[NOTA_SUPUESTO:\s*(\d+(?:[\.,]\d+)?)\s*\]\]', texto_ia, flags=re.IGNORECASE)
     if m_sup:
         nota_10 = round(max(0.0, min(10.0, float(m_sup.group(1).replace(",", ".")))), 2)
@@ -2575,7 +2574,6 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     return ev_out, texto_ia
 
 def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARROLLO"):
-    """Alternativa analítica de respaldo por si en algún momento no hubiera conexión con los servidores de Google."""
     aud_b = aud.get("auditoria_bloques") or {}
     desv = aud_b.get("desviacion_epigrafe", False)
     mot_desv = aud_b.get("motivo_desviacion", "")
@@ -3252,6 +3250,60 @@ def handle_radio_change():
         else:
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
 
+def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_correcta_final=None):
+    """
+    Actualiza en la explicación cualquier referencia a las letras de opción ('a', 'b', 'c', 'd')
+    para que tras barajar las opciones coincidan siempre con las letras reales en pantalla:
+    - 'La respuesta correcta es la b)' -> 'La respuesta correcta es la a)'
+    - '(opción a)', "opción 'b'", 'opciones a, b y d' -> actualizadas según el nuevo orden.
+    """
+    if not texto_exp:
+        return ""
+
+    txt = texto_exp
+
+    def _map_char(ch):
+        c_low = ch.lower()
+        nuevo = mapa_letras.get(c_low, c_low)
+        return nuevo.upper() if ch.isupper() else nuevo
+
+    # 1. Actualizar 'La respuesta correcta es la X)' / 'Opción correcta: X' con la letra correcta real en pantalla
+    if letra_correcta_final:
+        txt = re.sub(
+            r'((?:la\s+)?(?:respuesta|opci[óo]n)\s+correcta\s+(?:es\s+la|es)\s*[:\s]*[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|$))',
+            lambda m: f"{m.group(1)}{letra_correcta_final.upper() if m.group(2).isupper() else letra_correcta_final}{m.group(3)}",
+            txt,
+            flags=re.IGNORECASE
+        )
+
+    # 2. Actualizar expresiones singulares del tipo: "opción 'b'", "opción b)", "(opción a)"
+    txt = re.sub(
+        r'\b(opci[óo]n\s+[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|\)|$))',
+        lambda m: f"{m.group(1)}{_map_char(m.group(2))}{m.group(3)}",
+        txt,
+        flags=re.IGNORECASE
+    )
+
+    # 3. Actualizar listas del tipo: "Las opciones a, b y d"
+    def _reemplazar_lista_opciones(m):
+        pref = m.group(1)
+        cuerpo_lista = m.group(2)
+        cuerpo_actualizado = re.sub(
+            r'\b([a-dA-D])\b',
+            lambda sm: _map_char(sm.group(1)) if sm.group(1).lower() != "y" else sm.group(1),
+            cuerpo_lista
+        )
+        return f"{pref}{cuerpo_actualizado}"
+
+    txt = re.sub(
+        r'\b(opciones\s+)([a-dA-D](?:\s*,\s*[a-dA-D])*\s+y\s+[a-dA-D])\b',
+        _reemplazar_lista_opciones,
+        txt,
+        flags=re.IGNORECASE
+    )
+
+    return txt
+
 def preparar_preguntas_como_en_test(raw_qs, barajar=True):
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -3266,23 +3318,62 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
         if q.get("is_open", False):
             qs_preparadas.append(q)
             continue
-        cleaned_options, tiene_fija = [], False
-        for opt in q.get("options", []):
-            to = re.sub(r'^[a-zA-Z][\)\.-]\s*', '', opt).strip()
-            cleaned_options.append(to)
+
+        opciones_originales = []
+        tiene_fija = False
+        for idx_o, opt in enumerate(q.get("options", [])):
+            m_let_orig = re.match(r'^([a-zA-Z])[\)\.-]\s*(.+)$', opt.strip())
+            if m_let_orig:
+                let_o = m_let_orig.group(1).lower()
+                to = m_let_orig.group(2).strip()
+            else:
+                let_o = chr(97 + idx_o)
+                to = opt.strip()
+            opciones_originales.append((let_o, to))
             if any(re.search(p, to.lower()) for p in patrones_fijos):
                 tiene_fija = True
+
+        cleaned_options = [to for _, to in opciones_originales]
         corr = cleaned_options[q["answer"]] if 0 <= q.get("answer", -1) < len(cleaned_options) else None
+
         if not tiene_fija and barajar:
             random.shuffle(cleaned_options)
+
         if corr is not None and corr in cleaned_options:
             q["answer"] = cleaned_options.index(corr)
         else:
             q["answer"] = -1
+
+        # Construir el mapa de cómo han cambiado las letras respecto al orden previo al barajado
+        mapa_letras = {}
+        for let_orig, txt_orig in opciones_originales:
+            if txt_orig in cleaned_options:
+                nueva_letra = chr(97 + cleaned_options.index(txt_orig))
+                mapa_letras[let_orig] = nueva_letra
+
+        letra_corr_final = chr(97 + q["answer"]) if 0 <= q["answer"] < len(cleaned_options) else None
+        if q.get("explanation"):
+            q["explanation"] = _actualizar_letras_explicacion_tras_barajar(
+                q["explanation"], mapa_letras, letra_correcta_final=letra_corr_final
+            )
+
         q["options"] = [f"{chr(97+i)}) {o}" for i, o in enumerate(cleaned_options)]
         qs_preparadas.append(q)
+
     if barajar:
         random.shuffle(qs_preparadas)
+
+    # Renumerar todas las preguntas cerradas según el orden real (1, 2, 3, 4...) que ocupan en el test actual
+    for idx_final, q_item in enumerate(qs_preparadas, 1):
+        if not q_item.get("is_open", False):
+            txt_sin_num = re.sub(
+                r'^(?:#\s*)?(?:Pregunta\s+)?\d{1,3}\s*[\.\-\)]\s*[\.\-\)]*\s*',
+                '',
+                (q_item.get("question_text") or "").strip(),
+                flags=re.IGNORECASE
+            ).strip()
+            q_item["question_text"] = f"{idx_final}. {txt_sin_num}"
+
     return qs_preparadas
 
 def auditar_extraccion_test_real(pdf_bytes, max_options=4):
