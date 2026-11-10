@@ -909,6 +909,65 @@ class PDFQuizParser:
         return False
 
     @staticmethod
+    def _reconstruir_parrafos_explicacion_test(texto_explicacion):
+        """
+        Une los renglones físicos de un PDF dentro de la explicación de una pregunta tipo test
+        para que no queden saltos de línea artificiales a mitad de frase (ej. 'dadas a cuenta del \\n precio'
+        o '(permiten el \\n desistimiento)'), manteniendo como párrafos separados únicamente los bloques
+        reales ('¡PREGUNTA TRAMPA!:', 'EXPLICACIÓN PARA ESTUDIO:', viñetas '•' o apartados numerados '1.').
+        """
+        if not texto_explicacion:
+            return ""
+
+        # Si "¡PREGUNTA TRAMPA!:" o "EXPLICACION PARA ESTUDIO:" vienen pegados tras un punto en la misma línea, separarlos en nueva línea
+        txt_prep = re.sub(
+            r'(?<=[.?!»"])\s+(?=¡?\s*PREGUNTA\s+TRAMPA\b|EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b)',
+            '\n',
+            texto_explicacion,
+            flags=re.IGNORECASE
+        )
+
+        lineas_ crudas = [l.strip() for l in txt_prep.split("\n") if l.strip()]
+        if not lineas_crudas:
+            return ""
+
+        parrafos = []
+        pendiente_viñeta = False
+
+        pat_inicio_bloque = re.compile(
+            r'^(?:\[\[H\]\]|¡?\s*PREGUNTA\s+TRAMPA\b|EXPLICACI[ÓO]N(?:\s+PARA\s+ESTUDIO|\s+Y\s+BASE\s+LEGAL|\s+DETALLADA)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|[•·▪■\*]\s+|\d{1,2}[\.\º\ª\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|En\s+el\s+Derecho\s+(?:Civil|Mercantil)\s*[\(:])',
+            re.IGNORECASE
+        )
+
+        for l in lineas_crudas:
+            if l in ("•", "·", "▪", "■", "-"):
+                pendiente_viñeta = True
+                continue
+            if pendiente_viñeta:
+                l = f"• {l}"
+                pendiente_viñeta = False
+
+            if not parrafos:
+                parrafos.append(l)
+                continue
+
+            if pat_inicio_bloque.match(l):
+                parrafos.append(l)
+            else:
+                prev = parrafos[-1]
+                # Si la línea anterior era un título corto de apartado (ej. "1. El punto de partida: ¿Qué es una obligación pura?")
+                if re.match(r'^(?:\[\[H\]\]|\d{1,2}[\.\)]\s+[^.]{4,95}\??|EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\s*:?)$', prev, re.IGNORECASE):
+                    parrafos.append(l)
+                else:
+                    # Si termina en guion de palabra partida al final de línea, unir sin espacio
+                    if prev.endswith("-") and not prev.endswith(" -") and re.match(r'^[a-záéíóúñ]', l):
+                        parrafos[-1] = prev[:-1] + l
+                    else:
+                        parrafos[-1] = prev + " " + l
+
+        return "\n".join(parrafos)
+
+    @staticmethod
     def _limpiar_cabeceras_incrustadas(texto, titulo_tema=""):
         if not texto:
             return ""
@@ -920,7 +979,7 @@ class PDFQuizParser:
             if PDFQuizParser._es_basura_cabecera_o_pie(ls, titulo_tema):
                 continue
             lineas_out.append(ls)
-        return "\n".join(lineas_out)
+        return PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(lineas_out))
 
     @staticmethod
     def renderizar_explicacion_html(texto_explicacion, titulo_tema=""):
@@ -951,7 +1010,7 @@ class PDFQuizParser:
                     f"<div style='margin-top:5px; margin-bottom:5px; padding-left:12px; line-height:1.5; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
                 )
             else:
-                l_fmt = re.sub(r'^(\d{1,2}\.º\s+|¡PREGUNTA\s+TRAMPA!\s*:?|(?:EXPLICACI[ÓO]N|RESPUESTA\s+T[ÉE]CNICA)\s*:|[A-ZÁÉÍÓÚÑ][^:\.]{2,75}:)', r'<b>\1</b>', l)
+                l_fmt = re.sub(r'^(\d{1,2}\.º\s+|¡?\s*PREGUNTA\s+TRAMPA!?\s*:?|(?:EXPLICACI[ÓO]N|RESPUESTA\s+T[ÉE]CNICA)\s*:|[A-ZÁÉÍÓÚÑ][^:\.]{2,75}:)', r'<b>\1</b>', l)
                 bloques_html.append(
                     f"<div style='margin-top:6px; margin-bottom:6px; line-height:1.52; color:#0c5460 !important; text-align:justify;'>{l_fmt}</div>"
                 )
@@ -1365,14 +1424,8 @@ class PDFQuizParser:
 
     @staticmethod
     def _atomizar_linea_test(raw_line, is_bold):
-        """
-        Divide líneas de PDF donde:
-        - La opción 'a)' / 'A)' viene pegada al final del enunciado de la pregunta tras ':' o '?' (ej. P20 de Mercantil, P25 y P28 de Constitucional).
-        - Varias opciones vienen pegadas en la misma línea ('a) Texto. b) Texto.' o 'c) Texto. d) Texto.').
-        - 'EXPLICACIÓN Y BASE LEGAL:' / 'Explicación:' viene pegada al final de la opción d).
-        """
         l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
-        if not l or l in ("0", "-", "•", "·", "#"):
+        if not l or l in ("0", "-", "#"):
             return []
 
         segmentos = []
@@ -1387,7 +1440,7 @@ class PDFQuizParser:
             cola_exp = l[m_exp_inline.start():].strip()
             l = l[:m_exp_inline.start()].strip()
 
-        # 2. Separar si la opción 'a)' / 'A)' viene pegada al final del enunciado de una pregunta (ej. '20. ... ¿cuándo es exigible el pago? a) Inmediatamente...')
+        # 2. Separar si la opción 'a)' / 'A)' viene pegada al final del enunciado de una pregunta
         m_q_with_a = re.match(
             r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}\s*[\.\-\)]\s*.*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
@@ -1449,17 +1502,11 @@ class PDFQuizParser:
 
     @staticmethod
     def _reducir_opciones_conservando_correcta(q_obj, max_options):
-        """
-        Cuando un PDF tiene 4 opciones (a, b, c, d) pero la especialidad exige 3 opciones (Gestión),
-        elimina 1 distractor NUNCA la respuesta correcta (aunque la correcta fuera la d),
-        y renumera las 3 opciones resultantes como a), b) y c) sin solapar textos jamás.
-        """
         opts = q_obj.get("options", [])
         if not max_options or len(opts) <= max_options:
             return
 
         ans_idx = q_obj.get("answer", -1)
-        # Si la respuesta aún no se había detectado por negrita, buscarla primero en la explicación antes de recortar
         if ans_idx == -1 and q_obj.get("explanation"):
             m_ans = re.search(
                 r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
@@ -1472,12 +1519,10 @@ class PDFQuizParser:
                     ans_idx = cand_a
                     q_obj["answer"] = ans_idx
 
-        # Índices que queremos conservar (siempre incluyendo ans_idx)
         if 0 <= ans_idx < len(opts):
             if ans_idx < max_options:
                 indices_mantener = list(range(max_options))
             else:
-                # La correcta está en la posición d) (índice 3): conservamos a), b) y d) (que pasará a ser c)
                 indices_mantener = list(range(max_options - 1)) + [ans_idx]
         else:
             indices_mantener = list(range(max_options))
@@ -1497,7 +1542,6 @@ class PDFQuizParser:
         q_obj["options"] = nuevas_opts
         q_obj["answer"] = nuevo_ans
 
-        # Si la opción correcta era la 'd)' y al pasar a 3 opciones ahora es la 'c)', actualizar la mención en la explicación para no confundir al alumno
         if mapa_letras.get("d") == "c" and q_obj.get("explanation"):
             q_obj["explanation"] = re.sub(
                 r'(respuesta\s+correcta\s+es\s+la\s+)d(\)|\b)',
@@ -1510,8 +1554,6 @@ class PDFQuizParser:
     def parse(file_bytes, max_options=None):
         """
         Extrae preguntas tipo test (a, b, c, d) tanto de PDF como de Word (.docx).
-        Lee primero TODAS las opciones (incluyendo la d) para que jamás se concatene la d)
-        al final de la c), y al cerrar cada pregunta reduce a `max_options` conservando siempre la correcta.
         """
         lineas_brutas = []
         if PDFQuizParser.es_archivo_docx(file_bytes):
@@ -1621,7 +1663,10 @@ class PDFQuizParser:
             q_obj["options"] = opts_limpias
             q_obj["answer"] = ans_final if 0 <= ans_final < len(opts_limpias) else -1
 
-            # Detectar respuesta correcta por texto de la explicación antes de reducir opciones
+            # Reconstruir los párrafos de la explicación eliminando cortes de renglón a mitad de frase
+            if q_obj.get("explanation"):
+                q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
+
             if q_obj["answer"] == -1 and q_obj.get("explanation"):
                 m_ans = re.search(
                     r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
@@ -1633,7 +1678,6 @@ class PDFQuizParser:
                     if 0 <= idx_a < len(q_obj["options"]):
                         q_obj["answer"] = idx_a
 
-            # Si hay límite de opciones (ej. 3 en Gestión), reducir conservando siempre la correcta
             if max_options is not None and len(q_obj["options"]) > max_options:
                 PDFQuizParser._reducir_opciones_conservando_correcta(q_obj, max_options)
 
@@ -1662,7 +1706,6 @@ class PDFQuizParser:
 
             if m_q and not m_opt and not m_opt_empty:
                 num_cand = int(m_q.group(1))
-                # Evitar confundir subapartados numerados dentro de 'EXPLICACION PARA ESTUDIO:' (ej. '# 1. El punto de partida...' tras la Pregunta 20)
                 es_subapartado_estudio = (
                     state == "EXPLANATION" and
                     ultimo_num_pregunta >= 5 and
@@ -1700,11 +1743,12 @@ class PDFQuizParser:
                     idx_l = ord(m_let.group(1).lower()) - ord('a')
                     if 0 <= idx_l < len(curr_q["options"]):
                         curr_q["answer"] = idx_l
-                if resto_exp:
+                if re.match(r'^EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b', line, re.IGNORECASE):
+                    curr_q["explanation"] = (curr_q["explanation"] + "\n[[H]]📚 EXPLICACIÓN PARA ESTUDIO:\n" + resto_exp).strip()
+                elif resto_exp:
                     curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
                 continue
 
-            # Extraer SIEMPRE hasta 4 opciones (a, b, c, d) durante la lectura para que la 'd)' jamás se pegue a la 'c)'
             if m_opt_empty and state in ("QUESTION", "OPTIONS"):
                 if len(curr_q["options"]) < 4:
                     letra_asignada = chr(ord('a') + len(curr_q["options"]))
