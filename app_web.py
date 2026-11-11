@@ -596,6 +596,7 @@ if not st.session_state.autenticado:
 # === FIN SECCIÓN 1 ===
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS DISPONIBLES ===
+
 TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
@@ -763,7 +764,19 @@ TESTS_DISPONIBLES = {
         },
         "SUPUESTOS": {
             "Elige un test de supuestos...": None,
-            "PROFESOR TEMA 54 - PREGUNTA + SUPUESTO PRÁCTICO": "https://drive.google.com/uc?export=download&id=1_pcP-rkh-8vXr5zViCY1XsCntnxlc4Yw",
+            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS": "https://drive.google.com/uc?export=download&id=1UqEhTtQzAqJFxhlsqticUNq3AtU8IXbN",
+            "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA": "https://drive.google.com/uc?export=download&id=1RQBpdR3EPeEsYBrV6XRHUA_knZypgA6u",
+            "TEMA 54 - ACCIDENTE DE TRABAJO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1_pcP-rkh-8vXr5zViCY1XsCntnxlc4Yw",
+            "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES": "https://drive.google.com/uc?export=download&id=1Z9j-NCO974GCQoApNn9YoP7aJokgzqqh",
+            "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES": "https://drive.google.com/uc?export=download&id=1r-2sH5kZIcqhEp-k-go8BfbsQc8sg3ku",
+            "TEMA 57 INCAPACIDAD TEMPORAL": "https://drive.google.com/uc?export=download&id=1oiz-rCO44MWI491G_pxGSU87QczqIcwg",
+            "TEMA 58 NYCM": "https://drive.google.com/uc?export=download&id=1208HwEFZ3jKuwNNUBinhOH5ANWoebJky",
+            "TEMA 59 y 60 IP": "https://drive.google.com/uc?export=download&id=1EwLQcCxrhBwPy6Jp-pJZl-eg1At00ZDW",
+            "TEMA 61 JUBILACION CONTRIBUTIVA": "https://drive.google.com/uc?export=download&id=1mGxNc-Ph1pXahlNfcVUEQxWJhFctz6cJ",
+            "TEMA 62 MUERTE Y SUPERVIVENCIA": "https://drive.google.com/uc?export=download&id=1UKbboomy3DuPZI_wQuW82KJ8MXqQ8yjv",
+            "TEMA 67 - COTIZACION": "https://drive.google.com/uc?export=download&id=1c15J-mxBJXF19LUVbriap4q_rsvSZcI3",
+            "TEMA 73. LOS REGÍMENES ESPECIALES DE LA SEGURIDAD SOCIAL INTEGRADOS EN EL RÉGIMEN GENERAL": "https://drive.google.com/uc?export=download&id=1jaElumEJxMrl1MV6roobYJHOwQQ45vAxK".replace("QQ", "Q"),
+            "TEMA 74. RETA SETA Y MAR": "https://drive.google.com/uc?export=download&id=1vz75WRZxHjKpqt5W_Z-O8YruY76Tbbsk",
         },
     },
 }
@@ -801,10 +814,19 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 
 NUEVOS_HOY = [
-    "Tema_54_Contingencias_Accidente_Trabajo_In_Itinere_Enfermedad_Profesional_Terrorismo",
-    "TEMA 54 - TEST - ACCIDENTE DE TRABAJO ACTUALIZADO",
-    "TEMA 25 EL DERECHO PRESUPUESTARIO",
-    "PROFESOR TEMA 54 - PREGUNTA + SUPUESTO PRÁCTICO",
+    "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS",
+    "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA",
+    "TEMA 54 - ACCIDENTE DE TRABAJO ACTUALIZADO",
+    "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
+    "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES",
+    "TEMA 57 INCAPACIDAD TEMPORAL",
+    "TEMA 58 NYCM",
+    "TEMA 59 y 60 IP",
+    "TEMA 61 JUBILACION CONTRIBUTIVA",
+    "TEMA 62 MUERTE Y SUPERVIVENCIA",
+    "TEMA 67 - COTIZACION",
+    "TEMA 73. LOS REGÍMENES ESPECIALES DE LA SEGURIDAD SOCIAL INTEGRADOS EN EL RÉGIMEN GENERAL",
+    "TEMA 74. RETA SETA Y MAR",
 ]
 # === FIN SECCIÓN 2 ===
 
