@@ -1144,7 +1144,7 @@ class PDFQuizParser:
         if not parrafos_utiles:
             return []
 
-        pat_pregunta_explicita = re.compile(r'^(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})[\.\-\)]\s+(.+)$', re.IGNORECASE)
+        pat_pregunta_explicita = re.compile(r'^(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})\s*[\.\-\)]\s+([A-ZÁÉÍÓÚÑ¿¡].+)$', re.IGNORECASE)
         pat_cierre_planteamiento = re.compile(
             r'(?:responda\s+de\s+forma\s+razonada|siguientes\s+(?:\w+\s+)?cuestiones\s+pr[áa]cticas|responda\s+a\s+las\s+siguientes\s+preguntas)\s*:\s*$',
             re.IGNORECASE
@@ -1314,7 +1314,7 @@ class PDFQuizParser:
         es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
 
         pat_corte_estructural_pdf = re.compile(
-            r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|[•\-\*▪■·]\s+|[a-g]\)\s+)',
+            r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|[•\-\*▪■·]\s+|[a-g]\)\s+)',
             re.IGNORECASE
         )
 
@@ -1484,7 +1484,7 @@ class PDFQuizParser:
             l = l[:m_exp_inline.start()].strip()
 
         m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}\s*[\.\-\)]\s+.*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+[A-ZÁÉÍÓÚÑ¿¡"«].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
         )
         if m_q_with_a:
@@ -1595,8 +1595,10 @@ class PDFQuizParser:
     def parse(file_bytes, max_options=None):
         """
         Extrae preguntas tipo test (a, b, c, d) tanto de PDF como de Word (.docx).
-        Blindado frente a citas de artículos al inicio de línea (ej. '169.1.a.1.ª...')
-        y frente a enumeraciones '1)', '2)' dentro de las explicaciones.
+        Totalmente blindado frente a:
+        1. Números de artículos al inicio de renglón ('169.1.a y 172 TRLGSS...') gracias a (?!\\d) y exigencia de mayúscula/¿/¡ tras el espacio.
+        2. Ruptura de enunciados multi-línea antes de llegar a la opción 'a)'.
+        3. Segundos supuestos prácticos sin título intercalados (como 'La sociedad "AGRO-INNOVA..."' en Tema 03).
         """
         lineas_brutas = []
         if PDFQuizParser.es_archivo_docx(file_bytes):
@@ -1667,10 +1669,12 @@ class PDFQuizParser:
         pre_opt_text_buf = None
         ultimo_num_pregunta = 0
 
-        # Exige espacio obligatorio tras el punto/guion y que el enunciado empiece por letra, ¿, ¡, comillas o paréntesis (nunca por dígito como '169.1.a')
+        # BLINDAJE CLAVE:
+        # 1) (\d{1,3})(?!\d) impide hacer backtracking sobre '169' para coger '16'.
+        # 2) Exige espacio real tras el punto/guion.
+        # 3) Exige que la primera letra tras el espacio sea MAYÚSCULA o signo ¿ / ¡ / " / « (jamás minúscula ni dígito como '169.1.a').
         pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})\s*(?:\.\-|\-\.|\.|\-|\))\s+([A-ZÁÉÍÓÚÑa-záéíóúñ¿¡"«\'\[].*)$',
-            re.IGNORECASE
+            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+([A-ZÁÉÍÓÚÑ¿¡"«\'\[].*)$'
         )
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -1679,6 +1683,11 @@ class PDFQuizParser:
             re.IGNORECASE
         )
         pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
+        # Detecta el inicio de un segundo Supuesto Práctico sin título después del cierre de una explicación (ej. 'La sociedad "AGRO-INNOVA, SOCIEDAD COOPERATIVA"...')
+        pat_nuevo_escenario_sin_titulo = re.compile(
+            r'^(?:La\s+(?:sociedad|empresa|mercantil|cooperativa|asesor[íi]a|entidad)\s+["«][A-ZÁÉÍÓÚÑ0-9\s\,\.\-]+["»]|Trabajador(?:a)?\s+[A-F]\s*\()',
+            re.IGNORECASE
+        )
 
         def _formatear_preamble_test(lineas_pre):
             if not lineas_pre:
@@ -1747,6 +1756,22 @@ class PDFQuizParser:
                 state = "PREAMBLE"
                 continue
 
+            # Si estamos al final de una explicación de un Supuesto Práctico (ej. tras '>>>' o '»') y empieza un segundo escenario narrativo ('La sociedad "AGRO-INNOVA..."')
+            if (
+                state == "EXPLANATION" and
+                curr_q is not None and
+                preamble_buf and
+                pat_nuevo_escenario_sin_titulo.match(line) and
+                curr_q.get("explanation", "").rstrip().endswith((".", "»", ">", '"', "'"))
+            ):
+                _cerrar_pregunta_actual(curr_q)
+                curr_q = None
+                pending_empty_opts = []
+                pre_opt_text_buf = None
+                preamble_buf = ["SUPUESTO PRÁCTICO", line]
+                state = "PREAMBLE"
+                continue
+
             m_q = pat_q.match(line)
             m_opt_empty = pat_opt_empty.match(line)
             m_opt = pat_opt.match(line)
@@ -1757,23 +1782,33 @@ class PDFQuizParser:
                 cuerpo_cand = m_q.group(2).strip()
                 es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
 
-                # 1. Si estamos en mitad de las opciones y aún no tenemos al menos 3 opciones, no romper la pregunta
+                # REGLA 1: Si estamos leyendo el enunciado de una pregunta (state == "QUESTION") y aún NO ha salido ni una sola opción,
+                # NUNCA partir el enunciado en dos preguntas.
+                en_enunciado_sin_opciones = (
+                    state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
+                )
+                # REGLA 2: Si estamos en mitad de las opciones y aún no tenemos al menos 3 opciones, no romper la pregunta.
                 en_mitad_opciones_incompletas = (
                     state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
                 )
-                # 2. Si estamos en EXPLANATION y aparece '1) La interrupción...' (con paréntesis) o un número fuera de secuencia (como '# 1. El punto de partida')
+                # REGLA 3: Si estamos en EXPLANATION y aparece '1) La interrupción...' (con paréntesis) o un número menor fuera de secuencia.
                 es_enumeracion_interna_exp = (
                     state == "EXPLANATION" and (
                         es_parentesis_enumeracion or
                         (ultimo_num_pregunta >= 5 and num_cand < ultimo_num_pregunta and not (ultimo_num_pregunta >= 15 and num_cand == 1))
                     )
                 )
-                # 3. Evitar saltos absurdos de numeración (ej. de la pregunta 7 saltar a > 120 por un número de artículo o ley)
+                # REGLA 4: El número de la nueva pregunta debe ser coherente con la secuencia del test (evita que cualquier número > ultimo + 10 dispare una pregunta falsa).
                 es_salto_articulo_ilegal = (
-                    ultimo_num_pregunta > 0 and num_cand > ultimo_num_pregunta + 25
+                    ultimo_num_pregunta > 0 and num_cand > ultimo_num_pregunta + 10
                 )
 
-                if not en_mitad_opciones_incompletas and not es_enumeracion_interna_exp and not es_salto_articulo_ilegal:
+                if (
+                    not en_enunciado_sin_opciones and
+                    not en_mitad_opciones_incompletas and
+                    not es_enumeracion_interna_exp and
+                    not es_salto_articulo_ilegal
+                ):
                     _cerrar_pregunta_actual(curr_q)
                     pending_empty_opts = []
                     pre_opt_text_buf = None
@@ -1815,7 +1850,6 @@ class PDFQuizParser:
             if m_opt_empty and state in ("QUESTION", "OPTIONS"):
                 if len(curr_q["options"]) < 4:
                     letra_asignada = chr(ord('a') + len(curr_q["options"]))
-                    # Caso Pregunta 47 de TEMA 08A IT: el texto de la opción 'a)' vino en la línea inmediatamente anterior a 'a)' vacía
                     if pre_opt_text_buf and len(curr_q["options"]) == 0:
                         txt_pre, bold_pre = pre_opt_text_buf
                         curr_q["options"].append(f"{letra_asignada}) {txt_pre}")
@@ -1856,7 +1890,6 @@ class PDFQuizParser:
                     continue
 
             if state == "QUESTION":
-                # Si el enunciado de la pregunta ya terminó en '?' y antes de 'a)' aparece una frase terminada en '.', guardarla por si es el texto adelantado de 'a)' (ej. Pregunta 47 de TEMA 08A)
                 if curr_q["question_text"].rstrip().endswith("?") and line.endswith(".") and not line.endswith("?"):
                     pre_opt_text_buf = (line, is_bold)
                 else:
