@@ -1592,13 +1592,87 @@ class PDFQuizParser:
             )
 
     @staticmethod
+    def _reconstruir_parrafos_preamble_test(lineas_pre):
+        """
+        Une los renglones físicos de PDF dentro del enunciado de un SUPUESTO PRÁCTICO
+        de tipo test para que no queden cortados a mitad de frase, manteniendo separados
+        el título y cada apartado ('Trabajador A...', 'En primer lugar...', 'Empresa filial...', etc.).
+        """
+        if not lineas_pre:
+            return []
+        parrafos = []
+        pat_nuevo_apartado = re.compile(
+            r'^(?:#\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASO\s+PR[ÁA]CTICO|ENUNCIADO\s+DEL\s+SUPUESTO|Trabajador(?:a)?\s+[A-Z0-9]|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|Por\s+[úu]ltimo|Finalmente|Empresa\s+filial|Cuestiones\s+administrativas|[•·▪■\*]\s+)',
+            re.IGNORECASE
+        )
+        for lp in lineas_pre:
+            lp_c = PDFQuizParser._limpiar_marca_agua_linea(lp)
+            if not lp_c:
+                continue
+            if not parrafos or pat_nuevo_apartado.match(lp_c) or re.match(r'^(?:#\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?$', parrafos[-1], re.IGNORECASE):
+                parrafos.append(lp_c)
+            else:
+                prev = parrafos[-1]
+                if prev.endswith("-") and not prev.endswith(" -") and re.match(r'^[a-záéíóúñ]', lp_c):
+                    parrafos[-1] = prev[:-1] + lp_c
+                else:
+                    parrafos[-1] = prev + " " + lp_c
+        return parrafos
+
+    @staticmethod
+    def _pregunta_necesita_preamble_supuesto(texto_pregunta, lineas_pre):
+        """
+        Determina si una pregunta tipo test necesita llevar encima el planteamiento del Supuesto Práctico.
+        Si la pregunta es 100% autónoma y teórica (como '20. Un emigrante español suscribe el convenio especial de emigrantes...'),
+        devuelve False para no pegarle encima un supuesto de una cooperativa que no guarda relación con la pregunta.
+        """
+        if not lineas_pre or not texto_pregunta:
+            return False
+        q_clean = re.sub(r'^\d{1,3}\s*[\.\-\)]\s*', '', texto_pregunta).strip()
+        q_low = q_clean.lower()
+        pre_joined = " ".join(lineas_pre)
+
+        # 1. Si empieza por un supuesto genérico e indeterminado ("Un emigrante español...", "Un ciudadano...", "De acuerdo con el artículo...")
+        # y NO menciona ni a "la empresa", ni a "la cooperativa", ni a ningún personaje del supuesto, es autónoma.
+        marcadores_vinculo_directo = [
+            r'\btrabajador(?:a)?\s+[a-f]\b',
+            r'\b(?:la|dicha|esta)\s+(?:empresa|cooperativa|sociedad|mercantil|asesor[íi]a|mutua\s+advierte)\b',
+            r'\bnueva\s+mutua\b',
+            r'\bsu\s+empresario\b',
+            r'\bfilial\b',
+            r'\bplantilla\b',
+            r'\b10\s+de\s+mayo\s+de\s+2026\b',
+            r'\b1\s+de\s+julio\s+de\s+2026\b',
+            r'\b15\s+de\s+marzo\s+de\s+2025\b',
+        ]
+        if any(re.search(pat, q_low) for pat in marcadores_vinculo_directo):
+            return True
+
+        # 2. Extraer nombres propios de personas o empresas entrecomilladas definidos en el planteamiento (ej. "ARTES ESCÉNICAS", "AGRO-INNOVA", "SocioLex", "Logística Guadalquivir", "Luis", "Elena", "Miguel", "Ana", "Pedro", "Marta", "Laura", "Juan", "Carlos", "Marcos", "Sonia", "Lucía", "Roberto", "Luisa", "Daniel")
+        for m_com in re.finditer(r'["«]([A-ZÁÉÍÓÚÑa-záéíóúñ0-9\s\,\.\-]{3,40})["»]', pre_joined):
+            nom_emp = m_com.group(1).strip().lower()
+            primera_pal = nom_emp.split()[0].strip(",.")
+            if nom_emp in q_low or (len(primera_pal) >= 4 and primera_pal in q_low):
+                return True
+
+        for m_pers in re.finditer(r'\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,15})\b', pre_joined):
+            pal = m_pers.group(1)
+            if pal.lower() not in {
+                "supuesto", "practico", "práctico", "empresa", "sociedad", "trabajador", "trabajadora",
+                "recientemente", "ademas", "además", "finalmente", "cuestiones", "comunidad", "autonoma",
+                "autónoma", "andalucia", "andalucía", "caceres", "cáceres", "españa", "texto", "refundido",
+                "real", "decreto", "general", "seguridad", "social", "mutua", "colaboradora", "tesoreria",
+                "tesorería", "instituto", "nacional", "inspeccion", "inspección", "trabajo", "codigo", "código"
+            }:
+                if re.search(r'\b' + re.escape(pal.lower()) + r'\b', q_low):
+                    return True
+
+        return False
+
+    @staticmethod
     def parse(file_bytes, max_options=None):
         """
         Extrae preguntas tipo test (a, b, c, d) tanto de PDF como de Word (.docx).
-        Totalmente blindado frente a:
-        1. Números de artículos al inicio de renglón ('169.1.a y 172 TRLGSS...') gracias a (?!\\d) y exigencia de mayúscula/¿/¡ tras el espacio.
-        2. Ruptura de enunciados multi-línea antes de llegar a la opción 'a)'.
-        3. Segundos supuestos prácticos sin título intercalados (como 'La sociedad "AGRO-INNOVA..."' en Tema 03).
         """
         lineas_brutas = []
         if PDFQuizParser.es_archivo_docx(file_bytes):
@@ -1669,10 +1743,6 @@ class PDFQuizParser:
         pre_opt_text_buf = None
         ultimo_num_pregunta = 0
 
-        # BLINDAJE CLAVE:
-        # 1) (\d{1,3})(?!\d) impide hacer backtracking sobre '169' para coger '16'.
-        # 2) Exige espacio real tras el punto/guion.
-        # 3) Exige que la primera letra tras el espacio sea MAYÚSCULA o signo ¿ / ¡ / " / « (jamás minúscula ni dígito como '169.1.a').
         pat_q = re.compile(
             r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+([A-ZÁÉÍÓÚÑ¿¡"«\'\[].*)$'
         )
@@ -1683,30 +1753,36 @@ class PDFQuizParser:
             re.IGNORECASE
         )
         pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
-        # Detecta el inicio de un segundo Supuesto Práctico sin título después del cierre de una explicación (ej. 'La sociedad "AGRO-INNOVA, SOCIEDAD COOPERATIVA"...')
         pat_nuevo_escenario_sin_titulo = re.compile(
             r'^(?:La\s+(?:sociedad|empresa|mercantil|cooperativa|asesor[íi]a|entidad)\s+["«][A-ZÁÉÍÓÚÑ0-9\s\,\.\-]+["»]|Trabajador(?:a)?\s+[A-F]\s*\()',
             re.IGNORECASE
         )
 
         def _formatear_preamble_test(lineas_pre):
-            if not lineas_pre:
+            parrafos_unidos = PDFQuizParser._reconstruir_parrafos_preamble_test(lineas_pre)
+            if not parrafos_unidos:
                 return ""
             bloques_p = []
-            for lp in lineas_pre:
-                lp_c = PDFQuizParser._limpiar_marca_agua_linea(lp)
-                if not lp_c:
-                    continue
-                if re.match(r'^(?:#\s*)?(?:SUPUESTO\s+PR[ÁA]CTICO|CASO\s+PR[ÁA]CTICO|ENUNCIADO\s+DEL\s+SUPUESTO)\b', lp_c, re.IGNORECASE):
+            for lp_c in parrafos_unidos:
+                if re.match(r'^(?:#\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASO\s+PR[ÁA]CTICO|ENUNCIADO\s+DEL\s+SUPUESTO)\b', lp_c, re.IGNORECASE):
                     lp_tit = re.sub(r'^#\s*', '', lp_c).strip()
                     bloques_p.append(f"<div style='font-size:10pt !important; font-weight:800; color:#1E3A8A !important; margin-bottom:4px;'>📋 {lp_tit}</div>")
                 else:
-                    bloques_p.append(f"<p style='margin:0 0 5px 0; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify;'>{lp_c}</p>")
+                    lp_fmt = re.sub(r'^((?:Trabajador(?:a)?\s+[A-Z0-9][^:]{0,35}|Empresa\s+filial\s+ficticia|Cuestiones\s+administrativas):)', r'<b>\1</b>', lp_c)
+                    bloques_p.append(f"<p style='margin:0 0 5px 0; font-size:10pt !important; line-height:1.4; color:#1E293B !important; text-align:justify;'>{lp_fmt}</p>")
             return "".join(bloques_p)
 
         def _cerrar_pregunta_actual(q_obj):
             if not q_obj:
                 return
+            # Verificar si la pregunta realmente pertenece al supuesto práctico o si es una pregunta teórica independiente
+            raw_pre_lines = q_obj.pop("_raw_preamble_lines", None)
+            if raw_pre_lines:
+                if PDFQuizParser._pregunta_necesita_preamble_supuesto(q_obj.get("question_text", ""), raw_pre_lines):
+                    q_obj["preamble"] = _formatear_preamble_test(raw_pre_lines)
+                else:
+                    q_obj["preamble"] = ""
+
             opts_limpias = []
             ans_final = q_obj.get("answer", -1)
             for idx_o, o_txt in enumerate(q_obj.get("options", [])):
@@ -1756,7 +1832,6 @@ class PDFQuizParser:
                 state = "PREAMBLE"
                 continue
 
-            # Si estamos al final de una explicación de un Supuesto Práctico (ej. tras '>>>' o '»') y empieza un segundo escenario narrativo ('La sociedad "AGRO-INNOVA..."')
             if (
                 state == "EXPLANATION" and
                 curr_q is not None and
@@ -1782,23 +1857,18 @@ class PDFQuizParser:
                 cuerpo_cand = m_q.group(2).strip()
                 es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
 
-                # REGLA 1: Si estamos leyendo el enunciado de una pregunta (state == "QUESTION") y aún NO ha salido ni una sola opción,
-                # NUNCA partir el enunciado en dos preguntas.
                 en_enunciado_sin_opciones = (
                     state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
                 )
-                # REGLA 2: Si estamos en mitad de las opciones y aún no tenemos al menos 3 opciones, no romper la pregunta.
                 en_mitad_opciones_incompletas = (
                     state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
                 )
-                # REGLA 3: Si estamos en EXPLANATION y aparece '1) La interrupción...' (con paréntesis) o un número menor fuera de secuencia.
                 es_enumeracion_interna_exp = (
                     state == "EXPLANATION" and (
                         es_parentesis_enumeracion or
                         (ultimo_num_pregunta >= 5 and num_cand < ultimo_num_pregunta and not (ultimo_num_pregunta >= 15 and num_cand == 1))
                     )
                 )
-                # REGLA 4: El número de la nueva pregunta debe ser coherente con la secuencia del test (evita que cualquier número > ultimo + 10 dispare una pregunta falsa).
                 es_salto_articulo_ilegal = (
                     ultimo_num_pregunta > 0 and num_cand > ultimo_num_pregunta + 10
                 )
@@ -1815,7 +1885,8 @@ class PDFQuizParser:
                     ultimo_num_pregunta = num_cand
                     curr_q = {
                         "question_text": f"{num_cand}. {cuerpo_cand}",
-                        "preamble": _formatear_preamble_test(preamble_buf),
+                        "preamble": "",
+                        "_raw_preamble_lines": list(preamble_buf) if preamble_buf else [],
                         "options": [],
                         "options_bold": [],
                         "answer": -1,
