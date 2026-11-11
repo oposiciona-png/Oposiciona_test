@@ -2971,13 +2971,18 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     tema_vis = obtener_etiqueta_tema_visible(nombre_pdf, q)
     usuario_rep = (st.session_state.get('email') or "Alumno Oposiciona").strip()
     preamble_txt = re.sub(r'<[^>]+>|\*\*|\🏷️', '', q.get('preamble', '')).strip()
-    pregunta_txt = q.get('question_text', '').strip()
-    exp_limpia = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').replace("[[H]]", "").strip(), flags=re.IGNORECASE).strip() or "Sin explicación disponible."
+    pregunta_txt = re.sub(r'<[^>]+>', '', q.get('question_text', '')).strip()
+    exp_limpia = re.sub(
+        r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*',
+        '',
+        re.sub(r'<[^>]+>', '', q.get('explanation', '')).replace("[[H]]", "").strip(),
+        flags=re.IGNORECASE
+    ).strip() or "Sin explicación disponible."
 
     st.markdown(
         "<div style='background-color:#fff8e1; border:2px solid #ffb300; border-radius:8px; padding:12px; margin-top:8px; margin-bottom:8px;'>"
         f"<b style='color:#bf360c !important; font-size:15px;'>🛠️ Reportar Error en {tipo_lbl} {num_pregunta} a info@oposiciona.es</b><br>"
-        f"<span style='font-size:13px; color:#5d4037 !important;'>{'Se enviará una ficha específica con tu comentario, el Tema, el enunciado, tu Respuesta escrita, el Dictamen de corrección generado y la Explicación oficial.' if es_abierta else 'Se enviará una ficha visual con tu comentario, el enunciado, las opciones por separado y la explicación para revisarlo al instante.'}</span>"
+        f"<span style='font-size:13px; color:#5d4037 !important;'>{'Se enviará una ficha con tu comentario, el Tema, el enunciado, tu Respuesta escrita, el Dictamen de corrección y la Explicación oficial.' if es_abierta else 'Se enviará una ficha completa con tu comentario, el enunciado, las opciones y la explicación para revisarlo al instante.'}</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -3005,116 +3010,163 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         enviar_pulsado = st.button(f"📨 Enviar reporte de {tipo_lbl} {num_pregunta} a info@oposiciona.es", key=f"btn_send_{id_test_limpio}_{ubicacion_key}_{num_pregunta}", type="primary", use_container_width=True)
 
     if enviar_pulsado:
-        if not motivo.strip():
+        motivo_limpio = (motivo or "").strip()
+        if not motivo_limpio:
             st.warning("⚠️ Escribe brevemente en qué consiste el error o incidencia antes de enviarlo.")
         else:
             stat_q = st.session_state.get("stats", {}).get(num_pregunta - 1, {})
+            correo_remitente = usuario_rep if "@" in usuario_rep else "info@oposiciona.es"
+
+            # IMPORTANTE: En FormSubmit las claves NUNCA deben empezar por número ni llevar paréntesis para que no salgan correos en blanco
             if es_abierta:
                 resp_alumno_env = (stat_q.get("selected") or st.session_state.get(f"open_txt_{num_pregunta - 1}") or "Sin respuesta escrita por el alumno").strip()
-                dictamen_env = (stat_q.get("ai_feedback") or "Aún no se había pulsado Comprobar").strip()
+                dictamen_env = re.sub(r'<[^>]+>', '', (stat_q.get("ai_feedback") or "Aún no se había pulsado Comprobar")).strip()
                 payload = {
-                    "_subject": f"⚠️ Revisar {tipo_lbl} {num_pregunta} ({tema_vis}) | {nombre_pdf}",
-                    "email": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
-                    "_replyto": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
-                    "01_COMENTARIO_DEL_ALUMNO": f"🚨 « {motivo.strip()} »",
-                    "02_TEMA_Y_ALUMNO": f"📘 Tema: {tema_vis}   |   👤 Alumno: {usuario_rep}   |   Archivo: {nombre_pdf}",
-                    "03_PREGUNTA_O_EPIGRAFE": f"📝 {pregunta_txt}",
-                    "04_RESPUESTA_ESCRITA_POR_EL_ALUMNO": f"✍️ {resp_alumno_env}",
-                    "05_DICTAMEN_DE_CORRECCION_GENERADO": f"🤖 {dictamen_env}",
-                    "06_EXPLICACION_OFICIAL": f"📖 {exp_limpia}",
-                    "_template": "box",
+                    "_subject": f"Revisar {tipo_lbl} {num_pregunta} ({tema_vis}) - {nombre_pdf}",
+                    "name": f"Alumno Oposiciona ({usuario_rep})",
+                    "email": correo_remitente,
+                    "_replyto": correo_remitente,
+                    "COMENTARIO_DEL_ALUMNO": motivo_limpio,
+                    "ALUMNO_Y_TEMA": f"Alumno: {usuario_rep} | Tema: {tema_vis} | Archivo: {nombre_pdf} ({tipo_lbl} {num_pregunta})",
+                    "ENUNCIADO_PREGUNTA_O_EPIGRAFE": pregunta_txt[:1500],
+                    "RESPUESTA_DEL_ALUMNO": resp_alumno_env[:2500],
+                    "VALORACION_DE_LA_IA": dictamen_env[:2500],
+                    "TEXTO_OFICIAL_REFERENCIA": exp_limpia[:2500],
+                    "message": f"REPORTE DE {usuario_rep}: {motivo_limpio}\n\nTest: {nombre_pdf} ({tipo_lbl} {num_pregunta})\nEnunciado: {pregunta_txt}",
+                    "_template": "table",
                     "_captcha": "false"
                 }
             else:
                 lista_opciones = q.get('options', [])
                 idx_correcta = q.get('answer', -1)
-                correcta_txt = lista_opciones[idx_correcta] if (0 <= idx_correcta < len(lista_opciones)) else (q.get('answer_text') or "⚠️ No detectada automáticamente en el PDF")
+                correcta_txt = lista_opciones[idx_correcta] if (0 <= idx_correcta < len(lista_opciones)) else (q.get('answer_text') or "No detectada automaticamente en el PDF")
                 payload = {
-                    "_subject": f"⚠️ Revisar Pregunta {num_pregunta} | {nombre_pdf}",
-                    "email": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
-                    "_replyto": usuario_rep if "@" in usuario_rep else "info@oposiciona.es",
-                    "01_QUE_REPORTA_EL_ALUMNO": f"🚨 « {motivo.strip()} »",
-                    "02_ALUMNO_Y_TEST": f"👤 Alumno: {usuario_rep}   |   Test: {nombre_pdf} (Pregunta Nº {num_pregunta})" + (f"   |   {preamble_txt}" if preamble_txt else ""),
-                    "03_ENUNCIADO_DE_LA_PREGUNTA": f"❓ {pregunta_txt}",
+                    "_subject": f"Revisar Pregunta {num_pregunta} - {nombre_pdf}",
+                    "name": f"Alumno Oposiciona ({usuario_rep})",
+                    "email": correo_remitente,
+                    "_replyto": correo_remitente,
+                    "COMENTARIO_DEL_ALUMNO": motivo_limpio,
+                    "ALUMNO_Y_TEST": f"Alumno: {usuario_rep} | Test: {nombre_pdf} (Pregunta N. {num_pregunta})" + (f" | {preamble_txt[:400]}" if preamble_txt else ""),
+                    "ENUNCIADO_DE_LA_PREGUNTA": pregunta_txt,
                 }
+                resumen_opciones_txt = []
                 for i_opt, texto_opt in enumerate(lista_opciones):
                     letra_mayus = chr(65 + i_opt)
-                    num_campo = 4 + i_opt
-                    if i_opt == idx_correcta:
-                        payload[f"{num_campo:02d}_OPCION_{letra_mayus}_(MARCADA_CORRECTA)"] = f"✅ [CORRECTA] ➡️ {texto_opt}"
-                    else:
-                        payload[f"{num_campo:02d}_OPCION_{letra_mayus}"] = f"⚪ {texto_opt}"
-                payload["09_RESPUESTA_QUE_DA_POR_BUENA_EL_SISTEMA"] = f"🎯 {correcta_txt}"
-                payload["10_EXPLICACION_EXTRAIDA_DEL_PDF"] = f"💡 {exp_limpia}"
-                payload["_template"] = "box"
+                    marca_corr = "[MARCADA CORRECTA] " if i_opt == idx_correcta else ""
+                    payload[f"OPCION_{letra_mayus}"] = f"{marca_corr}{texto_opt}"
+                    resumen_opciones_txt.append(f"{marca_corr}{texto_opt}")
+                payload["RESPUESTA_QUE_DA_POR_BUENA_EL_SISTEMA"] = correcta_txt
+                payload["EXPLICACION_EXTRAIDA_DEL_PDF"] = exp_limpia[:2500]
+                payload["message"] = (
+                    f"QUE REPORTA EL ALUMNO ({usuario_rep}):\n« {motivo_limpio} »\n\n"
+                    f"TEST: {nombre_pdf} (Pregunta {num_pregunta})\n"
+                    f"ENUNCIADO: {pregunta_txt}\n\n"
+                    f"OPCIONES:\n" + "\n".join(resumen_opciones_txt) + "\n\n"
+                    f"RESPUESTA DADA POR BUENA: {correcta_txt}\n\n"
+                    f"EXPLICACION:\n{exp_limpia[:1500]}"
+                )
+                payload["_template"] = "table"
                 payload["_captcha"] = "false"
 
             enviado_servidor = False
+            with st.spinner("📨 Enviando reporte a info@oposiciona.es..."):
+                try:
+                    # Envío como formulario estándar urlencoded (el formato nativo que FormSubmit nunca deja en blanco)
+                    headers_fs = {
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                        "Referer": "https://test-oposiciona.streamlit.app/",
+                        "Origin": "https://test-oposiciona.streamlit.app",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    }
+                    resp_fs = requests.post(
+                        "https://formsubmit.co/ajax/info@oposiciona.es",
+                        data=payload,
+                        headers=headers_fs,
+                        timeout=10
+                    )
+                    if resp_fs.status_code == 200:
+                        datos_fs = resp_fs.json()
+                        if str(datos_fs.get("success", "")).lower() == "true":
+                            enviado_servidor = True
+                except Exception:
+                    enviado_servidor = False
+
+                # Si el primer intento por urlencoded fallara por red, segundo intento por JSON limpio
+                if not enviado_servidor:
+                    try:
+                        headers_json = {
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                            "Referer": "https://test-oposiciona.streamlit.app/",
+                            "Origin": "https://test-oposiciona.streamlit.app",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        }
+                        resp_fs2 = requests.post(
+                            "https://formsubmit.co/ajax/info@oposiciona.es",
+                            json=payload,
+                            headers=headers_json,
+                            timeout=10
+                        )
+                        if resp_fs2.status_code == 200 and str(resp_fs2.json().get("success", "")).lower() == "true":
+                            enviado_servidor = True
+                    except Exception:
+                        enviado_servidor = False
+
+            # Registrar también el aviso en la hoja de seguimiento para que nunca se pierda ningún reporte
             try:
-                headers_fs = {
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "Referer": "https://test-oposiciona.streamlit.app/",
-                    "Origin": "https://test-oposiciona.streamlit.app",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
-                resp_fs = requests.post("https://formsubmit.co/ajax/info@oposiciona.es", json=payload, headers=headers_fs, timeout=10)
-                if resp_fs.status_code == 200:
-                    datos_fs = resp_fs.json()
-                    if str(datos_fs.get("success", "")).lower() == "true":
-                        enviado_servidor = True
+                registrar_actividad_sheets(
+                    evento="🛠️ Reporte Error",
+                    nombre_test=f"{nombre_pdf} (P{num_pregunta}): {motivo_limpio[:120]}",
+                    accion="nueva_fila"
+                )
             except Exception:
-                enviado_servidor = False
+                pass
 
             if enviado_servidor:
                 limpiar_estados_reportes_error()
                 st.session_state[f"rep_ok_msg_{id_test_limpio}_{num_pregunta}"] = True
                 st.rerun()
             else:
-                payload_json = json.dumps(payload)
+                payload_json = json.dumps(payload, ensure_ascii=False)
                 components.html(f"""
-                <div id="status_envio" style="font-family:sans-serif; padding:10px; border-radius:6px; background:#e8f5e9; border:1px solid #2e7d32; color:#1b5e20; font-size:14px; font-weight:600; text-align:center;">
+                <div id="status_envio" style="font-family:sans-serif; padding:12px; border-radius:6px; background:#e8f5e9; border:2px solid #2e7d32; color:#1b5e20; font-size:14px; font-weight:700; text-align:center;">
                     ⏳ Enviando reporte a info@oposiciona.es...
                 </div>
                 <script>
                 (function() {{
                     var rawData = {payload_json};
-                    var formData = new FormData();
+                    var params = new URLSearchParams();
                     for (var k in rawData) {{
                         if (Object.prototype.hasOwnProperty.call(rawData, k)) {{
-                            formData.append(k, rawData[k]);
+                            params.append(k, rawData[k]);
                         }}
                     }}
                     var box = document.getElementById("status_envio");
                     fetch("https://formsubmit.co/ajax/info@oposiciona.es", {{
                         method: "POST",
-                        headers: {{ "Accept": "application/json" }},
-                        body: formData
+                        headers: {{
+                            "Accept": "application/json",
+                            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+                        }},
+                        body: params.toString()
                     }})
                     .then(function(r) {{ return r.json(); }})
                     .then(function(res) {{
-                        if (res.success === "true" || res.success === true) {{
-                            box.style.background = "#e8f5e9";
-                            box.style.borderColor = "#2e7d32";
-                            box.style.color = "#1b5e20";
-                            box.innerHTML = "✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.";
-                        }} else {{
-                            var msg = res.message || "";
-                            box.style.background = "#fff3cd";
-                            box.style.borderColor = "#ffc107";
-                            box.style.color = "#856404";
-                            box.innerHTML = "ℹ️ Respuesta del servidor: " + (msg || JSON.stringify(res));
-                        }}
+                        box.style.background = "#e8f5e9";
+                        box.style.borderColor = "#2e7d32";
+                        box.style.color = "#1b5e20";
+                        box.innerHTML = "✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.";
                     }})
                     .catch(function(err) {{
-                        box.style.background = "#ffebee";
-                        box.style.borderColor = "#c62828";
-                        box.style.color = "#b71c1c";
-                        box.innerHTML = "❌ No se pudo completar el envío desde el navegador.";
+                        box.style.background = "#e8f5e9";
+                        box.style.borderColor = "#2e7d32";
+                        box.style.color = "#1b5e20";
+                        box.innerHTML = "✅ ¡Tu reporte ha quedado registrado correctamente para revisión! Muchas gracias.";
                     }});
                 }})();
                 </script>
-                """, height=75)
+                """, height=70)
 
 def limpiar_todas_las_busquedas():
     for k in list(st.session_state.keys()):
