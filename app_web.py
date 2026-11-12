@@ -3655,10 +3655,226 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
 activar_proteccion_antirecortes_alumno()
+
+def render_dictado_voz_tiempo_real(idx_pregunta):
+    """
+    Renderiza un control de dictado por voz en tiempo real (Web Speech API es-ES)
+    que transcribe palabra por palabra directamente dentro del textarea activo de Streamlit,
+    sincronizando el valor nativo de React y el borrador anticaídas.
+    """
+    components.html(f"""
+    <div style="font-family: sans-serif; margin: 0; padding: 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #F0F9FF; border: 1.5px solid #0284C7; border-radius: 8px; padding: 8px 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button id="btn_mic_{idx_pregunta}" type="button" style="background: #0284C7; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 13px; font-size: 13.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: all 0.2s;">
+                    <span>🎙️</span> <span id="lbl_mic_{idx_pregunta}">Dictar respuesta por voz</span>
+                </button>
+                <span id=" badge_estado_{idx_pregunta}" style="font-size: 12.5px; font-weight: 600; color: #0369A1;">
+                    Pulsa para hablar (puedes decir: <i>«coma»</i>, <i>«punto y seguido»</i>, <i>«punto y aparte»</i>)
+                </span>
+            </div>
+            <span style="font-size: 11.5px; color: #475569;">📱 En iPhone/iPad también puedes usar el 🎙️ de tu teclado</span>
+        </div>
+        <div id="preview_voz_{idx_pregunta}" style="display: none; margin-top: 5px; padding: 6px 10px; background: #FEFCE8; border: 1px dashed #CA8A04; border-radius: 6px; font-size: 13px; color: #854D0E; font-style: italic;"></div>
+    </div>
+
+    <script>
+    (function() {{
+        var pw = window.parent;
+        var pd = pw.document;
+        var btn = document.getElementById("btn_mic_{idx_pregunta}");
+        var lbl = document.getElementById("lbl_mic_{idx_pregunta}");
+        var badge = document.getElementById(" badge_estado_{idx_pregunta}");
+        var preview = document.getElementById("preview_voz_{idx_pregunta}");
+
+        var SpeechRecognition = pw.SpeechRecognition || pw.webkitSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {{
+            btn.style.background = "#94A3B8";
+            btn.style.cursor = "not-allowed";
+            lbl.textContent = "Dictado directo no soportado en este navegador";
+            badge.innerHTML = "Usa <b>Google Chrome</b>, <b>Edge</b>, <b>Safari</b> o el micrófono del teclado de tu móvil.";
+            return;
+        }}
+
+        /* Si había un reconocimiento previo activo de otra pregunta, detenerlo */
+        if (pw.__oposiciona_speech_rec) {{
+            try {{
+                pw.__oposiciona_speech_active = false;
+                pw.__oposiciona_speech_rec.stop();
+            }} catch(e) {{}}
+        }}
+
+        function obtenerTextareaRespuesta() {{
+            var areas = pd.querySelectorAll('textarea');
+            if (!areas || areas.length === 0) return null;
+            /* El primer textarea de la pantalla de pregunta abierta es siempre el de la respuesta del alumno */
+            return areas[0];
+        }}
+
+        function formatearTextoJuridicoDictado(texto) {{
+            if (!texto) return "";
+            var t = texto;
+            /* Comandos de puntuación hablados */
+            t = t.replace(/\\bpunto y aparte\\b/gi, ".\\n\\n");
+            t = t.replace(/\\bpunto y seguido\\b/gi, ". ");
+            t = t.replace(/\\bpunto final\\b/gi, ".");
+            t = t.replace(/\\bdos puntos\\b/gi, ": ");
+            t = t.replace(/\\bpunto y coma\\b/gi, "; ");
+            t = t.replace(/\\bcoma\\b/gi, ", ");
+            t = t.replace(/\\babrir par[ée]ntesis\\b/gi, " (");
+            t = t.replace(/\\bcerrar par[ée]ntesis\\b/gi, ") ");
+            t = t.replace(/\\babrir comillas\\b/gi, " «");
+            t = t.replace(/\\bcerrar comillas\\b/gi, "» ");
+            /* Siglas habituales de Seguridad Social */
+            t = t.replace(/\\btrlgss\\b/gi, "TRLGSS");
+            t = t.replace(/\\blgss\\b/gi, "LGSS");
+            t = t.replace(/\\breta\\b/gi, "RETA");
+            t = t.replace(/\\binss\\b/gi, "INSS");
+            t = t.replace(/\\btgss\\b/gi, "TGSS");
+            t = t.replace(/\\bimserso\\b/gi, "IMSERSO");
+            t = t.replace(/\\bingesa\\b/gi, "INGESA");
+            t = t.replace(/\\bitss\\b/gi, "ITSS");
+            t = t.replace(/\\bsepe\\b/gi, "SEPE");
+            t = t.replace(/\\biprem\\b/gi, "IPREM");
+            t = t.replace(/\\bsmi\\b/gi, "SMI");
+            t = t.replace(/\\bimv\\b/gi, "IMV");
+            t = t.replace(/\\bfogasa\\b/gi, "FOGASA");
+            return t;
+        }}
+
+        function insertarEnTextareaReact(ta, fragmentoNuevo) {{
+            if (!ta || !fragmentoNuevo) return;
+            var actual = ta.value || "";
+            var frag = formatearTextoJuridicoDictado(fragmentoNuevo).trim();
+            if (!frag) return;
+
+            var separador = "";
+            if (actual.length > 0 && !actual.endsWith("\\n") && !actual.endsWith(" ") && !actual.endsWith("(") && !actual.endsWith("«")) {{
+                if (/^[.,;:!?)»]/.test(frag)) {{
+                    separador = "";
+                }} else {{
+                    separador = " ";
+                }}
+            }}
+
+            /* Poner mayúscula inicial si empieza el texto o va tras punto o salto de línea */
+            if (actual.length === 0 || /[.?!]\\s*$/.test(actual) || /\\n\\s*$/.test(actual)) {{
+                frag = frag.charAt(0).toUpperCase() + frag.slice(1);
+            }}
+
+            var nuevoValor = (actual + separador + frag).replace(/\\s+([.,;:!?)])/g, "$1");
+
+            var nativeSetter = Object.getOwnPropertyDescriptor(pw.HTMLTextAreaElement.prototype, "value").set;
+            nativeSetter.call(ta, nuevoValor);
+
+            ta.dispatchEvent(new Event("input", {{ bubbles: true }}));
+            ta.dispatchEvent(new Event("change", {{ bubbles: true }}));
+            ta.scrollTop = ta.scrollHeight;
+
+            try {{
+                pw.sessionStorage.setItem("oposiciona_live_draft_txt", nuevoValor);
+                pw.localStorage.setItem("oposiciona_live_draft_txt", nuevoValor);
+            }} catch(e) {{}}
+        }}
+
+        var rec = new SpeechRecognition();
+        rec.lang = "es-ES";
+        rec.continuous = true;
+        rec.interimResults = true;
+        pw.__oposiciona_speech_rec = rec;
+        pw.__oposiciona_speech_active = false;
+
+        function actualizarUI(escuchando, msgExtra) {{
+            if (escuchando) {{
+                btn.style.background = "#DC2626";
+                lbl.textContent = "⏹️ Detener dictado (Escuchando...)";
+                badge.style.color = "#B91C1C";
+                badge.innerHTML = msgExtra || "🔴 <b>Micrófono activo:</b> habla con naturalidad, el texto se escribe solo en el recuadro.";
+            }} else {{
+                btn.style.background = "#0284C7";
+                lbl.textContent = "🎙️ Dictar respuesta por voz";
+                badge.style.color = "#0369A1";
+                badge.innerHTML = msgExtra || "Pulsa para hablar (puedes decir: <i>«coma»</i>, <i>«punto y seguido»</i>, <i>«punto y aparte»</i>)";
+                preview.style.display = "none";
+                preview.textContent = "";
+            }}
+        }}
+
+        rec.onresult = function(event) {{
+            var interino = "";
+            var finalTxt = "";
+            for (var i = event.resultIndex; i < event.results.length; ++i) {{
+                var transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {{
+                    finalTxt += transcript + " ";
+                }} else {{
+                    interino += transcript;
+                }}
+            }}
+            var ta = obtenerTextareaRespuesta();
+            if (finalTxt.trim() && ta) {{
+                insertarEnTextareaReact(ta, finalTxt);
+            }}
+            if (interino.trim()) {{
+                preview.style.display = "block";
+                preview.textContent = "🗣️ Escuchando en vivo: «" + interino.trim() + "...»";
+            }} else {{
+                preview.style.display = "none";
+                preview.textContent = "";
+            }}
+        }};
+
+        rec.onerror = function(event) {{
+            if (event.error === "not-allowed" || event.error === "service-not-allowed") {{
+                pw.__oposiciona_speech_active = false;
+                actualizarUI(false, "⚠️ <b>Permiso de micrófono bloqueado:</b> autoriza el micrófono en el icono del candado de la barra de direcciones.");
+            }} else if (event.error === "no-speech") {{
+                /* En pausas de silencio no cerramos el dictado */
+            }}
+        }};
+
+        rec.onend = function() {{
+            /* Si el usuario no ha pulsado Detener (ej. pausa en iPhone/Safari), reconectar automáticamente */
+            if (pw.__oposiciona_speech_active) {{
+                setTimeout(function() {{
+                    if (pw.__oposiciona_speech_active) {{
+                        try {{ rec.start(); }} catch(e) {{}}
+                    }}
+                }}, 250);
+            }} else {{
+                var ta = obtenerTextareaRespuesta();
+                if (ta) {{
+                    ta.focus();
+                    ta.dispatchEvent(new Event("change", {{ bubbles: true }}));
+                    ta.blur();
+                }}
+                actualizarUI(false, "✅ <b>Dictado pausado y guardado en el recuadro.</b> Puedes revisar el texto o volver a pulsar para seguir dictando.");
+            }}
+        }};
+
+        btn.addEventListener("click", function() {{
+            if (!pw.__oposiciona_speech_active) {{
+                try {{
+                    pw.__oposiciona_speech_active = true;
+                    rec.start();
+                    actualizarUI(true);
+                }} catch(e) {{
+                    pw.__oposiciona_speech_active = false;
+                    actualizarUI(false, "⚠️ No se pudo iniciar el micrófono. Inténtalo de nuevo.");
+                }}
+            }} else {{
+                pw.__oposiciona_speech_active = false;
+                try {{ rec.stop(); }} catch(e) {{}}
+                actualizarUI(false, "✅ <b>Dictado finalizado.</b> Tu texto ya está listo en el cuadro.");
+            }}
+        }});
+    }})();
+    </script>
+    """, height=78)
 
 if not st.session_state.questions:
     st.markdown("""<style>
@@ -3746,9 +3962,9 @@ if not st.session_state.questions:
 
     st.markdown(f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] and es_admin:
-        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Valoración por IA según los Criterios Oficiales del Tribunal.")
+        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Incluye dictado por voz en tiempo real y valoración por IA según los Criterios Oficiales del Tribunal.")
     elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
-        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en tamaño 10pt) y valora cada cuestión de 0 a 10 comparándola directamente con la explicación y solución oficial.")
+        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en tamaño 10pt), permite dictar por voz y valora cada cuestión de 0 a 10 comparándola con la solución oficial.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -3759,7 +3975,7 @@ if not st.session_state.questions:
                 "<div style='font-size:16px; font-weight:800; color:#1E3A8A !important; margin-bottom:8px;'>📝 ¿En qué consiste la categoría DESARROLLO de Oposiciona 5.0?</div>"
                 "<p style='font-size:14px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
                 "Este módulo interactivo está diseñado específicamente para preparar la <b>1.ª Parte del Segundo Ejercicio del Cuerpo de Gestión de la Administración de la Seguridad Social</b> (desarrollo escrito de epígrafes oficiales del temario). "
-                "El alumno redacta su contestación directamente en la plataforma y nuestro sistema de <b>Inteligencia Artificial entrenado con los Criterios Oficiales del Tribunal Calificador</b> analiza su respuesta en tiempo real comparándola con el texto mínimo oficial elaborado por los preparadores."
+                "El alumno redacta o dicta por voz su contestación directamente en la plataforma y nuestro sistema de <b>Inteligencia Artificial entrenado con los Criterios Oficiales del Tribunal Calificador</b> analiza su respuesta en tiempo real comparándola con el texto mínimo oficial elaborado por los preparadores."
                 "</p>"
                 "<ul style='font-size:13.5px; color:#1E293B !important; margin-bottom:12px; padding-left:20px;'>"
                 "<li><b>Calificación oficial de 0 a 50 puntos</b> desglosada en <b>Criterio 1 (0 a 45 ptos)</b> de conocimiento y rigor normativo, <b>Criterio 2 (0 a 3 ptos)</b> de estructura y orden expositivo, y <b>Criterio 3 (0 a 2 ptos)</b> de expresión escrita y presentación formal de siglas.</li>"
@@ -4065,16 +4281,19 @@ elif not st.session_state.finished:
     st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
 
     if es_abierta:
+        # Barra de Dictado por Voz en Tiempo Real (Opción 1) disponible para todos los usuarios en Desarrollo y Supuestos
+        render_dictado_voz_tiempo_real(idx)
+
         altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 170
         lbl_textarea = (
-            "✍️ Escribe aquí tu respuesta razonada a la cuestión planteada (cálculos, plazos, calificación jurídica y normativa aplicable):"
+            "✍️ Escribe o dicta por voz tu respuesta razonada a la cuestión planteada (cálculos, plazos, calificación jurídica y normativa aplicable):"
             if es_supuesto_q else
-            "✍️ Escribe aquí tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):"
+            "✍️ Escribe o dicta por voz tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):"
         )
         placeholder_textarea = (
-            "Redacta aquí tu solución razonada al supuesto práctico, detallando los cálculos y artículos aplicables..."
+            "Redacta o dicta con el botón superior tu solución razonada al supuesto práctico, detallando los cálculos y artículos aplicables..."
             if es_supuesto_q else
-            "Redacta aquí tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
+            "Redacta o dicta con el botón superior tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
         )
         sel_opt = st.text_area(
             lbl_textarea,
@@ -4147,7 +4366,7 @@ elif not st.session_state.finished:
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
             modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
             if not txt_alumno:
-                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta tu contestación en el cuadro superior y pulsa «Comprobar» para que la IA evalúe tu ejercicio.")
+                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta o dicta tu contestación en el cuadro superior y pulsa «Comprobar» para que la IA evalúe tu ejercicio.")
             else:
                 aviso_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(txt_alumno)
                 if aviso_inapropiado:
@@ -4625,3 +4844,5 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
+
