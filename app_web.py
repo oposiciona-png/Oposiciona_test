@@ -2060,7 +2060,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -3528,130 +3527,118 @@ def generar_simulacro_aleatorio(especialidad, ambito_seleccionado, total_deseada
 if 'questions' not in st.session_state:
     st.session_state.update(questions=[], current_index=0, stats={}, finished=False, checked=False, test_name=None)
 
-def _diagnosticar_extension_respuesta_desarrollo(texto, ev_obj=None):
-    t = (texto or "").strip()
-    if not t:
-        return "⚠️ No cumplimentó nada en el texto"
-    lineas_no_vacias = [l.strip() for l in t.split('\n') if l.strip()]
-    palabras = re.findall(r'\S+', t)
-    nota_sufijo = ""
-    if isinstance(ev_obj, dict) and ev_obj.get("nota_50") is not None:
-        n50 = float(ev_obj.get("nota_50", 0.0))
-        n10 = float(ev_obj.get("nota", 0.0))
-        nota_sufijo = f" ({n50:.2f}/50 | {n10:.2f}/10)".replace(".", ",")
-    if len(palabras) < 35 or (len(lineas_no_vacias) <= 2 and len(t) < 200):
-        num_lin = 1 if len(palabras) < 18 else 2
-        return f"⚠️ Solo escribió {num_lin} {'línea' if num_lin == 1 else 'líneas'} ({len(palabras)} palabras){nota_sufijo}"
-    return f"✅ Cumplimentado{nota_sufijo}"
+def _obtener_prefijo_corto_tema(nombre_test, q=None):
+    """Extrae únicamente 'TEMA XX' (ej. 'TEMA 53') para el registro limpio de Desarrollo."""
+    fuentes = [
+        (q.get("tema_titulo") if isinstance(q, dict) else "") or "",
+        nombre_test or ""
+    ]
+    for f in fuentes:
+        m = re.search(r'tema[_\s\-]*(\d+)', str(f), re.IGNORECASE)
+        if m:
+            return f"TEMA {int(m.group(1)):02d}"
+    return (nombre_test or "TEMA").strip().upper()
 
-def construir_nombre_test_seguimiento_sheets(indice_actual=None):
+def construir_nombre_epigrafe_sheets(indice_epigrafe):
+    """
+    Devuelve el formato limpio y exacto pedido para la columna 'Nombre del Test' en Desarrollo:
+    Ejemplo: 'TEMA 53. EPÍGRAFE 2: Altas y bajas en el régimen general'
+    """
     qs = st.session_state.get("questions", [])
-    es_desarrollo = (
-        (st.session_state.get("test_cat") or "").upper() == "DESARROLLO"
-        or any(q.get("tipo_abierta") == "DESARROLLO" for q in qs)
-    )
-    if not es_desarrollo or not qs:
+    if not qs or indice_epigrafe is None or indice_epigrafe >= len(qs):
         return st.session_state.get("test_name") or "Test"
+    q_ep = qs[indice_epigrafe]
+    pref_tema = _obtener_prefijo_corto_tema(st.session_state.get("test_name"), q_ep)
+    ep_txt = re.sub(r'\s*↑+\s*$', '', (q_ep.get("question_text") or f"EPÍGRAFE {indice_epigrafe + 1}")).strip().rstrip(".")
+    if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', ep_txt, re.IGNORECASE):
+        ep_txt = f"EPÍGRAFE {indice_epigrafe + 1}: {ep_txt}"
+    return f"{pref_tema}. {ep_txt}"
+
+def formatear_nota_epigrafe_individual_sheets(ev_obj):
+    """Formatea la nota de ESE epígrafe concreto para la columna 'Nota Final' (ej. '16,50/50 (3,30/10)')."""
+    if not isinstance(ev_obj, dict):
+        return "0,00/50 (0,00/10)"
+    n50 = float(ev_obj.get("nota_50", 0.0))
+    n10 = float(ev_obj.get("nota", 0.0))
+    return f"{n50:.2f}/50 ({n10:.2f}/10)".replace(".", ",")
+
+def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
+    """
+    Registra UNA ÚNICA LÍNEA limpia y definitiva ('✅ Completado') por cada epígrafe resuelto
+    en DESARROLLO con el formato 'TEMA XX. EPÍGRAFE Y: ...' y la nota de ESE epígrafe en 'Nota Final',
+    sin dejar líneas '🚀 En curso' colgadas ni duplicar filas.
+    """
+    qs = st.session_state.get("questions", [])
+    stats = st.session_state.get("stats", {})
+    if not qs or idx_ep is None or idx_ep >= len(qs):
+        return
+    q_ep = qs[idx_ep]
+    if q_ep.get("tipo_abierta") != "DESARROLLO":
+        return
+
+    stat_ep = stats.get(idx_ep, {})
+    txt_al = (stat_ep.get("selected") or "").strip()
+    ev_ep = stat_ep.get("ai_eval")
+    if not isinstance(ev_ep, dict):
+        return
+
+    # Evitar duplicar la misma línea si el usuario recarga o pulsa Finalizar sin haber cambiado su texto
+    firma_registro = f"{txt_al}__{ev_ep.get('nota_50', 0.0):.2f}"
+    if stat_ep.get("sheets_logged_sig") == firma_registro:
+        return
+    stat_ep["sheets_logged_sig"] = firma_registro
 
     st.session_state.test_cat = "DESARROLLO"
-    tema_lbl = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), qs[0])
-    stats = st.session_state.get("stats", {})
+    nombre_ep_limpio = construir_nombre_epigrafe_sheets(idx_ep)
+    nota_ep_limpia = formatear_nota_epigrafe_individual_sheets(ev_ep)
 
-    detalles_epigrafes = []
-    alguno_tocado = False
-    for i_q, q_item in enumerate(qs):
-        ep_tit = q_item.get("question_text", f"Epígrafe {i_q + 1}").strip()
-        stat_i = stats.get(i_q, {})
-        txt_i = (stat_i.get("selected") or "").strip()
-        intentos_i = stat_i.get("attempts", 0)
-        ev_i = stat_i.get("ai_eval")
-        if txt_i or intentos_i > 0 or (indice_actual is not None and i_q == indice_actual):
-            alguno_tocado = True
-            est_i = _diagnosticar_extension_respuesta_desarrollo(txt_i, ev_i)
-            detalles_epigrafes.append(f"{ep_tit} -> {est_i}")
+    # Enviamos accion='actualizar_fin' con evento='✅ Completado':
+    # - Como no se creó fila previa '🚀 En curso', el webhook inserta directamente 1 sola fila cerrada
+    #   con Hora Inicio, Hora Fin, Duración, 'TEMA XX. EPÍGRAFE Y: ...' y 'Nota Final' rellenos.
+    registrar_actividad_sheets(
+        evento="✅ Completado",
+        nombre_test=nombre_ep_limpio,
+        aciertos="",
+        fallos="",
+        blancos="",
+        nota=nota_ep_limpia,
+        accion="actualizar_fin"
+    )
 
-    if not alguno_tocado:
-        idx_ref = indice_actual if indice_actual is not None else st.session_state.get("current_index", 0)
-        ep_actual = qs[idx_ref].get("question_text", f"Epígrafe {idx_ref + 1}").strip() if idx_ref < len(qs) else "Todos los epígrafes"
-        detalles_epigrafes.append(f"{ep_actual} -> ⚠️ No cumplimentó nada en el texto")
-
-    return f"{tema_lbl}\n" + "\n".join(detalles_epigrafes)
-
-def calcular_nota_final_desarrollo_sheets(indice_actual=None):
-    """
-    Calcula la nota para volcar en la columna NOTA FINAL de Google Sheets cuando el alumno
-    hace una pregunta de DESARROLLO (o SUPUESTOS):
-    - Si ha evaluado 1 epígrafe, muestra directamente la nota de ese epígrafe: '34,50/50 (6,90/10)'.
-    - Si ha evaluado varios epígrafes, muestra la media de los realizados y el desglose:
-      '32,00/50 (6,40/10) [Ep.1: 34,50/50 | Ep.2: 29,50/50]'.
-    """
+def calcular_nota_final_supuestos_sheets(indice_actual=None):
     qs = st.session_state.get("questions", [])
     stats = st.session_state.get("stats", {})
     if not qs:
         return ""
-
-    es_supuesto = any(q.get("tipo_abierta") == "SUPUESTO" for q in qs)
     evaluados = []
-
-    for i_q, q_item in enumerate(qs):
+    for i_q, _ in enumerate(qs):
         stat_i = stats.get(i_q, {})
-        txt_i = (stat_i.get("selected") or "").strip()
         ev_i = stat_i.get("ai_eval")
-        if isinstance(ev_i, dict) and (ev_i.get("nota_50") is not None or ev_i.get("nota") is not None):
-            n50_i = float(ev_i.get("nota_50", 0.0))
-            n10_i = float(ev_i.get("nota", 0.0))
-            evaluados.append((i_q + 1, n50_i, n10_i))
-        elif txt_i and detectar_respuesta_inapropiada_o_sin_interes(txt_i):
-            evaluados.append((i_q + 1, 0.0, 0.0))
-
-    if not evaluados and indice_actual is not None:
-        stat_act = stats.get(indice_actual, {})
-        ev_act = stat_act.get("ai_eval")
-        if isinstance(ev_act, dict):
-            evaluados.append((indice_actual + 1, float(ev_act.get("nota_50", 0.0)), float(ev_act.get("nota", 0.0))))
-        else:
-            return "0,00/50 (0,00/10)" if not es_supuesto else "0,00/10"
-
+        if isinstance(ev_i, dict) and ev_i.get("nota") is not None:
+            evaluados.append((i_q + 1, float(ev_i.get("nota", 0.0))))
     if not evaluados:
-        return "0,00/50 (0,00/10)" if not es_supuesto else "0,00/10"
-
-    if es_supuesto:
-        media_10 = sum(x[2] for x in evaluados) / len(evaluados)
-        if len(evaluados) == 1:
-            num_e, _, n10_e = evaluados[0]
-            return f"{n10_e:.2f}/10 (P{num_e})".replace(".", ",")
-        desglose_s = " | ".join([f"P{num_e}: {n10_e:.2f}/10" for num_e, _, n10_e in evaluados])
-        return f"{media_10:.2f}/10 [{desglose_s}]".replace(".", ",")
-
-    media_50 = sum(x[1] for x in evaluados) / len(evaluados)
-    media_10 = sum(x[2] for x in evaluados) / len(evaluados)
+        return "0,00/10"
+    media_10 = sum(x[1] for x in evaluados) / len(evaluados)
     if len(evaluados) == 1:
-        num_e, n50_e, n10_e = evaluados[0]
-        return f"{n50_e:.2f}/50 ({n10_e:.2f}/10)".replace(".", ",")
-
-    desglose_d = " | ".join([f"Ep.{num_e}: {n50_e:.2f}/50" for num_e, n50_e, _ in evaluados])
-    return f"{media_50:.2f}/50 ({media_10:.2f}/10) [{desglose_d}]".replace(".", ",")
+        num_e, n10_e = evaluados[0]
+        return f"{n10_e:.2f}/10 (P{num_e})".replace(".", ",")
+    desglose_s = " | ".join([f"P{num_e}: {n10_e:.2f}/10" for num_e, n10_e in evaluados])
+    return f"{media_10:.2f}/10 [{desglose_s}]".replace(".", ",")
 
 def save_answer(selected):
     idx_curr = st.session_state.current_index
     stat = st.session_state.stats[idx_curr]
     q_curr = st.session_state.questions[idx_curr] if st.session_state.get("questions") else {}
-    es_desarrollo_curr = bool(q_curr.get("tipo_abierta") == "DESARROLLO" or st.session_state.get("test_cat") == "DESARROLLO")
+    es_desarrollo_curr = bool(q_curr.get("tipo_abierta") == "DESARROLLO" or (st.session_state.get("test_cat") or "").upper() == "DESARROLLO")
 
     if selected is not None and str(selected).strip() != "" and selected != stat['selected']:
         stat['selected'] = selected
         stat['attempts'] += 1
-        if not st.session_state.get('inicio_registrado_sheets', False):
+        # En DESARROLLO NO creamos fila prematura "🚀 En curso" al escribir, porque cada epígrafe
+        # genera su propia línea cerrada ("✅ Completado") con su nota cuando se corrige.
+        if not es_desarrollo_curr and not st.session_state.get('inicio_registrado_sheets', False):
             st.session_state.inicio_registrado_sheets = True
-            if es_desarrollo_curr:
-                st.session_state.test_cat = "DESARROLLO"
-            nombre_celda = construir_nombre_test_seguimiento_sheets(indice_actual=idx_curr)
-            registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
-    elif es_desarrollo_curr and st.session_state.get("checked", False):
-        if not st.session_state.get('inicio_registrado_sheets', False):
-            st.session_state.inicio_registrado_sheets = True
-            st.session_state.test_cat = "DESARROLLO"
-            nombre_celda = construir_nombre_test_seguimiento_sheets(indice_actual=idx_curr)
+            nombre_celda = st.session_state.get("test_name") or "Test"
             registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
 
 def handle_radio_change():
@@ -3860,7 +3847,7 @@ def procesar_preguntas(raw_qs, barajar=True):
         current_index=0,
         finished=False,
         checked=False,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None} for i in range(len(qs_listas))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None} for i in range(len(qs_listas))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
         do_scroll=True
@@ -3872,7 +3859,7 @@ def action_repetir_test():
     limpiar_estados_reportes_error()
     st.session_state.update(
         current_index=0,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None} for i in range(len(st.session_state.questions))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None} for i in range(len(st.session_state.questions))},
         finished=False, checked=False, celebracion_mostrada=False, do_scroll=True
     )
     iniciar_cronometro_test()
@@ -3894,7 +3881,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
@@ -4526,7 +4512,6 @@ elif not st.session_state.finished:
         st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
 
     if es_abierta:
-        # Barra de Dictado por Voz en Tiempo Real (Opción 1) disponible para todos los usuarios en Desarrollo y Supuestos
         render_dictado_voz_tiempo_real(idx)
 
         altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 170
@@ -4565,14 +4550,6 @@ elif not st.session_state.finished:
         st.session_state.update(checked=False, current_index=idx - 1, do_scroll=True); st.rerun()
     if c2.button("Comprobar", use_container_width=True):
         save_answer(sel_opt)
-        if q.get("tipo_abierta") == "DESARROLLO":
-            st.session_state.test_cat = "DESARROLLO"
-            nombre_celda_des = construir_nombre_test_seguimiento_sheets(indice_actual=idx)
-            if not st.session_state.get('inicio_registrado_sheets', False):
-                st.session_state.inicio_registrado_sheets = True
-                registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda_des, aciertos="", fallos="", blancos="", accion="nueva_fila")
-            else:
-                registrar_actividad_sheets("✍️ Revisado", nombre_test=nombre_celda_des, aciertos="", fallos="", blancos="", accion="actualizar_fin")
         st.session_state.update(checked=True, do_scroll=True); st.rerun()
     if idx < len(st.session_state.questions) - 1:
         if c3.button("Siguiente ➔", use_container_width=True):
@@ -4611,12 +4588,17 @@ elif not st.session_state.finished:
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
             modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
             if not txt_alumno:
+                if q.get("tipo_abierta") == "DESARROLLO":
+                    stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
+                    registrar_epigrafe_desarrollo_en_sheets(idx)
                 st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta o dicta tu contestación en el cuadro superior y pulsa «Comprobar» para que la IA evalúe tu ejercicio.")
             else:
                 aviso_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(txt_alumno)
                 if aviso_inapropiado:
                     stat["open_score"] = 0.0
-                    stat["ai_eval"] = None
+                    stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
+                    if q.get("tipo_abierta") == "DESARROLLO":
+                        registrar_epigrafe_desarrollo_en_sheets(idx)
                     st.markdown(
                         f"<div style='background-color:#fff8e1; border:2px solid #d97706; border-radius:8px; padding:16px; margin-top:10px; margin-bottom:10px; font-size:15px; color:#1E293B !important; line-height:1.55; text-align:justify;'>"
                         f"{aviso_inapropiado}"
@@ -4639,6 +4621,24 @@ elif not st.session_state.finished:
                             )
                         stat["ai_eval"] = ev
                         stat["open_score"] = ev.get("nota", 0.0)
+
+                        # Volcar UNA ÚNICA LÍNEA limpia por este epígrafe con su nota individual en Google Sheets
+                        if q.get("tipo_abierta") == "DESARROLLO":
+                            registrar_epigrafe_desarrollo_en_sheets(idx)
+                        elif es_supuesto_q:
+                            nota_celda_sup = calcular_nota_final_supuestos_sheets(indice_actual=idx)
+                            accion_sh = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
+                            st.session_state.inicio_registrado_sheets = True
+                            registrar_actividad_sheets(
+                                "✍️ Revisado",
+                                nombre_test=st.session_state.get("test_name") or "Supuesto",
+                                aciertos="",
+                                fallos="",
+                                blancos="",
+                                nota=nota_celda_sup,
+                                accion=accion_sh
+                            )
+                        sincronizar_progreso_navegador()
                     else:
                         ev = stat["ai_eval"]
 
@@ -4775,6 +4775,7 @@ else:
                 stat['final_status'] = "⚪ En blanco (0,00 / 10)" if es_sup_i else "⚪ En blanco (0,00 / 50 ptos)"
             elif detectar_respuesta_inapropiada_o_sin_interes(txt_al):
                 fallos += 1
+                stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
                 notas_individuales_10.append((i + 1, 0.0))
                 notas_individuales_50.append((i + 1, 0.0))
                 stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 10)" if es_sup_i else "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
@@ -4869,19 +4870,20 @@ else:
 
         if es_desarrollo_fin:
             st.session_state.test_cat = "DESARROLLO"
-            nombre_test_final_sheets = construir_nombre_test_seguimiento_sheets()
-            nota_sheets_str = f"{nota_media_50:.2f}/50 ({nota_oposicion_10:.2f}/10)".replace(".", ",")
-            accion_sheets = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
-            st.session_state.inicio_registrado_sheets = True
-            registrar_actividad_sheets(
-                evento="✅ Completado",
-                nombre_test=nombre_test_final_sheets,
-                aciertos="",
-                fallos="",
-                blancos="",
-                nota=nota_sheets_str,
-                accion=accion_sheets
-            )
+            # En DESARROLLO registramos una línea individual por cada epígrafe que el alumno haya resuelto
+            # (si ya le dio a Comprobar antes, 'sheets_logged_sig' evita que se duplique; si le dio directamente a Finalizar sin Comprobar, se registra ahora con su nota).
+            alguno_resuelto = False
+            for idx_ep_fin, q_ep_fin in enumerate(st.session_state.questions):
+                stat_ep_fin = st.session_state.stats.get(idx_ep_fin, {})
+                txt_ep_fin = (stat_ep_fin.get("selected") or "").strip()
+                if txt_ep_fin or stat_ep_fin.get("ai_eval") is not None:
+                    alguno_resuelto = True
+                    registrar_epigrafe_desarrollo_en_sheets(idx_ep_fin)
+            # Si cerró sin haber escrito en ningún epígrafe, registrar el epígrafe en el que estaba con 0,00/50
+            if not alguno_resuelto and st.session_state.questions:
+                idx_act_f = st.session_state.get("current_index", 0)
+                st.session_state.stats[idx_act_f]["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
+                registrar_epigrafe_desarrollo_en_sheets(idx_act_f)
         else:
             if aciertos > 0 and aciertos_por_intento:
                 max_intento = max(aciertos_por_intento.keys())
@@ -4892,10 +4894,12 @@ else:
                 aciertos_sheets_str = str(aciertos)
 
             nota_sheets_str = (
-                f"{nota_oposicion_10:.2f}/10".replace(".", ",")
+                calcular_nota_final_supuestos_sheets()
                 if es_test_supuestos else
                 f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
             )
+            accion_sheets = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
+            st.session_state.inicio_registrado_sheets = True
             registrar_actividad_sheets(
                 evento="✅ Completado",
                 nombre_test=st.session_state.get("test_name") or "Test",
@@ -4903,7 +4907,7 @@ else:
                 fallos=fallos,
                 blancos=blancos,
                 nota=nota_sheets_str,
-                accion="actualizar_fin"
+                accion=accion_sheets
             )
 
     if nota_oposicion_10 >= 5.0:
@@ -4971,17 +4975,9 @@ else:
             f"✅ Superadas (≥ 25/50): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Inferiores a 25/50: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco (0/50): <b style='color:#000000 !important;'>{blancos}</b>"
             f"</div>"
             f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 NOTA MEDIA FINAL ({nombre_cuerpo})</div>"
-            f"<div style='text-align: center; font-size: 22px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
-            f"🏛️ PUNTUACIÓN MEDIA DIRECTA: {nota_media_50:.2f} / 50,00 PUNTOS"
-            f"</div>"
-            f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1565c0 !important; margin-bottom: 8px;'>"
-            f"🎓 Equivalencia media sobre 10: {nota_oposicion_10:.2f} / 10"
-            f"</div>"
-            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.45;'>"
-            f"<b>Cálculo de la nota final:</b> Media aritmética de las calificaciones obtenidas individualmente en los {preg_eval} epígrafes del tema "
-            f"({suma_notas_50:.2f} ÷ {preg_eval} = <b>{nota_media_50:.2f} / 50 ptos</b> | Equivalencia: <b>{nota_oposicion_10:.2f} / 10</b>).<br>"
-            f"<span style='font-size:12.5px; color:#475569 !important;'>{desglose_indiv_des}</span>"
+            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 CALIFICACIONES POR EPÍGRAFE ({nombre_cuerpo})</div>"
+            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 10px 12px; border-radius: 4px; font-size: 14px; color: #2C3E50 !important; text-align: center; line-height: 1.5;'>"
+            f"{desglose_indiv_des}"
             f"</div></div>",
             unsafe_allow_html=True
         )
@@ -5089,3 +5085,4 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
