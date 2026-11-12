@@ -841,6 +841,7 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
+
 # === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
 import io, zipfile
 import xml.etree.ElementTree as ET
@@ -1242,7 +1243,7 @@ class PDFQuizParser:
         return "".join(bloques)
 
     @staticmethod
-    def _parse_supuestos_practicos(parrafos, tema_titulo=""):
+    def _parse_supuestos_practicos(parrafos, tema_titulo="", es_docx=False):
         """
         Extrae las cuestiones de la categoría SUPUESTOS manteniendo SIEMPRE el orden secuencial (1, 2, 3... N):
         - Reconoce preguntas numeradas aunque empiecen por comillas ('5. "AgroExport S.L."...'), signos '¿' o cualquier palabra.
@@ -1298,7 +1299,6 @@ class PDFQuizParser:
         if not parrafos_utiles:
             return []
 
-        # Acepta que el enunciado de la pregunta tras '5.' empiece por comillas ("AgroExport..."), «, ¿, ¡, ( o letra mayúscula
         pat_pregunta_explicita = re.compile(
             r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s*(?![ºª°a-zA-Z]\b)\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$',
             re.IGNORECASE
@@ -1321,7 +1321,6 @@ class PDFQuizParser:
         )
         pat_resp_tecnica = re.compile(r'^(?:#\s*)?RESPUESTA\s+T[ÉE]CNICA\s*:\s*(.*)$', re.IGNORECASE)
         pat_opcion_test_residual = re.compile(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+')
-        # Detecta el inicio de un segundo escenario narrativo (normalmente entre la pregunta 10 y la 11)
         pat_segundo_supuesto_narrativo = re.compile(
             r'^(?:(?:#\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?)\b|(?:La\s+(?:mercantil|sociedad|empresa|cooperativa|entidad|asesor[íi]a)\s+["«][^"»]+["»]|Don\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+es\s+un\s+empresario).*)',
             re.IGNORECASE
@@ -1351,11 +1350,9 @@ class PDFQuizParser:
             if not txt or txt == tema_titulo or PDFQuizParser._es_basura_cabecera_o_pie(txt_sin_hash, tema_titulo):
                 continue
 
-            # Ignorar opciones a), b), c), d) residuales si algún PDF de supuesto aún las tuviera
             if not leyendo_planteamiento and pat_opcion_test_residual.match(txt_sin_hash):
                 continue
 
-            # Detectar si tras haber respondido varias preguntas (ej. la 10) empieza el planteamiento de un 2.º supuesto práctico
             if (
                 not leyendo_planteamiento and
                 curr_q is not None and
@@ -1407,9 +1404,6 @@ class PDFQuizParser:
             if m_q and not es_subapartado_respuesta:
                 num_cand = int(m_q.group(1))
                 cuerpo_cand = m_q.group(2).strip()
-                # Es nueva pregunta si:
-                # - Es la pregunta 1 tras leer el planteamiento, o
-                # - Sigue la numeración correlativa (contador_preguntas + 1) o tiene signo '?' o verbo de pregunta
                 es_correlativa = (
                     (leyendo_planteamiento and num_cand == 1 and len(lineas_planteamiento) > 0) or
                     (not leyendo_planteamiento and (num_cand == contador_preguntas + 1 or (curr_q is not None and len(curr_q["explanation_lines"]) > 0)))
@@ -1456,7 +1450,6 @@ class PDFQuizParser:
                 else:
                     lineas_planteamiento.append({"text": txt_sin_hash, "html": html_p, "is_list": es_lista})
             elif curr_q is not None:
-                # Si el enunciado de la pregunta ocupaba más de una línea y aún no había cerrado con '?' ni ':'
                 if (
                     not curr_q["explanation_lines"] and
                     not curr_q["question_text"].rstrip().endswith(("?", ":", ".")) and
@@ -1478,11 +1471,9 @@ class PDFQuizParser:
             if es_docx:
                 exp_unida = "\n".join(lineas_exp_q).strip()
             else:
-                # En PDFs de supuestos, unir renglones partidos dentro de cada párrafo de la explicación
                 exp_limpia_tags = [re.sub(r'</?b>', '', l_e) if not l_e.startswith("[[H]]") else l_e for l_e in lineas_exp_q]
                 exp_unida = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(exp_limpia_tags)).strip()
             q_item.pop("num", None)
-            # Asegurar numeración secuencial limpia 1, 2, 3... N
             txt_q_s = re.sub(r'^\d{1,2}\s*[\.\-\)]\s*', '', q_item.get("question_text", "")).strip()
             q_item["question_text"] = f"{idx_s}. {txt_q_s}"
             q_item["explanation"] = exp_unida
@@ -1536,7 +1527,6 @@ class PDFQuizParser:
         buf_bold = False
         buf_list = False
 
-        # Incluye comillas tras el número ('5. "AgroExport S.L."...') para que en PDF nunca se fusione una pregunta con la explicación anterior
         pat_corte_estructural_pdf = re.compile(
             r'^(?:#\s*)?(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}(?!\d)\s*[\.\)]\s+["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|La\s+(?:mercantil|sociedad|empresa|cooperativa)\s+["«]|[•\-\*▪■·]\s+|[a-g]\)\s+)',
             re.IGNORECASE
@@ -1593,7 +1583,7 @@ class PDFQuizParser:
                     break
 
         if modo in ("SUPUESTOS", "SUPUESTO"):
-            return PDFQuizParser._parse_supuestos_practicos(parrafos, tema_titulo=tema_titulo)
+            return PDFQuizParser._parse_supuestos_practicos(parrafos, tema_titulo=tema_titulo, es_docx=es_docx)
 
         parrafos_desarrollo = []
         for p in parrafos:
