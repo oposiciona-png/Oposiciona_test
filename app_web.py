@@ -841,7 +841,6 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
-
 # === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
 import io, zipfile
 import xml.etree.ElementTree as ET
@@ -868,7 +867,6 @@ class PDFQuizParser:
             ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
             w_prefix = f"{{{ns['w']}}}"
 
-            # Leer estilos base de word/styles.xml si existen para saber qué estilos llevan negrita o lista por defecto
             estilos_negrita = set()
             estilos_lista = set()
             try:
@@ -929,7 +927,6 @@ class PDFQuizParser:
                 chars_totales = 0
                 chars_negrita = 0
 
-                # Usar p.iter para capturar también <w:r> dentro de <w:hyperlink> o <w:smartTag>
                 for r in p.iter(f"{w_prefix}r"):
                     rPr = r.find("w:rPr", ns)
                     r_bold = bold_por_parrafo
@@ -985,7 +982,6 @@ class PDFQuizParser:
                 if not texto_p:
                     continue
 
-                # Fusionar etiquetas <b></b> contiguas para limpiar el HTML generado desde runs consecutivos de Word
                 html_p = re.sub(r'</b>(\s*)<b>', r'\1', html_p)
                 html_p = re.sub(r'</i>(\s*)<i>', r'\1', html_p)
 
@@ -1000,14 +996,11 @@ class PDFQuizParser:
                     if not sub_l:
                         continue
 
-                    # Detectar si el párrafo en Word es una viñeta o un apartado de definición ("Concepto (art. X): Definición...")
                     empieza_con_bullet = bool(re.match(r'^(?:[•·▪■\-\*]|\d{1,2}[\.\º\ª]*\)|\([a-z0-9]+\)|[a-g]\))\s+', sub_l))
-                    # Detectar apartados tipo "Pluriactividad (artículo 7.4 del RIA): Es la situación..." o "Alta presunta o de pleno derecho (...): Mecanismo..."
                     m_def_lead = re.match(r'^([A-ZÁÉÍÓÚÑ][^:]{2,115}):\s+(.+)$', sub_l)
                     es_apartado_definicion = False
                     if m_def_lead and not es_heading and not es_negrita:
                         lead_txt = m_def_lead.group(1).strip()
-                        # Verificar que el texto antes de ':' sea un título de apartado/concepto y no una oración larga normal
                         lead_sin_paren = re.sub(r'\([^)]*\)', '', lead_txt).strip()
                         palabras_lead = lead_sin_paren.split()
                         if 1 <= len(palabras_lead) <= 12 and not re.search(r'\b(dice|establece|dispone|señala|indica|siguientes|como|saber)\b$', lead_sin_paren, re.IGNORECASE):
@@ -1050,7 +1043,7 @@ class PDFQuizParser:
         if re.match(r'^(?:p[áa]gina\s*)?\d{1,3}(?:\s+de\s+\d{1,3})?$', l_sin_hash, re.IGNORECASE):
             return True
         if re.match(
-            r'^(?:OPOSICIONA(?:\s+POSICIO\w*)?|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|TEMA\s+\d+\s*[\-–]\s*DERECHO\s+MERCANTIL.*|PREGUNTAS?\s+DE\s+RESERVA|OPOSICIONA(?:\.ES|\s+5\.0)?|RESPUESTAS?\s+TE[ST]*\s+TEMAS?.*)$',
+            r'^(?:OPOSICIONA(?:\s+POSICIO\w*)?|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|TEMA\s+\d+\s*[\-–]\s*(?:DERECHO\s+MERCANTIL|CAMPO\s+DE\s+APLICACI[ÓO]N|CONSTITUCI[ÓO]N|AFILIACI[ÓO]N|ACCI[ÓO]N\s+PROTECTORA|REQUISITOS|INCAPACIDAD|NACIMIENTO|JUBILACI[ÓO]N|MUERTE|COTIZACI[ÓO]N|LOS\s+REG[ÍI]MENES|RETA).*|PREGUNTAS?\s+DE\s+RESERVA|OPOSICIONA(?:\.ES|\s+5\.0)?|RESPUESTAS?\s+TE[ST]*\s+TEMAS?.*)$',
             l_sin_hash,
             re.IGNORECASE
         ):
@@ -1064,10 +1057,6 @@ class PDFQuizParser:
 
     @staticmethod
     def _reconstruir_parrafos_explicacion_test(texto_explicacion):
-        """
-        Une renglones físicos partidos ÚNICAMENTE en explicaciones extraídas de PDFs de tipo test.
-        (Jamás se aplica a documentos Word de Desarrollo ni Supuestos).
-        """
         if not texto_explicacion:
             return ""
 
@@ -1132,13 +1121,6 @@ class PDFQuizParser:
 
     @staticmethod
     def _asegurar_negrita_encabezado_dos_puntos(html_str):
-        """
-        Garantiza que si un párrafo o viñeta comienza por un concepto seguido de dos puntos
-        (incluso si contiene puntos de abreviaturas o artículos como 'Pluriactividad (artículo 7.4 del RIA):'
-        o 'Alta presunta o de pleno derecho (artículo 166.4 del TRLGSS y artículo 29.2 del RIA):'),
-        todo ese encabezado previo a los dos puntos se muestre siempre en negrita sin perder
-        las demás negritas que haya en el resto del párrafo.
-        """
         plain = re.sub(r'<[^>]+>', '', html_str).strip()
         m = re.match(r'^([•\-\*▪■·]?\s*[A-ZÁÉÍÓÚÑ¡¿][^:]{1,115}:)(\s+.+)$', plain)
         if not m:
@@ -1146,13 +1128,11 @@ class PDFQuizParser:
 
         pref_plain = m.group(1)
         pref_sin_paren = re.sub(r'\([^)]*\)', '', pref_plain)
-        # Si fuera de los paréntesis hay un punto seguido de espacio y mayúscula, son dos frases normales, no un encabezado
         if re.search(r'\.\s+[A-ZÁÉÍÓÚÑ]', pref_sin_paren):
             return html_str
         if len(pref_sin_paren.split()) > 13:
             return html_str
 
-        # Dividir el HTML por el primer ':' que cierra ese encabezado
         idx_colon = html_str.find(":")
         if idx_colon == -1:
             return html_str
@@ -1162,12 +1142,6 @@ class PDFQuizParser:
 
     @staticmethod
     def renderizar_explicacion_html(texto_explicacion, titulo_tema=""):
-        """
-        Renderiza fielmente la maquetación original del documento Word (.docx) o PDF:
-        - Respeta cada párrafo, cada viñeta y cada negrita/cursiva/subrayado del Word.
-        - Aplica viñeta '•', sangría francesa y negrita en el término inicial a todos los elementos de lista
-          y apartados de definición (incluso cuando citan artículos con decimales como 'artículo 7.4' o '166.4').
-        """
         if not texto_explicacion:
             return "<div>Sin explicación disponible.</div>"
         txt_limpio = PDFQuizParser._limpiar_cabeceras_incrustadas(texto_explicacion, titulo_tema)
@@ -1199,7 +1173,6 @@ class PDFQuizParser:
                 elif re.match(r'^(?:\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|EP[ÍI]GRAFE\s+\d+|APARTADO\s+\d+)', l_plain) and len(l_plain) < 155 and not l_plain.endswith("."):
                     es_cabecera_h = True
 
-            # Detectar también por contenido si es un apartado de definición/viñeta aunque viniera de una sesión anterior en memoria
             if not es_cabecera_h and not es_item_lista:
                 if re.match(r'^(?:[•\-\*▪■·]|\d{1,2}[\.\º\ª]*\)|\([a-z0-9]+\)|[a-g]\))\s*', l_plain):
                     es_item_lista = True
@@ -1216,7 +1189,6 @@ class PDFQuizParser:
                     f"<div style='font-size:15.5px; font-weight:800; color:#083B46 !important; margin-top:15px; margin-bottom:7px; line-height:1.4;'>{l_tit}</div>"
                 )
             elif es_item_lista:
-                # Limpiar posible marca de viñeta duplicada y poner siempre '• ' uniforme al inicio
                 l_sin_bullet = re.sub(r'^(?:<b>\s*)?[•\-\*▪■·]\s*', lambda m: '<b>' if '<b>' in m.group(0) else '', l).strip()
                 if not re.match(r'^(?:<[^>]+>)*\s*(?:\d{1,2}[\.\º\ª\)]|\([a-z0-9]+\)|[a-g]\))', l_sin_bullet):
                     l_fmt = f"• {l_sin_bullet}"
@@ -1244,7 +1216,7 @@ class PDFQuizParser:
             txt_p = PDFQuizParser._limpiar_marca_agua_linea(item.get("text") or "")
             html_p = PDFQuizParser._limpiar_marca_agua_linea(item.get("html") or txt_p)
             es_lista = bool(item.get("is_list", False))
-            if not txt_p:
+            if not txt_p or txt_p in ("•", "·", "▪", "■"):
                 continue
 
             m_ord = pat_ordinal_caso.match(txt_p)
@@ -1271,8 +1243,17 @@ class PDFQuizParser:
 
     @staticmethod
     def _parse_supuestos_practicos(parrafos, tema_titulo=""):
+        """
+        Extrae las cuestiones de la categoría SUPUESTOS manteniendo SIEMPRE el orden secuencial (1, 2, 3... N):
+        - Reconoce preguntas numeradas aunque empiecen por comillas ('5. "AgroExport S.L."...'), signos '¿' o cualquier palabra.
+        - Si un PDF de supuestos aún tuviera opciones a), b), c), d) debajo de la pregunta, las ignora limpiamente
+          para que la cuestión sea siempre de desarrollo abierto.
+        - Detecta automáticamente si después de la pregunta 10 comienza un segundo planteamiento narrativo
+          (ej. 'La mercantil "TechNova S.A."...' en Tema 52 o 'La sociedad "AGRO-INNOVA"...' en Tema 53)
+          para asignarlo como planteamiento de las preguntas 11 a 20 sin mezclarlo con la explicación de la pregunta 10.
+        """
         pat_marca_supuesto = re.compile(
-            r'(?:^|\b)(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?\s*[:\.\-]?\s*',
+            r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?\s*[:\.\-]?\s*',
             re.IGNORECASE
         )
 
@@ -1286,7 +1267,7 @@ class PDFQuizParser:
                 continue
             if not encontrado_supuesto:
                 m_sup = pat_marca_supuesto.search(txt_p)
-                if m_sup and (txt_p[m_sup.start():m_sup.end()].isupper() or m_sup.start() == 0):
+                if m_sup:
                     encontrado_supuesto = True
                     resto_txt = txt_p[m_sup.end():].strip()
                     if resto_txt:
@@ -1317,7 +1298,11 @@ class PDFQuizParser:
         if not parrafos_utiles:
             return []
 
-        pat_pregunta_explicita = re.compile(r'^(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})\s*[\.\-\)]\s+([A-ZÁÉÍÓÚÑ¿¡].+)$', re.IGNORECASE)
+        # Acepta que el enunciado de la pregunta tras '5.' empiece por comillas ("AgroExport..."), «, ¿, ¡, ( o letra mayúscula
+        pat_pregunta_explicita = re.compile(
+            r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s*(?![ºª°a-zA-Z]\b)\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$',
+            re.IGNORECASE
+        )
         pat_cierre_planteamiento = re.compile(
             r'(?:responda\s+de\s+forma\s+razonada|siguientes\s+(?:\w+\s+)?cuestiones\s+pr[áa]cticas|responda\s+a\s+las\s+siguientes\s+preguntas)\s*:\s*$',
             re.IGNORECASE
@@ -1327,11 +1312,20 @@ class PDFQuizParser:
             re.IGNORECASE
         )
         pat_verbo_pregunta = re.compile(
-            r'^(?:Determine|Analice|Calcule|Indique|Precise|Razone|Justifique|Explique|Señale|Resuelva|En\s+relaci[óo]n\s+con|Respecto\s+(?:de|a)|Ante\s+la)\b',
+            r'^(?:Determine|Analice|Calcule|Indique|Precise|Razone|Justifique|Explique|Señale|Resuelva|En\s+relaci[óo]n\s+con|Respecto\s+(?:de|a|al)|Ante\s+la|Sobre\s+la|Atendiendo\s+a|Teniendo\s+en\s+cuenta|Si\s+["«A-ZÁÉÍÓÚÑ]|["«][A-ZÁÉÍÓÚÑ])\b',
             re.IGNORECASE
         )
-        pat_explicacion = re.compile(r'^EXPLICACI[ÓO]N\s*:\s*(.*)$', re.IGNORECASE)
-        pat_resp_tecnica = re.compile(r'^RESPUESTA\s+T[ÉE]CNICA\s*:\s*(.*)$', re.IGNORECASE)
+        pat_explicacion = re.compile(
+            r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?)\s*:\s*(.*)$',
+            re.IGNORECASE
+        )
+        pat_resp_tecnica = re.compile(r'^(?:#\s*)?RESPUESTA\s+T[ÉE]CNICA\s*:\s*(.*)$', re.IGNORECASE)
+        pat_opcion_test_residual = re.compile(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+')
+        # Detecta el inicio de un segundo escenario narrativo (normalmente entre la pregunta 10 y la 11)
+        pat_segundo_supuesto_narrativo = re.compile(
+            r'^(?:(?:#\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?)\b|(?:La\s+(?:mercantil|sociedad|empresa|cooperativa|entidad|asesor[íi]a)\s+["«][^"»]+["»]|Don\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+es\s+un\s+empresario).*)',
+            re.IGNORECASE
+        )
 
         lineas_planteamiento = []
         questions = []
@@ -1339,45 +1333,73 @@ class PDFQuizParser:
         leyendo_planteamiento = True
         cierre_planteamiento_visto = False
         contador_preguntas = 0
+        pendiente_vineta_pl = False
 
         for p in parrafos_utiles:
             txt_raw = PDFQuizParser._limpiar_marca_agua_linea(p["text"])
-            txt = re.sub(r'^[•·\-\*▪■]\s*', '', txt_raw).strip()
-            html_p = PDFQuizParser._limpiar_marca_agua_linea(p.get("html") or txt_raw)
+            txt_sin_hash = re.sub(r'^#\s*', '', txt_raw).strip()
+            txt = re.sub(r'^[•·\-\*▪■]\s*', '', txt_sin_hash).strip()
+            html_p = re.sub(r'^(?:<[^>]+>)*#\s*', lambda m: re.sub(r'#\s*', '', m.group(0)), PDFQuizParser._limpiar_marca_agua_linea(p.get("html") or txt_raw)).strip()
             es_bold = bool(p.get("is_bold", False))
             es_lista = bool(p.get("is_list", False))
 
-            if not txt or txt == tema_titulo:
+            if txt_sin_hash in ("•", "·", "▪", "■"):
+                if leyendo_planteamiento:
+                    pendiente_vineta_pl = True
                 continue
 
-            m_exp = pat_explicacion.match(txt)
-            m_rt = pat_resp_tecnica.match(txt)
+            if not txt or txt == tema_titulo or PDFQuizParser._es_basura_cabecera_o_pie(txt_sin_hash, tema_titulo):
+                continue
+
+            # Ignorar opciones a), b), c), d) residuales si algún PDF de supuesto aún las tuviera
+            if not leyendo_planteamiento and pat_opcion_test_residual.match(txt_sin_hash):
+                continue
+
+            # Detectar si tras haber respondido varias preguntas (ej. la 10) empieza el planteamiento de un 2.º supuesto práctico
+            if (
+                not leyendo_planteamiento and
+                curr_q is not None and
+                len(curr_q["explanation_lines"]) > 0 and
+                pat_segundo_supuesto_narrativo.match(txt_sin_hash)
+            ):
+                questions.append(curr_q)
+                curr_q = None
+                leyendo_planteamiento = True
+                cierre_planteamiento_visto = False
+                lineas_planteamiento = []
+                if not re.match(r'^(?:#\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?\b', txt_sin_hash, re.IGNORECASE):
+                    lineas_planteamiento.append({"text": txt_sin_hash, "html": html_p, "is_list": es_lista})
+                continue
+
+            m_exp = pat_explicacion.match(txt_sin_hash)
+            m_rt = pat_resp_tecnica.match(txt_sin_hash)
 
             if m_exp and curr_q is not None:
-                curr_q["explanation_lines"].append("[[H]]📌 EXPLICACIÓN Y ANÁLISIS DEL SUPUESTO:")
+                if not any("EXPLICACIÓN" in l_e for l_e in curr_q["explanation_lines"]):
+                    curr_q["explanation_lines"].append("[[H]]📌 EXPLICACIÓN Y ANÁLISIS DEL SUPUESTO:")
                 if m_exp.group(1).strip():
-                    rest_h = re.sub(r'^(?:<[^>]+>)*\s*EXPLICACI[ÓO]N\s*:\s*(?:</[^>]+>)*\s*', '', html_p, flags=re.IGNORECASE).strip()
+                    rest_h = re.sub(r'^(?:<[^>]+>)*\s*(?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:\s*(?:</[^>]+>)*\s*', '', html_p, flags=re.IGNORECASE).strip()
                     curr_q["explanation_lines"].append(rest_h or m_exp.group(1).strip())
                 continue
 
             if m_rt and curr_q is not None:
                 curr_q["explanation_lines"].append("[[H]]⚖️ RESPUESTA TÉCNICA Y FUNDAMENTACIÓN JURÍDICA:")
                 if m_rt.group(1).strip():
-                    rest_rt = re.sub(r'^(?:<[^>]+>)*\s*RESPUESTA\s+T[ÉE]CNICA\s*:\s*(?:</[^>]+>)*\s*', '', html_p, flags=re.IGNORECASE).strip()
+                    rest_rt = re.sub(r'^(?:<[^>]+>)*\s*(?:#\s*)?RESPUESTA\s+T[ÉE]CNICA\s*:\s*(?:</[^>]+>)*\s*', '', html_p, flags=re.IGNORECASE).strip()
                     curr_q["explanation_lines"].append(rest_rt or m_rt.group(1).strip())
                 continue
 
-            if leyendo_planteamiento and pat_ordinal_enunciado.match(txt_raw):
-                lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": True})
+            if leyendo_planteamiento and pat_ordinal_enunciado.match(txt_sin_hash):
+                lineas_planteamiento.append({"text": txt_sin_hash, "html": html_p, "is_list": True})
                 continue
 
             if leyendo_planteamiento and pat_cierre_planteamiento.search(txt):
-                lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": False})
+                lineas_planteamiento.append({"text": txt_sin_hash, "html": html_p, "is_list": False})
                 cierre_planteamiento_visto = True
                 continue
 
-            m_q = pat_pregunta_explicita.match(txt)
-            es_subapartado_respuesta = bool(re.match(r'^\d{1,2}\.[ºª°]', txt))
+            m_q = pat_pregunta_explicita.match(txt_sin_hash)
+            es_subapartado_respuesta = bool(re.match(r'^\d{1,2}\.[ºª°\d]', txt_sin_hash))
             es_nueva_pregunta = False
             num_q = 0
             cuerpo_q = ""
@@ -1385,9 +1407,17 @@ class PDFQuizParser:
             if m_q and not es_subapartado_respuesta:
                 num_cand = int(m_q.group(1))
                 cuerpo_cand = m_q.group(2).strip()
+                # Es nueva pregunta si:
+                # - Es la pregunta 1 tras leer el planteamiento, o
+                # - Sigue la numeración correlativa (contador_preguntas + 1) o tiene signo '?' o verbo de pregunta
+                es_correlativa = (
+                    (leyendo_planteamiento and num_cand == 1 and len(lineas_planteamiento) > 0) or
+                    (not leyendo_planteamiento and (num_cand == contador_preguntas + 1 or (curr_q is not None and len(curr_q["explanation_lines"]) > 0)))
+                )
                 if (
+                    es_correlativa or
                     cierre_planteamiento_visto or
-                    (not leyendo_planteamiento and curr_q is not None and len(curr_q["explanation_lines"]) > 0) or
+                    "?" in cuerpo_cand or
                     pat_verbo_pregunta.match(cuerpo_cand)
                 ):
                     es_nueva_pregunta = True
@@ -1420,10 +1450,19 @@ class PDFQuizParser:
                 continue
 
             if leyendo_planteamiento:
-                lineas_planteamiento.append({"text": txt_raw, "html": html_p, "is_list": es_lista})
+                if pendiente_vineta_pl:
+                    lineas_planteamiento.append({"text": f"• {txt_sin_hash}", "html": html_p, "is_list": True})
+                    pendiente_vineta_pl = False
+                else:
+                    lineas_planteamiento.append({"text": txt_sin_hash, "html": html_p, "is_list": es_lista})
             elif curr_q is not None:
-                if not curr_q["explanation_lines"] and es_bold and not txt.startswith(("·", "•", "-", "«", '"', "1.", "2.", "3.")):
-                    curr_q["question_text"] += " " + txt
+                # Si el enunciado de la pregunta ocupaba más de una línea y aún no había cerrado con '?' ni ':'
+                if (
+                    not curr_q["explanation_lines"] and
+                    not curr_q["question_text"].rstrip().endswith(("?", ":", ".")) and
+                    (es_bold or "?" in txt_sin_hash)
+                ):
+                    curr_q["question_text"] += " " + txt_sin_hash
                 else:
                     if es_lista:
                         curr_q["explanation_lines"].append(f"[[LI]]{html_p}")
@@ -1434,9 +1473,18 @@ class PDFQuizParser:
             questions.append(curr_q)
 
         salida_final = []
-        for q_item in questions:
-            exp_unida = "\n".join(q_item.pop("explanation_lines", [])).strip()
+        for idx_s, q_item in enumerate(questions, 1):
+            lineas_exp_q = q_item.pop("explanation_lines", [])
+            if es_docx:
+                exp_unida = "\n".join(lineas_exp_q).strip()
+            else:
+                # En PDFs de supuestos, unir renglones partidos dentro de cada párrafo de la explicación
+                exp_limpia_tags = [re.sub(r'</?b>', '', l_e) if not l_e.startswith("[[H]]") else l_e for l_e in lineas_exp_q]
+                exp_unida = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(exp_limpia_tags)).strip()
             q_item.pop("num", None)
+            # Asegurar numeración secuencial limpia 1, 2, 3... N
+            txt_q_s = re.sub(r'^\d{1,2}\s*[\.\-\)]\s*', '', q_item.get("question_text", "")).strip()
+            q_item["question_text"] = f"{idx_s}. {txt_q_s}"
             q_item["explanation"] = exp_unida
             salida_final.append(q_item)
 
@@ -1445,7 +1493,8 @@ class PDFQuizParser:
     @staticmethod
     def parse_abiertas_gestion(file_bytes, modo="DESARROLLO"):
         lineas_estructuradas = []
-        if PDFQuizParser.es_archivo_docx(file_bytes):
+        es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
+        if es_docx:
             lineas_estructuradas = PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes)
         else:
             try:
@@ -1486,10 +1535,10 @@ class PDFQuizParser:
         buf_html = ""
         buf_bold = False
         buf_list = False
-        es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
 
+        # Incluye comillas tras el número ('5. "AgroExport S.L."...') para que en PDF nunca se fusione una pregunta con la explicación anterior
         pat_corte_estructural_pdf = re.compile(
-            r'^(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|[•\-\*▪■·]\s+|[a-g]\)\s+)',
+            r'^(?:#\s*)?(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}(?!\d)\s*[\.\)]\s+["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|La\s+(?:mercantil|sociedad|empresa|cooperativa)\s+["«]|[•\-\*▪■·]\s+|[a-g]\)\s+)',
             re.IGNORECASE
         )
 
@@ -1532,8 +1581,9 @@ class PDFQuizParser:
 
         tema_titulo = ""
         for p in parrafos[:8]:
-            if re.match(r'^TEMA\s+\d+', p["text"], re.IGNORECASE):
-                tema_titulo = re.sub(r'\s*↑+\s*$', '', p["text"]).strip()
+            t_cand = re.sub(r'^#\s*', '', p["text"]).strip()
+            if re.match(r'^TEMA\s+\d+', t_cand, re.IGNORECASE):
+                tema_titulo = re.sub(r'\s*↑+\s*$', '', t_cand).strip()
                 break
         if not tema_titulo:
             for p in parrafos:
@@ -1552,7 +1602,7 @@ class PDFQuizParser:
             parrafos_desarrollo.append(p)
 
         pat_epigrafe = re.compile(
-            r'^(?:(EP[ÍI]GRAFE\s+\d+)[\.\:\-\s]*|(PREGUNTA(?:\s+DE\s+DESARROLLO)?(?:\s+\d+)?)[\.\:\-\s]*)(.*)$',
+            r'^(?:#\s*)?(?:(EP[ÍI]GRAFE\s+\d+)[\.\:\-\s]*|(PREGUNTA(?:\s+DE\s+DESARROLLO)?(?:\s+\d+)?)[\.\:\-\s]*)(.*)$',
             re.IGNORECASE
         )
 
@@ -1561,7 +1611,7 @@ class PDFQuizParser:
         curr_body = []
 
         for p in parrafos_desarrollo:
-            txt = re.sub(r'\s*↑+\s*$', '', p["text"]).strip()
+            txt = re.sub(r'^#\s*', '', re.sub(r'\s*↑+\s*$', '', p["text"])).strip()
             html_linea = re.sub(r'\s*↑+\s*(?:</b>)?\s*$', '', (p.get("html") or txt)).strip()
             if not txt or txt == tema_titulo:
                 continue
@@ -1614,7 +1664,7 @@ class PDFQuizParser:
         if not questions and parrafos_desarrollo:
             num_ep_auto = 0
             for p in parrafos_desarrollo:
-                txt = re.sub(r'\s*↑+\s*$', '', p["text"]).strip()
+                txt = re.sub(r'^#\s*', '', re.sub(r'\s*↑+\s*$', '', p["text"])).strip()
                 html_linea = re.sub(r'\s*↑+\s*(?:</b>)?\s*$', '', (p.get("html") or txt)).strip()
                 if not txt or txt == tema_titulo:
                     continue
@@ -1683,7 +1733,7 @@ class PDFQuizParser:
             l = l[:m_exp_inline.start()].strip()
 
         m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+[A-ZÁÉÍÓÚÑ¿¡"«].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
         )
         if m_q_with_a:
@@ -1794,8 +1844,8 @@ class PDFQuizParser:
     def parse(file_bytes, max_options=None):
         """
         Extrae EXCLUSIVAMENTE las preguntas tipo test (a, b, c, d).
-        En cuanto aparece el encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS' / 'CASO PRÁCTICO',
-        cierra la última pregunta de test y detiene la lectura (break).
+        En cuanto aparece el encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS' / 'CASO PRÁCTICO'
+        o 'PREGUNTA DE DESARROLLO', cierra la última pregunta de test y detiene la lectura (break).
         """
         lineas_brutas = []
         if PDFQuizParser.es_archivo_docx(file_bytes):
@@ -1866,7 +1916,7 @@ class PDFQuizParser:
         ultimo_num_pregunta = 0
 
         pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+([A-ZÁÉÍÓÚÑ¿¡"«\'\[].*)$'
+            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$'
         )
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -1919,7 +1969,7 @@ class PDFQuizParser:
             if not line or PDFQuizParser._es_basura_cabecera_o_pie(line):
                 continue
 
-            if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO)\b', line, re.IGNORECASE):
+            if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO|PREGUNTA\s+DE\s+DESARROLLO)\b', line, re.IGNORECASE):
                 _cerrar_pregunta_actual(curr_q)
                 curr_q = None
                 break
