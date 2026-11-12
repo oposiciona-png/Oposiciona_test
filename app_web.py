@@ -1376,7 +1376,7 @@ class PDFQuizParser:
             parrafos_desarrollo.append(p)
 
         pat_epigrafe = re.compile(
-            r'^(?:EP[ÍI]GRAFE\s+\d+[\.\:\-\s]*|PREGUNTA(?:\s+DE\s+DESARROLLO)?(?:\s+\d+)?[\.\:\-\s]*)(.*)$',
+            r'^(?:(EP[ÍI]GRAFE\s+\d+)[\.\:\-\s]*|(PREGUNTA(?:\s+DE\s+DESARROLLO)?(?:\s+\d+)?)[\.\:\-\s]*)(.*)$',
             re.IGNORECASE
         )
 
@@ -1402,13 +1402,19 @@ class PDFQuizParser:
                         "tipo_abierta": "DESARROLLO",
                         "tema_titulo": tema_titulo
                     })
-                resto_tit = m_ep.group(1).strip()
-                curr_title = resto_tit if resto_tit else txt
+                pref_ep = (m_ep.group(1) or m_ep.group(2) or "").strip().upper()
+                if pref_ep.startswith("EPIGRAFE"):
+                    pref_ep = "EPÍGRAFE" + pref_ep[8:]
+                resto_tit = (m_ep.group(3) or "").strip()
+                # Conservar siempre "EPÍGRAFE X: Título del epígrafe" completo
+                curr_title = f"{pref_ep}: {resto_tit}" if (pref_ep and resto_tit) else txt
                 curr_body = []
             else:
                 if curr_title:
-                    if curr_title.upper() == "PREGUNTA DE DESARROLLO" and not curr_body and len(txt) < 160:
+                    if curr_title.upper() in ("PREGUNTA DE DESARROLLO", "PREGUNTA DE DESARROLLO:") and not curr_body and len(txt) < 160:
                         curr_title = f"PREGUNTA DE DESARROLLO: {txt}"
+                    elif re.match(r'^EP[ÍI]GRAFE\s+\d+\s*:?$', curr_title, re.IGNORECASE) and not curr_body and len(txt) < 160:
+                        curr_title = f"{curr_title.rstrip(':')}: {txt}"
                     elif p.get("is_bold") and len(txt) < 135 and not txt.endswith("."):
                         curr_body.append(f"[[H]]{txt}")
                     else:
@@ -1428,6 +1434,7 @@ class PDFQuizParser:
             })
 
         if not questions and parrafos_desarrollo:
+            num_ep_auto = 0
             for p in parrafos_desarrollo:
                 txt = p["text"].strip()
                 if txt == tema_titulo:
@@ -1446,7 +1453,8 @@ class PDFQuizParser:
                             "tipo_abierta": "DESARROLLO",
                             "tema_titulo": tema_titulo
                         })
-                    curr_title = txt
+                    num_ep_auto += 1
+                    curr_title = f"EPÍGRAFE {num_ep_auto}: {txt}" if not txt.upper().startswith("EP") else txt
                     curr_body = []
                 elif curr_title:
                     curr_body.append(f"[[H]]{txt}" if (p.get("is_bold") and len(txt) < 130) else txt)
@@ -1463,6 +1471,12 @@ class PDFQuizParser:
                     "tipo_abierta": "DESARROLLO",
                     "tema_titulo": tema_titulo
                 })
+
+        # Garantizar que todo epígrafe de DESARROLLO lleve visible su etiqueta "EPÍGRAFE X:"
+        for idx_q, q_des in enumerate(questions, 1):
+            qt = (q_des.get("question_text") or "").strip()
+            if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', qt, re.IGNORECASE):
+                q_des["question_text"] = f"EPÍGRAFE {idx_q}: {qt}"
 
         return questions
 
@@ -1721,7 +1735,6 @@ class PDFQuizParser:
             if not line or PDFQuizParser._es_basura_cabecera_o_pie(line):
                 continue
 
-            # En los tests normales NO se deben incluir nunca los SUPUESTOS PRÁCTICOS: detener la lectura al llegar a ellos
             if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO)\b', line, re.IGNORECASE):
                 _cerrar_pregunta_actual(curr_q)
                 curr_q = None
