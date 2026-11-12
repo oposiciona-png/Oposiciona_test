@@ -22,7 +22,6 @@ GEMINI_API_KEY_DEFAULT = "".join(base64.b64decode(p).decode("utf-8") for p in _K
 # Clave interna del servidor para cifrar el backup de sesión y evitar que nadie extraiga el JSON de preguntas
 _BACKUP_SECRET_BYTES = b"Oposiciona_5.0_Blindaje_Privado_2026_SS#Key"
 
-# Almacén en memoria del servidor indexado por token de sesión (v3 invalida cualquier caché antigua)
 @st.cache_resource
 def _obtener_almacen_sesiones_servidor():
     return {}
@@ -31,15 +30,15 @@ def _cifrar_backup_sesion(datos_dict):
     raw = zlib.compress(json.dumps(datos_dict, ensure_ascii=False).encode("utf-8"), level=9)
     klen = len(_BACKUP_SECRET_BYTES)
     xored = bytes(b ^ _BACKUP_SECRET_BYTES[i % klen] for i, b in enumerate(raw))
-    return "v3_" + base64.urlsafe_b64encode(xored).decode("ascii")
+    return "v4_" + base64.urlsafe_b64encode(xored).decode("ascii")
 
 def _descifrar_backup_sesion(token_str):
     if not token_str:
         return {}
-    if token_str.startswith("sid3_"):
+    if token_str.startswith("sid4_"):
         almacen = _obtener_almacen_sesiones_servidor()
         return dict(almacen.get(token_str, {}))
-    if token_str.startswith(("v2_", "v3_")):
+    if token_str.startswith(("v2_", "v3_", "v4_")):
         xored = base64.urlsafe_b64decode(token_str[3:].encode("ascii"))
         klen = len(_BACKUP_SECRET_BYTES)
         raw = bytes(b ^ _BACKUP_SECRET_BYTES[i % klen] for i, b in enumerate(xored))
@@ -426,23 +425,22 @@ def _enviar_post_background(url, payload):
     except Exception:
         pass
 
-def _enviar_secuencia_epigrafe_background(url, payload_inicio, payload_cierre):
-    """
-    Para los epígrafes de DESARROLLO:
-    1) Envía primero 'nueva_fila' para que el Apps Script cree la fila con ese epígrafe concreto.
-    2) Espera 0.4s y envía 'actualizar_fin' con el mismo 'hora_inicio' y el mismo 'test' ('TEMA XX. EPÍGRAFE Y...'),
-       para que el Apps Script cierre esa misma fila en '✅ Completado' y escriba la 'Nota Final', 'Hora Fin' y 'Duración'.
-    """
-    try:
-        requests.post(url, json=payload_inicio, timeout=10)
-        time.sleep(0.45)
-        requests.post(url, json=payload_cierre, timeout=10)
-    except Exception:
-        pass
-
-def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", blancos="", nota="", accion="nueva_fila", hora_inicio_override=None, start_ts_override=None):
+def registrar_actividad_sheets(
+    evento,
+    nombre_test="",
+    aciertos="",
+    fallos="",
+    blancos="",
+    nota="",
+    accion="nueva_fila",
+    hora_inicio_override=None,
+    start_ts_override=None,
+    sincrono=False
+):
     email_actual = (st.session_state.get("email") or "").lower().strip()
-    if email_actual in USUARIOS_ADMIN or st.session_state.get("es_admin", False):
+    # Solo excluir las cuentas genéricas 'ponentes@oposiciona.es'; permitir que 'ignacio.garcia.heras@gmail.com'
+    # y cualquier otro usuario registren siempre aunque hayan entrado con contraseña de administrador.
+    if email_actual in USUARIOS_ADMIN:
         return
 
     url = (GOOGLE_SHEETS_WEBHOOK_URL or "").strip()
@@ -454,33 +452,12 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
         fecha_ini = st.session_state.get("fecha_inicio_str") or ahora.strftime("%d/%m/%Y")
         hora_ini = hora_inicio_override or st.session_state.get("hora_inicio_str") or hora_actual
         ini_ts = start_ts_override if start_ts_override is not None else st.session_state.get("test_start_ts")
-        duracion_calc = formatear_duracion(max(1, time.time() - ini_ts)) if ini_ts else "0m 01s"
-        disp_str = detectar_dispositivo_usuario()
-
-        if accion == "fila_epigrafe_completa":
-            base_payload = {
-                "fecha": fecha_ini,
-                "hora_inicio": hora_ini,
-                "email": email_actual or "desconocido",
-                "rol": st.session_state.get("rol") or "",
-                "especialidad": st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "GESTION",
-                "categoria": "DESARROLLO",
-                "test": nombre_test,
-                "aciertos": "",
-                "fallos": "",
-                "blancos": "",
-                "dispositivo": disp_str
-            }
-            p_ini = dict(base_payload, accion="nueva_fila", hora_fin="", duracion="", evento="🚀 En curso", nota="")
-            p_fin = dict(base_payload, accion="actualizar_fin", hora_fin=hora_actual, duracion=duracion_calc, evento="✅ Completado", nota=nota)
-            threading.Thread(target=_enviar_secuencia_epigrafe_background, args=(url, p_ini, p_fin), daemon=True).start()
-            return
 
         if accion == "nueva_fila":
             hora_fin, duracion_str = "", ""
         else:
             hora_fin = hora_actual
-            duracion_str = duracion_calc
+            duracion_str = formatear_duracion(max(1, time.time() - ini_ts)) if ini_ts else "0m 01s"
 
         payload = {
             "accion": accion,
@@ -498,9 +475,12 @@ def registrar_actividad_sheets(evento, nombre_test="", aciertos="", fallos="", b
             "fallos": fallos,
             "blancos": blancos,
             "nota": nota,
-            "dispositivo": disp_str
+            "dispositivo": detectar_dispositivo_usuario()
         }
-        threading.Thread(target=_enviar_post_background, args=(url, payload), daemon=True).start()
+        if sincrono:
+            _enviar_post_background(url, payload)
+        else:
+            threading.Thread(target=_enviar_post_background, args=(url, payload), daemon=True).start()
     except Exception:
         pass
 
@@ -508,7 +488,7 @@ if st.session_state.get("borrar_backup_ls", False):
     st.session_state.borrar_backup_ls = False
     components.html("""<script>
     try {
-        ["oposiciona_test_backup_v1", "oposiciona_auth_backup_v1", "oposiciona_sid_v1", "oposiciona_sid_v3", "oposiciona_live_draft_txt"].forEach(function(k) {
+        ["oposiciona_test_backup_v1", "oposiciona_auth_backup_v1", "oposiciona_sid_v1", "oposiciona_sid_v3", "oposiciona_sid_v4", "oposiciona_live_draft_txt"].forEach(function(k) {
             window.parent.localStorage.removeItem(k);
             window.parent.sessionStorage.removeItem(k);
         });
@@ -578,10 +558,11 @@ if not st.session_state.autenticado:
         try {
             var ss = window.parent.sessionStorage;
             var ls = window.parent.localStorage;
-            /* Limpiar tokens de versiones anteriores (v1) para que nunca carguen caché vieja */
-            ss.removeItem("oposiciona_sid_v1");
-            ls.removeItem("oposiciona_sid_v1");
-            var savedSid = ss.getItem("oposiciona_sid_v3") || ls.getItem("oposiciona_sid_v3");
+            ["oposiciona_sid_v1", "oposiciona_sid_v3"].forEach(function(k) {
+                ss.removeItem(k);
+                ls.removeItem(k);
+            });
+            var savedSid = ss.getItem("oposiciona_sid_v4") || ls.getItem("oposiciona_sid_v4");
             var savedAuth = ss.getItem("oposiciona_auth_backup_v1") || ls.getItem("oposiciona_auth_backup_v1");
             var draftTxt = ss.getItem("oposiciona_live_draft_txt") || ls.getItem("oposiciona_live_draft_txt") || "";
 
@@ -3131,7 +3112,7 @@ def sincronizar_progreso_navegador():
             "modo_avance": st.session_state.get("modo_avance", "")
         }
         b64_auth = _cifrar_backup_sesion(datos_auth)
-        sid_key = "sid3_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
+        sid_key = "sid4_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
         almacen_srv = _obtener_almacen_sesiones_servidor()
 
         if st.session_state.get("questions"):
@@ -3158,11 +3139,11 @@ def sincronizar_progreso_navegador():
             borrador_js = json.dumps(str(borrador_actual))
             components.html(f"""<script>
             try {{
-                window.parent.sessionStorage.setItem("oposiciona_sid_v3", "{sid_key}");
+                window.parent.sessionStorage.setItem("oposiciona_sid_v4", "{sid_key}");
                 window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
                 window.parent.sessionStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
                 window.parent.sessionStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
-                window.parent.localStorage.setItem("oposiciona_sid_v3", "{sid_key}");
+                window.parent.localStorage.setItem("oposiciona_sid_v4", "{sid_key}");
                 window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
                 window.parent.localStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
                 window.parent.localStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
@@ -3172,11 +3153,11 @@ def sincronizar_progreso_navegador():
             almacen_srv[sid_key] = datos_auth
             components.html(f"""<script>
             try {{
-                window.parent.sessionStorage.setItem("oposiciona_sid_v3", "{sid_key}");
+                window.parent.sessionStorage.setItem("oposiciona_sid_v4", "{sid_key}");
                 window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
                 window.parent.sessionStorage.removeItem("oposiciona_test_backup_v1");
                 window.parent.sessionStorage.removeItem("oposiciona_live_draft_txt");
-                window.parent.localStorage.setItem("oposiciona_sid_v3", "{sid_key}");
+                window.parent.localStorage.setItem("oposiciona_sid_v4", "{sid_key}");
                 window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
                 window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
                 window.parent.localStorage.removeItem("oposiciona_live_draft_txt");
@@ -3595,10 +3576,12 @@ def formatear_nota_epigrafe_individual_sheets(ev_obj):
 
 def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
     """
-    Registra UNA ÚNICA LÍNEA limpia y definitiva ('✅ Completado') por cada epígrafe resuelto
-    en DESARROLLO con el formato 'TEMA XX. EPÍGRAFE Y: ...' y la nota de ESE epígrafe en 'Nota Final'.
-    Usa la secuencia 'fila_epigrafe_completa' (nueva_fila + actualizar_fin sincronizados con la misma
-    hora_inicio del epígrafe) para garantizar que el Apps Script crea la fila y la cierra con su nota.
+    Cierra y actualiza con su nota individual en 'Nota Final' la fila de ESE epígrafe en Google Sheets:
+    - Si la fila '🚀 En curso' aún no se había creado en Sheets (ej. si pulsó Comprobar en blanco),
+      envía primero 'nueva_fila' de forma síncrona.
+    - A continuación envía de forma síncrona 'actualizar_fin' con EXACTAMENTE el mismo 'nombre_test'
+      ('TEMA 53. EPÍGRAFE 2: ...') y la misma 'hora_inicio' ('ep_hora_inicio'), para que el Apps Script
+      encuentre la fila al 100%, la pase a '✅ Completado' y escriba la 'Nota Final'.
     """
     qs = st.session_state.get("questions", [])
     stats = st.session_state.get("stats", {})
@@ -3623,9 +3606,31 @@ def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
     nombre_ep_limpio = construir_nombre_epigrafe_sheets(idx_ep)
     nota_ep_limpia = formatear_nota_epigrafe_individual_sheets(ev_ep)
 
-    hora_ini_ep = stat_ep.get("ep_hora_inicio") or st.session_state.get("hora_inicio_str")
+    if not stat_ep.get("ep_hora_inicio"):
+        ahora_ep = datetime.now(ZoneInfo("Europe/Madrid"))
+        stat_ep["ep_start_ts"] = time.time() - 5
+        stat_ep["ep_hora_inicio"] = ahora_ep.strftime("%H:%M:%S")
+
+    hora_ini_ep = stat_ep["ep_hora_inicio"]
     ts_ini_ep = stat_ep.get("ep_start_ts") or st.session_state.get("test_start_ts")
 
+    # Si no se había abierto fila '🚀 En curso' para este epígrafe al escribir, abrirla primero síncronamente
+    if not stat_ep.get("ep_inicio_registrado", False):
+        stat_ep["ep_inicio_registrado"] = True
+        registrar_actividad_sheets(
+            evento="🚀 En curso",
+            nombre_test=nombre_ep_limpio,
+            aciertos="",
+            fallos="",
+            blancos="",
+            nota="",
+            accion="nueva_fila",
+            hora_inicio_override=hora_ini_ep,
+            start_ts_override=ts_ini_ep,
+            sincrono=True
+        )
+
+    # Actualizar esa misma fila a '✅ Completado' volcando la calificación en la columna 'Nota Final'
     registrar_actividad_sheets(
         evento="✅ Completado",
         nombre_test=nombre_ep_limpio,
@@ -3633,9 +3638,10 @@ def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
         fallos="",
         blancos="",
         nota=nota_ep_limpia,
-        accion="fila_epigrafe_completa",
+        accion="actualizar_fin",
         hora_inicio_override=hora_ini_ep,
-        start_ts_override=ts_ini_ep
+        start_ts_override=ts_ini_ep,
+        sincrono=True
     )
 
 def calcular_nota_final_supuestos_sheets(indice_actual=None):
@@ -3665,13 +3671,26 @@ def save_answer(selected):
     es_desarrollo_curr = bool(q_curr.get("tipo_abierta") == "DESARROLLO" or (st.session_state.get("test_cat") or "").upper() == "DESARROLLO")
 
     if selected is not None and str(selected).strip() != "" and selected != stat['selected']:
-        if not stat.get("ep_start_ts"):
-            ahora_ep = datetime.now(ZoneInfo("Europe/Madrid"))
-            stat["ep_start_ts"] = time.time()
-            stat["ep_hora_inicio"] = ahora_ep.strftime("%H:%M:%S")
         stat['selected'] = selected
         stat['attempts'] += 1
-        if not es_desarrollo_curr and not st.session_state.get('inicio_registrado_sheets', False):
+        if es_desarrollo_curr:
+            # Abrir UNA SOLA VEZ la fila "🚀 En curso" de este epígrafe concreto con el mismo nombre exacto
+            # ('TEMA 53. EPÍGRAFE 2: ...') y la misma hora_inicio que luego usará 'actualizar_fin' al volcar la nota.
+            if not stat.get("ep_inicio_registrado", False):
+                ahora_ep = datetime.now(ZoneInfo("Europe/Madrid"))
+                stat["ep_start_ts"] = time.time()
+                stat["ep_hora_inicio"] = ahora_ep.strftime("%H:%M:%S")
+                stat["ep_inicio_registrado"] = True
+                st.session_state.test_cat = "DESARROLLO"
+                nombre_ep_limpio = construir_nombre_epigrafe_sheets(idx_curr)
+                registrar_actividad_sheets(
+                    "🚀 En curso",
+                    nombre_test=nombre_ep_limpio,
+                    accion="nueva_fila",
+                    hora_inicio_override=stat["ep_hora_inicio"],
+                    start_ts_override=stat["ep_start_ts"]
+                )
+        elif not st.session_state.get('inicio_registrado_sheets', False):
             st.session_state.inicio_registrado_sheets = True
             nombre_celda = st.session_state.get("test_name") or "Test"
             registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
@@ -3877,14 +3896,12 @@ def auditar_extraccion_test_real(pdf_bytes, max_options=4):
 def procesar_preguntas(raw_qs, barajar=True):
     limpiar_estados_reportes_error()
     qs_listas = preparar_preguntas_como_en_test(raw_qs, barajar=barajar)
-    ahora_init = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%H:%M:%S")
-    ts_init = time.time()
     st.session_state.update(
         questions=qs_listas,
         current_index=0,
         finished=False,
         checked=False,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None, 'ep_start_ts': ts_init, 'ep_hora_inicio': ahora_init} for i in range(len(qs_listas))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None, 'ep_start_ts': None, 'ep_hora_inicio': None, 'ep_inicio_registrado': False} for i in range(len(qs_listas))},
         mostrar_opciones_simulacro=False,
         celebracion_mostrada=False,
         do_scroll=True
@@ -3894,11 +3911,9 @@ def procesar_preguntas(raw_qs, barajar=True):
 
 def action_repetir_test():
     limpiar_estados_reportes_error()
-    ahora_init = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%H:%M:%S")
-    ts_init = time.time()
     st.session_state.update(
         current_index=0,
-        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None, 'ep_start_ts': ts_init, 'ep_hora_inicio': ahora_init} for i in range(len(st.session_state.questions))},
+        stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None, 'ep_start_ts': None, 'ep_hora_inicio': None, 'ep_inicio_registrado': False} for i in range(len(st.session_state.questions))},
         finished=False, checked=False, celebracion_mostrada=False, do_scroll=True
     )
     iniciar_cronometro_test()
@@ -3914,12 +3929,13 @@ def action_subir_otro():
 def action_finalizar_sesion():
     correo_usr = (st.session_state.get("email") or "").lower().strip()
     if correo_usr:
-        sid_key = "sid3_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
+        sid_key = "sid4_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
         _obtener_almacen_sesiones_servidor().pop(sid_key, None)
     st.session_state.clear()
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
