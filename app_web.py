@@ -2366,27 +2366,27 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     primera_frase = re.split(r'[.?!;\n]', t_norm)[0].strip()
 
     patrones_inaceptables = [
-        r'\b(puta|puto|mierda|caca|joder|coño|hostia|ostia|polla|capullo|gilipollas|imbecil|idiota|estupidez|asco|basura|porqueria)\b',
+        r'\b(puta|puto|mierda|caca|joder|coño|hostia|ostia|polla|capullo|gilipollas|imbecil|idiota|estupidez|asco|basura|porqueria|tonto|payaso|subnormal|mamaguevo|cabron)\b',
         r'\b(esto\s+es\s+una\s+(caca|mierda|porqueria|basura|tonteria|chorrada))\b',
         r'\b(paso\s+de\s+(todo|hacerlo|responder|estudiar|esto))\b',
         r'\b(me\s+da\s+igual|me\s+importa\s+un\s+(bledo|pimiento|carajo|huevo)|no\s+me\s+da\s+la\s+gana)\b',
-        r'\b(que\s+te\s+den|vete\s+a\s+la\s+mierda|estoy\s+harto|estoy\s+hasta\s+las\s+narices)\b',
+        r'\b(que\s+te\s+den|vete\s+a\s+la\s+mierda|dejame\s+en\s+paz|estoy\s+harto|estoy\s+hasta\s+las\s+narices)\b',
         r'^(no\s+se(\s+nada)?|ni\s+idea|paso|nada|hola|prueba|test|asdf+|qwer+|zxcv+|jaja+|jeje+|bla\s*bla.*)$'
     ]
 
     es_inapropiada = any(re.search(p, primera_frase) or re.search(p, t_norm) for p in patrones_inaceptables)
     palabras_reales = re.findall(r'\b[a-záéíóúñ]{3,}\b', t_norm)
-    sin_sentido = (len(t_norm) < 12 and len(palabras_reales) < 2) or bool(re.match(r'^([a-z])\1{4,}$', t_norm))
+    sin_sentido = (len(t_norm) < 10 and len(palabras_reales) < 2 and not re.search(r'\d', t_norm)) or bool(re.match(r'^([a-z])\1{4,}$', t_norm))
 
     if es_inapropiada or sin_sentido:
         return (
             "🎩 **Observación de tus preparadores de Oposiciona:**\n\n"
             "Comprendemos que la preparación hacia el Cuerpo de Gestión de la Administración de la Seguridad Social "
-            "tiene momentos de cansancio y máxima exigencia, pero esta plataforma ha sido concebida con un único propósito: "
-            "**forjar funcionarios de excelencia y acercarte cada día más a tu plaza, no perder el tiempo**.\n\n"
-            "El día del examen oficial ante el Tribunal, cada línea que escribas será el reflejo de tu rigor técnico y de tu temple como futuro gestor público. "
-            "Respira hondo, retoma el pulso jurídico y redacta una respuesta a la altura del profesional en el que te estás convirtiendo. "
-            "Cuando estés listo, vuelve a pulsar **«Comprobar»**."
+            "tiene momentos de cansancio y máxima exigencia, pero esta plataforma está pensada para ayudarte a "
+            "**practicar lo aprendido, afianzar el temario y acercarte cada día más a tu plaza**.\n\n"
+            "Te animamos a que retomes el ejercicio con calma y redactes una respuesta razonada aplicando los conceptos, "
+            "plazos y artículos que has estudiado (o consulta la solución oficial que te mostramos debajo para repasar y vuelve a intentarlo). "
+            "¡Mucho ánimo con el estudio!"
         )
     return None
 
@@ -2740,7 +2740,7 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
     auditoria = auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, explicacion_oficial, enunciado_pregunta)
     aud_b = auditoria["auditoria_bloques"]
 
-    if not (texto_alumno or "").strip():
+    if not (texto_alumno or "").strip() or detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
         return {
             "nota": 0.0,
             "nota_50": 0.0,
@@ -3000,12 +3000,12 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
     return "\n\n".join(partes)
 
 def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respuesta_alumno, respuesta_oficial, explicacion_oficial, ev_fallback=None, modo="DESARROLLO"):
-    aviso_elegante = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
-    if aviso_elegante:
-        return aviso_elegante
-
     if ev_fallback is None:
         ev_fallback = evaluar_respuesta_escrita(respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}")
+
+    aviso_respaldo_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(respuesta_alumno)
+    palabras_alumno = re.findall(r'\b[a-záéíóúñ0-9]{2,}\b', (respuesta_alumno or "").lower())
+    es_respuesta_muy_escueta = len(palabras_alumno) < 12
 
     aud = ev_fallback.get("auditoria") or auditar_articulos_y_aportaciones_alumno(
         respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}"
@@ -3024,17 +3024,62 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     enunciado_limpio = re.sub(r'<[^>]+>', ' ', enunciado_supuesto or "").strip()
     explicacion_limpia_prompt = re.sub(r'<[^>]+>', '', (explicacion_oficial or "").replace("[[H]]", "").replace("[[LI]]", "• ")).strip()
 
+    # Si se detecta falta de respeto, evasiva ("no lo sé", "paso", etc.) o texto telegráfico/insuficiente,
+    # pedir a la IA que le responda de forma personalizada, educada y constructiva en función de lo que ha escrito
+    if aviso_respaldo_inapropiado is not None:
+        etiqueta_cero = "[[NOTA_SUPUESTO: 0.00]]" if modo in ("SUPUESTO", "SUPUESTOS") else "[[NOTAS_TRIBUNAL: C1=0.00 | C2=0.00 | C3=0.00]]"
+        prompt_educado = (
+            "Actúa como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+            "El alumno ha introducido el siguiente texto en lugar de resolver adecuadamente el ejercicio:\n"
+            f"«{respuesta_alumno}»\n\n"
+            f"Pregunta planteada: {pregunta}\n"
+            f"Solución oficial resumida: {explicacion_limpia_prompt[:900]}\n\n"
+            "=== INSTRUCCIONES ===\n"
+            f"1. En la PRIMERA LÍNEA escribe exactamente: {etiqueta_cero}\n"
+            "2. A continuación, dirígete al alumno de forma muy educada, serena, profesional y constructiva, adaptando tu respuesta exactamente a lo que ha escrito:\n"
+            "   - Si ha escrito una falta de respeto, desahogo o queja, recuérdale con elegancia y templanza el respeto y el temple propios de un futuro funcionario del Cuerpo de Gestión, comprendiendo que la oposición es dura pero animándole a no perder el tiempo.\n"
+            "   - Si ha escrito «no sé», letras sueltas o una frase evasiva, anímale con cercanía a perder el miedo al papel en blanco.\n"
+            "   - En todos los casos, pídele amablemente que practique lo aprendido redactando una respuesta razonada sobre la cuestión planteada (indicándole 2 o 3 pistas clave del tema sin desvelarle todo, e invitándole a revisar la solución oficial que aparece justo debajo para consolidar el concepto)."
+        )
+        payload_ed = {
+            "contents": [{"parts": [{"text": prompt_educado}]}],
+            "generationConfig": {"temperature": 0.25, "topP": 0.85}
+        }
+        for modelo in _obtener_modelos_disponibles_api(clave_limpia):
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
+                r = requests.post(url, json=payload_ed, headers={"Content-Type": "application/json"}, timeout=25)
+                if r.status_code == 200:
+                    texto_ia = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
+                    if isinstance(ev_fallback, dict):
+                        ev_fallback.update({"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0})
+                    return texto_ia_limpio
+            except Exception:
+                continue
+        if isinstance(ev_fallback, dict):
+            ev_fallback.update({"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0})
+        return aviso_respaldo_inapropiado
+
     if modo in ("SUPUESTO", "SUPUESTOS"):
+        instruccion_escueta_sup = (
+            "\n4. **ATENCIÓN A RESPUESTAS MUY BREVES, TELEGRÁFICAS O INADECUADAS:**\n"
+            "   - Si observas que el alumno ha escrito muy poco (solo unas palabras sueltas sin razonar), está contestando sin rigor o con desgana, responde siempre de forma muy educada y constructiva: valóralo en su justa medida pero pídele amablemente que practique lo aprendido desarrollando el razonamiento jurídico completo (la conclusión, el porqué normativo y el artículo aplicable), explicándole que en el examen oficial del Cuerpo de Gestión el Tribunal valora la argumentación y no solo una palabra suelta.\n"
+            if es_respuesta_muy_escueta else
+            "\n4. **TONO CONSTRUCTIVO ANTE RESPUESTAS CORTAS O DUDOSAS:** Si la respuesta del alumno es demasiado breve o incompleta, anímale de forma muy educada a practicar lo aprendido desarrollando tanto la solución como su fundamentación jurídica.\n"
+        )
         prompt = (
             "Actúa como el equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
             "Evalúa la respuesta del alumno a esta cuestión de un SUPUESTO PRÁCTICO comparándola directamente con la "
             "EXPLICACIÓN Y RESPUESTA TÉCNICA OFICIAL de la pregunta (SIN aplicar baremos ni criterios formales de Tribunal C1/C2/C3).\n\n"
             "=== REGLAS DE CORRECCIÓN DEL SUPUESTO PRÁCTICO ===\n"
             "1. Califica la respuesta de **0,00 a 10,00 puntos** (siendo 5,00 el aprobado), aplicando un criterio justo, constructivo y ligeramente indulgente cuando el alumno identifique bien la solución jurídica o el planteamiento del cálculo.\n"
-            "2. Comprueba si el alumno:\n"
-            "   - Ha detectado la clave o «trampa» jurídica/matemática explicada en el bloque `EXPLICACION`.\n"
-            "   - Ha llegado al resultado numérico, plazo o calificación jurídica correcta indicada en `RESPUESTA TÉCNICA`.\n"
-            "   - Ha fundamentado su respuesta en la normativa aplicable (no penalices en exceso si omite el número exacto de algún artículo pero aplica bien la regla legal).\n\n"
+            "2. Si el alumno falta al respeto, escribe tonterías o demuestra nulo interés, otórgale `0.00` puntos y respóndele de forma sumamente educada, elegante y constructiva pidiéndole que aproveche el estudio y practique lo aprendido.\n"
+            "3. Comprueba si el alumno:\n"
+            "   - Ha detectado la clave o «trampa» jurídica/matemática explicada en el bloque de solución.\n"
+            "   - Ha llegado al resultado numérico, plazo o calificación jurídica correcta.\n"
+            "   - Ha fundamentado su respuesta en la normativa aplicable (no penalices en exceso si omite el número exacto de algún artículo pero aplica bien la regla legal)."
+            f"{instruccion_escueta_sup}\n"
             f"=== PLANTEAMIENTO DEL SUPUESTO ===\n{enunciado_limpio}\n\n"
             f"=== PREGUNTA PRÁCTICA ===\n{pregunta}\n\n"
             f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL DE LA PREGUNTA ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
@@ -3042,14 +3087,14 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
             "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal):\n"
             "[[NOTA_SUPUESTO: X.XX]]\n\n"
-            "A continuación, redacta una valoración clara, directa y formativa estructurada en estos 3 puntos:\n"
+            "A continuación, redacta una valoración clara, educada, directa y formativa estructurada en estos 3 puntos:\n"
             "1. **✅ Lo que has acertado en la resolución de la pregunta:**\n"
-            "   - Destaca los cálculos, plazos, conclusiones jurídicas y preceptos que el alumno ha resuelto correctamente.\n"
-            "2. **⚠️ Por qué obtienes esta nota (qué ha faltado o qué trampa del supuesto debes tener en cuenta):**\n"
-            "   - Explica con claridad qué matiz, cálculo, plazo o precepto de la explicación oficial le ha faltado o en qué punto se ha desviado, justificando de forma transparente el porqué de la nota.\n"
+            "   - Destaca los cálculos, plazos, conclusiones jurídicas y preceptos que el alumno ha resuelto correctamente (o indícale con amabilidad si su respuesta ha sido demasiado escueta para darla por completa).\n"
+            "2. **⚠️ Por qué obtienes esta nota (qué ha faltado y cómo practicar lo aprendido):**\n"
+            "   - Explica con claridad y tono pedagógico qué matiz, cálculo, plazo o precepto de la explicación oficial le ha faltado o en qué punto se ha desviado, invitándole educadamente a practicar lo aprendido razonando su contestación.\n"
             f"   - Indica en una línea limpia: **Artículos de la solución no citados:** {arts_omitidos_str}\n"
-            "3. **💡 Consejo práctico para clavar esta pregunta en el examen:**\n"
-            "   - Un consejo breve y directo para recordar la regla o fórmula aplicada."
+            "3. **💡 Consejo práctico de tus preparadores para clavar esta pregunta en el examen:**\n"
+            "   - Un consejo breve, cercano y directo para recordar la regla o fórmula aplicada."
         )
     else:
         alerta_desv_str = (
@@ -3063,18 +3108,18 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
             "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
             "=== REGLAS EQUILIBRADAS DE VALORACIÓN DEL TRIBUNAL ===\n"
-            "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE VS. RESPUESTA PARCIAL PERO PERTINENTE (`" + pregunta + "`):**\n"
-            "   - **Cuándo SÍ debes suspender con firmeza (< 12 / 50 ptos):** Únicamente cuando el alumno conteste un epígrafe distinto al preguntado (por ejemplo, si el epígrafe preguntado es `Normas sobre afiliación`, `El convenio especial` o `Encuadramiento e inscripción` y el alumno pega un texto sobre `Altas y bajas en el Régimen General` omitiendo la institución preguntada) o cuando deje casi todo en blanco.\n"
-            "   - **Cuándo debes ser UN POCO MÁS INDULGENTE Y CONSTRUCTIVO (permitiendo alcanzar o superar los 22-30 / 45 puntos en Criterio 1):** Cuando el alumno SÍ está contestando al epígrafe preguntado, comprende bien el núcleo del tema y desarrolla correctamente una parte relevante (por ejemplo, explica bien las modalidades de alta —real, asimilada, presunta/pleno derecho y especial— y además aporta el procedimiento, efectos o altas/bajas indebidas), aunque haya olvidado algunos subapartados del esquema (como definir pluriempleo/pluriactividad o sujetos obligados) o haya explicado conceptos con sus propias palabras sin recordar todos los números de artículo. En estos casos, **valora con generosidad todo lo que sí sabe y aporta** para que su esfuerzo se vea recompensado y pueda superar el corte eliminatorio de 25/50 si la respuesta demuestra estudio y buena base.\n"
-            "   - **NO EXIJAS COMO OBLIGATORIO LO QUE NO ESTÉ EN LA EXPLICACIÓN OFICIAL DE ESTE EPÍGRAFE:** Si el alumno adelanta o añade conceptos conexos válidos del tema (como plazos de altas previas, efectos de las altas o las altas y bajas indebidas de los arts. 60 y 61 RIA), súmale puntos adicionales en el Criterio 1 por enriquecer la exposición."
+            "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE, RESPUESTA MUY ESCUETA O FALTA DE RESPETO VS. RESPUESTA PERTINENTE (`" + pregunta + "`):**\n"
+            "   - **Si el alumno falta al respeto o escribe comentarios improcedentes:** Otórgale `0.00` puntos y respóndele con máxima educación, elegancia y firmeza constructiva pidiéndole que practique lo aprendido.\n"
+            "   - **Si el alumno escribe muy poco (unas pocas líneas esquemáticas):** Respóndele de forma muy educada y motivadora, valorando los conceptos que haya mencionado pero invitándole a practicar lo aprendido desarrollando todos los apartados del epígrafe con redacción jurídica completa.\n"
+            "   - **Cuándo SÍ debes suspender con firmeza (< 12 / 50 ptos):** Únicamente cuando el alumno conteste un epígrafe distinto al preguntado o cuando deje casi todo sin desarrollar.\n"
+            "   - **Cuándo debes ser UN POCO MÁS INDULGENTE Y CONSTRUCTIVO (permitiendo alcanzar o superar los 22-30 / 45 puntos en Criterio 1):** Cuando el alumno SÍ está contestando al epígrafe preguntado, comprende bien el núcleo del tema y desarrolla correctamente una parte relevante.\n"
+            "   - **NO EXIJAS COMO OBLIGATORIO LO QUE NO ESTÉ EN LA EXPLICACIÓN OFICIAL DE ESTE EPÍGRAFE:** Si el alumno adelanta o añade conceptos conexos válidos del tema, súmale puntos adicionales en el Criterio 1 por enriquecer la exposición."
             f"{alerta_desv_str}\n"
             "2. **REGLA EXACTA SOBRE PRESENTACIÓN DE SIGLAS (PROHIBIDO INVENTAR FALSOS POSITIVOS):**\n"
-            "   - Una sigla está **CORRECTAMENTE PRESENTADA** tanto si el alumno escribe su nombre completo seguido de la sigla entre paréntesis —por ejemplo: *«Reglamento General sobre inscripción de empresas y afiliación, altas, bajas y variaciones de datos de trabajadores en la Seguridad Social (RIA)»*— como si utiliza la fórmula *«..., en adelante, SIGLA»*.\n"
-            "   - **PROHIBIDO** acusar al alumno de usar siglas sin presentar si ya puso su nombre completo antes (como en el caso de `(RIA)`), y **PROHIBIDO** mencionar siglas que el alumno ni siquiera ha escrito en su texto.\n"
+            "   - Una sigla está **CORRECTAMENTE PRESENTADA** tanto si el alumno escribe su nombre completo seguido de la sigla entre paréntesis como si utiliza la fórmula *«..., en adelante, SIGLA»*.\n"
             f"   - Auditoría automática verificada sobre el texto del alumno: **Siglas usadas sin presentar detectadas:** `{siglas_mal_str}` (respeta exactamente este dato y resta muy poquito —máximo 0,15 o 0,20 ptos— si hay alguna).\n\n"
             "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MUY LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
             "   - Omitir números de artículos incluidos en la explicación oficial debe restar **muy poco** cuando el alumno ha sabido explicar el concepto jurídico.\n"
-            "   - En el apartado 3 de tu informe, escribe en una línea limpia únicamente **`Artículos omitidos:`** seguido directamente de la relación de artículos omitidos.\n"
             f"   - Relación detectada: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
             "=== BAREMO OFICIAL DEL TRIBUNAL CALIFICADOR ===\n"
             "- Puntuación total: de 0 a 50 puntos (mínimo 25,00 puntos para aprobar).\n"
@@ -3094,11 +3139,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
             "A continuación, redacta tu dictamen analítico y motivador estructurado en estos 4 apartados:\n"
             "1. **✅ Análisis de pertinencia, apartados acertados y aportaciones adicionales que enriquecen el epígrafe:**\n"
-            "   - Valora de forma constructiva y positiva todo lo que el alumno ha desarrollado bien respecto al epígrafe y destaca muy favorablemente los conceptos o artículos adicionales conexos (como efectos o altas/bajas indebidas) que ha aportado para enriquecer su respuesta.\n"
+            "   - Valora de forma constructiva y positiva todo lo que el alumno ha desarrollado bien respecto al epígrafe.\n"
             "2. **⚠️ Análisis constructivo de lo que falta por completar respecto a la explicación oficial:**\n"
-            "   - Explica con detalle analítico pero con tono cercano y pedagógico qué apartados o matices de la `EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE` le han faltado para alcanzar una nota de sobresaliente.\n"
+            "   - Explica con detalle analítico y tono cercano qué apartados o matices de la `EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE` le han faltado, animándole educadamente a practicar lo aprendido.\n"
             "3. **⚖️ Rigor normativo y uso de siglas:**\n"
-            "   - Valora las normas y artículos bien citados (incluyendo la correcta presentación de siglas como `(RIA)` cuando lo haya hecho).\n"
+            "   - Valora las normas y artículos bien citados.\n"
             f"   - Escribe en una línea limpia: **Artículos omitidos:** {arts_omitidos_str}\n"
             f"   - Respecto a las siglas sin presentar, indica únicamente: **Siglas sin presentación previa:** {siglas_mal_str}\n"
             "4. **🎓 Calificación por Criterios del Tribunal y Desglose sencillo de puntos sumados y restados:**\n"
@@ -3108,8 +3153,8 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "     • **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
             "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
             "   - Añade el bloque **📊 Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
-            "     • **➕ Qué te ha sumado puntos:** viñetas claras con los puntos aportados por cada bloque bien desarrollado, por los conceptos/artículos adicionales que mejoraron el epígrafe y por estructura/expresión.\n"
-            "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras con los puntos que faltaron por los apartados de la explicación oficial no incluidos, la resta leve por **Artículos omitidos** y la resta leve (si procede) por **siglas sin presentación previa**.\n"
+            "     • **➕ Qué te ha sumado puntos:** viñetas claras con los puntos aportados por cada bloque bien desarrollado.\n"
+            "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras con los puntos que faltaron por los apartados no incluidos, la resta leve por **Artículos omitidos** y la resta leve (si procede) por **siglas sin presentación previa**.\n"
             "   - Cierra con **💡 Orientación motivadora de tus preparadores para seguir subiendo nota en este epígrafe:**."
         )
 
@@ -3580,7 +3625,6 @@ if 'questions' not in st.session_state:
     st.session_state.update(questions=[], current_index=0, stats={}, finished=False, checked=False, test_name=None)
 
 def _obtener_prefijo_corto_tema(nombre_test, q=None):
-    """Extrae únicamente 'TEMA XX' (ej. 'TEMA 53') para el registro limpio de Desarrollo."""
     fuentes = [
         (q.get("tema_titulo") if isinstance(q, dict) else "") or "",
         nombre_test or ""
@@ -3592,10 +3636,6 @@ def _obtener_prefijo_corto_tema(nombre_test, q=None):
     return (nombre_test or "TEMA").strip().upper()
 
 def construir_nombre_epigrafe_sheets(indice_epigrafe):
-    """
-    Devuelve el formato limpio y exacto pedido para la columna 'Nombre del Test' en Desarrollo:
-    Ejemplo: 'TEMA 53. EPÍGRAFE 2: Altas y bajas en el régimen general'
-    """
     qs = st.session_state.get("questions", [])
     if not qs or indice_epigrafe is None or indice_epigrafe >= len(qs):
         return st.session_state.get("test_name") or "Test"
@@ -3607,7 +3647,6 @@ def construir_nombre_epigrafe_sheets(indice_epigrafe):
     return f"{pref_tema}. {ep_txt}"
 
 def formatear_nota_epigrafe_individual_sheets(ev_obj):
-    """Formatea la nota de ESE epígrafe concreto para la columna 'Nota Final' (ej. '16,50/50 (3,30/10)')."""
     if not isinstance(ev_obj, dict):
         return "0,00/50 (0,00/10)"
     n50 = float(ev_obj.get("nota_50", 0.0))
@@ -3615,14 +3654,6 @@ def formatear_nota_epigrafe_individual_sheets(ev_obj):
     return f"{n50:.2f}/50 ({n10:.2f}/10)".replace(".", ",")
 
 def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
-    """
-    Cierra y actualiza con su nota individual en 'Nota Final' la fila de ESE epígrafe en Google Sheets:
-    - Si la fila '🚀 En curso' aún no se había creado en Sheets (ej. si pulsó Comprobar en blanco),
-      envía primero 'nueva_fila' de forma síncrona.
-    - A continuación envía de forma síncrona 'actualizar_fin' con EXACTAMENTE el mismo 'nombre_test'
-      ('TEMA 53. EPÍGRAFE 2: ...') y la misma 'hora_inicio' ('ep_hora_inicio'), para que el Apps Script
-      encuentre la fila al 100%, la pase a '✅ Completado' y escriba la 'Nota Final'.
-    """
     qs = st.session_state.get("questions", [])
     stats = st.session_state.get("stats", {})
     if not qs or idx_ep is None or idx_ep >= len(qs):
@@ -3654,7 +3685,6 @@ def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
     hora_ini_ep = stat_ep["ep_hora_inicio"]
     ts_ini_ep = stat_ep.get("ep_start_ts") or st.session_state.get("test_start_ts")
 
-    # Si no se había abierto fila '🚀 En curso' para este epígrafe al escribir, abrirla primero síncronamente
     if not stat_ep.get("ep_inicio_registrado", False):
         stat_ep["ep_inicio_registrado"] = True
         registrar_actividad_sheets(
@@ -3670,7 +3700,6 @@ def registrar_epigrafe_desarrollo_en_sheets(idx_ep):
             sincrono=True
         )
 
-    # Actualizar esa misma fila a '✅ Completado' volcando la calificación en la columna 'Nota Final'
     registrar_actividad_sheets(
         evento="✅ Completado",
         nombre_test=nombre_ep_limpio,
@@ -3714,8 +3743,6 @@ def save_answer(selected):
         stat['selected'] = selected
         stat['attempts'] += 1
         if es_desarrollo_curr:
-            # Abrir UNA SOLA VEZ la fila "🚀 En curso" de este epígrafe concreto con el mismo nombre exacto
-            # ('TEMA 53. EPÍGRAFE 2: ...') y la misma hora_inicio que luego usará 'actualizar_fin' al volcar la nota.
             if not stat.get("ep_inicio_registrado", False):
                 ahora_ep = datetime.now(ZoneInfo("Europe/Madrid"))
                 stat["ep_start_ts"] = time.time()
@@ -3794,6 +3821,10 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
     return txt
 
 def preparar_preguntas_como_en_test(raw_qs, barajar=True):
+    # REGLA ESTRICTA: En SUPUESTOS y en DESARROLLO el orden de las preguntas NUNCA puede ser aleatorio
+    if any(q.get("is_open", False) or q.get("tipo_abierta") in ("SUPUESTO", "DESARROLLO") for q in (raw_qs or [])):
+        barajar = False
+
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
         r'todas\s+las\s+respuestas?\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -3975,8 +4006,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
-
-
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
@@ -4612,7 +4641,7 @@ elif not st.session_state.finished:
 
         altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 170
         lbl_textarea = (
-            "✍️ Escribe o dicta por voz tu respuesta razonada a la cuestión planteada (cálculos, plazos, calificación jurídica y normativa aplicable):"
+            "✍️ Escribe o dicta por voz tu respuesta razonada a la cuestión planteada (o pulsa «Comprobar» en blanco si deseas consultar directamente la solución oficial):"
             if es_supuesto_q else
             "✍️ Escribe o dicta por voz tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):"
         )
@@ -4683,154 +4712,145 @@ elif not st.session_state.finished:
             exp_of = (q.get("explanation") or "").strip()
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
             modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
+
             if not txt_alumno:
+                # Si el alumno NO escribe NADA y pulsa Comprobar, permitimos ver directamente la respuesta oficial (modo consulta)
+                stat["open_score"] = 0.0
+                stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
                 if q.get("tipo_abierta") == "DESARROLLO":
-                    stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
                     registrar_epigrafe_desarrollo_en_sheets(idx)
-                st.warning("⚪ No has escrito ninguna respuesta todavía. Redacta o dicta tu contestación en el cuadro superior y pulsa «Comprobar» para que la IA evalúe tu ejercicio.")
+                st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres que la IA evalúe tu redacción, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
             else:
-                aviso_inapropiado = detectar_respuesta_inapropiada_o_sin_interes(txt_alumno)
-                if aviso_inapropiado:
-                    stat["open_score"] = 0.0
-                    stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
+                # Si escribe algo (incluso si es muy poco o una falta de respeto), la IA lo analiza y responde educadamente
+                if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
+                    ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
+                    stat["last_evaluated_text"] = txt_alumno
+                    clave_activa = obtener_gemini_api_key_activa()
+                    msg_spinner = (
+                        "🤖 Analizando tu respuesta y contrastándola con la solución oficial..."
+                        if es_supuesto_q else
+                        "🤖 Analizando y valorando tu respuesta frente a la explicación oficial según los Criterios del Tribunal..."
+                    )
+                    with st.spinner(msg_spinner):
+                        stat["ai_feedback"] = consultar_ia_gemini_correccion(
+                            clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev, modo=modo_corr
+                        )
+                    stat["ai_eval"] = ev
+                    stat["open_score"] = ev.get("nota", 0.0)
+
                     if q.get("tipo_abierta") == "DESARROLLO":
                         registrar_epigrafe_desarrollo_en_sheets(idx)
+                    elif es_supuesto_q:
+                        nota_celda_sup = calcular_nota_final_supuestos_sheets(indice_actual=idx)
+                        accion_sh = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
+                        st.session_state.inicio_registrado_sheets = True
+                        registrar_actividad_sheets(
+                            "✍️ Revisado",
+                            nombre_test=st.session_state.get("test_name") or "Supuesto",
+                            aciertos="",
+                            fallos="",
+                            blancos="",
+                            nota=nota_celda_sup,
+                            accion=accion_sh
+                        )
+                    sincronizar_progreso_navegador()
+                else:
+                    ev = stat["ai_eval"]
+
+                n50_q = ev.get("nota_50", 0.0)
+                n10_q = ev.get("nota", 0.0)
+                c1_q = ev.get("pts_criterio_1", 0.0)
+                c2_q = ev.get("pts_criterio_2", 0.0)
+                c3_q = ev.get("pts_criterio_3", 0.0)
+
+                if es_supuesto_q:
+                    aprobado_s = n10_q >= 5.0
+                    bg_card = "#ecfdf5" if aprobado_s else "#fff7ed"
+                    border_card = "#16a34a" if aprobado_s else "#ea580c"
+                    color_nota = "#15803d" if aprobado_s else "#c2410c"
+                    badge_txt = "✅ CUESTIÓN PRÁCTICA SUPERADA" if aprobado_s else "⚠️ CUESTIÓN A REFORZAR — PRACTICA LO APRENDIDO"
+
                     st.markdown(
-                        f"<div style='background-color:#fff8e1; border:2px solid #d97706; border-radius:8px; padding:16px; margin-top:10px; margin-bottom:10px; font-size:15px; color:#1E293B !important; line-height:1.55; text-align:justify;'>"
-                        f"{aviso_inapropiado}"
+                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:12px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
+                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:2px;'>🎯 RESULTADO DE TU RESPUESTA A LA CUESTIÓN PRÁCTICA</div>"
+                        f"<div style='font-size:26px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>NOTA: {n10_q:.2f} / 10 PUNTOS</div>"
+                        f"<div style='font-size:14px; font-weight:700; color:#1E293B !important;'>{badge_txt}</div>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
+
+                    st.markdown(
+                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
+                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 VALORACIÓN DE LA IA Y ORIENTACIÓN PARA TU ESTUDIO</div>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(stat.get("ai_feedback") or "")
                 else:
-                    if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
-                        ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
-                        stat["last_evaluated_text"] = txt_alumno
-                        clave_activa = obtener_gemini_api_key_activa()
-                        msg_spinner = (
-                            "🤖 Comparando tu respuesta con la solución oficial de la pregunta..."
-                            if es_supuesto_q else
-                            "🤖 Analizando y valorando tu respuesta frente a la explicación oficial según los Criterios del Tribunal..."
-                        )
-                        with st.spinner(msg_spinner):
-                            stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                                clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev, modo=modo_corr
-                            )
-                        stat["ai_eval"] = ev
-                        stat["open_score"] = ev.get("nota", 0.0)
+                    aprobado_q = n50_q >= 25.0
+                    bg_card = "#ecfdf5" if aprobado_q else "#fff7ed"
+                    border_card = "#16a34a" if aprobado_q else "#ea580c"
+                    color_nota = "#15803d" if aprobado_q else "#c2410c"
+                    badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
 
-                        # Volcar UNA ÚNICA LÍNEA limpia por este epígrafe con su nota individual en Google Sheets
-                        if q.get("tipo_abierta") == "DESARROLLO":
-                            registrar_epigrafe_desarrollo_en_sheets(idx)
-                        elif es_supuesto_q:
-                            nota_celda_sup = calcular_nota_final_supuestos_sheets(indice_actual=idx)
-                            accion_sh = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
-                            st.session_state.inicio_registrado_sheets = True
-                            registrar_actividad_sheets(
-                                "✍️ Revisado",
-                                nombre_test=st.session_state.get("test_name") or "Supuesto",
-                                aciertos="",
-                                fallos="",
-                                blancos="",
-                                nota=nota_celda_sup,
-                                accion=accion_sh
-                            )
-                        sincronizar_progreso_navegador()
-                    else:
-                        ev = stat["ai_eval"]
+                    st.markdown(
+                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
+                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
+                        f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
+                        f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
+                        f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
+                        f"<b>Criterio 1 (Conocimiento y normativa):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
+                        f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
+                        f"<b>Criterio 3 (Expresión escrita):</b> {c3_q:.2f} / 2,00 ptos"
+                        f"</div>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
 
-                    n50_q = ev.get("nota_50", 0.0)
-                    n10_q = ev.get("nota", 0.0)
-                    c1_q = ev.get("pts_criterio_1", 0.0)
-                    c2_q = ev.get("pts_criterio_2", 0.0)
-                    c3_q = ev.get("pts_criterio_3", 0.0)
+                    st.markdown(
+                        f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
+                        f"{NOTA_METODOLOGICA_PREPARADORES}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
 
-                    if es_supuesto_q:
-                        aprobado_s = n10_q >= 5.0
-                        bg_card = "#ecfdf5" if aprobado_s else "#fff7ed"
-                        border_card = "#16a34a" if aprobado_s else "#ea580c"
-                        color_nota = "#15803d" if aprobado_s else "#c2410c"
-                        badge_txt = "✅ CUESTIÓN PRÁCTICA SUPERADA" if aprobado_s else "⚠️ CUESTIÓN A REFORZAR"
+                    st.markdown(
+                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
+                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(stat.get("ai_feedback") or "")
 
-                        st.markdown(
-                            f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:12px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                            f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:2px;'>🎯 RESULTADO DE TU RESPUESTA A LA CUESTIÓN PRÁCTICA</div>"
-                            f"<div style='font-size:26px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>NOTA: {n10_q:.2f} / 10 PUNTOS</div>"
-                            f"<div style='font-size:14px; font-weight:700; color:#1E293B !important;'>{badge_txt}</div>"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
+            # Mostrar SIEMPRE debajo la Respuesta y Explicación Oficial (tanto si dejó en blanco para consultar como si respondió)
+            if resp_of and resp_of != exp_of:
+                st.markdown(
+                    f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
+                    f"<div style='font-size:14px; font-weight:700; color:#1b5e20 !important; margin-bottom:4px;'>🎯 Respuesta Directa Oficial:</div>"
+                    f"<div style='font-size:14px; color:#1b5e20 !important; text-align:justify;'>{resp_of}</div></div>",
+                    unsafe_allow_html=True
+                )
+            if exp_of:
+                eh = PDFQuizParser.renderizar_explicacion_html(exp_of, etiqueta_tema)
+                if q.get("tipo_abierta") == "DESARROLLO":
+                    cabecera_exp_html = (
+                        f"<div style='font-size: 15.5px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
+                        f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 8px; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{etiqueta_tema}</div>"
+                    )
+                else:
+                    cabecera_exp_html = (
+                        f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>📖 Solución y Explicación Oficial de la Pregunta:</div>"
+                    )
+                st.markdown(
+                    f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 16px 18px; border-radius: 6px; margin-top: 10px;'>"
+                    f"{cabecera_exp_html}"
+                    f"<div style='font-size: 14.5px; color: #0c5460 !important;'>{eh}</div></div>",
+                    unsafe_allow_html=True
+                )
 
-                        st.markdown(
-                            "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                            "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 VALORACIÓN Y PORQUÉ DE TU NOTA (COMPARATIVA CON LA SOLUCIÓN)</div>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(stat.get("ai_feedback") or "")
-                    else:
-                        aprobado_q = n50_q >= 25.0
-                        bg_card = "#ecfdf5" if aprobado_q else "#fff7ed"
-                        border_card = "#16a34a" if aprobado_q else "#ea580c"
-                        color_nota = "#15803d" if aprobado_q else "#c2410c"
-                        badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
-
-                        st.markdown(
-                            f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                            f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
-                            f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
-                            f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
-                            f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
-                            f"<b>Criterio 1 (Conocimiento y normativa):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
-                            f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
-                            f"<b>Criterio 3 (Expresión escrita):</b> {c3_q:.2f} / 2,00 ptos"
-                            f"</div>"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
-
-                        st.markdown(
-                            f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
-                            f"{NOTA_METODOLOGICA_PREPARADORES}"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
-
-                        st.markdown(
-                            "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                            "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(stat.get("ai_feedback") or "")
-
-                    if resp_of and resp_of != exp_of:
-                        st.markdown(
-                            f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
-                            f"<div style='font-size:14px; font-weight:700; color:#1b5e20 !important; margin-bottom:4px;'>🎯 Respuesta Directa Oficial:</div>"
-                            f"<div style='font-size:14px; color:#1b5e20 !important; text-align:justify;'>{resp_of}</div></div>",
-                            unsafe_allow_html=True
-                        )
-                    if exp_of:
-                        eh = PDFQuizParser.renderizar_explicacion_html(exp_of, etiqueta_tema)
-                        if q.get("tipo_abierta") == "DESARROLLO":
-                            cabecera_exp_html = (
-                                f"<div style='font-size: 15.5px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
-                                f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 8px; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{etiqueta_tema}</div>"
-                            )
-                        else:
-                            cabecera_exp_html = (
-                                f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>📖 Solución y Explicación Oficial de la Pregunta:</div>"
-                            )
-                        st.markdown(
-                            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 16px 18px; border-radius: 6px; margin-top: 10px;'>"
-                            f"{cabecera_exp_html}"
-                            f"<div style='font-size: 14.5px; color: #0c5460 !important;'>{eh}</div></div>",
-                            unsafe_allow_html=True
-                        )
-
-                    if puede_rep:
-                        with st.expander(f"⚠️ Reportar Error en {tipo_item_lbl} {idx + 1} a info@oposiciona.es"):
-                            render_cuadro_reporte_error(q, idx + 1, "test_activo_bottom")
+            if puede_rep:
+                with st.expander(f"⚠️ Reportar Error en {tipo_item_lbl} {idx + 1} a info@oposiciona.es"):
+                    render_cuadro_reporte_error(q, idx + 1, "test_activo_bottom")
         else:
             if q['answer'] != -1:
                 co = q['options'][q['answer']]
@@ -4966,8 +4986,6 @@ else:
 
         if es_desarrollo_fin:
             st.session_state.test_cat = "DESARROLLO"
-            # En DESARROLLO registramos una línea individual por cada epígrafe que el alumno haya resuelto
-            # (si ya le dio a Comprobar antes, 'sheets_logged_sig' evita que se duplique; si le dio directamente a Finalizar sin Comprobar, se registra ahora con su nota).
             alguno_resuelto = False
             for idx_ep_fin, q_ep_fin in enumerate(st.session_state.questions):
                 stat_ep_fin = st.session_state.stats.get(idx_ep_fin, {})
@@ -4975,7 +4993,6 @@ else:
                 if txt_ep_fin or stat_ep_fin.get("ai_eval") is not None:
                     alguno_resuelto = True
                     registrar_epigrafe_desarrollo_en_sheets(idx_ep_fin)
-            # Si cerró sin haber escrito en ningún epígrafe, registrar el epígrafe en el que estaba con 0,00/50
             if not alguno_resuelto and st.session_state.questions:
                 idx_act_f = st.session_state.get("current_index", 0)
                 st.session_state.stats[idx_act_f]["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
@@ -5181,4 +5198,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
-
