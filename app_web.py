@@ -830,6 +830,7 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
+
 # === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
 import io, zipfile
 import xml.etree.ElementTree as ET
@@ -854,46 +855,93 @@ class PDFQuizParser:
             with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zf:
                 xml_content = zf.read("word/document.xml")
             ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            w_prefix = f"{{{ns['w']}}}"
+
+            # Leer estilos base de word/styles.xml si existen para saber qué estilos llevan negrita o lista por defecto
+            estilos_negrita = set()
+            estilos_lista = set()
+            try:
+                with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zf:
+                    if "word/styles.xml" in zf.namelist():
+                        st_root = ET.fromstring(zf.read("word/styles.xml"))
+                        for st_node in st_root.findall("w:style", ns):
+                            st_id = st_node.attrib.get(f"{w_prefix}styleId", "")
+                            name_el = st_node.find("w:name", ns)
+                            st_name = name_el.attrib.get(f"{w_prefix}val", "") if name_el is not None else ""
+                            pPr_s = st_node.find("w:pPr", ns)
+                            rPr_s = st_node.find("w:rPr", ns)
+                            if pPr_s is not None and pPr_s.find("w:numPr", ns) is not None:
+                                estilos_lista.add(st_id)
+                            if re.search(r'list|vi[ñn]eta|bullet', f"{st_id} {st_name}", re.IGNORECASE):
+                                estilos_lista.add(st_id)
+                            if rPr_s is not None:
+                                b_s = rPr_s.find("w:b", ns)
+                                if b_s is not None and b_s.attrib.get(f"{w_prefix}val", "true").lower() not in ("0", "false", "off"):
+                                    estilos_negrita.add(st_id)
+            except Exception:
+                pass
+
             root = ET.fromstring(xml_content)
             body = root.find("w:body", ns)
             if body is None:
                 return []
 
-            for p in body.iter(f"{{{ns['w']}}}p"):
+            for p in body.iter(f"{w_prefix}p"):
                 pPr = p.find("w:pPr", ns)
                 pStyle = ""
                 es_lista = False
+                tiene_sangria_izq = False
+                bold_por_parrafo = False
+
                 if pPr is not None:
                     st_el = pPr.find("w:pStyle", ns)
                     if st_el is not None:
-                        pStyle = st_el.attrib.get(f"{{{ns['w']}}}val", "")
+                        pStyle = st_el.attrib.get(f"{w_prefix}val", "")
+                        if pStyle in estilos_lista or re.search(r'list|vi[ñn]eta|bullet', pStyle, re.IGNORECASE):
+                            es_lista = True
+                        if pStyle in estilos_negrita:
+                            bold_por_parrafo = True
                     if pPr.find("w:numPr", ns) is not None:
                         es_lista = True
-                    elif re.search(r'list|vi[ñn]eta|bullet', pStyle, re.IGNORECASE):
-                        es_lista = True
+                    ind_el = pPr.find("w:ind", ns)
+                    if ind_el is not None:
+                        left_val = ind_el.attrib.get(f"{w_prefix}left") or ind_el.attrib.get(f"{w_prefix}start") or "0"
+                        hanging_val = ind_el.attrib.get(f"{w_prefix}hanging") or "0"
+                        try:
+                            if int(left_val) >= 180 or int(hanging_val) > 0:
+                                tiene_sangria_izq = True
+                        except Exception:
+                            pass
 
                 partes_txt = []
                 partes_html = []
                 chars_totales = 0
                 chars_negrita = 0
 
-                for r in p.findall("w:r", ns):
+                # Usar p.iter para capturar también <w:r> dentro de <w:hyperlink> o <w:smartTag>
+                for r in p.iter(f"{w_prefix}r"):
                     rPr = r.find("w:rPr", ns)
-                    r_bold = False
+                    r_bold = bold_por_parrafo
                     r_italic = False
                     r_underline = False
                     if rPr is not None:
                         b_el = rPr.find("w:b", ns)
+                        bcs_el = rPr.find("w:bCs", ns)
                         if b_el is not None:
-                            val_b = b_el.attrib.get(f"{{{ns['w']}}}val", "true").lower()
+                            val_b = b_el.attrib.get(f"{w_prefix}val", "true").lower()
                             r_bold = val_b not in ("0", "false", "off")
+                        elif bcs_el is not None:
+                            val_bcs = bcs_el.attrib.get(f"{w_prefix}val", "true").lower()
+                            r_bold = val_bcs not in ("0", "false", "off")
+
                         i_el = rPr.find("w:i", ns)
                         if i_el is not None:
-                            val_i = i_el.attrib.get(f"{{{ns['w']}}}val", "true").lower()
+                            val_i = i_el.attrib.get(f"{w_prefix}val", "true").lower()
                             r_italic = val_i not in ("0", "false", "off")
+
                         u_el = rPr.find("w:u", ns)
                         if u_el is not None:
-                            val_u = u_el.attrib.get(f"{{{ns['w']}}}val", "single").lower()
+                            val_u = u_el.attrib.get(f"{w_prefix}val", "single").lower()
                             r_underline = val_u not in ("none", "0", "false", "off")
 
                     t_runs = []
@@ -926,6 +974,10 @@ class PDFQuizParser:
                 if not texto_p:
                     continue
 
+                # Fusionar etiquetas <b></b> contiguas para limpiar el HTML generado desde runs consecutivos de Word
+                html_p = re.sub(r'</b>(\s*)<b>', r'\1', html_p)
+                html_p = re.sub(r'</i>(\s*)<i>', r'\1', html_p)
+
                 es_heading = bool(re.search(r'heading|titulo|encabezado|title', pStyle, re.IGNORECASE))
                 es_negrita = es_heading or (chars_totales > 0 and (chars_negrita / chars_totales) >= 0.65)
 
@@ -934,15 +986,32 @@ class PDFQuizParser:
                 for idx_sl, sub_l in enumerate(sub_lineas_txt):
                     sub_l = sub_l.strip()
                     sub_h = sub_lineas_html[idx_sl].strip() if idx_sl < len(sub_lineas_html) else sub_l
-                    if sub_l:
-                        lineas_info.append({
-                            "text": sub_l,
-                            "html": sub_h,
-                            "is_bold": es_negrita,
-                            "is_heading": es_heading,
-                            "is_list": es_lista,
-                            "style": pStyle
-                        })
+                    if not sub_l:
+                        continue
+
+                    # Detectar si el párrafo en Word es una viñeta o un apartado de definición ("Concepto (art. X): Definición...")
+                    empieza_con_bullet = bool(re.match(r'^(?:[•·▪■\-\*]|\d{1,2}[\.\º\ª]*\)|\([a-z0-9]+\)|[a-g]\))\s+', sub_l))
+                    # Detectar apartados tipo "Pluriactividad (artículo 7.4 del RIA): Es la situación..." o "Alta presunta o de pleno derecho (...): Mecanismo..."
+                    m_def_lead = re.match(r'^([A-ZÁÉÍÓÚÑ][^:]{2,115}):\s+(.+)$', sub_l)
+                    es_apartado_definicion = False
+                    if m_def_lead and not es_heading and not es_negrita:
+                        lead_txt = m_def_lead.group(1).strip()
+                        # Verificar que el texto antes de ':' sea un título de apartado/concepto y no una oración larga normal
+                        lead_sin_paren = re.sub(r'\([^)]*\)', '', lead_txt).strip()
+                        palabras_lead = lead_sin_paren.split()
+                        if 1 <= len(palabras_lead) <= 12 and not re.search(r'\b(dice|establece|dispone|señala|indica|siguientes|como|saber)\b$', lead_sin_paren, re.IGNORECASE):
+                            es_apartado_definicion = True
+
+                    es_lista_final = es_lista or empieza_con_bullet or es_apartado_definicion or (tiene_sangria_izq and not es_heading)
+
+                    lineas_info.append({
+                        "text": sub_l,
+                        "html": sub_h,
+                        "is_bold": es_negrita,
+                        "is_heading": es_heading,
+                        "is_list": es_lista_final,
+                        "style": pStyle
+                    })
         except Exception:
             return []
         return lineas_info
@@ -1038,9 +1107,6 @@ class PDFQuizParser:
 
     @staticmethod
     def _limpiar_cabeceras_incrustadas(texto, titulo_tema=""):
-        """
-        Limpia cabeceras o pies de página SIN fusionar ni destruir los saltos de párrafo originales.
-        """
         if not texto:
             return ""
         lineas_out = []
@@ -1054,12 +1120,42 @@ class PDFQuizParser:
         return "\n".join(lineas_out)
 
     @staticmethod
+    def _asegurar_negrita_encabezado_dos_puntos(html_str):
+        """
+        Garantiza que si un párrafo o viñeta comienza por un concepto seguido de dos puntos
+        (incluso si contiene puntos de abreviaturas o artículos como 'Pluriactividad (artículo 7.4 del RIA):'
+        o 'Alta presunta o de pleno derecho (artículo 166.4 del TRLGSS y artículo 29.2 del RIA):'),
+        todo ese encabezado previo a los dos puntos se muestre siempre en negrita sin perder
+        las demás negritas que haya en el resto del párrafo.
+        """
+        plain = re.sub(r'<[^>]+>', '', html_str).strip()
+        m = re.match(r'^([•\-\*▪■·]?\s*[A-ZÁÉÍÓÚÑ¡¿][^:]{1,115}:)(\s+.+)$', plain)
+        if not m:
+            return html_str
+
+        pref_plain = m.group(1)
+        pref_sin_paren = re.sub(r'\([^)]*\)', '', pref_plain)
+        # Si fuera de los paréntesis hay un punto seguido de espacio y mayúscula, son dos frases normales, no un encabezado
+        if re.search(r'\.\s+[A-ZÁÉÍÓÚÑ]', pref_sin_paren):
+            return html_str
+        if len(pref_sin_paren.split()) > 13:
+            return html_str
+
+        # Dividir el HTML por el primer ':' que cierra ese encabezado
+        idx_colon = html_str.find(":")
+        if idx_colon == -1:
+            return html_str
+        parte_izq = re.sub(r'</?b>', '', html_str[:idx_colon + 1]).strip()
+        parte_der = html_str[idx_colon + 1:]
+        return f"<b>{parte_izq}</b>{parte_der}"
+
+    @staticmethod
     def renderizar_explicacion_html(texto_explicacion, titulo_tema=""):
         """
-        Renderiza fielmente la maquetación original del documento (Word o PDF):
-        - Respeta cada párrafo por separado con su espaciado y justificación.
-        - Respeta las negritas, cursivas y subrayados originales del Word.
-        - Aplica sangría y formato de lista a todas las viñetas y apartados.
+        Renderiza fielmente la maquetación original del documento Word (.docx) o PDF:
+        - Respeta cada párrafo, cada viñeta y cada negrita/cursiva/subrayado del Word.
+        - Aplica viñeta '•', sangría francesa y negrita en el término inicial a todos los elementos de lista
+          y apartados de definición (incluso cuando citan artículos con decimales como 'artículo 7.4' o '166.4').
         """
         if not texto_explicacion:
             return "<div>Sin explicación disponible.</div>"
@@ -1070,7 +1166,7 @@ class PDFQuizParser:
             l = linea.strip()
             if not l:
                 continue
-            l = re.sub(r'\s*↑+\s*$', '', l).strip()
+            l = re.sub(r'\s*↑+\s*(?:</b>)?\s*$', '', l).strip()
 
             es_cabecera_h = False
             es_item_lista = False
@@ -1083,35 +1179,46 @@ class PDFQuizParser:
                 l = l.replace("[[LI]]", "").strip()
 
             l_plain = re.sub(r'<[^>]+>', '', l).strip()
+            if not l_plain:
+                continue
 
             if not es_cabecera_h:
                 if re.match(r'^(?:EXPLICACI[ÓO]N(?:\s+PARA\s+ESTUDIO)?|RESPUESTA\s+T[ÉE]CNICA)\s*:?$', l_plain, re.IGNORECASE):
                     es_cabecera_h = True
-                elif re.match(r'^(?:\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|EP[ÍI]GRAFE\s+\d+|APARTADO\s+\d+)', l_plain) and len(l_plain) < 145 and not l_plain.endswith("."):
+                elif re.match(r'^(?:\d{1,2}[\.\)]\s+[A-ZÁÉÍÓÚÑ¿¡]|EP[ÍI]GRAFE\s+\d+|APARTADO\s+\d+)', l_plain) and len(l_plain) < 155 and not l_plain.endswith("."):
                     es_cabecera_h = True
 
+            # Detectar también por contenido si es un apartado de definición/viñeta aunque viniera de una sesión anterior en memoria
+            if not es_cabecera_h and not es_item_lista:
+                if re.match(r'^(?:[•\-\*▪■·]|\d{1,2}[\.\º\ª]*\)|\([a-z0-9]+\)|[a-g]\))\s*', l_plain):
+                    es_item_lista = True
+                else:
+                    m_def = re.match(r'^([A-ZÁÉÍÓÚÑ][^:]{2,115}):\s+(.+)$', l_plain)
+                    if m_def:
+                        lead_sin_p = re.sub(r'\([^)]*\)', '', m_def.group(1)).strip()
+                        if 1 <= len(lead_sin_p.split()) <= 12 and not re.search(r'\.\s+[A-ZÁÉÍÓÚÑ]', lead_sin_p):
+                            es_item_lista = True
+
             if es_cabecera_h:
-                # Limpiar etiquetas redundantes de negrita dentro del título para aplicar estilo uniforme de subepígrafe
                 l_tit = re.sub(r'</?b>', '', l).strip()
                 bloques_html.append(
-                    f"<div style='font-size:15px; font-weight:800; color:#083B46 !important; margin-top:14px; margin-bottom:6px; line-height:1.4;'>{l_tit}</div>"
+                    f"<div style='font-size:15.5px; font-weight:800; color:#083B46 !important; margin-top:15px; margin-bottom:7px; line-height:1.4;'>{l_tit}</div>"
                 )
-            elif es_item_lista or re.match(r'^(?:[•\-\*▪■·]|\d{1,2}[\.\º\ª]*\)|\([a-z0-9]+\)|[a-g]\))\s*', l_plain):
-                if not re.match(r'^(?:[•\-\*▪■·]|\d{1,2}[\.\º\ª\)]|\([a-z0-9]+\)|[a-g]\))', l_plain):
-                    l_fmt = f"• {l}"
+            elif es_item_lista:
+                # Limpiar posible marca de viñeta duplicada y poner siempre '• ' uniforme al inicio
+                l_sin_bullet = re.sub(r'^(?:<b>\s*)?[•\-\*▪■·]\s*', lambda m: '<b>' if '<b>' in m.group(0) else '', l).strip()
+                if not re.match(r'^(?:<[^>]+>)*\s*(?:\d{1,2}[\.\º\ª\)]|\([a-z0-9]+\)|[a-g]\))', l_sin_bullet):
+                    l_fmt = f"• {l_sin_bullet}"
                 else:
-                    l_fmt = l
-                if "<b>" not in l_fmt:
-                    l_fmt = re.sub(r'^([•\-\*▪■·]?\s*[^:\.]{2,95}:)', r'<b>\1</b>', l_fmt)
+                    l_fmt = l_sin_bullet
+                l_fmt = PDFQuizParser._asegurar_negrita_encabezado_dos_puntos(l_fmt)
                 bloques_html.append(
-                    f"<div style='margin-top:6px; margin-bottom:6px; padding-left:18px; text-indent:-12px; line-height:1.55; color:#0F172A !important; text-align:justify;'>{l_fmt}</div>"
+                    f"<div style='margin-top:6px; margin-bottom:7px; padding-left:20px; text-indent:-13px; line-height:1.56; color:#0F172A !important; text-align:justify;'>{l_fmt}</div>"
                 )
             else:
-                l_fmt = l
-                if "<b>" not in l_fmt:
-                    l_fmt = re.sub(r'^(\d{1,2}\.º\s+|¡?\s*PREGUNTA\s+TRAMPA!?\s*:?|(?:EXPLICACI[ÓO]N|RESPUESTA\s+T[ÉE]CNICA)\s*:|[A-ZÁÉÍÓÚÑ][^:\.]{2,85}:)', r'<b>\1</b>', l_fmt)
+                l_fmt = PDFQuizParser._asegurar_negrita_encabezado_dos_puntos(l)
                 bloques_html.append(
-                    f"<p style='margin:0 0 9px 0; line-height:1.56; color:#0F172A !important; text-align:justify;'>{l_fmt}</p>"
+                    f"<p style='margin:0 0 9px 0; line-height:1.58; color:#0F172A !important; text-align:justify;'>{l_fmt}</p>"
                 )
         return "".join(bloques_html)
 
@@ -1238,13 +1345,15 @@ class PDFQuizParser:
             if m_exp and curr_q is not None:
                 curr_q["explanation_lines"].append("[[H]]📌 EXPLICACIÓN Y ANÁLISIS DEL SUPUESTO:")
                 if m_exp.group(1).strip():
-                    curr_q["explanation_lines"].append(m_exp.group(1).strip())
+                    rest_h = re.sub(r'^(?:<[^>]+>)*\s*EXPLICACI[ÓO]N\s*:\s*(?:</[^>]+>)*\s*', '', html_p, flags=re.IGNORECASE).strip()
+                    curr_q["explanation_lines"].append(rest_h or m_exp.group(1).strip())
                 continue
 
             if m_rt and curr_q is not None:
                 curr_q["explanation_lines"].append("[[H]]⚖️ RESPUESTA TÉCNICA Y FUNDAMENTACIÓN JURÍDICA:")
                 if m_rt.group(1).strip():
-                    curr_q["explanation_lines"].append(m_rt.group(1).strip())
+                    rest_rt = re.sub(r'^(?:<[^>]+>)*\s*RESPUESTA\s+T[ÉE]CNICA\s*:\s*(?:</[^>]+>)*\s*', '', html_p, flags=re.IGNORECASE).strip()
+                    curr_q["explanation_lines"].append(rest_rt or m_rt.group(1).strip())
                 continue
 
             if leyendo_planteamiento and pat_ordinal_enunciado.match(txt_raw):
@@ -1471,7 +1580,7 @@ class PDFQuizParser:
                         curr_title = f"PREGUNTA DE DESARROLLO: {txt}"
                     elif re.match(r'^EP[ÍI]GRAFE\s+\d+\s*:?$', curr_title, re.IGNORECASE) and not curr_body and len(txt) < 160:
                         curr_title = f"{curr_title.rstrip(':')}: {txt}"
-                    elif (p.get("is_heading") or p.get("is_bold")) and len(txt) < 145 and not txt.endswith("."):
+                    elif (p.get("is_heading") or p.get("is_bold")) and len(txt) < 155 and not txt.endswith("."):
                         curr_body.append(f"[[H]]{txt}")
                     elif p.get("is_list"):
                         curr_body.append(f"[[LI]]{html_linea}")
@@ -1516,7 +1625,7 @@ class PDFQuizParser:
                     curr_title = f"EPÍGRAFE {num_ep_auto}: {txt}" if not txt.upper().startswith("EP") else txt
                     curr_body = []
                 elif curr_title:
-                    if (p.get("is_heading") or p.get("is_bold")) and len(txt) < 145 and not txt.endswith("."):
+                    if (p.get("is_heading") or p.get("is_bold")) and len(txt) < 155 and not txt.endswith("."):
                         curr_body.append(f"[[H]]{txt}")
                     elif p.get("is_list"):
                         curr_body.append(f"[[LI]]{html_linea}")
@@ -1950,6 +2059,7 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 3 ===
+
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
