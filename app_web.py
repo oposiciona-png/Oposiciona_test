@@ -4227,6 +4227,69 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
     </script>
     """, height=78)
 
+def activar_desmarcado_al_clicar_radio_marcado():
+    """
+    Permite que en cualquier pregunta de test (Administrativos y Gestión), al volver a hacer clic
+    sobre la opción de radio que ya está marcada, se desmarque automáticamente dejando la pregunta en blanco,
+    sin mostrar ningún botón visible en la interfaz.
+    """
+    components.html("""
+    <script>
+    (function() {
+        try {
+            var pd = window.parent.document;
+            /* Ocultar por completo el contenedor del botón puente interno */
+            var marker = pd.querySelector('. puente-desmarcar-oculto');
+            if (!marker) marker = pd.querySelector('.puente-desmarcar-oculto');
+            if (marker) {
+                var wrapper = marker.closest('[data-testid="stVerticalBlock"]');
+                if (wrapper) {
+                    wrapper.style.cssText = "position:fixed !important; left:-9999px !important; top:-9999px !important; width:1px !important; height:1px !important; overflow:hidden !important; opacity:0 !important; pointer-events:none !important; margin:0 !important; padding:0 !important;";
+                }
+            }
+
+            var rg = pd.querySelector('div[role="radiogroup"]');
+            if (!rg) return;
+
+            var labels = rg.querySelectorAll('label');
+            labels.forEach(function(lbl) {
+                if (lbl.dataset.oposicionaToggleBound === "1") return;
+                lbl.dataset.oposicionaToggleBound = "1";
+
+                lbl.addEventListener('click', function(e) {
+                    var inp = lbl.querySelector('input[type="radio"]');
+                    var box = lbl.querySelector('div[data-baseweb="radio"]');
+                    var yaMarcado = (box && box.getAttribute('data-checked') === 'true') || (inp && inp.defaultChecked);
+                    if (inp && inp.dataset.wasChecked === "true") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        inp.dataset.wasChecked = "false";
+                        /* Disparar el botón oculto de Streamlit para limpiar el estado en Python */
+                        var btns = pd.querySelectorAll('button');
+                        for (var i = 0; i < btns.length; i++) {
+                            if ((btns[i].innerText || "").indexOf("__CLEAR_RADIO_INTERNAL__") !== -1) {
+                                btns[i].click();
+                                break;
+                            }
+                        }
+                        return false;
+                    }
+                }, true);
+
+                lbl.addEventListener('pointerdown', function() {
+                    var inp = lbl.querySelector('input[type="radio"]');
+                    var box = lbl.querySelector('div[data-baseweb="radio"]');
+                    var isCheckedNow = (inp && inp.checked) || (box && box.getAttribute('data-checked') === 'true');
+                    if (inp) {
+                        inp.dataset.wasChecked = isCheckedNow ? "true" : "false";
+                    }
+                }, true);
+            });
+        } catch (err) {}
+    })();
+    </script>
+    """, height=0)
+
 if not st.session_state.questions:
     st.markdown("""<style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
@@ -4669,17 +4732,11 @@ elif not st.session_state.finished:
     else:
         def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
         sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
-        # Opción disponible en todos los tests (Administrativos y Gestión) para desmarcar y dejar en blanco
-        if sel_opt is not None or stat.get("selected") is not None:
-            col_desm, _ = st.columns([1.4, 2.6])
-            with col_desm:
-                st.button(
-                    "⚪ Dejar en blanco (Desmarcar opción)",
-                    key=f"btn_clear_opt_{idx}",
-                    on_click=clear_radio_answer,
-                    args=(idx,),
-                    use_container_width=True
-                )
+        # Puente interno invisible que permite desmarcar la opción haciendo clic de nuevo sobre ella (sin botón visible)
+        with st.container():
+            st.markdown("<div class='puente-desmarcar-oculto' style='display:none;'></div>", unsafe_allow_html=True)
+            st.button("__CLEAR_RADIO_INTERNAL__", key=f"btn_internal_clr_{idx}", on_click=clear_radio_answer, args=(idx,))
+        activar_desmarcado_al_clicar_radio_marcado()
 
     if puede_rep:
         c1, c2, c3, c4, c5 = st.columns([0.9, 0.95, 0.95, 1.1, 1.5])
