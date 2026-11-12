@@ -2111,7 +2111,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -3024,8 +3023,6 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     enunciado_limpio = re.sub(r'<[^>]+>', ' ', enunciado_supuesto or "").strip()
     explicacion_limpia_prompt = re.sub(r'<[^>]+>', '', (explicacion_oficial or "").replace("[[H]]", "").replace("[[LI]]", "• ")).strip()
 
-    # Si se detecta falta de respeto, evasiva ("no lo sé", "paso", etc.) o texto telegráfico/insuficiente,
-    # pedir a la IA que le responda de forma personalizada, educada y constructiva en función de lo que ha escrito
     if aviso_respaldo_inapropiado is not None:
         etiqueta_cero = "[[NOTA_SUPUESTO: 0.00]]" if modo in ("SUPUESTO", "SUPUESTOS") else "[[NOTAS_TRIBUNAL: C1=0.00 | C2=0.00 | C3=0.00]]"
         prompt_educado = (
@@ -3761,6 +3758,16 @@ def save_answer(selected):
             st.session_state.inicio_registrado_sheets = True
             nombre_celda = st.session_state.get("test_name") or "Test"
             registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
+
+def clear_radio_answer(idx_q):
+    """Permite al alumno desmarcar la respuesta seleccionada en cualquier test y dejar la pregunta en blanco."""
+    if idx_q in st.session_state.stats:
+        st.session_state.stats[idx_q]['selected'] = None
+        if st.session_state.stats[idx_q].get('attempts', 0) > 0:
+            st.session_state.stats[idx_q]['attempts'] -= 1
+    st.session_state[f"radio_{idx_q}"] = None
+    st.session_state.checked = False
+    sincronizar_progreso_navegador()
 
 def handle_radio_change():
     idx = st.session_state.current_index
@@ -4662,6 +4669,17 @@ elif not st.session_state.finished:
     else:
         def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
         sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
+        # Opción disponible en todos los tests (Administrativos y Gestión) para desmarcar y dejar en blanco
+        if sel_opt is not None or stat.get("selected") is not None:
+            col_desm, _ = st.columns([1.4, 2.6])
+            with col_desm:
+                st.button(
+                    "⚪ Dejar en blanco (Desmarcar opción)",
+                    key=f"btn_clear_opt_{idx}",
+                    on_click=clear_radio_answer,
+                    args=(idx,),
+                    use_container_width=True
+                )
 
     if puede_rep:
         c1, c2, c3, c4, c5 = st.columns([0.9, 0.95, 0.95, 1.1, 1.5])
@@ -4714,14 +4732,12 @@ elif not st.session_state.finished:
             modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
 
             if not txt_alumno:
-                # Si el alumno NO escribe NADA y pulsa Comprobar, permitimos ver directamente la respuesta oficial (modo consulta)
                 stat["open_score"] = 0.0
                 stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
                 if q.get("tipo_abierta") == "DESARROLLO":
                     registrar_epigrafe_desarrollo_en_sheets(idx)
                 st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres que la IA evalúe tu redacción, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
             else:
-                # Si escribe algo (incluso si es muy poco o una falta de respeto), la IA lo analiza y responde educadamente
                 if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
                     ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
                     stat["last_evaluated_text"] = txt_alumno
@@ -4822,7 +4838,6 @@ elif not st.session_state.finished:
                     )
                     st.markdown(stat.get("ai_feedback") or "")
 
-            # Mostrar SIEMPRE debajo la Respuesta y Explicación Oficial (tanto si dejó en blanco para consultar como si respondió)
             if resp_of and resp_of != exp_of:
                 st.markdown(
                     f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
@@ -5198,3 +5213,4 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
+
