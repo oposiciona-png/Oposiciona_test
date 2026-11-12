@@ -2509,7 +2509,8 @@ def _extraer_bloques_estructurales_epigrafe(explicacion_oficial):
     cabecera_pendiente = ""
 
     for l in lineas:
-        l_clean = re.sub(r'^[•\*■▪\-–\s]+', '', l.replace("[[H]]", "")).strip()
+        l_clean = re.sub(r'<[^>]+>', '', l.replace("[[H]]", "").replace("[[LI]]", "")).strip()
+        l_clean = re.sub(r'^[•\*■▪\-–\s]+', '', l_clean).strip()
         if not l_clean or PDFQuizParser._es_basura_cabecera_o_pie(l_clean):
             continue
         if len(l_clean) < 95 and not l_clean.endswith('.') and ":" not in l_clean:
@@ -2970,6 +2971,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
     clave_limpia = (api_key or GEMINI_API_KEY_DEFAULT).strip().replace("×", "x").replace(" ", "")
     enunciado_limpio = re.sub(r'<[^>]+>', ' ', enunciado_supuesto or "").strip()
+    explicacion_limpia_prompt = re.sub(r'<[^>]+>', '', (explicacion_oficial or "").replace("[[H]]", "").replace("[[LI]]", "• ")).strip()
 
     if modo in ("SUPUESTO", "SUPUESTOS"):
         prompt = (
@@ -2984,7 +2986,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "   - Ha fundamentado su respuesta en la normativa aplicable (no penalices en exceso si omite el número exacto de algún artículo pero aplica bien la regla legal).\n\n"
             f"=== PLANTEAMIENTO DEL SUPUESTO ===\n{enunciado_limpio}\n\n"
             f"=== PREGUNTA PRÁCTICA ===\n{pregunta}\n\n"
-            f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL DE LA PREGUNTA ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+            f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL DE LA PREGUNTA ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
             f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
             "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
             "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal):\n"
@@ -3029,7 +3031,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
             "- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas (puntúa si Criterio 1 >= 20,00; resta muy levemente solo por las siglas que realmente haya usado el alumno sin presentar su nombre completo).\n\n"
             f"=== EPÍGRAFE PREGUNTADO ===\n{enunciado_limpio}\n{pregunta}\n\n"
-            f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (REFERENCIA DE CONTENIDO) ===\n{respuesta_oficial}\n{explicacion_oficial}\n\n"
+            f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (REFERENCIA DE CONTENIDO) ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
             f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
             f"=== DATOS DE AUDITORÍA VERIFICADOS ===\n"
             f"- Artículos de la explicación citados por el alumno: {arts_acertados_str}\n"
@@ -3175,7 +3177,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     exp_limpia = re.sub(
         r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+fundamento\s+legal|\s+y\s+soluci[óo]n\s+detallada|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*',
         '',
-        re.sub(r'<[^>]+>', '', q.get('explanation', '')).replace("[[H]]", "").strip(),
+        re.sub(r'<[^>]+>', '', q.get('explanation', '')).replace("[[H]]", "").replace("[[LI]]", "• ").strip(),
         flags=re.IGNORECASE
     ).strip() or "Sin explicación disponible."
 
@@ -3217,7 +3219,6 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
             stat_q = st.session_state.get("stats", {}).get(num_pregunta - 1, {})
             correo_remitente = usuario_rep if "@" in usuario_rep else "info@oposiciona.es"
 
-            # IMPORTANTE: En FormSubmit las claves NUNCA deben empezar por número ni llevar paréntesis para que no salgan correos en blanco
             if es_abierta:
                 resp_alumno_env = (stat_q.get("selected") or st.session_state.get(f"open_txt_{num_pregunta - 1}") or "Sin respuesta escrita por el alumno").strip()
                 dictamen_env = re.sub(r'<[^>]+>', '', (stat_q.get("ai_feedback") or "Aún no se había pulsado Comprobar")).strip()
@@ -3271,7 +3272,6 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
             enviado_servidor = False
             with st.spinner("📨 Enviando reporte a info@oposiciona.es..."):
                 try:
-                    # Envío como formulario estándar urlencoded (el formato nativo que FormSubmit nunca deja en blanco)
                     headers_fs = {
                         "Accept": "application/json",
                         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -3292,7 +3292,6 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                 except Exception:
                     enviado_servidor = False
 
-                # Si el primer intento por urlencoded fallara por red, segundo intento por JSON limpio
                 if not enviado_servidor:
                     try:
                         headers_json = {
@@ -3313,7 +3312,6 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                     except Exception:
                         enviado_servidor = False
 
-            # Registrar también el aviso en la hoja de seguimiento para que nunca se pierda ningún reporte
             try:
                 registrar_actividad_sheets(
                     evento="🛠️ Reporte Error",
@@ -3530,16 +3528,21 @@ def generar_simulacro_aleatorio(especialidad, ambito_seleccionado, total_deseada
 if 'questions' not in st.session_state:
     st.session_state.update(questions=[], current_index=0, stats={}, finished=False, checked=False, test_name=None)
 
-def _diagnosticar_extension_respuesta_desarrollo(texto):
+def _diagnosticar_extension_respuesta_desarrollo(texto, ev_obj=None):
     t = (texto or "").strip()
     if not t:
         return "⚠️ No cumplimentó nada en el texto"
     lineas_no_vacias = [l.strip() for l in t.split('\n') if l.strip()]
     palabras = re.findall(r'\S+', t)
+    nota_sufijo = ""
+    if isinstance(ev_obj, dict) and ev_obj.get("nota_50") is not None:
+        n50 = float(ev_obj.get("nota_50", 0.0))
+        n10 = float(ev_obj.get("nota", 0.0))
+        nota_sufijo = f" ({n50:.2f}/50 | {n10:.2f}/10)".replace(".", ",")
     if len(palabras) < 35 or (len(lineas_no_vacias) <= 2 and len(t) < 200):
         num_lin = 1 if len(palabras) < 18 else 2
-        return f"⚠️ Solo escribió {num_lin} {'línea' if num_lin == 1 else 'líneas'} ({len(palabras)} palabras)"
-    return "✅ Cumplimentado"
+        return f"⚠️ Solo escribió {num_lin} {'línea' if num_lin == 1 else 'líneas'} ({len(palabras)} palabras){nota_sufijo}"
+    return f"✅ Cumplimentado{nota_sufijo}"
 
 def construir_nombre_test_seguimiento_sheets(indice_actual=None):
     qs = st.session_state.get("questions", [])
@@ -3554,30 +3557,80 @@ def construir_nombre_test_seguimiento_sheets(indice_actual=None):
     tema_lbl = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), qs[0])
     stats = st.session_state.get("stats", {})
 
-    if indice_actual is not None and not st.session_state.get("finished", False):
-        q_act = qs[indice_actual]
-        ep_titulo = q_act.get("question_text", f"Epígrafe {indice_actual + 1}").strip()
-        txt_al = (stats.get(indice_actual, {}).get("selected") or "").strip()
-        estado_txt = _diagnosticar_extension_respuesta_desarrollo(txt_al)
-        return f"{tema_lbl}\n{ep_titulo} -> {estado_txt}"
-
     detalles_epigrafes = []
     alguno_tocado = False
     for i_q, q_item in enumerate(qs):
         ep_tit = q_item.get("question_text", f"Epígrafe {i_q + 1}").strip()
-        txt_i = (stats.get(i_q, {}).get("selected") or "").strip()
-        intentos_i = stats.get(i_q, {}).get("attempts", 0)
-        if txt_i or intentos_i > 0:
+        stat_i = stats.get(i_q, {})
+        txt_i = (stat_i.get("selected") or "").strip()
+        intentos_i = stat_i.get("attempts", 0)
+        ev_i = stat_i.get("ai_eval")
+        if txt_i or intentos_i > 0 or (indice_actual is not None and i_q == indice_actual):
             alguno_tocado = True
-            est_i = _diagnosticar_extension_respuesta_desarrollo(txt_i)
+            est_i = _diagnosticar_extension_respuesta_desarrollo(txt_i, ev_i)
             detalles_epigrafes.append(f"{ep_tit} -> {est_i}")
 
     if not alguno_tocado:
-        idx_ref = st.session_state.get("current_index", 0)
+        idx_ref = indice_actual if indice_actual is not None else st.session_state.get("current_index", 0)
         ep_actual = qs[idx_ref].get("question_text", f"Epígrafe {idx_ref + 1}").strip() if idx_ref < len(qs) else "Todos los epígrafes"
         detalles_epigrafes.append(f"{ep_actual} -> ⚠️ No cumplimentó nada en el texto")
 
     return f"{tema_lbl}\n" + "\n".join(detalles_epigrafes)
+
+def calcular_nota_final_desarrollo_sheets(indice_actual=None):
+    """
+    Calcula la nota para volcar en la columna NOTA FINAL de Google Sheets cuando el alumno
+    hace una pregunta de DESARROLLO (o SUPUESTOS):
+    - Si ha evaluado 1 epígrafe, muestra directamente la nota de ese epígrafe: '34,50/50 (6,90/10)'.
+    - Si ha evaluado varios epígrafes, muestra la media de los realizados y el desglose:
+      '32,00/50 (6,40/10) [Ep.1: 34,50/50 | Ep.2: 29,50/50]'.
+    """
+    qs = st.session_state.get("questions", [])
+    stats = st.session_state.get("stats", {})
+    if not qs:
+        return ""
+
+    es_supuesto = any(q.get("tipo_abierta") == "SUPUESTO" for q in qs)
+    evaluados = []
+
+    for i_q, q_item in enumerate(qs):
+        stat_i = stats.get(i_q, {})
+        txt_i = (stat_i.get("selected") or "").strip()
+        ev_i = stat_i.get("ai_eval")
+        if isinstance(ev_i, dict) and (ev_i.get("nota_50") is not None or ev_i.get("nota") is not None):
+            n50_i = float(ev_i.get("nota_50", 0.0))
+            n10_i = float(ev_i.get("nota", 0.0))
+            evaluados.append((i_q + 1, n50_i, n10_i))
+        elif txt_i and detectar_respuesta_inapropiada_o_sin_interes(txt_i):
+            evaluados.append((i_q + 1, 0.0, 0.0))
+
+    if not evaluados and indice_actual is not None:
+        stat_act = stats.get(indice_actual, {})
+        ev_act = stat_act.get("ai_eval")
+        if isinstance(ev_act, dict):
+            evaluados.append((indice_actual + 1, float(ev_act.get("nota_50", 0.0)), float(ev_act.get("nota", 0.0))))
+        else:
+            return "0,00/50 (0,00/10)" if not es_supuesto else "0,00/10"
+
+    if not evaluados:
+        return "0,00/50 (0,00/10)" if not es_supuesto else "0,00/10"
+
+    if es_supuesto:
+        media_10 = sum(x[2] for x in evaluados) / len(evaluados)
+        if len(evaluados) == 1:
+            num_e, _, n10_e = evaluados[0]
+            return f"{n10_e:.2f}/10 (P{num_e})".replace(".", ",")
+        desglose_s = " | ".join([f"P{num_e}: {n10_e:.2f}/10" for num_e, _, n10_e in evaluados])
+        return f"{media_10:.2f}/10 [{desglose_s}]".replace(".", ",")
+
+    media_50 = sum(x[1] for x in evaluados) / len(evaluados)
+    media_10 = sum(x[2] for x in evaluados) / len(evaluados)
+    if len(evaluados) == 1:
+        num_e, n50_e, n10_e = evaluados[0]
+        return f"{n50_e:.2f}/50 ({n10_e:.2f}/10)".replace(".", ",")
+
+    desglose_d = " | ".join([f"Ep.{num_e}: {n50_e:.2f}/50" for num_e, n50_e, _ in evaluados])
+    return f"{media_50:.2f}/50 ({media_10:.2f}/10) [{desglose_d}]".replace(".", ",")
 
 def save_answer(selected):
     idx_curr = st.session_state.current_index
@@ -3841,6 +3894,7 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
