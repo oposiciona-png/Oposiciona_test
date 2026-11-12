@@ -3685,7 +3685,7 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
                 <button id="btn_mic_{idx_pregunta}" type="button" style="background: #0284C7; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 13px; font-size: 13.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: all 0.2s;">
                     <span>🎙️</span> <span id="lbl_mic_{idx_pregunta}">Dictar respuesta por voz</span>
                 </button>
-                <span id=" badge_estado_{idx_pregunta}" style="font-size: 12.5px; font-weight: 600; color: #0369A1;">
+                <span id="badge_estado_{idx_pregunta}" style="font-size: 12.5px; font-weight: 600; color: #0369A1;">
                     Pulsa para hablar (puedes decir: <i>«coma»</i>, <i>«punto y seguido»</i>, <i>«punto y aparte»</i>)
                 </span>
             </div>
@@ -3700,7 +3700,7 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
         var pd = pw.document;
         var btn = document.getElementById("btn_mic_{idx_pregunta}");
         var lbl = document.getElementById("lbl_mic_{idx_pregunta}");
-        var badge = document.getElementById(" badge_estado_{idx_pregunta}");
+        var badge = document.getElementById("badge_estado_{idx_pregunta}");
         var preview = document.getElementById("preview_voz_{idx_pregunta}");
 
         var SpeechRecognition = pw.SpeechRecognition || pw.webkitSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3713,7 +3713,6 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
             return;
         }}
 
-        /* Si había un reconocimiento previo activo de otra pregunta, detenerlo */
         if (pw.__oposiciona_speech_rec) {{
             try {{
                 pw.__oposiciona_speech_active = false;
@@ -3724,14 +3723,12 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
         function obtenerTextareaRespuesta() {{
             var areas = pd.querySelectorAll('textarea');
             if (!areas || areas.length === 0) return null;
-            /* El primer textarea de la pantalla de pregunta abierta es siempre el de la respuesta del alumno */
             return areas[0];
         }}
 
         function formatearTextoJuridicoDictado(texto) {{
             if (!texto) return "";
             var t = texto;
-            /* Comandos de puntuación hablados */
             t = t.replace(/\\bpunto y aparte\\b/gi, ".\\n\\n");
             t = t.replace(/\\bpunto y seguido\\b/gi, ". ");
             t = t.replace(/\\bpunto final\\b/gi, ".");
@@ -3742,7 +3739,6 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
             t = t.replace(/\\bcerrar par[ée]ntesis\\b/gi, ") ");
             t = t.replace(/\\babrir comillas\\b/gi, " «");
             t = t.replace(/\\bcerrar comillas\\b/gi, "» ");
-            /* Siglas habituales de Seguridad Social */
             t = t.replace(/\\btrlgss\\b/gi, "TRLGSS");
             t = t.replace(/\\blgss\\b/gi, "LGSS");
             t = t.replace(/\\breta\\b/gi, "RETA");
@@ -3774,7 +3770,6 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
                 }}
             }}
 
-            /* Poner mayúscula inicial si empieza el texto o va tras punto o salto de línea */
             if (actual.length === 0 || /[.?!]\\s*$/.test(actual) || /\\n\\s*$/.test(actual)) {{
                 frag = frag.charAt(0).toUpperCase() + frag.slice(1);
             }}
@@ -3845,13 +3840,10 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
             if (event.error === "not-allowed" || event.error === "service-not-allowed") {{
                 pw.__oposiciona_speech_active = false;
                 actualizarUI(false, "⚠️ <b>Permiso de micrófono bloqueado:</b> autoriza el micrófono en el icono del candado de la barra de direcciones.");
-            }} else if (event.error === "no-speech") {{
-                /* En pausas de silencio no cerramos el dictado */
             }}
         }};
 
         rec.onend = function() {{
-            /* Si el usuario no ha pulsado Detener (ej. pausa en iPhone/Safari), reconectar automáticamente */
             if (pw.__oposiciona_speech_active) {{
                 setTimeout(function() {{
                     if (pw.__oposiciona_speech_active) {{
@@ -4291,7 +4283,19 @@ elif not st.session_state.finished:
                 unsafe_allow_html=True
             )
 
-    st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
+    if q.get("tipo_abierta") == "DESARROLLO":
+        txt_ep_mostrar = (q.get("question_text") or "").strip()
+        if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', txt_ep_mostrar, re.IGNORECASE):
+            txt_ep_mostrar = f"EPÍGRAFE {idx + 1}: {txt_ep_mostrar}"
+        st.markdown(
+            f"<div style='background-color:#FFFFFF; border:2px solid #1E3A8A; border-left:6px solid #1E3A8A; border-radius:8px; padding:10px 14px; margin-bottom:10px;'>"
+            f"<div style='font-size:12px; font-weight:800; color:#1D4ED8 !important; letter-spacing:0.4px; margin-bottom:3px;'>📝 EPÍGRAFE QUE SE PREGUNTA (DESARROLLO):</div>"
+            f"<div style='font-size:18px; font-weight:800; color:#0F172A !important; line-height:1.35; text-align:justify;'>{txt_ep_mostrar}</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
 
     if es_abierta:
         # Barra de Dictado por Voz en Tiempo Real (Opción 1) disponible para todos los usuarios en Desarrollo y Supuestos
@@ -4857,5 +4861,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
-
-
