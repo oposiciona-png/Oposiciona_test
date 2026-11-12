@@ -3736,7 +3736,11 @@ def save_answer(selected):
     q_curr = st.session_state.questions[idx_curr] if st.session_state.get("questions") else {}
     es_desarrollo_curr = bool(q_curr.get("tipo_abierta") == "DESARROLLO" or (st.session_state.get("test_cat") or "").upper() == "DESARROLLO")
 
-    if selected is not None and str(selected).strip() != "" and selected != stat['selected']:
+    if selected is None or (q_curr.get("is_open") and str(selected).strip() == ""):
+        stat['selected'] = None
+        return
+
+    if selected != stat['selected']:
         stat['selected'] = selected
         stat['attempts'] += 1
         if es_desarrollo_curr:
@@ -3759,15 +3763,45 @@ def save_answer(selected):
             nombre_celda = st.session_state.get("test_name") or "Test"
             registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
 
-def clear_radio_answer(idx_q):
-    """Permite al alumno desmarcar la respuesta seleccionada en cualquier test y dejar la pregunta en blanco."""
-    if idx_q in st.session_state.stats:
-        st.session_state.stats[idx_q]['selected'] = None
-        if st.session_state.stats[idx_q].get('attempts', 0) > 0:
-            st.session_state.stats[idx_q]['attempts'] -= 1
-    st.session_state[f"radio_{idx_q}"] = None
-    st.session_state.checked = False
-    sincronizar_progreso_navegador()
+def handle_option_toggle(idx_q, opt_idx):
+    """
+    Gestiona el clic sobre una opción en cualquier pregunta de test (Administrativos y Gestión):
+    - Si la opción NO estaba marcada: la marca y desmarca automáticamente las demás.
+    - Si la opción YA estaba marcada y el alumno vuelve a pulsar sobre ella: se desmarca sola (queda en blanco).
+    """
+    q = st.session_state.questions[idx_q]
+    opts = q.get("options", [])
+    if opt_idx < 0 or opt_idx >= len(opts):
+        return
+
+    key_clicked = f"opt_chk_{idx_q}_{opt_idx}"
+    nuevo_estado = bool(st.session_state.get(key_clicked, False))
+
+    if nuevo_estado:
+        # Se ha marcado esta opción -> desmarcar las demás opciones de la pregunta
+        opt_elegida = opts[opt_idx]
+        for j in range(len(opts)):
+            if j != opt_idx:
+                st.session_state[f"opt_chk_{idx_q}_{j}"] = False
+        save_answer(opt_elegida)
+        if "metralleta" in st.session_state.modo_avance.lower():
+            limpiar_estados_reportes_error()
+            if idx_q < len(st.session_state.questions) - 1:
+                st.session_state.current_index += 1
+                st.session_state.checked = False
+                st.session_state.do_scroll = True
+            else:
+                st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
+    else:
+        # El alumno ha pulsado sobre la opción que ya estaba marcada -> desmarcar y dejar en blanco
+        for j in range(len(opts)):
+            st.session_state[f"opt_chk_{idx_q}_{j}"] = False
+        if idx_q in st.session_state.stats:
+            st.session_state.stats[idx_q]['selected'] = None
+            if st.session_state.stats[idx_q].get('attempts', 0) > 0:
+                st.session_state.stats[idx_q]['attempts'] -= 1
+        st.session_state.checked = False
+        sincronizar_progreso_navegador()
 
 def handle_radio_change():
     idx = st.session_state.current_index
@@ -3828,7 +3862,6 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
     return txt
 
 def preparar_preguntas_como_en_test(raw_qs, barajar=True):
-    # REGLA ESTRICTA: En SUPUESTOS y en DESARROLLO el orden de las preguntas NUNCA puede ser aleatorio
     if any(q.get("is_open", False) or q.get("tipo_abierta") in ("SUPUESTO", "DESARROLLO") for q in (raw_qs or [])):
         barajar = False
 
@@ -3971,8 +4004,14 @@ def auditar_extraccion_test_real(pdf_bytes, max_options=4):
         "incidencias": incidencias
     }
 
+def _limpiar_estados_checkbox_opciones():
+    for k in list(st.session_state.keys()):
+        if k.startswith("opt_chk_"):
+            del st.session_state[k]
+
 def procesar_preguntas(raw_qs, barajar=True):
     limpiar_estados_reportes_error()
+    _limpiar_estados_checkbox_opciones()
     qs_listas = preparar_preguntas_como_en_test(raw_qs, barajar=barajar)
     st.session_state.update(
         questions=qs_listas,
@@ -3989,6 +4028,7 @@ def procesar_preguntas(raw_qs, barajar=True):
 
 def action_repetir_test():
     limpiar_estados_reportes_error()
+    _limpiar_estados_checkbox_opciones()
     st.session_state.update(
         current_index=0,
         stats={i: {'attempts': 0, 'selected': None, 'ai_feedback': None, 'ai_eval': None, 'last_evaluated_text': None, 'sheets_logged_sig': None, 'ep_start_ts': None, 'ep_hora_inicio': None, 'ep_inicio_registrado': False} for i in range(len(st.session_state.questions))},
@@ -3998,6 +4038,7 @@ def action_repetir_test():
 
 def action_subir_otro():
     limpiar_estados_reportes_error()
+    _limpiar_estados_checkbox_opciones()
     st.session_state.update(
         questions=[], current_index=0, stats={}, finished=False, checked=False,
         test_name=None, mostrar_opciones_simulacro=False, celebracion_mostrada=False,
@@ -4226,69 +4267,6 @@ def render_dictado_voz_tiempo_real(idx_pregunta):
     }})();
     </script>
     """, height=78)
-
-def activar_desmarcado_al_clicar_radio_marcado():
-    """
-    Permite que en cualquier pregunta de test (Administrativos y Gestión), al volver a hacer clic
-    sobre la opción de radio que ya está marcada, se desmarque automáticamente dejando la pregunta en blanco,
-    sin mostrar ningún botón visible en la interfaz.
-    """
-    components.html("""
-    <script>
-    (function() {
-        try {
-            var pd = window.parent.document;
-            /* Ocultar por completo el contenedor del botón puente interno */
-            var marker = pd.querySelector('. puente-desmarcar-oculto');
-            if (!marker) marker = pd.querySelector('.puente-desmarcar-oculto');
-            if (marker) {
-                var wrapper = marker.closest('[data-testid="stVerticalBlock"]');
-                if (wrapper) {
-                    wrapper.style.cssText = "position:fixed !important; left:-9999px !important; top:-9999px !important; width:1px !important; height:1px !important; overflow:hidden !important; opacity:0 !important; pointer-events:none !important; margin:0 !important; padding:0 !important;";
-                }
-            }
-
-            var rg = pd.querySelector('div[role="radiogroup"]');
-            if (!rg) return;
-
-            var labels = rg.querySelectorAll('label');
-            labels.forEach(function(lbl) {
-                if (lbl.dataset.oposicionaToggleBound === "1") return;
-                lbl.dataset.oposicionaToggleBound = "1";
-
-                lbl.addEventListener('click', function(e) {
-                    var inp = lbl.querySelector('input[type="radio"]');
-                    var box = lbl.querySelector('div[data-baseweb="radio"]');
-                    var yaMarcado = (box && box.getAttribute('data-checked') === 'true') || (inp && inp.defaultChecked);
-                    if (inp && inp.dataset.wasChecked === "true") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        inp.dataset.wasChecked = "false";
-                        /* Disparar el botón oculto de Streamlit para limpiar el estado en Python */
-                        var btns = pd.querySelectorAll('button');
-                        for (var i = 0; i < btns.length; i++) {
-                            if ((btns[i].innerText || "").indexOf("__CLEAR_RADIO_INTERNAL__") !== -1) {
-                                btns[i].click();
-                                break;
-                            }
-                        }
-                        return false;
-                    }
-                }, true);
-
-                lbl.addEventListener('pointerdown', function() {
-                    var inp = lbl.querySelector('input[type="radio"]');
-                    var box = lbl.querySelector('div[data-baseweb="radio"]');
-                    var isCheckedNow = (inp && inp.checked) || (box && box.getAttribute('data-checked') === 'true');
-                    if (inp) {
-                        inp.dataset.wasChecked = isCheckedNow ? "true" : "false";
-                    }
-                }, true);
-            });
-        } catch (err) {}
-    })();
-    </script>
-    """, height=0)
 
 if not st.session_state.questions:
     st.markdown("""<style>
@@ -4658,7 +4636,60 @@ if not st.session_state.questions:
                 st.code(txt_copiar, language="markdown")
 
 elif not st.session_state.finished:
-    st.markdown("<style>:root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; color: #1E293B !important; } .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }</style>", unsafe_allow_html=True)
+    # Estilos del examen activo + transformación visual de los checkboxes de opciones en círculos idénticos a st.radio
+    st.markdown("""<style>
+    :root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; --text-color: #1E293B !important; }
+    html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; color: #1E293B !important; }
+    .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }
+
+    /* Opciones del test con aspecto idéntico a botones de radio redondos pero desmarcables al volver a pulsar sobre ellas */
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] {
+        margin-bottom: 6px !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label {
+        align-items: flex-start !important;
+        cursor: pointer !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label span[data-baseweb="checkbox"],
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] div[data-baseweb="checkbox"] > div:first-child {
+        border-radius: 50% !important;
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        min-height: 20px !important;
+        border: 2px solid #000000 !important;
+        background-color: #FFFFFF !important;
+        margin-top: 2px !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] svg {
+        display: none !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"]:has(input:checked) span[data-baseweb="checkbox"]::after,
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"]:has(input:checked) div[data-baseweb="checkbox"] > div:first-child::after {
+        content: "" !important;
+        display: block !important;
+        width: 10px !important;
+        height: 10px !important;
+        border-radius: 50% !important;
+        background-color: #000000 !important;
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label p,
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label span {
+        font-size: 17px !important;
+        line-height: 1.35 !important;
+        text-align: justify !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        white-space: normal !important;
+    }
+    </style>""", unsafe_allow_html=True)
+
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
     puede_rep = usuario_puede_reportar()
@@ -4730,13 +4761,19 @@ elif not st.session_state.finished:
         if st.session_state.get(f"open_txt_{idx}") is not None:
             sel_opt = st.session_state.get(f"open_txt_{idx}")
     else:
-        def_idx = q['options'].index(stat['selected']) if stat['selected'] in q['options'] else None
-        sel_opt = st.radio("Elige tu respuesta:", q['options'], index=def_idx, key=f"radio_{idx}", label_visibility="collapsed", on_change=handle_radio_change)
-        # Puente interno invisible que permite desmarcar la opción haciendo clic de nuevo sobre ella (sin botón visible)
+        # Opciones redondas de selección única que se desmarcan solas al volver a pulsar sobre la que está marcada
         with st.container():
-            st.markdown("<div class='puente-desmarcar-oculto' style='display:none;'></div>", unsafe_allow_html=True)
-            st.button("__CLEAR_RADIO_INTERNAL__", key=f"btn_internal_clr_{idx}", on_click=clear_radio_answer, args=(idx,))
-        activar_desmarcado_al_clicar_radio_marcado()
+            st.markdown("<div class='marcador-opciones-test'></div>", unsafe_allow_html=True)
+            for j_opt, opt_str in enumerate(q['options']):
+                k_chk = f"opt_chk_{idx}_{j_opt}"
+                st.session_state[k_chk] = (stat.get('selected') == opt_str)
+                st.checkbox(
+                    opt_str,
+                    key=k_chk,
+                    on_change=handle_option_toggle,
+                    args=(idx, j_opt)
+                )
+        sel_opt = stat.get("selected")
 
     if puede_rep:
         c1, c2, c3, c4, c5 = st.columns([0.9, 0.95, 0.95, 1.1, 1.5])
@@ -4745,24 +4782,29 @@ elif not st.session_state.finished:
         c5 = None
 
     if c1.button("🡄 Anterior", use_container_width=True) and idx > 0:
-        save_answer(sel_opt)
+        if es_abierta:
+            save_answer(sel_opt)
         limpiar_estados_reportes_error()
         st.session_state.update(checked=False, current_index=idx - 1, do_scroll=True); st.rerun()
     if c2.button("Comprobar", use_container_width=True):
-        save_answer(sel_opt)
+        if es_abierta:
+            save_answer(sel_opt)
         st.session_state.update(checked=True, do_scroll=True); st.rerun()
     if idx < len(st.session_state.questions) - 1:
         if c3.button("Siguiente ➔", use_container_width=True):
-            save_answer(sel_opt)
+            if es_abierta:
+                save_answer(sel_opt)
             limpiar_estados_reportes_error()
             st.session_state.update(checked=False, current_index=idx + 1, do_scroll=True); st.rerun()
     else:
         if c3.button("Terminar ➔", use_container_width=True):
-            save_answer(sel_opt)
+            if es_abierta:
+                save_answer(sel_opt)
             limpiar_estados_reportes_error()
             st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
     if c4.button("⏹ Finalizar Test", use_container_width=True):
-        save_answer(sel_opt)
+        if es_abierta:
+            save_answer(sel_opt)
         limpiar_estados_reportes_error()
         st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
 
@@ -5270,4 +5312,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5 ===
-
