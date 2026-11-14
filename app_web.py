@@ -1989,8 +1989,15 @@ class PDFQuizParser:
                         (ultimo_num_pregunta >= 5 and num_cand < ultimo_num_pregunta)
                     )
                 )
+                ya_cerro_con_pagina_tema = (
+                    state == "EXPLANATION" and
+                    curr_q is not None and
+                    bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', (curr_q.get("explanation") or "").strip(), re.IGNORECASE))
+                )
                 es_salto_articulo_ilegal = (
-                    ultimo_num_pregunta > 0 and num_cand > ultimo_num_pregunta + 10
+                    ultimo_num_pregunta > 0 and
+                    num_cand > ultimo_num_pregunta + 10 and
+                    not ya_cerro_con_pagina_tema
                 )
 
                 if (
