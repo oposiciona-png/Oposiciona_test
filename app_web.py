@@ -605,7 +605,6 @@ if not st.session_state.autenticado:
     st.stop()
 # === FIN SECCIÓN 1 ===
 
-
 # === SECCIÓN 2: CATÁLOGO DE TESTS DISPONIBLES ===
 
 TESTS_DISPONIBLES = {
@@ -620,6 +619,7 @@ TESTS_DISPONIBLES = {
             "TEMA 03 AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fhJxtDHNTVgEIjQYRPGDsuIMiqRC4SBQ",
             "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML",
             "Tema 04 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oirjNXzELp4sCZ-2woU6SU-aLVZT2Lpi",
+            "TEMA 05a - RECAUDACIÓN VOLUNTARIA": "https://drive.google.com/uc?export=download&id=1DRsCORMz-vUTATK-mnQwjIp4Q9CD0azF",
             "TEMA 08 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1JUb9ndQ7MIaTagpQztXnrv1rsVxTE6im",
             "TEMA 08 REPASO 1 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1M3rydnWydxk_IkiL5-M3lOb8YrHASHXk",
             "TEMA 08 REPASO 2 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1mbLqDw1Z30I5BNVEXRDdAiUuBya9jn1G",
@@ -669,6 +669,7 @@ TESTS_DISPONIBLES = {
             "TEMA 10 REPASO INSTITUCIONES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1Hw1l1-2_zsGfX4tbjUuw1DDokmE682e9",
             "TEMA 11  FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1gFNuLkKNhX8iq7GUrZzDj5xCSdKUPzCB",
             "TEMA 11 REPASO FUENTES DE LA UE GENERAL": "https://drive.google.com/uc?export=download&id=1OzmfuJkQooMX7ld_KFrNRnLj4xH9XHD1",
+            "TEMA 12 - MINISTERIO": "https://drive.google.com/uc?export=download&id=1JzqJfb8ddB2wPb7ijOE6tsTA3rhPrhhH",
             "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
             "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
         },
@@ -692,6 +693,7 @@ TESTS_DISPONIBLES = {
             "Tema_61_Jubilacion_Contributiva_Modalidades_Ley_27_2011_Vejez_SOVI-v2": "https://drive.google.com/uc?export=download&id=1NuEgPTYZmEals8Wv5ILmmyswT12Owfuu",
             "Tema_62_Proteccion_Muerte_y_Supervivencia": "https://drive.google.com/uc?export=download&id=1ATIGJ-0SxfOnN2tJHpQ1Hm6g7LPHAx2s",
             "Tema_67_Asistencia_Sanitaria_Prestaciones_y_Gestion": "https://drive.google.com/uc?export=download&id=1fmLaDtnKASH6GjGATrz363bn26B1BURw",
+            "TEMA_68_GESTIÓN RECAUDATORIA": "https://drive.google.com/uc?export=download&id=1hSs73f4MXMjgmD8ZjlFh66f7qGD26xJ6",
             "Tema_73_Regimenes_Integrados_Sistema_Especial_Agrario_y_Empleados_de_Hogar": "https://drive.google.com/uc?export=download&id=1geoGjR6csLIc78aJeU13zQTdt7DPZuYb",
             "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2": "https://drive.google.com/uc?export=download&id=1hx4PKcE0NALdBWdvQi1OxqgBzuC4eqFf",
             "Tema_75_Mineria_del_Carbon_Seguro_Escolar_y_Regimenes_Externos": "https://drive.google.com/uc?export=download&id=1RSXfx-Jzri8G0D42JobMx9tVe3DWhQG1",
@@ -750,6 +752,7 @@ TESTS_DISPONIBLES = {
             "TEMA 09 - LAS OBLIGACIONES MERCANTILES": "https://drive.google.com/uc?export=download&id=1ZhUqRGsA8SV8k4QPzVuGz0t2yXzdElXj",
             "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
             "TEMA 25 EL DERECHO PRESUPUESTARIO": "https://drive.google.com/uc?export=download&id=1laSQ9V_KWQsADQ3ltO9TheF3kHOrlJnF",
+            "TEMA 26 EL PRESUPUESTO DE LA SEGURIDAD SOCIAL": "https://drive.google.com/uc?export=download&id=1Iplaf0ltUFrl662NgCKO6ZyO5R8JOVvj",
             "TEMA 40 - IGUALDAD": "https://drive.google.com/uc?export=download&id=1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
             "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": "https://drive.google.com/uc?export=download&id=1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
             "TEMA 42 a 50 REPASO LABORAL GENERAL": "https://drive.google.com/uc?export=download&id=1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
@@ -786,7 +789,7 @@ TESTS_DISPONIBLES = {
             "TEMA 61 JUBILACION CONTRIBUTIVA": "https://drive.google.com/uc?export=download&id=1mGxNc-Ph1pXahlNfcVUEQxWJhFctz6cJ",
             "TEMA 62 MUERTE Y SUPERVIVENCIA": "https://drive.google.com/uc?export=download&id=1UKbboomy3DuPZI_wQuW82KJ8MXqQ8yjv",
             "TEMA 67 - COTIZACION": "https://drive.google.com/uc?export=download&id=1c15J-mxBJXF19LUVbriap4q_rsvSZcI3",
-            "TEMA 73. LOS REGÍMENES ESPECIALES DE LA SEGURIDAD SOCIAL INTEGRADOS EN EL RÉGIMEN GENERAL": "https://drive.google.com/uc?export=download&id=1jaElumEJxMrl1MV6roobYJHOwQQ45vAxK".replace("QQ", "Q"),
+            "TEMA 73. LOS REGÍMENES ESPECIALES DE LA SEGURIDAD SOCIAL INTEGRADOS EN EL RÉGIMEN GENERAL": "https://drive.google.com/uc?export=download&id=1jaElumEJxMrl1MV6roobYJHOwQ45vAxK",
             "TEMA 74. RETA SETA Y MAR": "https://drive.google.com/uc?export=download&id=1vz75WRZxHjKpqt5W_Z-O8YruY76Tbbsk",
         },
     },
@@ -825,6 +828,8 @@ TESTS_DISPONIBLES_INVITADO = {
 }
 
 NUEVOS_HOY = [
+    "TEMA 05a - RECAUDACIÓN VOLUNTARIA",
+    "TEMA_68_GESTIÓN RECAUDATORIA",
     "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS",
     "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA",
     "TEMA 54 - ACCIDENTE DE TRABAJO ACTUALIZADO",
@@ -840,6 +845,8 @@ NUEVOS_HOY = [
     "TEMA 74. RETA SETA Y MAR",
 ]
 # === FIN SECCIÓN 2 ===
+
+
 
 # === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
 import io, zipfile
