@@ -61,7 +61,8 @@ USUARIOS_AUTORIZADOS = {
         "cynthiaflafla14@gmail.com", "fragosotorbellinocarmen@gmail.com", "pherrerojulian@gmail.com",
         "rsilveiraescudero@gmail.com", "delfijv19@gmail.com", "marielipedreira@hotmail.com",
         "vanessagarciajimenez87@gmail.com", "luiscacid@gmail.com", "miguelromanrmm@gmail.com",
-        "raquelkmacho@gmail.com", "patripintoalvarez@gmail.com", "alexandrajimenezmontoliu@gmail.com"
+        "raquelkmacho@gmail.com", "patripintoalvarez@gmail.com", "alexandrajimenezmontoliu@gmail.com",
+        "pedromarquezpavon58@gmail.com"
     ],
     "GESTION": [
         "vsaurod@gmail.com", "mariaquirosmonge5@gmail.com", "vanessagomeztdla@gmail.com",
