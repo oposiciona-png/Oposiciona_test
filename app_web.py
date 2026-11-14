@@ -841,7 +841,6 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
-
 # === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
 import io, zipfile
 import xml.etree.ElementTree as ET
@@ -1244,15 +1243,6 @@ class PDFQuizParser:
 
     @staticmethod
     def _parse_supuestos_practicos(parrafos, tema_titulo="", es_docx=False):
-        """
-        Extrae las cuestiones de la categoría SUPUESTOS manteniendo SIEMPRE el orden secuencial (1, 2, 3... N):
-        - Reconoce preguntas numeradas aunque empiecen por comillas ('5. "AgroExport S.L."...'), signos '¿' o cualquier palabra.
-        - Si un PDF de supuestos aún tuviera opciones a), b), c), d) debajo de la pregunta, las ignora limpiamente
-          para que la cuestión sea siempre de desarrollo abierto.
-        - Detecta automáticamente si después de la pregunta 10 comienza un segundo planteamiento narrativo
-          (ej. 'La mercantil "TechNova S.A."...' en Tema 52 o 'La sociedad "AGRO-INNOVA"...' en Tema 53)
-          para asignarlo como planteamiento de las preguntas 11 a 20 sin mezclarlo con la explicación de la pregunta 10.
-        """
         pat_marca_supuesto = re.compile(
             r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+\d+)?\s*[:\.\-]?\s*',
             re.IGNORECASE
@@ -1713,7 +1703,7 @@ class PDFQuizParser:
 
         segmentos = []
         m_exp_inline = re.search(
-            r'(?<=[.?!»"\)\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*.*)$',
+            r'(?<=[.?!»"\)\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*.*|(?:Art[íi]culos?|Arts?\.|Seg[úu]n\s+el\s+art[íi]culo|Conforme\s+al\s+art[íi]culo|De\s+acuerdo\s+con\s+el\s+art[íi]culo|Disposici[óo]n\s+(?:adicional|transitoria|final))\s+\d[^:]{0,95}:\s+.*)$',
             l,
             flags=re.IGNORECASE
         )
@@ -1914,6 +1904,11 @@ class PDFQuizParser:
             r'^(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*(.*)$',
             re.IGNORECASE
         )
+        # Detecta explicaciones que no llevan la palabra "EXPLICACIÓN:" y arrancan tras la última opción
+        pat_exp_articulo_directo = re.compile(
+            r'^(?:#\s*)?(?:Art[íi]culos?|Arts?\.|Seg[úu]n\s+el\s+art[íi]culo|Conforme\s+al\s+art[íi]culo|De\s+acuerdo\s+con\s+el\s+art[íi]culo|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4})\s+.*:\s+.+$',
+            re.IGNORECASE
+        )
         pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
 
         def _cerrar_pregunta_actual(q_obj):
@@ -2030,6 +2025,23 @@ class PDFQuizParser:
                     curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
                 continue
 
+            # Detección automática de explicaciones sin la palabra "EXPLICACIÓN" tras la última opción
+            if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts and not m_opt and not m_opt_empty:
+                line_sin_hash = re.sub(r'^#\s*', '', line).strip()
+                ultima_opt_cerrada = curr_q["options"][-1].rstrip().endswith((".", "?", "!", "»", '"'))
+                es_inicio_exp_directa = (
+                    bool(pat_exp_articulo_directo.match(line_sin_hash)) or
+                    (
+                        len(curr_q["options"]) >= 4 and
+                        ultima_opt_cerrada and
+                        bool(re.match(r'^["«¡¿]?[A-ZÁÉÍÓÚÑ0-9]', line_sin_hash))
+                    )
+                )
+                if es_inicio_exp_directa:
+                    state = "EXPLANATION"
+                    curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_sin_hash).strip()
+                    continue
+
             if m_opt_empty and state in ("QUESTION", "OPTIONS"):
                 if len(curr_q["options"]) < 4:
                     letra_asignada = chr(ord('a') + len(curr_q["options"]))
@@ -2110,6 +2122,7 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 3 ===
+
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
