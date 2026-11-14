@@ -71,7 +71,7 @@ USUARIOS_AUTORIZADOS = {
         "micastroespejo@gmail.com", "aisacarrerapexe@gmail.com", "csanchezssmm@gmail.com",
         "maria.concal@gmail.com", "mariachinchurreta@gmail.com", "rocio10460@gmail.com",
         "manuelmuriel97@gmail.com", "hfdiaz99@gmail.com", "ireneizquierdo22@gmail.com",
-        "manuelsan240902@gmail.com"
+        "manuelsan240902@gmail.com", "pablorp959@gmail.com"
     ],
     "INVITADO": ["invitado@oposiciona.es", "invitado"]
 }
