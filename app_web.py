@@ -71,7 +71,7 @@ USUARIOS_AUTORIZADOS = {
         "micastroespejo@gmail.com", "aisacarrerapexe@gmail.com", "csanchezssmm@gmail.com",
         "maria.concal@gmail.com", "mariachinchurreta@gmail.com", "rocio10460@gmail.com",
         "manuelmuriel97@gmail.com", "hfdiaz99@gmail.com", "ireneizquierdo22@gmail.com",
-        "manuelsan240902@gmail.com", "pablorp959@gmail.com"
+        "manuelsan240902@gmail.com", "pablorpgestion@gmail.com"
     ],
     "INVITADO": ["invitado@oposiciona.es", "invitado"]
 }
@@ -2141,7 +2141,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3 ===
 
-
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -2151,6 +2150,7 @@ if "TESTS_DISPONIBLES_COMPLETO" not in globals():
 USUARIOS_DADOS_DE_BAJA = {
     "andreitalopeamor1@gmail.com",
     "mfangela23@gmail.com",
+    "pablorp959@gmail.com",
 }
 
 def _aplicar_bajas_usuarios():
@@ -2380,6 +2380,7 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
             61: "TEMA 61: JUBILACIÓN EN EL RÉGIMEN GENERAL",
             62: "TEMA 62: MUERTE Y SUPERVIVENCIA",
             67: "TEMA 67: ASISTENCIA SANITARIA / COTIZACIÓN EN EL RÉGIMEN GENERAL DE LA SEGURIDAD SOCIAL",
+            68: "TEMA 68: GESTIÓN RECAUDATORIA DE LA SEGURIDAD SOCIAL",
             73: "TEMA 73: REGÍMENES ESPECIALES E INTEGRACIÓN EN EL RÉGIMEN GENERAL (SEA Y SEEH)",
             74: "TEMA 74: RÉGIMEN ESPECIAL DE TRABAJADORES AUTÓNOMOS (RETA), SETA Y MAR",
             75: "TEMA 75: MINERÍA DEL CARBÓN, SEGURO ESCOLAR Y REGÍMENES ESPECIALES DE FUNCIONARIOS",
@@ -3809,7 +3810,6 @@ def handle_option_toggle(idx_q, opt_idx):
     nuevo_estado = bool(st.session_state.get(key_clicked, False))
 
     if nuevo_estado:
-        # Se ha marcado esta opción -> desmarcar las demás opciones de la pregunta
         opt_elegida = opts[opt_idx]
         for j in range(len(opts)):
             if j != opt_idx:
@@ -3824,7 +3824,6 @@ def handle_option_toggle(idx_q, opt_idx):
             else:
                 st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
     else:
-        # El alumno ha pulsado sobre la opción que ya estaba marcada -> desmarcar y dejar en blanco
         for j in range(len(opts)):
             st.session_state[f"opt_chk_{idx_q}_{j}"] = False
         if idx_q in st.session_state.stats:
