@@ -847,8 +847,6 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
-
-
 # === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
 import io, zipfile
 import xml.etree.ElementTree as ET
@@ -1711,7 +1709,7 @@ class PDFQuizParser:
 
         segmentos = []
         m_exp_inline = re.search(
-            r'(?<=[.?!»"\)\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*.*|(?:Art[íi]culos?|Arts?\.|Seg[úu]n\s+el\s+art[íi]culo|Conforme\s+al\s+art[íi]culo|De\s+acuerdo\s+con\s+el\s+art[íi]culo|Disposici[óo]n\s+(?:adicional|transitoria|final))\s+\d[^:]{0,95}:\s+.*)$',
+            r'(?<=[.?!»"\)\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*.*|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final))\s+.*)$',
             l,
             flags=re.IGNORECASE
         )
@@ -1914,7 +1912,7 @@ class PDFQuizParser:
         )
         # Detecta explicaciones que no llevan la palabra "EXPLICACIÓN:" y arrancan tras la última opción
         pat_exp_articulo_directo = re.compile(
-            r'^(?:#\s*)?(?:Art[íi]culos?|Arts?\.|Seg[úu]n\s+el\s+art[íi]culo|Conforme\s+al\s+art[íi]culo|De\s+acuerdo\s+con\s+el\s+art[íi]culo|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4})\s+.*:\s+.+$',
+            r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4})\b)',
             re.IGNORECASE
         )
         pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
@@ -2040,14 +2038,19 @@ class PDFQuizParser:
                     curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
                 continue
 
-            # Detección automática de explicaciones sin la palabra "EXPLICACIÓN" tras la última opción
+            # Detección automática de explicaciones sin la palabra "EXPLICACIÓN" tras la última opción (3 opciones en Gestión o 4 en Administrativos)
             if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts and not m_opt and not m_opt_empty:
                 line_sin_hash = re.sub(r'^#\s*', '', line).strip()
-                ultima_opt_cerrada = curr_q["options"][-1].rstrip().endswith((".", "?", "!", "»", '"'))
+                num_opts_esperadas = max_options if max_options in (3, 4) else 4
+                ultima_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
+                ultima_opt_cerrada = (
+                    ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
+                    (len(curr_q["options"]) >= 3 and bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE)))
+                )
                 es_inicio_exp_directa = (
-                    bool(pat_exp_articulo_directo.match(line_sin_hash)) or
+                    (len(curr_q["options"]) >= 3 and bool(pat_exp_articulo_directo.match(line_sin_hash))) or
                     (
-                        len(curr_q["options"]) >= 4 and
+                        len(curr_q["options"]) >= num_opts_esperadas and
                         ultima_opt_cerrada and
                         bool(re.match(r'^["«¡¿]?[A-ZÁÉÍÓÚÑ0-9]', line_sin_hash))
                     )
