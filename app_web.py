@@ -1296,7 +1296,7 @@ class PDFQuizParser:
             return []
 
         pat_pregunta_explicita = re.compile(
-            r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s*(?![ºª°a-zA-Z]\b)\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$',
+            r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s*(?![ºª°a-zA-Z]\b)\s*(["«\x27¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$',
             re.IGNORECASE
         )
         pat_cierre_planteamiento = re.compile(
@@ -1524,7 +1524,7 @@ class PDFQuizParser:
         buf_list = False
 
         pat_corte_estructural_pdf = re.compile(
-            r'^(?:#\s*)?(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}(?!\d)\s*[\.\)]\s+["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|La\s+(?:mercantil|sociedad|empresa|cooperativa)\s+["«]|[•\-\*▪■·]\s+|[a-g]\)\s+)',
+            r'^(?:#\s*)?(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}(?!\d)\s*[\.\)]\s+["«\x27¿¡\(]*[A-ZÁÉÍÓÚÑ]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|La\s+(?:mercantil|sociedad|empresa|cooperativa)\s+["«]|[•\-\*▪■·]\s+|[a-g]\)\s+)',
             re.IGNORECASE
         )
 
@@ -1719,7 +1719,7 @@ class PDFQuizParser:
             l = l[:m_exp_inline.start()].strip()
 
         m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\x27¿¡\(]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\x27«\d].*)$',
             l
         )
         if m_q_with_a:
@@ -1729,7 +1729,7 @@ class PDFQuizParser:
             l = opts_part
 
         partes_opt = re.split(
-            r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
+            r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\x27«\d])',
             l
         )
         for p in partes_opt:
@@ -1785,7 +1785,7 @@ class PDFQuizParser:
         ans_idx = q_obj.get("answer", -1)
         if ans_idx == -1 and q_obj.get("explanation"):
             m_ans = re.search(
-                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
+                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\x27"]?([a-dA-D])[\)\x27"]?\b',
                 q_obj["explanation"],
                 re.IGNORECASE
             )
@@ -1902,7 +1902,7 @@ class PDFQuizParser:
         ultimo_num_pregunta = 0
 
         pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)|([¿¡][A-ZÁÉÍÓÚÑ].*))$'
+            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\x27¿¡\(]*[A-ZÁÉÍÓÚÑ].*)|([¿¡][A-ZÁÉÍÓÚÑ].*))$'
         )
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -1939,7 +1939,7 @@ class PDFQuizParser:
 
             if q_obj["answer"] == -1 and q_obj.get("explanation"):
                 m_ans = re.search(
-                    r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
+                    r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\x27"]?([a-dA-D])[\)\x27"]?\b',
                     q_obj["explanation"],
                     re.IGNORECASE
                 )
@@ -2070,7 +2070,7 @@ class PDFQuizParser:
                             bool(pat_exp_articulo_directo.match(line_sin_hash)) or
                             bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE))
                         ) and
-                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
+                        bool(re.match(r'^["«\x27¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
                     )
                 )
                 es_inicio_exp_directa = (
@@ -2078,7 +2078,7 @@ class PDFQuizParser:
                     ultima_opt_cerrada and
                     (
                         bool(pat_exp_articulo_directo.match(line_sin_hash)) or
-                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ0-9Ε]', line_sin_hash))
+                        bool(re.match(r'^["«\x27¡¿]?[A-ZÁÉÍÓÚÑ0-9Ε]', line_sin_hash))
                     )
                 )
                 if es_inicio_exp_directa:
@@ -2166,7 +2166,6 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 3 ===
-
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
