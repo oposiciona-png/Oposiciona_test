@@ -1399,7 +1399,7 @@ class PDFQuizParser:
 
             if m_q and not es_subapartado_respuesta:
                 num_cand = int(m_q.group(1))
-                cuerpo_cand = m_q.group(2).strip()
+                cuerpo_cand = (m_q.group(2) or "").strip()
                 es_correlativa = (
                     (leyendo_planteamiento and num_cand == 1 and len(lineas_planteamiento) > 0) or
                     (not leyendo_planteamiento and (num_cand == contador_preguntas + 1 or (curr_q is not None and len(curr_q["explanation_lines"]) > 0)))
@@ -1719,7 +1719,7 @@ class PDFQuizParser:
             l = l[:m_exp_inline.start()].strip()
 
         m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
         )
         if m_q_with_a:
@@ -1902,7 +1902,7 @@ class PDFQuizParser:
         ultimo_num_pregunta = 0
 
         pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s+(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$'
+            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)|([¿¡][A-ZÁÉÍÓÚÑ].*))$'
         )
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -1972,7 +1972,7 @@ class PDFQuizParser:
 
             if m_q and not m_opt and not m_opt_empty:
                 num_cand = int(m_q.group(1))
-                cuerpo_cand = m_q.group(2).strip()
+                cuerpo_cand = (m_q.group(2) or m_q.group(3) or "").strip()
                 es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
 
                 en_enunciado_sin_opciones = (
@@ -1981,16 +1981,26 @@ class PDFQuizParser:
                 en_mitad_opciones_incompletas = (
                     state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
                 )
+                exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
+                ya_cerro_con_pagina_tema = (
+                    state == "EXPLANATION" and
+                    bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', exp_actual_txt, re.IGNORECASE))
+                )
+                # Detectar si estamos dentro de una cita literal no cerrada («... o <<...) o justo tras la palabra "Artículo"
+                dentro_de_cita_articulo = (
+                    state == "EXPLANATION" and
+                    not ya_cerro_con_pagina_tema and (
+                        exp_actual_txt.count("«") > exp_actual_txt.count("»") or
+                        exp_actual_txt.count("<<") > exp_actual_txt.count(">>") or
+                        bool(re.search(r'(?:Art[íi]culo|Art\.)\s*$', exp_actual_txt, re.IGNORECASE))
+                    )
+                )
                 es_enumeracion_interna_exp = (
                     state == "EXPLANATION" and (
                         es_parentesis_enumeracion or
-                        (ultimo_num_pregunta >= 5 and num_cand < ultimo_num_pregunta)
+                        dentro_de_cita_articulo or
+                        (ultimo_num_pregunta > 0 and num_cand <= ultimo_num_pregunta)
                     )
-                )
-                ya_cerro_con_pagina_tema = (
-                    state == "EXPLANATION" and
-                    curr_q is not None and
-                    bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', (curr_q.get("explanation") or "").strip(), re.IGNORECASE))
                 )
                 es_salto_articulo_ilegal = (
                     ultimo_num_pregunta > 0 and
@@ -2043,16 +2053,32 @@ class PDFQuizParser:
                 line_sin_hash = re.sub(r'^#\s*', '', line).strip()
                 num_opts_esperadas = max_options if max_options in (3, 4) else 4
                 ultima_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
+                opts_previas_sin_punto = all(
+                    not re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_p).strip().endswith(".")
+                    for o_p in curr_q["options"][:-1]
+                )
+                ultima_opt_no_termina_en_conector = not bool(
+                    re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|entre|hacia|hasta|desde|seg[úu]n|que|y|o|ni|el|la|los|las|un|una|unos|unas|su|sus)\s*$', ultima_opt_txt, re.IGNORECASE)
+                )
                 ultima_opt_cerrada = (
                     ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
-                    (len(curr_q["options"]) >= num_opts_esperadas and bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE)))
+                    (
+                        len(curr_q["options"]) >= num_opts_esperadas and
+                        ultima_opt_no_termina_en_conector and
+                        (
+                            opts_previas_sin_punto or
+                            bool(pat_exp_articulo_directo.match(line_sin_hash)) or
+                            bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE))
+                        ) and
+                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
+                    )
                 )
                 es_inicio_exp_directa = (
                     len(curr_q["options"]) >= num_opts_esperadas and
                     ultima_opt_cerrada and
                     (
                         bool(pat_exp_articulo_directo.match(line_sin_hash)) or
-                        bool(re.match(r'^["«¡¿]?[A-ZÁÉÍÓÚÑ0-9]', line_sin_hash))
+                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ0-9Ε]', line_sin_hash))
                     )
                 )
                 if es_inicio_exp_directa:
@@ -2140,6 +2166,7 @@ class PDFQuizParser:
 
         return questions
 # === FIN SECCIÓN 3 ===
+
 
 # === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
@@ -3282,9 +3309,42 @@ def sincronizar_progreso_navegador():
 
 def descargar_pdf_fresco(url):
     sep = "&" if "?" in url else "?"
-    url_nocache = f"{url}{sep}_cb={int(time.time() * 1000)}"
-    headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
-    return requests.get(url_nocache, headers=headers)
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    }
+    m_id = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url or "")
+    file_id = m_id.group(1) if m_id else ""
+
+    for intento in range(3):
+        try:
+            url_try = f"{url}{sep}_cb={int(time.time() * 1000)}_{intento}"
+            if intento == 1 and file_id:
+                url_try = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t&_cb={int(time.time() * 1000)}"
+            elif intento == 2 and file_id:
+                url_try = f"https://drive.google.com/uc?export=download&confirm=t&id={file_id}&_cb={int(time.time() * 1000)}"
+
+            r = requests.get(url_try, headers=headers, timeout=20, allow_redirects=True)
+            if r.status_code == 200 and r.content:
+                cab = r.content[:64].lstrip()
+                es_binario_valido = cab.startswith(b"%PDF-") or r.content[:4] == b"PK\x03\x04"
+                if es_binario_valido:
+                    return r
+                # Si Google Drive devolvió una página HTML intermedia de confirmación o rate-limit, extraer enlace o reintentar
+                txt_html = r.text if hasattr(r, "text") else ""
+                m_uuid = re.search(r'name="uuid"\s+value="([^"]+)"', txt_html)
+                if file_id and m_uuid:
+                    url_confirm = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t&uuid={m_uuid.group(1)}"
+                    r2 = requests.get(url_confirm, headers=headers, timeout=20, allow_redirects=True)
+                    if r2.status_code == 200 and (r2.content[:64].lstrip().startswith(b"%PDF-") or r2.content[:4] == b"PK\x03\x04"):
+                        return r2
+            time.sleep(0.35 * (intento + 1))
+        except Exception:
+            time.sleep(0.35 * (intento + 1))
+
+    return requests.get(f"{url}{sep}_cb={int(time.time() * 1000)}", headers=headers, timeout=20)
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     if not usuario_puede_reportar():
@@ -3859,14 +3919,14 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
 
     if letra_correcta_final:
         txt = re.sub(
-            r'((?:la\s+)?(?:respuesta|opci[óo]n)\s+correcta\s+(?:es\s+la|es)\s*[:\s]*[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|$))',
+            r'((?:la\s+)?(?:respuesta|opci[óo]n)\s+correcta\s+(?:es\s+la|es)\s*[:\s]*['"«]?)([a-dA-D])([\)'"»]?(?=\s|\.|\,|\;|\:|$))',
             lambda m: f"{m.group(1)}{letra_correcta_final.upper() if m.group(2).isupper() else letra_correcta_final}{m.group(3)}",
             txt,
             flags=re.IGNORECASE
         )
 
     txt = re.sub(
-        r'\b(opci[óo]n\s+[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|\)|$))',
+        r'\b(opci[óo]n\s+['"«]?)([a-dA-D])([\)'"»]?(?=\s|\.|\,|\;|\:|\)|$))',
         lambda m: f"{m.group(1)}{_map_char(m.group(2))}{m.group(3)}",
         txt,
         flags=re.IGNORECASE
@@ -4084,6 +4144,7 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
+
 
 # === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
 sincronizar_progreso_navegador()
