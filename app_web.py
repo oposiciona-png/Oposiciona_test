@@ -3307,8 +3307,12 @@ def sincronizar_progreso_navegador():
     except Exception:
         pass
 
+@st.cache_resource
+def _obtener_cache_binarios_drive():
+    return {}
+
 def descargar_pdf_fresco(url):
-    sep = "&" if "?" in url else "?"
+    cache_bin = _obtener_cache_binarios_drive()
     headers = {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
@@ -3318,33 +3322,42 @@ def descargar_pdf_fresco(url):
     m_id = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url or "")
     file_id = m_id.group(1) if m_id else ""
 
-    for intento in range(3):
-        try:
-            url_try = f"{url}{sep}_cb={int(time.time() * 1000)}_{intento}"
-            if intento == 1 and file_id:
-                url_try = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t&_cb={int(time.time() * 1000)}"
-            elif intento == 2 and file_id:
-                url_try = f"https://drive.google.com/uc?export=download&confirm=t&id={file_id}&_cb={int(time.time() * 1000)}"
+    urls_a_probar = []
+    if file_id:
+        urls_a_probar.append(f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t")
+    sep = "&" if "?" in url else "?"
+    urls_a_probar.append(f"{url}{sep}_cb={int(time.time() * 1000)}")
 
-            r = requests.get(url_try, headers=headers, timeout=20, allow_redirects=True)
-            if r.status_code == 200 and r.content:
-                cab = r.content[:64].lstrip()
-                es_binario_valido = cab.startswith(b"%PDF-") or r.content[:4] == b"PK\x03\x04"
-                if es_binario_valido:
+    ultimo_resp = None
+    for u_try in urls_a_probar:
+        for intento in range(2):
+            try:
+                r = requests.get(u_try, headers=headers, timeout=20, allow_redirects=True)
+                ultimo_resp = r
+                if r.status_code == 200 and r.content and (r.content[:4] in (b"%PDF", b"PK\x03\x04")):
+                    cache_bin[url] = r.content
                     return r
-                # Si Google Drive devolvió una página HTML intermedia de confirmación o rate-limit, extraer enlace o reintentar
-                txt_html = r.text if hasattr(r, "text") else ""
-                m_uuid = re.search(r'name="uuid"\s+value="([^"]+)"', txt_html)
-                if file_id and m_uuid:
-                    url_confirm = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t&uuid={m_uuid.group(1)}"
-                    r2 = requests.get(url_confirm, headers=headers, timeout=20, allow_redirects=True)
-                    if r2.status_code == 200 and (r2.content[:64].lstrip().startswith(b"%PDF-") or r2.content[:4] == b"PK\x03\x04"):
+                if r.status_code == 200 and b"confirm=" in r.content and file_id:
+                    r2 = requests.get(
+                        f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t",
+                        headers=headers,
+                        timeout=20,
+                        allow_redirects=True
+                    )
+                    if r2.status_code == 200 and r2.content and (r2.content[:4] in (b"%PDF", b"PK\x03\x04")):
+                        cache_bin[url] = r2.content
                         return r2
-            time.sleep(0.35 * (intento + 1))
-        except Exception:
-            time.sleep(0.35 * (intento + 1))
+            except Exception:
+                pass
+            time.sleep(0.35)
 
-    return requests.get(f"{url}{sep}_cb={int(time.time() * 1000)}", headers=headers, timeout=20)
+    if url in cache_bin:
+        class _CachedResp:
+            status_code = 200
+            content = cache_bin[url]
+        return _CachedResp()
+
+    return ultimo_resp if ultimo_resp is not None else requests.get(url, headers=headers, timeout=20)
 
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     if not usuario_puede_reportar():
@@ -3919,14 +3932,14 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
 
     if letra_correcta_final:
         txt = re.sub(
-            r'((?:la\s+)?(?:respuesta|opci[óo]n)\s+correcta\s+(?:es\s+la|es)\s*[:\s]*['"«]?)([a-dA-D])([\)'"»]?(?=\s|\.|\,|\;|\:|$))',
+            r'((?:la\s+)?(?:respuesta|opci[óo]n)\s+correcta\s+(?:es\s+la|es)\s*[:\s]*[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|$))',
             lambda m: f"{m.group(1)}{letra_correcta_final.upper() if m.group(2).isupper() else letra_correcta_final}{m.group(3)}",
             txt,
             flags=re.IGNORECASE
         )
 
     txt = re.sub(
-        r'\b(opci[óo]n\s+['"«]?)([a-dA-D])([\)'"»]?(?=\s|\.|\,|\;|\:|\)|$))',
+        r'\b(opci[óo]n\s+[\'"«]?)([a-dA-D])([\)\'"»]?(?=\s|\.|\,|\;|\:|\)|$))',
         lambda m: f"{m.group(1)}{_map_char(m.group(2))}{m.group(3)}",
         txt,
         flags=re.IGNORECASE
