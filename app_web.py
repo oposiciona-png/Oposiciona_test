@@ -2045,13 +2045,13 @@ class PDFQuizParser:
                 ultima_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
                 ultima_opt_cerrada = (
                     ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
-                    (len(curr_q["options"]) >= 3 and bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE)))
+                    (len(curr_q["options"]) >= num_opts_esperadas and bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE)))
                 )
                 es_inicio_exp_directa = (
-                    (len(curr_q["options"]) >= 3 and bool(pat_exp_articulo_directo.match(line_sin_hash))) or
+                    len(curr_q["options"]) >= num_opts_esperadas and
+                    ultima_opt_cerrada and
                     (
-                        len(curr_q["options"]) >= num_opts_esperadas and
-                        ultima_opt_cerrada and
+                        bool(pat_exp_articulo_directo.match(line_sin_hash)) or
                         bool(re.match(r'^["«¡¿]?[A-ZÁÉÍÓÚÑ0-9]', line_sin_hash))
                     )
                 )
