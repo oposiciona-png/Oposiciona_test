@@ -4496,71 +4496,67 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4 ===
 
-
-# === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
+# === SECCIÓN 5: INTERFAZ GRÁFICA Y PANTALLA DE RESULTADOS ===
 sincronizar_progreso_navegador()
 activar_proteccion_antirecortes_alumno()
 
-def render_dictado_voz_tiempo_real(idx_pregunta):
+def render_widget_dictado_voz(idx_pregunta):
     """
-    Renderiza un control de dictado por voz en tiempo real (Web Speech API es-ES)
-    que transcribe palabra por palabra directamente dentro del textarea activo de Streamlit,
-    sincronizando el valor nativo de React y el borrador anticaídas.
+    Inserta un control de micrófono por voz (Web Speech API en español 'es-ES')
+    que transcribe en tiempo real y vuelca el texto directamente dentro del st.text_area activo
+    disparando el evento nativo de React para que Streamlit lo guarde al instante.
     """
     components.html(f"""
-    <div style="font-family: sans-serif; margin: 0; padding: 0;">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #F0F9FF; border: 1.5px solid #0284C7; border-radius: 8px; padding: 8px 12px;">
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <button id="btn_mic_{idx_pregunta}" type="button" style="background: #0284C7; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 13px; font-size: 13.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: all 0.2s;">
-                    <span>🎙️</span> <span id="lbl_mic_{idx_pregunta}">Dictar respuesta por voz</span>
-                </button>
-                <span id="badge_estado_{idx_pregunta}" style="font-size: 12.5px; font-weight: 600; color: #0369A1;">
-                    Pulsa para hablar (puedes decir: <i>«coma»</i>, <i>«punto y seguido»</i>, <i>«punto y aparte»</i>)
-                </span>
-            </div>
-            <span style="font-size: 11.5px; color: #475569;">📱 En iPhone/iPad también puedes usar el 🎙️ de tu teclado</span>
+    <div style="font-family:sans-serif; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; background:linear-gradient(90deg, #F0F9FF 0%, #E0F2FE 100%); border:1.5px solid #0284C7; border-radius:8px; padding:7px 12px; margin-bottom:4px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <button id="btn_mic_{idx_pregunta}" type="button" style="background:#0284C7; color:#FFFFFF; border:none; border-radius:6px; padding:6px 13px; font-size:13.5px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(0,0,0,0.15); transition:all 0.2s;">
+                <span id="mic_icon_{idx_pregunta}">🎙️</span>
+                <span id="mic_lbl_{idx_pregunta}">Dictar respuesta por voz</span>
+            </button>
+            <span id="mic_status_{idx_pregunta}" style="font-size:12.5px; color:#0369A1; font-weight:600;">
+                Pulsa para hablar (puedes decir: <i>«coma»</i>, <i>«punto y seguido»</i>, <i>«punto y aparte»</i>)
+            </span>
         </div>
-        <div id="preview_voz_{idx_pregunta}" style="display: none; margin-top: 5px; padding: 6px 10px; background: #FEFCE8; border: 1px dashed #CA8A04; border-radius: 6px; font-size: 13px; color: #854D0E; font-style: italic;"></div>
+        <div id="mic_interim_{idx_pregunta}" style="width:100%; font-size:12.5px; color:#0F172A; font-style:italic; display:none; padding-top:3px; border-top:1px dashed #7DD3FC;"></div>
     </div>
-
     <script>
     (function() {{
         var pw = window.parent;
         var pd = pw.document;
         var btn = document.getElementById("btn_mic_{idx_pregunta}");
-        var lbl = document.getElementById("lbl_mic_{idx_pregunta}");
-        var badge = document.getElementById("badge_estado_{idx_pregunta}");
-        var preview = document.getElementById("preview_voz_{idx_pregunta}");
+        var lbl = document.getElementById("mic_lbl_{idx_pregunta}");
+        var badge = document.getElementById("mic_status_{idx_pregunta}");
+        var preview = document.getElementById("mic_interim_{idx_pregunta}");
 
         var SpeechRecognition = pw.SpeechRecognition || pw.webkitSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
-
         if (!SpeechRecognition) {{
             btn.style.background = "#94A3B8";
             btn.style.cursor = "not-allowed";
-            lbl.textContent = "Dictado directo no soportado en este navegador";
-            badge.innerHTML = "Usa <b>Google Chrome</b>, <b>Edge</b>, <b>Safari</b> o el micrófono del teclado de tu móvil.";
+            lbl.textContent = "Dictado por voz no soportado en este navegador";
+            badge.textContent = "Usa Google Chrome, Microsoft Edge o Safari para dictar por voz.";
             return;
         }}
 
         if (pw.__oposiciona_speech_rec) {{
-            try {{
-                pw.__oposiciona_speech_active = false;
-                pw.__oposiciona_speech_rec.stop();
-            }} catch(e) {{}}
+            try {{ pw.__oposiciona_speech_rec.stop(); }} catch(e) {{}}
+            pw.__oposiciona_speech_rec = null;
         }}
 
         function obtenerTextareaRespuesta() {{
-            var areas = pd.querySelectorAll('textarea');
-            if (!areas || areas.length === 0) return null;
-            return areas[0];
+            var areas = pd.querySelectorAll("textarea");
+            for (var i = 0; i < areas.length; i++) {{
+                var ph = (areas[i].getAttribute("placeholder") || "").toLowerCase();
+                if (ph.indexOf("escribe aquí tu respuesta") !== -1 || ph.indexOf("desarrollo") !== -1 || areas[i].offsetHeight > 140) {{
+                    return areas[i];
+                }}
+            }}
+            return areas.length > 0 ? areas[0] : null;
         }}
 
         function formatearTextoJuridicoDictado(texto) {{
-            if (!texto) return "";
-            var t = texto;
+            var t = " " + texto + " ";
             t = t.replace(/\\bpunto y aparte\\b/gi, ".\\n\\n");
             t = t.replace(/\\bpunto y seguido\\b/gi, ". ");
-            t = t.replace(/\\bpunto final\\b/gi, ".");
             t = t.replace(/\\bdos puntos\\b/gi, ": ");
             t = t.replace(/\\bpunto y coma\\b/gi, "; ");
             t = t.replace(/\\bcoma\\b/gi, ", ");
@@ -5030,23 +5026,18 @@ if not st.session_state.questions:
                         desarrollo_dict = {k: v for k, v in cats.get("DESARROLLO", {}).items() if v is not None}
                         st.markdown(f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} {'tema incluido' if len(desarrollo_dict)==1 else 'temas incluidos'})")
                         if desarrollo_dict:
-                            d_md = "| Categoría | Documento Incluido | Formato | Tema Correspondiente | Nº de Epígrafes Extraídos | Auditoría Epígrafes |\n| :--- | :--- | :---: | :--- | :---: | :--- |\n"
+                            d_md = "| Categoría | Documento Incluido | Nº de Epígrafes Extraídos | Auditoría Epígrafes |\n| :--- | :--- | :---: | :--- |\n"
                             tot_epigrafes_des = 0
                             for nom_d, url_d in desarrollo_dict.items():
                                 proc += 1
                                 bp.progress(proc / max(1, tot_pdfs), text=f"Auditando Epígrafes de Desarrollo ({proc}/{tot_pdfs}): {nom_d}...")
-                                et_tema_d = obtener_etiqueta_tema_visible(nom_d)
-                                fmt_doc = "-"
                                 try:
                                     r = descargar_pdf_fresco(url_d)
                                     if r.status_code == 200:
-                                        fmt_doc = "📘 Word (.docx)" if PDFQuizParser.es_archivo_docx(r.content) else "📕 PDF"
                                         qs_des = PDFQuizParser.parse_abiertas_gestion(r.content, modo="DESARROLLO")
                                         qs_des = preparar_preguntas_como_en_test(qs_des, barajar=False)
                                         n_ep = len(qs_des)
                                         tot_epigrafes_des += n_ep
-                                        if qs_des and qs_des[0].get("tema_titulo"):
-                                            et_tema_d = qs_des[0]["tema_titulo"]
                                         n_ep_str = f"{n_ep} {'epígrafe' if n_ep == 1 else 'epígrafes'}"
                                         ep_cortos = [f"Ep.{idx_e}" for idx_e, qe in enumerate(qs_des, 1) if len((qe.get("explanation") or "").strip()) < 120]
                                         if n_ep == 0:
@@ -5059,8 +5050,8 @@ if not st.session_state.questions:
                                         n_ep_str, est_d = "Error", "❌ Error de descarga"
                                 except Exception as e_d:
                                     n_ep_str, est_d = "-", f"❌ {e_d}"
-                                d_md += f"| **DESARROLLO** | **{nom_d}** | {fmt_doc} | {et_tema_d} | **{n_ep_str}** | {est_d} |\n"
-                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} documentos incluidos** | **Word / PDF** | **Relación completa de temas de desarrollo** | **{tot_epigrafes_des} epígrafes en total** | — |\n"
+                                d_md += f"| **DESARROLLO** | **{nom_d}** | **{n_ep_str}** | {est_d} |\n"
+                            d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} documentos incluidos** | **{tot_epigrafes_des} epígrafes en total** | — |\n"
                         else:
                             d_md = "*Actualmente no hay ningún documento cargado en la categoría DESARROLLO de esta especialidad.*\n"
                         st.markdown(d_md)
@@ -5102,29 +5093,25 @@ elif not st.session_state.finished:
         border: 2px solid #000000 !important;
         background-color: #FFFFFF !important;
         margin-top: 2px !important;
+        margin-right: 10px !important;
         box-sizing: border-box !important;
-        position: relative !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label:has(input:checked) span[data-baseweb="checkbox"],
+    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] div[data-baseweb="checkbox"]:has(input:checked) > div:first-child {
+        background-color: #FFFFFF !important;
+        border-color: #000000 !important;
+        background-image: radial-gradient(circle, #000000 45%, transparent 50%) !important;
     }
     div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] svg {
         display: none !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"]:has(input:checked) span[data-baseweb="checkbox"]::after,
-    div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"]:has(input:checked) div[data-baseweb="checkbox"] > div:first-child::after {
-        content: "" !important;
-        display: block !important;
-        width: 10px !important;
-        height: 10px !important;
-        border-radius: 50% !important;
-        background-color: #000000 !important;
-        position: absolute !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-    }
     div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label p,
     div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] label span {
         font-size: 17px !important;
-        line-height: 1.35 !important;
+        line-height: 1.32 !important;
         text-align: justify !important;
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
@@ -5132,625 +5119,522 @@ elif not st.session_state.finished:
     }
     </style>""", unsafe_allow_html=True)
 
-    idx = st.session_state.current_index
-    q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
-    puede_rep = usuario_puede_reportar()
-    es_abierta = bool(q.get("is_open", False))
-    es_supuesto_q = bool(q.get("tipo_abierta") == "SUPUESTO")
-    nombre_test_act = st.session_state.get("test_name") or "Test"
-    id_test_act = re.sub(r'\W+', '_', nombre_test_act)
+    c_r, c_s, c_c, _ = st.columns([1.4, 1.3, 1.3, 2.0])
+    with c_r: st.button("🔄 Repetir test", on_click=action_repetir_test, use_container_width=True)
+    with c_s: st.button("📂 Subir otro", on_click=action_subir_otro, use_container_width=True)
+    with c_c: st.button("🚪 Cerrar sesión", on_click=action_finalizar_sesion, use_container_width=True)
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
-    etiqueta_tema = obtener_etiqueta_tema_visible(nombre_test_act, q)
-    tipo_item_lbl = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if es_abierta else "Pregunta")
+    idx = st.session_state.current_index
+    q = st.session_state.questions[idx]
+    stat = st.session_state.stats[idx]
+    tot = len(st.session_state.questions)
+    es_pregunta_abierta = bool(q.get("is_open", False))
+    es_desarrollo_epigrafe = bool(q.get("tipo_abierta") == "DESARROLLO")
+    tipo_unidad = "Epígrafe" if es_desarrollo_epigrafe else ("Cuestión" if es_pregunta_abierta else "Pregunta")
+    tema_actual_str = obtener_etiqueta_tema_visible(st.session_state.get("test_name"), q)
+
+    if es_pregunta_abierta and tot > 1:
+        etiquetas_nav = []
+        for i_q, q_nav in enumerate(st.session_state.questions):
+            t_nav = re.sub(r'\s+', ' ', q_nav.get("question_text", f"{tipo_unidad} {i_q+1}")).strip()
+            t_corto = t_nav[:92] + ("..." if len(t_nav) > 92 else "")
+            etiquetas_nav.append(f"{i_q+1}. {t_corto}" if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA|\d+)', t_corto, re.IGNORECASE) else t_corto)
+
+        def _cambiar_epigrafe_selector():
+            limpiar_estados_reportes_error()
+            sel_lbl = st.session_state.get("sel_nav_abierta")
+            if sel_lbl in etiquetas_nav:
+                st.session_state.current_index = etiquetas_nav.index(sel_lbl)
+                st.session_state.checked = False
+                st.session_state.do_scroll = True
+
+        st.selectbox(
+            f"📌 Navegación directa ({tot} {tipo_unidad.lower()}s disponibles en este documento):",
+            options=etiquetas_nav,
+            index=idx,
+            key="sel_nav_abierta",
+            on_change=_cambiar_epigrafe_selector
+        )
+
+    st.progress((idx + 1) / tot)
     st.markdown(
-        f"<div style='background-color:#EFF6FF; border:1px solid #93C5FD; border-left:5px solid #1D4ED8; border-radius:6px; padding:8px 12px; margin-top:-8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;'>"
-        f"<span style='font-size:14px; font-weight:700; color:#1E3A8A !important;'>📘 {etiqueta_tema}</span>"
-        f"<span style='font-size:13px; font-weight:700; color:#1D4ED8 !important; background:#DBEAFE; padding:2px 8px; border-radius:4px;'>{tipo_item_lbl} {idx + 1} de {len(st.session_state.questions)}</span>"
+        f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:6px 12px; margin-bottom:10px;'>"
+        f"<span style='font-size:13.5px; font-weight:800; color:#0F172A !important;'>📘 {tema_actual_str}</span>"
+        f"<span style='font-size:13px; font-weight:700; color:#1E40AF !important; background:#DBEAFE; padding:2px 8px; border-radius:4px;'>{tipo_unidad} {idx + 1} de {tot}</span>"
         f"</div>",
         unsafe_allow_html=True
     )
 
     if q.get('preamble'):
-        if es_supuesto_q:
+        if es_pregunta_abierta and not es_desarrollo_epigrafe:
             st.markdown(
-                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:10pt !important; line-height:1.42; text-align:justify; color:#1E293B !important;'>"
-                f"<div style='font-size:10pt !important; font-weight:800; color:#1E3A8A !important; margin-bottom:6px; border-bottom:1px solid #E2E8F0; padding-bottom:4px;'>📋 PLANTEAMIENTO DEL SUPUESTO PRÁCTICO</div>"
-                f"{q['preamble']}"
-                f"</div>",
+                "<div style='background-color: #F8FAFC; padding: 14px 16px; border-left: 4px solid #1F77B4; border-radius: 6px; margin-bottom: 14px; border: 1px solid #CBD5E1;'>"
+                "<div style='font-size:10pt !important; font-weight:700; color:#1F77B4 !important; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px;'>📋 Planteamiento del Supuesto Práctico:</div>"
+                f"<div style='font-size:10pt !important; line-height:1.4; color:#1E293B !important;'>{q['preamble']}</div>"
+                "</div>",
                 unsafe_allow_html=True
             )
         else:
-            st.markdown(
-                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; font-size:15px; line-height:1.45; text-align:justify; color:#1E293B !important;'>{q['preamble']}</div>",
-                unsafe_allow_html=True
-            )
+            p_html = "<br>".join([line.strip() for line in q['preamble'].split('\n') if line.strip()])
+            st.markdown(f"<div style='background-color: #eef6ff; padding: 14px; border-left: 5px solid #1f77b4; border-radius: 5px; margin-bottom: 18px; font-size: 15.5px; line-height: 1.45; color: #1E293B !important; text-align: justify;'>{p_html}</div>", unsafe_allow_html=True)
 
-    if q.get("tipo_abierta") == "DESARROLLO":
-        txt_ep_mostrar = (q.get("question_text") or "").strip()
-        if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', txt_ep_mostrar, re.IGNORECASE):
-            txt_ep_mostrar = f"EPÍGRAFE {idx + 1}: {txt_ep_mostrar}"
+    if es_desarrollo_epigrafe:
         st.markdown(
-            f"<div style='background-color:#FFFFFF; border:2px solid #1E3A8A; border-left:6px solid #1E3A8A; border-radius:8px; padding:10px 14px; margin-bottom:10px;'>"
-            f"<div style='font-size:12px; font-weight:800; color:#1D4ED8 !important; letter-spacing:0.4px; margin-bottom:3px;'>📝 EPÍGRAFE QUE SE PREGUNTA (DESARROLLO):</div>"
-            f"<div style='font-size:18px; font-weight:800; color:#0F172A !important; line-height:1.35; text-align:justify;'>{txt_ep_mostrar}</div>"
+            f"<div style='background:#EFF6FF; border:2px solid #1D4ED8; border-radius:8px; padding:12px 16px; margin-bottom:12px;'>"
+            f"<div style='font-size:12px; font-weight:700; color:#1E40AF !important; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:3px;'>📝 2.º Ejercicio (1.ª Parte) — Desarrollo escrito de Epígrafe Oficial (Calificación de 0 a 50 puntos):</div>"
+            f"<div style='font-size:18px; font-weight:800; color:#0F172A !important; line-height:1.35;'>{q['question_text']}</div>"
             f"</div>",
             unsafe_allow_html=True
         )
     else:
-        st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size: 19px; font-weight: 700; line-height: 1.35; margin-bottom: 14px; color: #1E293B !important; text-align: justify;'>{q['question_text']}</div>", unsafe_allow_html=True)
 
-    if es_abierta:
-        render_dictado_voz_tiempo_real(idx)
+    if es_pregunta_abierta:
+        render_widget_dictado_voz(idx)
 
-        altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 170
-        lbl_textarea = (
-            "✍️ Escribe o dicta por voz tu respuesta razonada a la cuestión planteada (o pulsa «Comprobar» en blanco si deseas consultar directamente la solución oficial):"
-            if es_supuesto_q else
-            "✍️ Escribe o dicta por voz tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):"
+        key_open = f"open_txt_{idx}"
+        if key_open not in st.session_state:
+            st.session_state[key_open] = stat.get("selected") or ""
+
+        def _on_open_change(i_q=idx, k_op=key_open):
+            val_txt = st.session_state.get(k_op, "")
+            save_answer(val_txt if val_txt.strip() else None)
+            sincronizar_progreso_navegador()
+
+        altura_caja = 300 if es_desarrollo_epigrafe else 210
+        placeholder_caja = (
+            "Escribe aquí tu desarrollo del epígrafe o pulsa el botón azul «🎙️ Dictar respuesta por voz» de arriba para ir hablando y que se escriba automáticamente..."
+            if es_desarrollo_epigrafe else
+            "Escribe aquí tu respuesta razonada al supuesto o pulsa «🎙️ Dictar respuesta por voz»..."
         )
-        placeholder_textarea = (
-            "Redacta o dicta con el botón superior tu solución razonada al supuesto práctico, detallando los cálculos y artículos aplicables..."
-            if es_supuesto_q else
-            "Redacta o dicta con el botón superior tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
-        )
-        sel_opt = st.text_area(
-            lbl_textarea,
-            value=stat.get("selected") or "",
+        texto_usuario = st.text_area(
+            "✍️ Redacta o dicta por voz tu contestación:",
+            key=key_open,
             height=altura_caja,
-            key=f"open_txt_{idx}",
-            placeholder=placeholder_textarea
+            placeholder=placeholder_caja,
+            on_change=_on_open_change
         )
-        if st.session_state.get(f"open_txt_{idx}") is not None:
-            sel_opt = st.session_state.get(f"open_txt_{idx}")
+        if texto_usuario.strip():
+            save_answer(texto_usuario)
+        else:
+            save_answer(None)
     else:
-        # Opciones redondas de selección única que se desmarcan solas al volver a pulsar sobre la que está marcada
+        opts = q['options']
+        curr_sel = stat['selected']
         with st.container():
             st.markdown("<div class='marcador-opciones-test'></div>", unsafe_allow_html=True)
-            for j_opt, opt_str in enumerate(q['options']):
-                k_chk = f"opt_chk_{idx}_{j_opt}"
-                st.session_state[k_chk] = (stat.get('selected') == opt_str)
+            for opt_i, opt_texto in enumerate(opts):
+                k_chk = f"opt_chk_{idx}_{opt_i}"
+                st.session_state[k_chk] = (curr_sel == opt_texto)
                 st.checkbox(
-                    opt_str,
+                    opt_texto,
                     key=k_chk,
                     on_change=handle_option_toggle,
-                    args=(idx, j_opt)
+                    args=(idx, opt_i)
                 )
-        sel_opt = stat.get("selected")
 
-    if puede_rep:
-        c1, c2, c3, c4, c5 = st.columns([0.9, 0.95, 0.95, 1.1, 1.5])
-    else:
-        c1, c2, c3, c4 = st.columns(4)
-        c5 = None
-
-    if c1.button("🡄 Anterior", use_container_width=True) and idx > 0:
-        if es_abierta:
-            save_answer(sel_opt)
-        limpiar_estados_reportes_error()
-        st.session_state.update(checked=False, current_index=idx - 1, do_scroll=True); st.rerun()
-    if c2.button("Comprobar", use_container_width=True):
-        if es_abierta:
-            save_answer(sel_opt)
-        st.session_state.update(checked=True, do_scroll=True); st.rerun()
-    if idx < len(st.session_state.questions) - 1:
-        if c3.button("Siguiente ➔", use_container_width=True):
-            if es_abierta:
-                save_answer(sel_opt)
+    st.write("")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        if st.button("⬅️ Anterior", disabled=(idx == 0), use_container_width=True):
             limpiar_estados_reportes_error()
-            st.session_state.update(checked=False, current_index=idx + 1, do_scroll=True); st.rerun()
-    else:
-        if c3.button("Terminar ➔", use_container_width=True):
-            if es_abierta:
-                save_answer(sel_opt)
+            st.session_state.current_index -= 1
+            st.session_state.checked = False
+            st.session_state.do_scroll = True
+            st.rerun()
+    with c2:
+        if st.button("✔️ Comprobar", use_container_width=True):
             limpiar_estados_reportes_error()
-            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
-    if c4.button("⏹ Finalizar Test", use_container_width=True):
-        if es_abierta:
-            save_answer(sel_opt)
-        limpiar_estados_reportes_error()
-        st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True); st.rerun()
-
-    key_rep_test = f"rep_open_test_{id_test_act}_{idx + 1}"
-    if key_rep_test not in st.session_state:
-        st.session_state[key_rep_test] = False
-    lbl_btn_reporte_top = "⚠️ Reportar Error en Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else "⚠️ Reportar Error"
-    if puede_rep and c5 is not None:
-        if c5.button(lbl_btn_reporte_top, key=f"btn_err_top_{id_test_act}_{idx + 1}", use_container_width=True, type="primary"):
-            st.session_state[key_rep_test] = not st.session_state[key_rep_test]
-
-    if st.session_state.pop(f"rep_ok_msg_{id_test_act}_{idx + 1}", False):
-        st.success("✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.")
-
-    if puede_rep and st.session_state.get(key_rep_test, False):
-        render_cuadro_reporte_error(q, idx + 1, "test_activo_top")
-
-    if st.session_state.checked:
-        if es_abierta:
-            txt_alumno = (sel_opt or stat.get("selected") or "").strip()
-            resp_of = (q.get("answer_text") or "").strip()
-            exp_of = (q.get("explanation") or "").strip()
-            ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
-            modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
-
-            if not txt_alumno:
-                stat["open_score"] = 0.0
-                stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
-                if q.get("tipo_abierta") == "DESARROLLO":
-                    registrar_epigrafe_desarrollo_en_sheets(idx)
-                st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres que la IA evalúe tu redacción, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
-            else:
-                if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
-                    ev = evaluar_respuesta_escrita(txt_alumno, resp_of, exp_of, ctx_pregunta)
-                    stat["last_evaluated_text"] = txt_alumno
-                    clave_activa = obtener_gemini_api_key_activa()
-                    msg_spinner = (
-                        "🤖 Analizando tu respuesta y contrastándola con la solución oficial..."
-                        if es_supuesto_q else
-                        "🤖 Analizando y valorando tu respuesta frente a la explicación oficial según los Criterios del Tribunal..."
+            st.session_state.checked = True
+            if es_pregunta_abierta:
+                txt_actual_al = (stat.get("selected") or "").strip()
+                if txt_actual_al and (stat.get("last_evaluated_text") != txt_actual_al or not stat.get("ai_feedback")):
+                    modo_corr = "DESARROLLO" if es_desarrollo_epigrafe else "SUPUESTO"
+                    ev_base = evaluar_respuesta_escrita(
+                        txt_actual_al,
+                        q.get("answer_text", ""),
+                        q.get("explanation", ""),
+                        f"{q.get('preamble', '')} {q.get('question_text', '')}"
                     )
-                    with st.spinner(msg_spinner):
+                    stat["ai_eval"] = ev_base
+                    stat["last_evaluated_text"] = txt_actual_al
+                    api_k_use = obtener_gemini_api_key_activa()
+                    msg_Wait = "🤖 Analizando tu desarrollo con los Criterios Oficiales del Tribunal (0 a 50 puntos)..." if es_desarrollo_epigrafe else "🤖 Evaluando tu respuesta en relación con la explicación oficial del supuesto..."
+                    with st.spinner(msg_Wait):
                         stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                            clave_activa, q.get("preamble", ""), q["question_text"], txt_alumno, resp_of, exp_of, ev_fallback=ev, modo=modo_corr
+                            api_k_use,
+                            q.get("preamble", ""),
+                            q.get("question_text", ""),
+                            txt_actual_al,
+                            q.get("answer_text", ""),
+                            q.get("explanation", ""),
+                            ev_fallback=stat["ai_eval"],
+                            modo=modo_corr
                         )
-                    stat["ai_eval"] = ev
-                    stat["open_score"] = ev.get("nota", 0.0)
-
-                    if q.get("tipo_abierta") == "DESARROLLO":
+                    if es_desarrollo_epigrafe:
                         registrar_epigrafe_desarrollo_en_sheets(idx)
-                    elif es_supuesto_q:
-                        nota_celda_sup = calcular_nota_final_supuestos_sheets(indice_actual=idx)
-                        accion_sh = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
-                        st.session_state.inicio_registrado_sheets = True
+                    else:
+                        nota_sup_sheets = calcular_nota_final_supuestos_sheets(idx)
                         registrar_actividad_sheets(
-                            "✍️ Revisado",
+                            evento="📝 Supuesto evaluado",
                             nombre_test=st.session_state.get("test_name") or "Supuesto",
                             aciertos="",
                             fallos="",
                             blancos="",
-                            nota=nota_celda_sup,
-                            accion=accion_sh
+                            nota=nota_sup_sheets,
+                            accion="actualizar_fin" if st.session_state.get("inicio_registrado_sheets") else "nueva_fila",
+                            sincrono=True
                         )
-                    sincronizar_progreso_navegador()
-                else:
-                    ev = stat["ai_eval"]
+                        st.session_state.inicio_registrado_sheets = True
+                sincronizar_progreso_navegador()
+    with c3:
+        if idx < tot - 1:
+            if st.button("Siguiente ➡️", use_container_width=True):
+                limpiar_estados_reportes_error()
+                st.session_state.current_index += 1
+                st.session_state.checked = False
+                st.session_state.do_scroll = True
+                st.rerun()
+        else:
+            if st.button("🏁 Finalizar", type="primary", use_container_width=True):
+                limpiar_estados_reportes_error()
+                st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
+                st.rerun()
+    with c4:
+        if st.button("⏹️ Finalizar Test", use_container_width=True):
+            limpiar_estados_reportes_error()
+            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
+            st.rerun()
 
-                n50_q = ev.get("nota_50", 0.0)
-                n10_q = ev.get("nota", 0.0)
-                c1_q = ev.get("pts_criterio_1", 0.0)
-                c2_q = ev.get("pts_criterio_2", 0.0)
-                c3_q = ev.get("pts_criterio_3", 0.0)
+    if st.session_state.checked:
+        if es_pregunta_abierta:
+            ans_usr = (stat.get('selected') or "").strip()
+            resp_of = (q.get('answer_text') or "").strip()
+            exp_of = (q.get('explanation') or "").strip()
 
-                if es_supuesto_q:
-                    aprobado_s = n10_q >= 5.0
-                    bg_card = "#ecfdf5" if aprobado_s else "#fff7ed"
-                    border_card = "#16a34a" if aprobado_s else "#ea580c"
-                    color_nota = "#15803d" if aprobado_s else "#c2410c"
-                    badge_txt = "✅ CUESTIÓN PRÁCTICA SUPERADA" if aprobado_s else "⚠️ CUESTIÓN A REFORZAR — PRACTICA LO APRENDIDO"
+            if not ans_usr:
+                st.warning("⚠️ No has escrito ni dictado ninguna respuesta todavía. Escribe o usa el micrófono arriba y vuelve a pulsar «✔️ Comprobar», o revisa directamente el desarrollo oficial que te mostramos debajo.")
+            else:
+                ev = stat.get("ai_eval") or evaluar_respuesta_escrita(
+                    ans_usr, resp_of, exp_of, f"{q.get('preamble', '')} {q.get('question_text', '')}"
+                )
+                stat["ai_eval"] = ev
 
+                if es_desarrollo_epigrafe:
+                    n50 = ev.get("nota_50", 0.0)
+                    n10 = ev.get("nota", 0.0)
+                    c1_pts = ev.get("pts_criterio_1", 0.0)
+                    c2_pts = ev.get("pts_criterio_2", 0.0)
+                    c3_pts = ev.get("pts_criterio_3", 0.0)
+                    color_b = "#2e7d32" if n50 >= 25.0 else ("#f57c00" if n50 >= 17.5 else "#d32f2f")
+                    bg_b = "#e8f5e9" if n50 >= 25.0 else ("#fff3e0" if n50 >= 17.5 else "#ffebee")
+                    estado_ap = "SUPERADO (≥ 25,00 ptos)" if n50 >= 25.0 else "NO SUPERADO (< 25,00 ptos)"
                     st.markdown(
-                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:12px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:2px;'>🎯 RESULTADO DE TU RESPUESTA A LA CUESTIÓN PRÁCTICA</div>"
-                        f"<div style='font-size:26px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>NOTA: {n10_q:.2f} / 10 PUNTOS</div>"
-                        f"<div style='font-size:14px; font-weight:700; color:#1E293B !important;'>{badge_txt}</div>"
-                        f"</div>",
+                        f"<div style='background-color:{bg_b}; border-left:5px solid {color_b}; padding:12px 15px; border-radius:6px; margin-top:10px; margin-bottom:8px; color:#1E293B !important;'>"
+                        f"<div style='font-size:16px; font-weight:800; color:{color_b} !important;'>🎯 Calificación del Tribunal: {n50:.2f} / 50,00 puntos — {estado_ap} (Equivalencia: {n10:.2f} / 10)</div>"
+                        f"<div style='font-size:13.5px; margin-top:5px;'>"
+                        f"• <b>Criterio 1 (Conocimiento y normativa: máx. 45 ptos):</b> {c1_pts:.2f}/45 &nbsp;|&nbsp; "
+                        f"<b>Criterio 2 (Estructura y orden: máx. 3 ptos):</b> {c2_pts:.2f}/3 &nbsp;|&nbsp; "
+                        f"<b>Criterio 3 (Expresión y siglas: máx. 2 ptos):</b> {c3_pts:.2f}/2"
+                        f"</div></div>",
                         unsafe_allow_html=True
                     )
-
                     st.markdown(
-                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 VALORACIÓN DE LA IA Y ORIENTACIÓN PARA TU ESTUDIO</div>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(stat.get("ai_feedback") or "")
-                else:
-                    aprobado_q = n50_q >= 25.0
-                    bg_card = "#ecfdf5" if aprobado_q else "#fff7ed"
-                    border_card = "#16a34a" if aprobado_q else "#ea580c"
-                    color_nota = "#15803d" if aprobado_q else "#c2410c"
-                    badge_txt = "✅ SUPERA EL CORTE ELIMINATORIO (≥ 25 / 50 PTOS)" if aprobado_q else "⚠️ NO ALCANZA EL CORTE ELIMINATORIO DE 25 / 50 PTOS"
-
-                    st.markdown(
-                        f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
-                        f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
-                        f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
-                        f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
-                        f"<b>Criterio 1 (Conocimiento y normativa):</b> {c1_q:.2f} / 45,00 ptos &nbsp;•&nbsp; "
-                        f"<b>Criterio 2 (Estructura):</b> {c2_q:.2f} / 3,00 ptos &nbsp;•&nbsp; "
-                        f"<b>Criterio 3 (Expresión escrita):</b> {c3_q:.2f} / 2,00 ptos"
-                        f"</div>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
-
-                    st.markdown(
-                        f"<div style='background-color:#F1F5F9; border:1px solid #CBD5E1; border-left:4px solid #64748B; border-radius:6px; padding:9px 12px; margin-top:4px; margin-bottom:10px; font-size:12.5px; line-height:1.4; color:#475569 !important; text-align:justify;'>"
+                        f"<div style='background-color:#F8FAFC; border:1px solid #CBD5E1; border-left:4px solid #0284C7; padding:9px 13px; border-radius:6px; margin-bottom:10px; font-size:12.8px; line-height:1.45; color:#334155 !important; text-align:justify;'>"
                         f"{NOTA_METODOLOGICA_PREPARADORES}"
                         f"</div>",
                         unsafe_allow_html=True
                     )
-
+                else:
+                    n10 = ev.get("nota", 0.0)
+                    color_b = "#2e7d32" if n10 >= 5.0 else ("#f57c00" if n10 >= 3.5 else "#d32f2f")
+                    bg_b = "#e8f5e9" if n10 >= 5.0 else ("#fff3e0" if n10 >= 3.5 else "#ffebee")
+                    estado_sup = "APROBADO (≥ 5,00 / 10)" if n10 >= 5.0 else "NO SUPERADO (< 5,00 / 10)"
                     st.markdown(
-                        "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
-                        "</div>",
+                        f"<div style='background-color:{bg_b}; border-left:5px solid {color_b}; padding:12px 15px; border-radius:6px; margin-top:10px; margin-bottom:10px; color:#1E293B !important;'>"
+                        f"<div style='font-size:16px; font-weight:800; color:{color_b} !important;'>🎯 Calificación de la Pregunta Práctica: {n10:.2f} / 10 puntos — {estado_sup}</div>"
+                        f"</div>",
                         unsafe_allow_html=True
                     )
-                    st.markdown(stat.get("ai_feedback") or "")
 
-            if resp_of and resp_of != exp_of:
-                st.markdown(
-                    f"<div style='background-color:#e8f5e9; border-left:4px solid #2e7d32; padding:12px; border-radius:4px; margin-top:10px;'>"
-                    f"<div style='font-size:14px; font-weight:700; color:#1b5e20 !important; margin-bottom:4px;'>🎯 Respuesta Directa Oficial:</div>"
-                    f"<div style='font-size:14px; color:#1b5e20 !important; text-align:justify;'>{resp_of}</div></div>",
-                    unsafe_allow_html=True
-                )
+                if stat.get("ai_feedback"):
+                    tit_dictamen = (
+                        "#### 🤖 Dictamen del Tribunal Calificador y Preparadores (Análisis frente al Epígrafe Oficial)"
+                        if es_desarrollo_epigrafe else
+                        "#### 🤖 Corrección de tus Preparadores (Comparativa con la Explicación Oficial de la Pregunta)"
+                    )
+                    with st.container(border=True):
+                        st.markdown(tit_dictamen)
+                        st.markdown(stat["ai_feedback"])
+
             if exp_of:
-                eh = PDFQuizParser.renderizar_explicacion_html(exp_of, etiqueta_tema)
-                if q.get("tipo_abierta") == "DESARROLLO":
-                    cabecera_exp_html = (
-                        f"<div style='font-size: 15.5px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
-                        f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 8px; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{etiqueta_tema}</div>"
-                    )
-                else:
-                    cabecera_exp_html = (
-                        f"<div style='font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #083B46 !important; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>📖 Solución y Explicación Oficial de la Pregunta:</div>"
-                    )
+                exp_html_fmt = PDFQuizParser.renderizar_explicacion_html(exp_of, tema_actual_str)
+                titulo_bloque_of = "📖 Texto Mínimo Oficial del Epígrafe para Estudio y Contraste:" if es_desarrollo_epigrafe else "📖 Solución y Explicación Oficial del Supuesto Práctico:"
                 st.markdown(
-                    f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 16px 18px; border-radius: 6px; margin-top: 10px;'>"
-                    f"{cabecera_exp_html}"
-                    f"<div style='font-size: 14.5px; color: #0c5460 !important;'>{eh}</div></div>",
+                    f"<div style='background-color:#E0F7FA; border:1px solid #00ACC1; border-left:5px solid #00838F; padding:16px 18px; border-radius:8px; margin-top:12px; color:#00363A !important;'>"
+                    f"<div style='font-weight:800; font-size:16px; margin-bottom:10px; color:#004D40 !important; border-bottom:1px solid #80DEEA; padding-bottom:6px;'>{titulo_bloque_of}</div>"
+                    f"{exp_html_fmt}"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+        else:
+            ans = stat['selected']
+            corr_idx = q['answer']
+            if ans is None:
+                st.warning("⚠️ No has seleccionado ninguna opción.")
+            elif corr_idx != -1 and corr_idx < len(q['options']):
+                corr_str = q['options'][corr_idx]
+                if ans == corr_str: st.success("✅ ¡Respuesta Correcta!")
+                else: st.error(f"❌ Incorrecto. La respuesta correcta es:\n\n**{corr_str}**")
+            else:
+                st.warning("⚠️ No se pudo detectar cuál es la opción correcta en el PDF original.")
+            if q['explanation']:
+                exp_html_test = PDFQuizParser.renderizar_explicacion_html(q['explanation'])
+                st.markdown(
+                    f"<div style='background-color:#E8F4F8; border-left:5px solid #0284C7; padding:14px 16px; border-radius:6px; margin-top:10px;'>"
+                    f"<div style='font-weight:800; font-size:15px; color:#0369A1 !important; margin-bottom:6px;'>💡 Explicación:</div>"
+                    f"{exp_html_test}"
+                    f"</div>",
                     unsafe_allow_html=True
                 )
 
-            if puede_rep:
-                with st.expander(f"⚠️ Reportar Error en {tipo_item_lbl} {idx + 1} a info@oposiciona.es"):
-                    render_cuadro_reporte_error(q, idx + 1, "test_activo_bottom")
-        else:
-            if q['answer'] != -1:
-                co = q['options'][q['answer']]
-                if sel_opt == co: st.success("✅ ¡CORRECTO!")
-                elif not sel_opt: st.warning(f"⚪ EN BLANCO. La correcta era: {co}")
-                else: st.error(f"❌ INCORRECTO. La respuesta correcta era: {co}")
-            else:
-                st.warning("⚪ EN BLANCO. La correcta no se detectó automáticamente en el PDF.") if not sel_opt else st.info("⚠️ Tu respuesta ha sido guardada. (La opción correcta no estaba remarcada en el PDF original, revisa la explicación).")
-            et = re.sub(r'(?i)^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
-            eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema)
-            st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px 15px; border-radius: 6px; margin-top: 10px;'><div style='font-size: 14.5px; font-weight: 800; margin-bottom: 4px; color: #083B46 !important;'>📖 Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
+    if usuario_puede_reportar():
+        st.write("")
+        id_t_act = re.sub(r'\W+', '_', st.session_state.get('test_name') or "Test")
+        k_rep_open = f"rep_open_{id_t_act}_active_{idx + 1}"
+        k_rep_ok = f"rep_ok_msg_{id_t_act}_{idx + 1}"
+
+        if st.session_state.get(k_rep_ok, False):
+            st.success(f"✅ ¡Reporte de {tipo_unidad} {idx + 1} enviado correctamente a info@oposiciona.es! Muchas gracias por ayudarnos a mejorar.")
+
+        c_rep1, c_rep2, c_rep3 = st.columns([1.2, 2.2, 1.2])
+        with c_rep2:
+            if st.button(f"🛠️ Reportar error en {tipo_unidad} {idx + 1}", key=f"btn_open_rep_act_{id_t_act}_{idx + 1}", use_container_width=True):
+                ya_abierto = st.session_state.get(k_rep_open, False)
+                limpiar_estados_reportes_error()
+                st.session_state[k_rep_open] = not ya_abierto
+                st.rerun()
+
+        if st.session_state.get(k_rep_open, False):
+            render_cuadro_reporte_error(q, idx + 1, "active")
 
 else:
-    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
-    components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
+    st.markdown("""<style>
+    :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
+    html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
+    </style>""", unsafe_allow_html=True)
 
-    puede_rep = usuario_puede_reportar()
-    aciertos = fallos = blancos = preg_eval = 0
-    aciertos_por_intento = {}
-    suma_notas_abiertas = 0.0
-    suma_notas_50 = 0.0
-    notas_individuales_10 = []
-    notas_individuales_50 = []
-    es_test_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
-    es_test_supuestos = any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions)
+    c_r, c_s, c_c, _ = st.columns([1.4, 1.3, 1.3, 2.0])
+    with c_r: st.button("🔄 Repetir test", on_click=action_repetir_test, use_container_width=True)
+    with c_s: st.button("📂 Subir otro", on_click=action_subir_otro, use_container_width=True)
+    with c_c: st.button("🚪 Cerrar sesión", on_click=action_finalizar_sesion, use_container_width=True)
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
-    for i, q in enumerate(st.session_state.questions):
-        stat = st.session_state.stats[i]
-        if q.get("is_open", False):
-            preg_eval += 1
-            es_sup_i = bool(q.get("tipo_abierta") == "SUPUESTO")
-            modo_i = "SUPUESTO" if es_sup_i else "DESARROLLO"
-            txt_al = (stat.get("selected") or "").strip()
-            if not txt_al:
-                blancos += 1
-                notas_individuales_10.append((i + 1, 0.0))
-                notas_individuales_50.append((i + 1, 0.0))
-                stat['final_status'] = "⚪ En blanco (0,00 / 10)" if es_sup_i else "⚪ En blanco (0,00 / 50 ptos)"
-            elif detectar_respuesta_inapropiada_o_sin_interes(txt_al):
-                fallos += 1
-                stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
-                notas_individuales_10.append((i + 1, 0.0))
-                notas_individuales_50.append((i + 1, 0.0))
-                stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 10)" if es_sup_i else "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
-            else:
-                ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
-                if stat.get("last_evaluated_text") == txt_al and stat.get("ai_eval"):
-                    ev = stat["ai_eval"]
-                else:
-                    ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
-                    clave_activa = obtener_gemini_api_key_activa()
-                    stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                        clave_activa, q.get("preamble", ""), q["question_text"], txt_al, q.get("answer_text", ""), q.get("explanation", ""), ev_fallback=ev, modo=modo_i
+    tot = len(st.session_state.questions)
+    es_examen_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
+    es_examen_desarrollo = any(q.get("tipo_abierta") == "DESARROLLO" for q in st.session_state.questions)
+
+    if es_examen_abierto:
+        contestadas = 0
+        suma_notas_10 = 0.0
+        suma_notas_50 = 0.0
+        for i, q in enumerate(st.session_state.questions):
+            sel_txt = (st.session_state.stats[i].get('selected') or "").strip()
+            if sel_txt:
+                contestadas += 1
+                ev_i = st.session_state.stats[i].get("ai_eval")
+                if not ev_i:
+                    ev_i = evaluar_respuesta_escrita(
+                        sel_txt,
+                        q.get("answer_text", ""),
+                        q.get("explanation", ""),
+                        f"{q.get('preamble', '')} {q.get('question_text', '')}"
                     )
-                    stat["last_evaluated_text"] = txt_al
-                    stat["ai_eval"] = ev
-                nota_q = float(ev.get("nota", 0.0))
-                nota_q_50 = float(ev.get("nota_50", 0.0))
-                suma_notas_abiertas += nota_q
-                suma_notas_50 += nota_q_50
-                notas_individuales_10.append((i + 1, nota_q))
-                notas_individuales_50.append((i + 1, nota_q_50))
-                if es_sup_i:
-                    if nota_q >= 5.0:
-                        aciertos += 1
-                        stat['final_status'] = f"✅ Superada ({nota_q:.2f} / 10)"
-                    else:
-                        fallos += 1
-                        stat['final_status'] = f"⚠️ A reforzar ({nota_q:.2f} / 10)"
+                    st.session_state.stats[i]["ai_eval"] = ev_i
+                suma_notas_10 += ev_i.get("nota", 0.0)
+                suma_notas_50 += ev_i.get("nota_50", 0.0)
+
+        no_contestadas = tot - contestadas
+        nota_media_10 = (suma_notas_10 / contestadas) if contestadas > 0 else 0.0
+        nota_media_50 = (suma_notas_50 / contestadas) if contestadas > 0 else 0.0
+        nota_str_sheets = (
+            f"{nota_media_50:.2f}/50 ({nota_media_10:.2f}/10)".replace(".", ",")
+            if es_examen_desarrollo else
+            calcular_nota_final_supuestos_sheets()
+        )
+
+        if not st.session_state.get('resultado_registrado', False):
+            st.session_state.resultado_registrado = True
+            if es_examen_desarrollo:
+                for i_ep, _ in enumerate(st.session_state.questions):
+                    st_ep = st.session_state.stats.get(i_ep, {})
+                    if (st_ep.get("selected") or "").strip() and isinstance(st_ep.get("ai_eval"), dict):
+                        registrar_epigrafe_desarrollo_en_sheets(i_ep)
+            else:
+                accion_fin = "actualizar_fin" if st.session_state.get('inicio_registrado_sheets', False) else "nueva_fila"
+                nombre_celda = st.session_state.get("test_name") or "Supuesto"
+                registrar_actividad_sheets(
+                    evento="✅ Completado",
+                    nombre_test=nombre_celda,
+                    aciertos=contestadas,
+                    fallos=0,
+                    blancos=no_contestadas,
+                    nota=nota_str_sheets,
+                    accion=accion_fin,
+                    sincrono=True
+                )
+
+        st.header("📊 Resumen Final (" + ("Preguntas de Desarrollo" if es_examen_desarrollo else "Supuestos Prácticos") + ")")
+        k1, k2, k3 = st.columns(3)
+        k1.metric("✍️ Respondidas", f"{contestadas} / {tot}")
+        k2.metric("⚪ En Blanco", no_contestadas)
+        if es_examen_desarrollo:
+            k3.metric("🎯 Media Tribunal (sobre 50)", f"{nota_media_50:.2f} / 50")
+        else:
+            k3.metric("🎯 Nota Media (sobre 10)", f"{nota_media_10:.2f} / 10")
+
+        st.markdown("---")
+        st.subheader("🧐 Revisión Detallada y Soluciones Oficiales")
+        id_t_fin = re.sub(r'\W+', '_', st.session_state.get('test_name') or "Test")
+
+        for i, q in enumerate(st.session_state.questions):
+            sel_txt = (st.session_state.stats[i].get('selected') or "").strip()
+            ev_i = st.session_state.stats[i].get("ai_eval") or {}
+            if es_examen_desarrollo:
+                tag_nota = f" — Nota Tribunal: {ev_i.get('nota_50', 0.0):.2f}/50 ({ev_i.get('nota', 0.0):.2f}/10)" if sel_txt else " — (En blanco)"
+            else:
+                tag_nota = f" — Nota: {ev_i.get('nota', 0.0):.2f}/10" if sel_txt else " — (En blanco)"
+            ic = "✍️" if sel_txt else "⚪"
+            with st.expander(f"{ic} {q['question_text'][:95]}{tag_nota}", expanded=bool(sel_txt)):
+                if q.get("preamble"):
+                    st.markdown(f"<div style='background-color: #F8FAFC; padding: 12px; border-left: 4px solid #1F77B4; border-radius: 5px; margin-bottom: 10px; font-size: 10pt !important; line-height: 1.4;'>{q['preamble']}</div>", unsafe_allow_html=True)
+                st.markdown(f"**{q['question_text']}**")
+                st.markdown("**Tu respuesta escrita:**")
+                if sel_txt:
+                    st.info(sel_txt)
                 else:
-                    if nota_q_50 >= 25.0:
-                        aciertos += 1
-                        stat['final_status'] = f"✅ Superada ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
-                    else:
-                        fallos += 1
-                        stat['final_status'] = f"⚠️ Inferior al corte de 25 ptos ({nota_q_50:.2f} / 50 ptos | {nota_q:.2f} / 10)"
-        elif q['answer'] != -1:
-            preg_eval += 1
-            co = q['options'][q['answer']]
-            if stat['selected'] == co:
-                aciertos += 1
-                stat['final_status'] = "✅ Correcta"
-                num_int = max(1, stat.get('attempts', 1))
-                aciertos_por_intento[num_int] = aciertos_por_intento.get(num_int, 0) + 1
-            elif stat['selected'] is None:
-                blancos += 1
-                stat['final_status'] = "⚪ En blanco"
-            else:
-                fallos += 1
-                stat['final_status'] = "❌ Incorrecta"
-        else:
-            if stat['selected'] is None:
-                blancos += 1
-                stat['final_status'] = "⚪ En blanco"
-            else:
-                stat['final_status'] = "⚠️ Sin corregir (PDF sin marcar)"
+                    st.warning("No respondiste a este ejercicio.")
 
-    if es_test_abierto:
-        total_items_abiertos = max(1, preg_eval)
-        nota_referencia = round(suma_notas_abiertas / total_items_abiertos, 2)
-        nota_media_50 = round(suma_notas_50 / total_items_abiertos, 2)
-        nota_oposicion_10 = nota_referencia
-        aciertos_netos = aciertos
-        puntos_restados = 0.0
-        divisor_penalizacion = 1
-        penalizacion_texto = "Media aritmética de las calificaciones obtenidas individualmente en cada pregunta"
-        nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL — SEGUNDO EJERCICIO (ACCESO LIBRE)"
+                if st.session_state.stats[i].get("ai_feedback"):
+                    st.markdown("**🤖 Valoración de tus preparadores:**")
+                    st.markdown(st.session_state.stats[i]["ai_feedback"])
+                elif sel_txt:
+                    if st.button(f"🤖 Solicitar corrección detallada para ejercicio {i+1}", key=f"btn_ai_fin_{i}"):
+                        modo_f = "DESARROLLO" if q.get("tipo_abierta") == "DESARROLLO" else "SUPUESTO"
+                        with st.spinner("Consultando corrección..."):
+                            st.session_state.stats[i]["ai_feedback"] = consultar_ia_gemini_correccion(
+                                obtener_gemini_api_key_activa(),
+                                q.get("preamble", ""),
+                                q.get("question_text", ""),
+                                sel_txt,
+                                q.get("answer_text", ""),
+                                q.get("explanation", ""),
+                                ev_fallback=st.session_state.stats[i].get("ai_eval"),
+                                modo=modo_f
+                            )
+                        if q.get("tipo_abierta") == "DESARROLLO":
+                            registrar_epigrafe_desarrollo_en_sheets(i)
+                        st.rerun()
+
+                if q.get("explanation"):
+                    exp_html_f = PDFQuizParser.renderizar_explicacion_html(q["explanation"], obtener_etiqueta_tema_visible(st.session_state.get("test_name"), q))
+                    st.markdown(
+                        f"<div style='background-color:#E0F7FA; border:1px solid #00ACC1; border-left:5px solid #00838F; padding:14px 16px; border-radius:8px; margin-top:10px;'>"
+                        f"<div style='font-weight:800; font-size:15px; color:#004D40 !important; margin-bottom:8px;'>📖 Desarrollo / Solución Oficial Completa:</div>"
+                        f"{exp_html_f}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
     else:
-        nota_referencia = (aciertos / preg_eval) * 10 if preg_eval > 0 else 0.0
-        nota_media_50 = 0.0
-        esp_actual = (st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "").upper()
-        if "GESTI" in esp_actual or st.session_state.get("rol") == "GESTION":
-            es_gestion = True
-            nombre_cuerpo = "GESTIÓN DE LA SEGURIDAD SOCIAL"
-            divisor_penalizacion = 3
-            penalizacion_texto = "0,33 puntos (cada 3 errores restan 1 acierto)"
-            puntos_restados = fallos / 3.0
-        else:
-            es_gestion = False
-            nombre_cuerpo = "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL"
-            divisor_penalizacion = 4
-            penalizacion_texto = "0,25 puntos (cada 4 errores restan 1 acierto)"
-            puntos_restados = fallos / 4.0
-
-        aciertos_netos = max(0.0, aciertos - puntos_restados)
-        nota_oposicion_10 = (aciertos_netos / preg_eval) * 10 if preg_eval > 0 else 0.0
-
-    if not st.session_state.get('resultado_registrado', False):
-        st.session_state.resultado_registrado = True
-        sincronizar_progreso_navegador()
-
-        es_desarrollo_fin = any(q.get("tipo_abierta") == "DESARROLLO" for q in st.session_state.questions) or (st.session_state.get("test_cat") or "").upper() == "DESARROLLO"
-
-        if es_desarrollo_fin:
-            st.session_state.test_cat = "DESARROLLO"
-            alguno_resuelto = False
-            for idx_ep_fin, q_ep_fin in enumerate(st.session_state.questions):
-                stat_ep_fin = st.session_state.stats.get(idx_ep_fin, {})
-                txt_ep_fin = (stat_ep_fin.get("selected") or "").strip()
-                if txt_ep_fin or stat_ep_fin.get("ai_eval") is not None:
-                    alguno_resuelto = True
-                    registrar_epigrafe_desarrollo_en_sheets(idx_ep_fin)
-            if not alguno_resuelto and st.session_state.questions:
-                idx_act_f = st.session_state.get("current_index", 0)
-                st.session_state.stats[idx_act_f]["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
-                registrar_epigrafe_desarrollo_en_sheets(idx_act_f)
-        else:
-            if aciertos > 0 and aciertos_por_intento:
-                max_intento = max(aciertos_por_intento.keys())
-                tope_mostrar = 1 if max_intento == 1 else max(3, max_intento)
-                desglose_str = ", ".join([f"{aciertos_por_intento.get(k, 0)}-{k}" for k in range(1, tope_mostrar + 1)])
-                aciertos_sheets_str = f"{aciertos} ({desglose_str})"
+        c_1, f_m, n_c = 0, 0, 0
+        for i, q in enumerate(st.session_state.questions):
+            s = st.session_state.stats[i]
+            if s['selected'] is None or s['attempts'] == 0: n_c += 1
             else:
-                aciertos_sheets_str = str(aciertos)
+                c_str = q['options'][q['answer']] if (0 <= q['answer'] < len(q['options'])) else None
+                if s['selected'] == c_str and s['attempts'] == 1: c_1 += 1
+                else: f_m += 1
 
-            nota_sheets_str = (
-                calcular_nota_final_supuestos_sheets()
-                if es_test_supuestos else
-                f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
-            )
-            accion_sheets = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
-            st.session_state.inicio_registrado_sheets = True
+        nota_10 = max(0.0, ((c_1 - (f_m / 3.0)) / tot) * 10) if tot > 0 else 0.0
+        nota_str = f"{nota_10:.2f}".replace(".", ",")
+
+        if not st.session_state.get('resultado_registrado', False):
+            st.session_state.resultado_registrado = True
+            accion_fin = "actualizar_fin" if st.session_state.get('inicio_registrado_sheets', False) else "nueva_fila"
             registrar_actividad_sheets(
                 evento="✅ Completado",
-                nombre_test=st.session_state.get("test_name") or "Test",
-                aciertos=aciertos_sheets_str,
-                fallos=fallos,
-                blancos=blancos,
-                nota=nota_sheets_str,
-                accion=accion_sheets
+                nombre_test=st.session_state.get('test_name') or "Test",
+                aciertos=c_1,
+                fallos=f_m,
+                blancos=n_c,
+                nota=nota_str,
+                accion=accion_fin,
+                sincrono=True
             )
 
-    if nota_oposicion_10 >= 5.0:
-        if not st.session_state.get('celebracion_mostrada', False):
-            st.session_state.celebracion_mostrada = True
-            components.html("""<script>
-            (function() {
-                var pw = window.parent, pd = pw.document;
-                function disp() {
-                    var end = Date.now() + 3200;
-                    (function frame() {
-                        pw.confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0, y: 0.6 } });
-                        pw.confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1, y: 0.6 } });
-                        if (Date.now() < end) requestAnimationFrame(frame);
-                    }());
-                }
-                if (!pw.confetti) {
-                    var s = pd.createElement('script');
-                    s.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
-                    s.onload = disp; pd.head.appendChild(s);
-                } else disp();
-            })();
-            </script>""", height=0)
-        msg_enhorabuena = "🎉 ¡ENHORABUENA, HAS SUPERADO EL SUPUESTO PRÁCTICO! 🎉" if es_test_supuestos else "🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉"
-        st.markdown(f"<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><div style='color: #1b5e20 !important; margin: 0; font-size: 22px; font-weight: 700;'>{msg_enhorabuena}</div><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
-        cr1, cr2, cr3 = st.columns([1, 0.4, 1])
-        with cr2:
-            try: st.image("test-utiles-768x768.png", use_container_width=True)
-            except: pass
-    else:
-        cr1, cr2, cr3 = st.columns([1, 1.5, 1])
-        with cr2:
-            try: st.image("llorona.jpeg", use_container_width=True)
-            except: pass
+        st.header("📊 Resultados Finales del Test")
 
-    nombre_test_fin = st.session_state.get("test_name") or "Test"
-    id_test_fin = re.sub(r'\W+', '_', nombre_test_fin)
-    etiqueta_tema_fin = obtener_etiqueta_tema_visible(nombre_test_fin, st.session_state.questions[0] if st.session_state.questions else None)
-    st.markdown("<div style='text-align: center; font-size: 22px; font-weight: 700; color: #2C3E50 !important; margin-top: -10px; margin-bottom: 6px;'>📊 RESULTADOS FINALES</div>", unsafe_allow_html=True)
-    st.markdown(f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1f77b4 !important; margin-bottom: 15px;'>📘 {etiqueta_tema_fin}</div>", unsafe_allow_html=True)
+        if nota_10 > 8.0:
+            if not st.session_state.get('celebracion_mostrada', False):
+                st.balloons()
+                st.session_state.celebracion_mostrada = True
+            st.markdown(f"<div style='background: linear-gradient(90deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #2e7d32; border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 18px;'><h3 style='color: #1b5e20 !important; margin: 0;'>🎉 ¡ENHORABUENA! ¡EXCELENTE RESULTADO! 🎉</h3><p style='color: #2e7d32 !important; font-size: 16px; font-weight: 600; margin-top: 6px; margin-bottom: 0;'>Has obtenido un <b>{nota_str} sobre 10</b>. ¡Sigue así, vas directo a por la plaza! 🏆👏</p></div>", unsafe_allow_html=True)
+        elif nota_10 >= 5.0:
+            if not st.session_state.get('celebracion_mostrada', False):
+                st.snow()
+                st.session_state.celebracion_mostrada = True
+            st.markdown(f"<div style='background-color: #e3f2fd; border-left: 5px solid #1976d2; border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;'><b style='color: #0d47a1 !important; font-size: 16px;'>👍 ¡Buen trabajo! Has aprobado con un {nota_str} sobre 10.</b><br><span style='color: #1565c0 !important; font-size: 14px;'>Repasa los fallos a continuación para seguir subiendo nota y superar el 8.</span></div>", unsafe_allow_html=True)
 
-    if es_test_supuestos:
-        desglose_indiv_sup = " &nbsp;•&nbsp; ".join([f"<b>P{num_i}:</b> {val_i:.2f}/10" for num_i, val_i in notas_individuales_10])
-        st.markdown(
-            f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
-            f"✅ Cuestiones superadas (≥ 5/10): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ A reforzar (< 5/10): <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco (0/10): <b style='color:#000000 !important;'>{blancos}</b>"
-            f"</div>"
-            f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 NOTA FINAL DEL SUPUESTO PRÁCTICO (MEDIA DE LAS {preg_eval} CUESTIONES)</div>"
-            f"<div style='text-align: center; font-size: 25px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 6px;'>"
-            f"🎓 NOTA MEDIA FINAL: {nota_oposicion_10:.2f} / 10 PUNTOS"
-            f"</div>"
-            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13px; color: #2C3E50 !important; text-align: justify; line-height: 1.45;'>"
-            f"<b>Cálculo de la nota final:</b> Media aritmética de las notas individuales obtenidas en las {preg_eval} cuestiones del supuesto "
-            f"({suma_notas_abiertas:.2f} puntos totales ÷ {preg_eval} cuestiones = <b>{nota_oposicion_10:.2f} / 10</b>).<br>"
-            f"<span style='font-size:12.5px; color:#475569 !important;'>{desglose_indiv_sup}</span>"
-            f"</div>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-    elif es_test_abierto:
-        desglose_indiv_des = " &nbsp;•&nbsp; ".join([f"<b>Ep.{num_i}:</b> {val_i:.2f}/50" for num_i, val_i in notas_individuales_50])
-        st.markdown(
-            f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
-            f"✅ Superadas (≥ 25/50): <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ⚠️ Inferiores a 25/50: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco (0/50): <b style='color:#000000 !important;'>{blancos}</b>"
-            f"</div>"
-            f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 CALIFICACIONES POR EPÍGRAFE ({nombre_cuerpo})</div>"
-            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 10px 12px; border-radius: 4px; font-size: 14px; color: #2C3E50 !important; text-align: center; line-height: 1.5;'>"
-            f"{desglose_indiv_des}"
-            f"</div></div>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 10px;'>"
-            f"✅ Acertadas: <b style='color:#000000 !important;'>{aciertos}</b> &nbsp;|&nbsp; ❌ Falladas: <b style='color:#000000 !important;'>{fallos}</b> &nbsp;|&nbsp; ⚪ En blanco: <b style='color:#000000 !important;'>{blancos}</b>"
-            f"</div>"
-            f"<div style='background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; text-align: center;'>"
-            f"<div style='font-size: 16px; font-weight: 600; color: #495057 !important;'>📏 PUNTUACIÓN DE REFERENCIA (SIN PENALIZACIÓN): <span style='color: #2C3E50 !important; font-size: 19px;'>{nota_referencia:.2f} / 10</span></div>"
-            f"<div style='font-size: 12.5px; color: #6c757d !important; margin-top: 2px;'>Obtenida dividiendo tus {aciertos} aciertos entre las {preg_eval} preguntas evaluables ({aciertos} / {preg_eval} × 10), sin descontar errores.</div>"
-            f"</div>"
-            f"<div style='background-color: #eef6ff; border: 2px solid #1f77b4; border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;'>"
-            f"<div style='text-align: center; font-size: 14px; font-weight: 700; color: #1f77b4 !important; letter-spacing: 0.5px; margin-bottom: 4px;'>🎯 BAREMO OFICIAL OPOSICIÓN ({nombre_cuerpo})</div>"
-            f"<div style='text-align: center; font-size: 23px; font-weight: 800; color: #0d47a1 !important; margin-bottom: 4px;'>"
-            f"🎓 NOTA CONVERTIDA OPOSICIÓN: {nota_oposicion_10:.2f} / 10"
-            f"</div>"
-            f"<div style='text-align: center; font-size: 15px; font-weight: 600; color: #1565c0 !important; margin-bottom: 10px;'>"
-            f"Puntos netos directos: <b style='color:#0d47a1 !important;'>{aciertos_netos:.2f}</b> sobre {preg_eval} puntos posibles"
-            f"</div>"
-            f"<div style='background-color: #ffffff; border-left: 4px solid #1f77b4; padding: 9px 12px; border-radius: 4px; font-size: 13.5px; color: #2C3E50 !important; text-align: justify; line-height: 1.4;'>"
-            f"<b style='color:#2C3E50 !important;'>ℹ️ ¿Cómo se ha calculado tu nota de oposición?</b><br>"
-            f"• <b style='color:#2C3E50 !important;'>Preguntas en blanco ({blancos}):</b> No suman ni restan (0 puntos).<br>"
-            f"• <b style='color:#2C3E50 !important;'>Penalización por errores ({fallos} {'fallo' if fallos == 1 else 'fallos'}):</b> En <b style='color:#2C3E50 !important;'>{nombre_cuerpo.title()}</b> cada error resta <b style='color:#2C3E50 !important;'>{penalizacion_texto}</b>. "
-            f"Tus {fallos} {'error' if fallos == 1 else 'errores'} restan <b style='color:#2C3E50 !important;'>{puntos_restados:.2f} aciertos</b> ({fallos} ÷ {divisor_penalizacion} = {puntos_restados:.2f}).<br>"
-            f"• <b style='color:#2C3E50 !important;'>Cálculo final:</b> {aciertos} aciertos − {puntos_restados:.2f} de penalización = <b style='color:#2C3E50 !important;'>{aciertos_netos:.2f} puntos netos</b> de {preg_eval} posibles "
-            f"➔ <b style='color:#2C3E50 !important;'>({aciertos_netos:.2f} ÷ {preg_eval}) × 10 = {nota_oposicion_10:.2f} sobre 10</b>."
-            f"</div>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("✅ Aciertos", c_1)
+        k2.metric("❌ Fallos", f_m)
+        k3.metric("⚪ En Blanco", n_c)
+        k4.metric("🎯 Nota (sobre 10)", nota_str)
+        st.caption("ℹ️ *Fórmula oficial aplicada: Cada 3 fallos restan 1 acierto. Las respuestas en blanco no penalizan.*")
+        st.markdown("---")
+        st.subheader("🧐 Revisión Detallada de Preguntas")
 
-    cat_actual_fin = (st.session_state.get("test_cat") or st.session_state.get("saved_cat") or "").upper()
-    if "DESARROLLO" in cat_actual_fin or any(q.get("tipo_abierta") == "DESARROLLO" for q in st.session_state.questions):
-        lbl_repetir = "🔄 Repetir Preguntas"
-        lbl_cambiar = "📁 Cambiar de Preguntas"
-    elif "SUPUESTO" in cat_actual_fin or any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions):
-        lbl_repetir = "🔄 Repetir Supuestos"
-        lbl_cambiar = "📁 Cambiar de Supuestos"
-    else:
-        lbl_repetir = "🔄 Repetir Test"
-        lbl_cambiar = "📁 Cambiar de Test"
+        id_t_fin = re.sub(r'\W+', '_', st.session_state.get('test_name') or "Test")
 
-    c1_t, c2_t, c3_t = st.columns(3)
-    c1_t.button(lbl_repetir, key="btn_rep_top", on_click=action_repetir_test, use_container_width=True)
-    c2_t.button(lbl_cambiar, key="btn_sub_top", on_click=action_subir_otro, use_container_width=True)
-    c3_t.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
-    st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
+        for i, q in enumerate(st.session_state.questions):
+            s = st.session_state.stats[i]
+            sel, att = s['selected'], s['attempts']
+            c_str = q['options'][q['answer']] if (0 <= q['answer'] < len(q['options'])) else "No detectada"
+            if sel is None: ic, st_t = "⚪", "No contestada (En blanco)"
+            elif sel == c_str and att == 1: ic, st_t = "✅", "Acertada a la primera"
+            elif sel == c_str and att > 1: ic, st_t = "⚠️", f"Corregida (Necesitaste {att} intentos - Cuenta como fallo)"
+            else: ic, st_t = "❌", "Fallada"
+            with st.expander(f"{ic} {q['question_text'][:85]}... — ({st_t})"):
+                if q.get('preamble'):
+                    p_html = "<br>".join([line.strip() for line in q['preamble'].split('\n') if line.strip()])
+                    st.markdown(f"<div style='background-color: #eef6ff; padding: 10px; border-left: 4px solid #1f77b4; margin-bottom: 10px; font-size: 14px; color: #1E293B !important;'>{p_html}</div>", unsafe_allow_html=True)
+                st.markdown(f"**{q['question_text']}**")
+                for o in q['options']:
+                    if o == c_str: st.markdown(f"🟢 **{o}** *(Respuesta Correcta)*")
+                    elif o == sel: st.markdown(f"🔴 ~~{o}~~ *(Tu selección)*")
+                    else: st.markdown(f"▫️ {o}")
+                if q['explanation']:
+                    exp_html_rev = PDFQuizParser.renderizar_explicacion_html(q['explanation'])
+                    st.markdown(
+                        f"<div style='background-color:#E8F4F8; border-left:5px solid #0284C7; padding:12px 15px; border-radius:6px; margin-top:8px;'>"
+                        f"<div style='font-weight:800; font-size:14.5px; color:#0369A1 !important; margin-bottom:5px;'>💡 Explicación:</div>"
+                        f"{exp_html_rev}"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
 
-    for i, q in enumerate(st.session_state.questions):
-        stat = st.session_state.stats[i]
-        tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if q.get("is_open") else "Pregunta")
-        co = (q.get('answer_text') or "Ver solución y explicación debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
-        col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
-        et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
-        eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema_fin)
-        if q.get("tipo_abierta") == "DESARROLLO":
-            cabecera_res_html = (
-                f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
-                f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
-            )
-        elif q.get("tipo_abierta") == "SUPUESTO":
-            cabecera_res_html = (
-                f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>📖 Solución y Explicación Oficial de la Cuestión {i+1}:</div>"
-            )
-        else:
-            cabecera_res_html = "<div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>📖 Explicación:</div>"
-
-        ph = ""
-        if q.get('preamble') and q.get("tipo_abierta") != "SUPUESTO":
-            ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>"
-        elif q.get('preamble') and q.get("tipo_abierta") == "SUPUESTO" and i == 0:
-            ph = f"<div style='background:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:10px 12px; margin-bottom:8px; font-size:10pt !important; line-height:1.4; text-align:justify; color:#1E293B !important;'><div style='font-weight:800; color:#1E3A8A !important; margin-bottom:4px;'>📋 Planteamiento del Supuesto Práctico:</div>{q['preamble']}</div>"
-
-        st.markdown(
-            f"<div style='margin-bottom: 5px;'>"
-            f"{ph}"
-            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
-            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q['question_text']}</div>"
-            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
-            f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
-            f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px 16px; border-radius: 6px; margin-bottom: 6px;'>{cabecera_res_html}<div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-        if q.get("is_open") and stat.get("ai_feedback"):
-            with st.expander(f"🤖 Ver valoración detallada de la IA para {tipo_lbl_res} {i + 1}"):
-                st.markdown(stat["ai_feedback"])
-        if puede_rep:
-            key_rep_res = f"rep_open_res_{id_test_fin}_{i + 1}"
-            if key_rep_res not in st.session_state:
-                st.session_state[key_rep_res] = False
-            if st.session_state.pop(f"rep_ok_msg_{id_test_fin}_{i + 1}", False):
-                st.success("✅ ¡Reporte enviado con éxito a info@oposiciona.es! Muchas gracias por tu colaboración.")
-            lbl_btn_res = f"⚠️ Reportar Error en {tipo_lbl_res} {i + 1}"
-            if st.button(lbl_btn_res, key=f"btn_err_res_{id_test_fin}_{i + 1}"):
-                st.session_state[key_rep_res] = not st.session_state[key_rep_res]
-            if st.session_state[key_rep_res]:
-                render_cuadro_reporte_error(q, i + 1, "resumen_final")
-
-        st.markdown("<hr style='margin: 12px 0px 15px 0px; border: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
-
-    c1_b, c2_b, c3_b = st.columns(3)
-    c1_b.button(lbl_repetir, key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
-    c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
-    c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
+                if usuario_puede_reportar():
+                    k_rep_fin_open = f"rep_open_{id_t_fin}_fin_{i + 1}"
+                    k_rep_fin_ok = f"rep_ok_msg_{id_t_fin}_{i + 1}"
+                    if st.session_state.get(k_rep_fin_ok, False):
+                        st.success(f"✅ ¡Reporte de la Pregunta {i + 1} enviado correctamente a info@oposiciona.es!")
+                    if st.button(f"🛠️ Reportar error en Pregunta {i + 1}", key=f"btn_open_rep_fin_{id_t_fin}_{i + 1}"):
+                        ya_ab = st.session_state.get(k_rep_fin_open, False)
+                        limpiar_estados_reportes_error()
+                        st.session_state[k_rep_fin_open] = not ya_ab
+                        st.rerun()
+                    if st.session_state.get(k_rep_fin_open, False):
+                        render_cuadro_reporte_error(q, i + 1, "fin")
 # === FIN SECCIÓN 5 ===
+
