@@ -1619,7 +1619,7 @@ class PDFQuizParser:
             return []
 
         pat_pregunta_explicita = re.compile(
-            r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s*(?![ºª°a-zA-Z]\b)\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)$',
+            r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s*(?![ºª°a-zA-Z]\b)\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
             re.IGNORECASE
         )
         pat_cierre_planteamiento = re.compile(
@@ -1847,7 +1847,7 @@ class PDFQuizParser:
         buf_list = False
 
         pat_corte_estructural_pdf = re.compile(
-            r'^(?:#\s*)?(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}(?!\d)\s*[\.\)]\s+["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|La\s+(?:mercantil|sociedad|empresa|cooperativa)\s+["«]|[•\-\*▪■·]\s+|[a-g]\)\s+)',
+            r'^(?:#\s*)?(?:TEMA\s+\d+|EP[ÍI]GRAFE\s+\d+|PREGUNTA\s+DE\s+DESARROLLO|SUPUESTOS?\s+PR[ÁA]CTICOS?|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+BASE\s+LEGAL)?\s*:|RESPUESTA\s+T[ÉE]CNICA\s*:|CUESTI[ÓO]N\s+\d+|PREGUNTA\s+\d+|\d{1,2}(?!\d)\s*[\.\)]\s+["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ]|[•\-\*▪■·]\s*En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)|En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo)\s+lugar|Con\s+base\s+en\s+los\s+hechos|La\s+(?:mercantil|sociedad|empresa|cooperativa)\s+["«]|[•\-\*▪■·]\s+|[a-g]\)\s+)',
             re.IGNORECASE
         )
 
@@ -2042,7 +2042,7 @@ class PDFQuizParser:
             l = l[:m_exp_inline.start()].strip()
 
         m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
         )
         if m_q_with_a:
@@ -2242,7 +2242,7 @@ class PDFQuizParser:
         ultimo_num_pregunta = 0
 
         pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(]*[A-ZÁÉÍÓÚÑ].*)|([¿¡][A-ZÁÉÍÓÚÑ].*))$'
+            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
         )
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -2266,7 +2266,6 @@ class PDFQuizParser:
                 cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
                 cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
                 if cuerpo_o:
-                    # Salvaguarda si una explicación sin "EXPLICACIÓN:" se pegó al final de la última opción (ej. P5 TEMA 56)
                     if idx_o == len(q_obj.get("options", [])) - 1 and not q_obj.get("explanation"):
                         m_pegada = re.search(
                             r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n.+)$',
@@ -2300,7 +2299,6 @@ class PDFQuizParser:
                     if 0 <= idx_a < len(q_obj["options"]):
                         q_obj["answer"] = idx_a
 
-                # Deducción por descarte explícito en la explicación (ej. "las opciones a, b y d resultan erróneas")
                 if q_obj["answer"] == -1:
                     m_excl = re.search(
                         r'las\s+opciones\s+([a-dA-D])[\)\s]*,\s*([a-dA-D])[\)\s]*y\s+([a-dA-D])[\)\s]*(?:resultan|son)\s+(?:err[óo]neas|falsas|incorrectas)',
@@ -2314,7 +2312,6 @@ class PDFQuizParser:
                         if len(restantes) == 1:
                             q_obj["answer"] = restantes[0]
 
-                # Deducción para opción única "No" frente a opciones "Sí, ..." cuando la explicación confirma que no opera/no queda excluida
                 if q_obj["answer"] == -1 and len(q_obj["options"]) >= 3:
                     no_indices = [
                         i for i, o_s in enumerate(q_obj["options"])
