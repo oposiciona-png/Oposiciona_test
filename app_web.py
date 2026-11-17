@@ -4454,7 +4454,7 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
     if barajar:
         random.shuffle(qs_preparadas)
 
-for idx_final, q_item in enumerate(qs_preparadas, 1):
+    for idx_final, q_item in enumerate(qs_preparadas, 1):
         if not q_item.get("is_open", False):
             txt_sin_num = re.sub(
                 r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*[\.\-\)]\s*[\.\-\)]*\s*',
