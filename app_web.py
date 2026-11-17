@@ -2170,9 +2170,8 @@ class PDFQuizParser:
     @staticmethod
     def parse(file_bytes, max_options=None):
         """
-        Extrae EXCLUSIVAMENTE las preguntas tipo test (a, b, c, d), incluyendo preguntas de reserva R1, R2, R3
-        y la Segunda Parte tipo test de Administrativos (con su planteamiento en preamble).
-        En cuanto aparece el encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS'
+        Extrae EXCLUSIVAMENTE las preguntas tipo test (a, b, c, d), incluyendo preguntas de reserva R1, R2, R3.
+        En cuanto aparece el encabezado 'SEGUNDA PARTE', 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS' / 'CASO PRÁCTICO'
         o 'PREGUNTA DE DESARROLLO', cierra la última pregunta de test y detiene la lectura (break).
         """
         lineas_brutas = []
@@ -2257,8 +2256,6 @@ class PDFQuizParser:
         pending_empty_opts = []
         pre_opt_text_buf = None
         ultimo_num_pregunta = 0
-        en_segunda_parte_test = False
-        preamble_segunda_parte = ""
 
         pat_q = re.compile(
             r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
@@ -2278,7 +2275,7 @@ class PDFQuizParser:
         def _cerrar_pregunta_actual(q_obj):
             if not q_obj:
                 return
-            q_obj["preamble"] = q_obj.get("preamble") or ""
+            q_obj["preamble"] = ""
             opts_limpias = []
             ans_final = q_obj.get("answer", -1)
             for idx_o, o_txt in enumerate(q_obj.get("options", [])):
@@ -2351,29 +2348,13 @@ class PDFQuizParser:
             if not line:
                 continue
 
-            if re.match(r'^(?:#\s*)?SEGUNDA\s+PARTE\b', line, re.IGNORECASE):
-                _cerrar_pregunta_actual(curr_q)
-                curr_q = None
-                state = "IDLE"
-                ultimo_num_pregunta = 0
-                en_segunda_parte_test = True
-                preamble_segunda_parte = ""
-                continue
-
-            if re.match(r'^(?:#\s*)?PREGUNTAS?\s+DE\s+RESERVA\b', line, re.IGNORECASE):
-                _cerrar_pregunta_actual(curr_q)
-                curr_q = None
-                state = "IDLE"
-                ultimo_num_pregunta = 0
-                continue
-
-            if PDFQuizParser._es_basura_cabecera_o_pie(line):
-                continue
-
-            if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO|PREGUNTA\s+DE\s+DESARROLLO)\b', line, re.IGNORECASE):
+            if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\b|SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO|PREGUNTA\s+DE\s+DESARROLLO)\b', line, re.IGNORECASE):
                 _cerrar_pregunta_actual(curr_q)
                 curr_q = None
                 break
+
+            if PDFQuizParser._es_basura_cabecera_o_pie(line):
+                continue
 
             m_q = pat_q.match(line)
             m_opt_empty = pat_opt_empty.match(line)
@@ -2430,11 +2411,12 @@ class PDFQuizParser:
                     _cerrar_pregunta_actual(curr_q)
                     pending_empty_opts = []
                     pre_opt_text_buf = None
-                    ultimo_num_pregunta = num_cand
+                    if not es_reserva_r:
+                        ultimo_num_pregunta = num_cand
                     etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_cand}"
                     curr_q = {
                         "question_text": f"{etiqueta_num}. {cuerpo_cand}",
-                        "preamble": preamble_segunda_parte if en_segunda_parte_test else "",
+                        "preamble": "",
                         "options": [],
                         "options_bold": [],
                         "answer": -1,
@@ -2444,10 +2426,6 @@ class PDFQuizParser:
                     continue
 
             if curr_q is None:
-                if en_segunda_parte_test:
-                    linea_pre = re.sub(r'^#\s*', '', line).strip()
-                    if linea_pre:
-                        preamble_segunda_parte = (preamble_segunda_parte + "\n" + linea_pre).strip()
                 continue
 
             if m_exp:
@@ -2578,16 +2556,7 @@ class PDFQuizParser:
                         curr_q["answer"] = len(curr_q["options"]) - 1
             elif state == "EXPLANATION":
                 line_exp_clean = re.sub(r'^#\s*', '', line).strip()
-                if en_segunda_parte_test and re.match(
-                    r'^(?:La\s+empresa\s+"|El\s+trabajador\s+|La\s+trabajadora\s+|Ante\s+la\s+falta\s+de\s+pago\b|El\s+aplazamiento\s+no\s+es\s+concedido\b)',
-                    line_exp_clean
-                ):
-                    _cerrar_pregunta_actual(curr_q)
-                    curr_q = None
-                    state = "IDLE"
-                    preamble_segunda_parte = line_exp_clean
-                else:
-                    curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
 
         _cerrar_pregunta_actual(curr_q)
 
