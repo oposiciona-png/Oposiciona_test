@@ -1372,7 +1372,7 @@ class PDFQuizParser:
         if re.match(r'^(?:p[áa]gina\s*)?\d{1,3}(?:\s+de\s+\d{1,3})?$', l_sin_hash, re.IGNORECASE):
             return True
         if re.match(
-            r'^(?:OPOSICIONA(?:\s+POSICIO\w*)?|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|TEMA\s+\d+\s*[\-–]\s*(?:DERECHO\s+MERCANTIL|CAMPO\s+DE\s+APLICACI[ÓO]N|CONSTITUCI[ÓO]N|AFILIACI[ÓO]N|ACCI[ÓO]N\s+PROTECTORA|REQUISITOS|INCAPACIDAD|NACIMIENTO|JUBILACI[ÓO]N|MUERTE|COTIZACI[ÓO]N|LOS\s+REG[ÍI]MENES|RETA).*|PREGUNTAS?\s+DE\s+RESERVA|OPOSICIONA(?:\.ES|\s+5\.0)?|RESPUESTAS?\s+TE[ST]*\s+TEMAS?.*)$',
+            r'^(?:OPOSICIONA(?:\s+POSICIO\w*)?|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL(?:\s+TEMA\s+\d+.*)?|TEMA\s+\d+\s*[\-–]\s*(?:DERECHO\s+MERCANTIL|CAMPO\s+DE\s+APLICACI[ÓO]N|CONSTITUCI[ÓO]N|AFILIACI[ÓO]N|ACCI[ÓO]N\s+PROTECTORA|REQUISITOS|INCAPACIDAD|NACIMIENTO|JUBILACI[ÓO]N|MUERTE|COTIZACI[ÓO]N|LOS\s+REG[ÍI]MENES|RETA).*|PREGUNTAS?\s+DE\s+RESERVA(?:\s*\(.*\))?|OPOSICIONA(?:\.ES|\s+5\.0)?|RESPUESTAS?\s+TE[ST]*\s+TEMAS?.*)$',
             l_sin_hash,
             re.IGNORECASE
         ):
@@ -2030,19 +2030,35 @@ class PDFQuizParser:
         if not l or l in ("0", "-", "#"):
             return []
 
-        segmentos = []
-        m_exp_inline = re.search(
-            r'(?:(?<=[.?!»"\)\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final)|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n))\s*.*)$',
-            l,
-            flags=re.IGNORECASE
+        # Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras el punto final de una explicación, dividirla primero
+        partes_r = re.split(
+            r'(?<=[.?!»"\)\]])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
+            l
         )
+        if len(partes_r) > 1:
+            res_r = []
+            for pr in partes_r:
+                res_r.extend(PDFQuizParser._atomizar_linea_test(pr, is_bold))
+            return res_r
+
+        segmentos = []
+        es_inicio_enunciado_numerado = bool(
+            re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))', l, re.IGNORECASE)
+        )
+        m_exp_inline = None
+        if not es_inicio_enunciado_numerado:
+            m_exp_inline = re.search(
+                r'(?:(?<=[.?!»"\)\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final)|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n))\s*.*)$',
+                l,
+                flags=re.IGNORECASE
+            )
         cola_exp = None
         if m_exp_inline and m_exp_inline.start() > 3:
             cola_exp = l[m_exp_inline.start():].strip()
             l = l[:m_exp_inline.start()].strip()
 
         m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+            r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
             l
         )
         if m_q_with_a:
@@ -2154,8 +2170,9 @@ class PDFQuizParser:
     @staticmethod
     def parse(file_bytes, max_options=None):
         """
-        Extrae EXCLUSIVAMENTE las preguntas tipo test (a, b, c, d).
-        En cuanto aparece el encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS' / 'CASO PRÁCTICO'
+        Extrae EXCLUSIVAMENTE las preguntas tipo test (a, b, c, d), incluyendo preguntas de reserva R1, R2, R3
+        y la Segunda Parte tipo test de Administrativos (con su planteamiento en preamble).
+        En cuanto aparece el encabezado 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS'
         o 'PREGUNTA DE DESARROLLO', cierra la última pregunta de test y detiene la lectura (break).
         """
         lineas_brutas = []
@@ -2240,9 +2257,11 @@ class PDFQuizParser:
         pending_empty_opts = []
         pre_opt_text_buf = None
         ultimo_num_pregunta = 0
+        en_segunda_parte_test = False
+        preamble_segunda_parte = ""
 
         pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?(\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
+            r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
         )
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -2259,7 +2278,7 @@ class PDFQuizParser:
         def _cerrar_pregunta_actual(q_obj):
             if not q_obj:
                 return
-            q_obj["preamble"] = ""
+            q_obj["preamble"] = q_obj.get("preamble") or ""
             opts_limpias = []
             ans_final = q_obj.get("answer", -1)
             for idx_o, o_txt in enumerate(q_obj.get("options", [])):
@@ -2329,7 +2348,26 @@ class PDFQuizParser:
 
         for raw_line, is_bold in lineas_doc:
             line = PDFQuizParser._limpiar_marca_agua_linea(raw_line)
-            if not line or PDFQuizParser._es_basura_cabecera_o_pie(line):
+            if not line:
+                continue
+
+            if re.match(r'^(?:#\s*)?SEGUNDA\s+PARTE\b', line, re.IGNORECASE):
+                _cerrar_pregunta_actual(curr_q)
+                curr_q = None
+                state = "IDLE"
+                ultimo_num_pregunta = 0
+                en_segunda_parte_test = True
+                preamble_segunda_parte = ""
+                continue
+
+            if re.match(r'^(?:#\s*)?PREGUNTAS?\s+DE\s+RESERVA\b', line, re.IGNORECASE):
+                _cerrar_pregunta_actual(curr_q)
+                curr_q = None
+                state = "IDLE"
+                ultimo_num_pregunta = 0
+                continue
+
+            if PDFQuizParser._es_basura_cabecera_o_pie(line):
                 continue
 
             if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO|PREGUNTA\s+DE\s+DESARROLLO)\b', line, re.IGNORECASE):
@@ -2343,7 +2381,9 @@ class PDFQuizParser:
             m_exp = pat_exp.match(line)
 
             if m_q and not m_opt and not m_opt_empty:
-                num_cand = int(m_q.group(1))
+                token_q = m_q.group(1).strip().upper()
+                es_reserva_r = token_q.startswith("R")
+                num_cand = int(token_q[1:]) if es_reserva_r else int(token_q)
                 cuerpo_cand = (m_q.group(2) or m_q.group(3) or "").strip()
                 es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
 
@@ -2367,6 +2407,7 @@ class PDFQuizParser:
                     )
                 )
                 es_enumeracion_interna_exp = (
+                    not es_reserva_r and
                     state == "EXPLANATION" and (
                         es_parentesis_enumeracion or
                         dentro_de_cita_articulo or
@@ -2374,6 +2415,7 @@ class PDFQuizParser:
                     )
                 )
                 es_salto_articulo_ilegal = (
+                    not es_reserva_r and
                     ultimo_num_pregunta > 0 and
                     num_cand > ultimo_num_pregunta + 10 and
                     not ya_cerro_con_pagina_tema
@@ -2389,9 +2431,10 @@ class PDFQuizParser:
                     pending_empty_opts = []
                     pre_opt_text_buf = None
                     ultimo_num_pregunta = num_cand
+                    etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_cand}"
                     curr_q = {
-                        "question_text": f"{num_cand}. {cuerpo_cand}",
-                        "preamble": "",
+                        "question_text": f"{etiqueta_num}. {cuerpo_cand}",
+                        "preamble": preamble_segunda_parte if en_segunda_parte_test else "",
                         "options": [],
                         "options_bold": [],
                         "answer": -1,
@@ -2401,6 +2444,10 @@ class PDFQuizParser:
                     continue
 
             if curr_q is None:
+                if en_segunda_parte_test:
+                    linea_pre = re.sub(r'^#\s*', '', line).strip()
+                    if linea_pre:
+                        preamble_segunda_parte = (preamble_segunda_parte + "\n" + linea_pre).strip()
                 continue
 
             if m_exp:
@@ -2531,7 +2578,16 @@ class PDFQuizParser:
                         curr_q["answer"] = len(curr_q["options"]) - 1
             elif state == "EXPLANATION":
                 line_exp_clean = re.sub(r'^#\s*', '', line).strip()
-                curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
+                if en_segunda_parte_test and re.match(
+                    r'^(?:La\s+empresa\s+"|El\s+trabajador\s+|La\s+trabajadora\s+|Ante\s+la\s+falta\s+de\s+pago\b|El\s+aplazamiento\s+no\s+es\s+concedido\b)',
+                    line_exp_clean
+                ):
+                    _cerrar_pregunta_actual(curr_q)
+                    curr_q = None
+                    state = "IDLE"
+                    preamble_segunda_parte = line_exp_clean
+                else:
+                    curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
 
         _cerrar_pregunta_actual(curr_q)
 
@@ -4398,10 +4454,10 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
     if barajar:
         random.shuffle(qs_preparadas)
 
-    for idx_final, q_item in enumerate(qs_preparadas, 1):
+for idx_final, q_item in enumerate(qs_preparadas, 1):
         if not q_item.get("is_open", False):
             txt_sin_num = re.sub(
-                r'^(?:#\s*)?(?:Pregunta\s+)?\d{1,3}\s*[\.\-\)]\s*[\.\-\)]*\s*',
+                r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*[\.\-\)]\s*[\.\-\)]*\s*',
                 '',
                 (q_item.get("question_text") or "").strip(),
                 flags=re.IGNORECASE
