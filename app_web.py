@@ -2032,7 +2032,7 @@ class PDFQuizParser:
 
         segmentos = []
         m_exp_inline = re.search(
-            r'(?<=[.?!»"\)\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*.*|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final))\s+.*)$',
+            r'(?:(?<=[.?!»"\)\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final)|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n))\s*.*)$',
             l,
             flags=re.IGNORECASE
         )
@@ -2108,15 +2108,17 @@ class PDFQuizParser:
         ans_idx = q_obj.get("answer", -1)
         if ans_idx == -1 and q_obj.get("explanation"):
             m_ans = re.search(
-                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
+                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la|opci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta)\s*[:\s]*[\'"]?([a-dA-D])?[\)\'"]?\b',
                 q_obj["explanation"],
                 re.IGNORECASE
             )
             if m_ans:
-                cand_a = ord(m_ans.group(1).lower()) - ord('a')
-                if 0 <= cand_a < len(opts):
-                    ans_idx = cand_a
-                    q_obj["answer"] = ans_idx
+                let_m = (m_ans.group(1) or m_ans.group(2) or "").lower()
+                if let_m:
+                    cand_a = ord(let_m) - ord('a')
+                    if 0 <= cand_a < len(opts):
+                        ans_idx = cand_a
+                        q_obj["answer"] = ans_idx
 
         if 0 <= ans_idx < len(opts):
             if ans_idx < max_options:
@@ -2186,7 +2188,9 @@ class PDFQuizParser:
                                     continue
                                 sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
                                 if curr_s_txt and re.match(r'^\s*[a-dA-D][\)\.\-]\s+', st) and re.search(r'[.?!»"\)\];:]\s*$', curr_s_txt):
-                                    is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= 0.55
+                                    cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                                    umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                                    is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
                                     sub_spans.append((curr_s_txt.strip(), is_b_seg))
                                     curr_s_txt = st
                                     curr_ch_tot = len(st.strip())
@@ -2198,7 +2202,9 @@ class PDFQuizParser:
                                     if sb:
                                         curr_ch_bold += n_c
                             if curr_s_txt.strip():
-                                is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= 0.55
+                                cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                                umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                                is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
                                 sub_spans.append((curr_s_txt.strip(), is_b_seg))
 
                             for idx_sp, (s_txt, s_bold) in enumerate(sub_spans):
@@ -2207,7 +2213,6 @@ class PDFQuizParser:
                                     items_pagina.append((y0, x0 + idx_sp * 0.1, s_clean, s_bold))
 
                     if not items_pagina:
-                        # Fallback a texto plano si get_text("dict") no encontró spans
                         for raw_t in (page.get_text("text") or "").splitlines():
                             s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
                             if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
@@ -2221,7 +2226,6 @@ class PDFQuizParser:
             except Exception:
                 pass
 
-        # Respaldo automático para TEMA 73 ACTUALIZADO (PDF de 14 páginas escaneado/imagen sin capa de texto en PyMuPDF)
         if not lineas_brutas and num_paginas_pdf == 14:
             return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
 
@@ -2243,12 +2247,11 @@ class PDFQuizParser:
         pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
         pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
         pat_exp = re.compile(
-            r'^(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*(.*)$',
+            r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
             re.IGNORECASE
         )
-        # Detecta explicaciones que no llevan la palabra "EXPLICACIÓN:" y arrancan tras la última opción
         pat_exp_articulo_directo = re.compile(
-            r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4})\b)',
+            r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4}|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n)\b)',
             re.IGNORECASE
         )
         pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
@@ -2263,6 +2266,16 @@ class PDFQuizParser:
                 cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
                 cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
                 if cuerpo_o:
+                    # Salvaguarda si una explicación sin "EXPLICACIÓN:" se pegó al final de la última opción (ej. P5 TEMA 56)
+                    if idx_o == len(q_obj.get("options", [])) - 1 and not q_obj.get("explanation"):
+                        m_pegada = re.search(
+                            r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n.+)$',
+                            cuerpo_o,
+                            flags=re.IGNORECASE | re.DOTALL
+                        )
+                        if m_pegada:
+                            cuerpo_o = m_pegada.group(1).strip()
+                            q_obj["explanation"] = m_pegada.group(2).strip()
                     letra_norm = chr(ord('a') + len(opts_limpias))
                     if idx_o == q_obj.get("answer", -1):
                         ans_final = len(opts_limpias)
@@ -2274,15 +2287,41 @@ class PDFQuizParser:
                 q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
 
             if q_obj["answer"] == -1 and q_obj.get("explanation"):
+                exp_txt = q_obj["explanation"]
                 m_ans = re.search(
                     r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
-                    q_obj["explanation"],
+                    exp_txt,
                     re.IGNORECASE
                 )
+                if not m_ans:
+                    m_ans = re.search(r'\bopci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta\b', exp_txt, re.IGNORECASE)
                 if m_ans:
                     idx_a = ord(m_ans.group(1).lower()) - ord('a')
                     if 0 <= idx_a < len(q_obj["options"]):
                         q_obj["answer"] = idx_a
+
+                # Deducción por descarte explícito en la explicación (ej. "las opciones a, b y d resultan erróneas")
+                if q_obj["answer"] == -1:
+                    m_excl = re.search(
+                        r'las\s+opciones\s+([a-dA-D])[\)\s]*,\s*([a-dA-D])[\)\s]*y\s+([a-dA-D])[\)\s]*(?:resultan|son)\s+(?:err[óo]neas|falsas|incorrectas)',
+                        exp_txt,
+                        re.IGNORECASE
+                    )
+                    if m_excl:
+                        descartadas = {m_excl.group(1).lower(), m_excl.group(2).lower(), m_excl.group(3).lower()}
+                        letras_disp = [chr(ord('a') + i) for i in range(len(q_obj["options"]))]
+                        restantes = [i for i, l_ch in enumerate(letras_disp) if l_ch not in descartadas]
+                        if len(restantes) == 1:
+                            q_obj["answer"] = restantes[0]
+
+                # Deducción para opción única "No" frente a opciones "Sí, ..." cuando la explicación confirma que no opera/no queda excluida
+                if q_obj["answer"] == -1 and len(q_obj["options"]) >= 3:
+                    no_indices = [
+                        i for i, o_s in enumerate(q_obj["options"])
+                        if re.match(r'^[a-d]\)\s*No\.?\s*$', o_s.strip(), re.IGNORECASE)
+                    ]
+                    if len(no_indices) == 1 and re.search(r'\bno\s+(?:queda\s+excluida|opera|procede|se\s+excluye)\b', exp_txt, re.IGNORECASE):
+                        q_obj["answer"] = no_indices[0]
 
             if max_options is not None and len(q_obj["options"]) > max_options:
                 PDFQuizParser._reducir_opciones_conservando_correcta(q_obj, max_options)
@@ -2322,7 +2361,6 @@ class PDFQuizParser:
                     state == "EXPLANATION" and
                     bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', exp_actual_txt, re.IGNORECASE))
                 )
-                # Detectar si estamos dentro de una cita literal no cerrada («... o <<...) o justo tras la palabra "Artículo"
                 dentro_de_cita_articulo = (
                     state == "EXPLANATION" and
                     not ya_cerro_con_pagina_tema and (
@@ -2378,7 +2416,7 @@ class PDFQuizParser:
                     idx_l = ord(m_let.group(1).lower()) - ord('a')
                     if 0 <= idx_l < len(curr_q["options"]):
                         curr_q["answer"] = idx_l
-                if re.match(r'^EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b', line, re.IGNORECASE):
+                if re.match(r'^(?:#\s*)?EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b', line, re.IGNORECASE):
                     curr_q["explanation"] = (curr_q["explanation"] + "\n[[H]]📚 EXPLICACIÓN PARA ESTUDIO:\n" + resto_exp).strip()
                 elif resto_exp:
                     curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
@@ -2404,7 +2442,7 @@ class PDFQuizParser:
                         (
                             opts_previas_sin_punto or
                             bool(pat_exp_articulo_directo.match(line_sin_hash)) or
-                            bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero)$', ultima_opt_txt, re.IGNORECASE))
+                            bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero|Durante\s+el\s+per[íi]odo\s+de\s+los\s+noventa\s+d[íi]as\s+naturales.*)$', ultima_opt_txt, re.IGNORECASE))
                         ) and
                         bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
                     )
