@@ -621,6 +621,7 @@ TESTS_DISPONIBLES = {
             "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML",
             "Tema 04 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1oirjNXzELp4sCZ-2woU6SU-aLVZT2Lpi",
             "TEMA 05a - RECAUDACIÓN VOLUNTARIA": "https://drive.google.com/uc?export=download&id=1DRsCORMz-vUTATK-mnQwjIp4Q9CD0azF",
+            "TEMA 05b - RECAUDACIÓN VOLUNTARIA": "https://drive.google.com/uc?export=download&id=1IIdZ6GXdOF72zaYad1iKYPxpEquRZheD",
             "TEMA 08 IP ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1JUb9ndQ7MIaTagpQztXnrv1rsVxTE6im",
             "TEMA 08 REPASO 1 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1M3rydnWydxk_IkiL5-M3lOb8YrHASHXk",
             "TEMA 08 REPASO 2 IT E IP ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1mbLqDw1Z30I5BNVEXRDdAiUuBya9jn1G",
@@ -673,6 +674,7 @@ TESTS_DISPONIBLES = {
             "TEMA 12 - MINISTERIO": "https://drive.google.com/uc?export=download&id=1JzqJfb8ddB2wPb7ijOE6tsTA3rhPrhhH",
             "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
             "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
+            "TEMA 20 - ATENCION AL PÚBLICO": "https://drive.google.com/uc?export=download&id=1v7I4oL03hQF8Q66MoG9ZiRnj_tHxjN2f",
         },
         "SUPUESTOS": {
             "Elige un test de supuestos...": None,
@@ -724,6 +726,8 @@ TESTS_DISPONIBLES = {
             "TEMA 64 IMV REPASO ESPECÍFICO ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1fsmjqL8jeCPS_mMLP0Svuq3IWAr_BVd-",
             "TEMA 67 - REPASO 1 - COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1XfUA3JPXNS3AiDLU0x3m18D2FV8aLuR2",
             "Tema 67 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10oRTI6Rw_yF0yFZTQXhP8f8cHrZUWxK6",
+            "TEMA 68 - GESTION RECAUDATORIA": "https://drive.google.com/uc?export=download&id=1ciJMrMtlDhBGQz-Vijo-_XUnvFhCpXVb",
+            "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO": "https://drive.google.com/uc?export=download&id=1XTCIwNZ2LI_ObF6gtSeuCTqzb9PcOgX3",
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
             "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Cct-h4j1Pn9g5YUg27ihZ0bNk9dKNUQO",
             "TEMA 74 - RETA, SETA  Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18N_VW51u8AsyPx57fBzQ9TUAacy4YEw6",
@@ -830,6 +834,9 @@ TESTS_DISPONIBLES_INVITADO = {
 
 NUEVOS_HOY = [
     "TEMA 05a - RECAUDACIÓN VOLUNTARIA",
+    "TEMA 05b - RECAUDACIÓN VOLUNTARIA",
+    "TEMA 68 - GESTION RECAUDATORIA",
+    "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO",
     "TEMA_68_GESTIÓN RECAUDATORIA",
     "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS",
     "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA",
