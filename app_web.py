@@ -2522,25 +2522,26 @@ def _parse_test_fn(file_bytes, max_options=None):
 
             aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
             cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
-            es_salto_corto_o_reinicio_valido = (
+            # Si la explicación ya cerró explícitamente con "(página X, tema Y)", se acepta cualquier salto de numeración hacia adelante (ej. 15 -> 31 en Tema 04) o reinicio a 1 (en Examen Repaso 1 a 14)
+            es_salto_o_reinicio_tras_cierre = (
                 curr_q is not None and
                 state == "EXPLANATION" and
                 len(curr_q.get("options", [])) >= 3 and
                 not es_Encabezado_Tabla_Interna and
                 (
-                    ya_cerro_con_pagina_tema or
-                    (aperturas_cita <= cierres_cita and not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE)))
-                ) and
-                (
-                    (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4) or
-                    (num_cand == 1 and ya_cerro_con_pagina_tema)
+                    (ya_cerro_con_pagina_tema and (num_cand > ultimo_num_pregunta or num_cand == 1)) or
+                    (
+                        aperturas_cita <= cierres_cita and
+                        not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE)) and
+                        (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4)
+                    )
                 )
             )
 
             if (
                 not en_enunciado_sin_opciones and
                 not en_mitad_opciones_incompletas and
-                (es_primera_o_reserva or es_correlativa_n_mas_1 or es_salto_corto_o_reinicio_valido)
+                (es_primera_o_reserva or es_correlativa_n_mas_1 or es_salto_o_reinicio_tras_cierre)
             ):
                 _cerrar_pregunta_actual(curr_q)
                 pending_empty_opts = []
@@ -2562,7 +2563,6 @@ def _parse_test_fn(file_bytes, max_options=None):
         if curr_q is None:
             continue
 
-        # Solo activar EXPLANATION si ya se leyeron las opciones de la pregunta (evita falsos positivos cuando un enunciado termina en un renglón que dice "respuesta correcta:")
         if m_exp and len(curr_q["options"]) >= 2:
             state = "EXPLANATION"
             pending_empty_opts = []
