@@ -2145,7 +2145,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
             cola_exp = m_reta_esp.group(2).strip()
         else:
             m_exp_inline = re.search(
-                r'(?<=[.?!»"\)\]])\s*((?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:)\s*.*)$',
+                r'(?<=[.?!»"\)\]])\s*((?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]\s*.*)$',
                 l,
                 flags=re.IGNORECASE
             )
@@ -2165,7 +2165,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         segmentos.append((q_part, False))
         l = opts_part
 
-    # No partir en sub-opciones a), b), c), d) una línea que sea una cita de artículo legal («... o Artículo X:)
     es_linea_cita_legal = bool(
         re.match(r'^(?:#\s*)?(?:«|<<+|Art[íi]culos?\s+\d|Apartados?\s+\d)', l, re.IGNORECASE) or
         ("«" in l or "<<" in l)
@@ -2379,7 +2378,6 @@ def _parse_test_fn(file_bytes, max_options=None):
     pre_opt_text_buf = None
     ultimo_num_pregunta = 0
 
-    # Exige punto o guion tras el número de pregunta (no paréntesis de cierre como "29) el recargo...")
     pat_q = re.compile(
         r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-)\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
     )
@@ -2390,7 +2388,7 @@ def _parse_test_fn(file_bytes, max_options=None):
         re.IGNORECASE
     )
     pat_exp_articulo_directo = re.compile(
-        r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4})\b)',
+        r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+(?:art[íi]culo|per[íi]odo|requisito)|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4}|La\s+(?:protecci[óo]n\s+no\s+contributiva|cotizaci[óo]n\s+ingresada|automaticidad\s+absoluta)|Las\s+cotizaciones\s+del\s+mes)\b)',
         re.IGNORECASE
     )
     pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
@@ -2514,10 +2512,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                 re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:|El\s+titular\s+de\s+la\s+Subdirecci[óo]n|S[óo]lo\s+en\s+el\s+caso\s+de\s+que\s+el\s+aplazamiento|Recargo\s+del\s+\d+\s+por\s+ciento|El\s+plazo\s+reglamentario\s+de\s+ingreso\s+de\s+los\s+capitales|Transcurrido\s+el\s+plazo\s+reglamentario\s+de\s+ingreso)', cuerpo_cand, re.IGNORECASE)
             )
 
-            # 1) Si es la primera pregunta del documento (curr_q is None) o es una pregunta de reserva R1..R10
             es_primera_o_reserva = (curr_q is None or es_reserva_r)
-
-            # 2) Si es exactamente la pregunta correlativa N+1 (y ya hemos leído al menos 3 opciones de la pregunta N)
             es_correlativa_n_mas_1 = (
                 curr_q is not None and
                 len(curr_q.get("options", [])) >= 3 and
@@ -2525,7 +2520,6 @@ def _parse_test_fn(file_bytes, max_options=None):
                 not es_Encabezado_Tabla_Interna
             )
 
-            # 3) Si hay un salto de 1 a 3 números por errata de numeración del PDF (ej. 3 -> 6 en Tema 11 Repaso 1) o un reinicio a 1 (en Examen Repaso 1 a 14), exigiendo que la pregunta actual ya esté en EXPLANATION y haya cerrado con "(página X, tema Y)" (o no tenga citas abiertas)
             aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
             cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
             es_salto_corto_o_reinicio_valido = (
@@ -2568,7 +2562,8 @@ def _parse_test_fn(file_bytes, max_options=None):
         if curr_q is None:
             continue
 
-        if m_exp:
+        # Solo activar EXPLANATION si ya se leyeron las opciones de la pregunta (evita falsos positivos cuando un enunciado termina en un renglón que dice "respuesta correcta:")
+        if m_exp and len(curr_q["options"]) >= 2:
             state = "EXPLANATION"
             pending_empty_opts = []
             pre_opt_text_buf = None
