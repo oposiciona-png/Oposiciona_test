@@ -1770,6 +1770,7 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3A ===
 
+
 # === SECCIÓN 3B: MOTOR DE EXTRACCIÓN DE PREGUNTAS TIPO TEST ===
 _RESPALDO_TEMA_73_TEST = [
     {
@@ -2281,6 +2282,17 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     if not l or l in ("0", "-", "#"):
         return []
 
+    # 0. Si la línea contiene dos o más etiquetas de opción vacías seguidas (ej. "b) c)" o "a) b)"), dividirlas
+    if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-](?:\s+[a-dA-D][\)\.\-])+\s*$', l):
+        return [(tok.strip(), is_bold) for tok in re.findall(r'[a-dA-D][\)\.\-]', l)]
+
+    # 0b. Si la línea empieza por una etiqueta de opción vacía seguida de otra opción con texto (ej. "b) c) El Real Decreto..."), separar la vacía
+    m_empty_then_opt = re.match(r'^((?:#\s*)?[a-dA-D][\)\.\-])\s+((?:#\s*)?[a-dA-D][\)\.\-]\s+.+)$', l)
+    if m_empty_then_opt:
+        res_eo = [(re.sub(r'^#\s*', '', m_empty_then_opt.group(1)).strip(), is_bold)]
+        res_eo.extend(PDFQuizParser._atomizar_linea_test(m_empty_then_opt.group(2), is_bold))
+        return res_eo
+
     # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_pag = re.match(
         r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
@@ -2348,7 +2360,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         segmentos.append((q_part, False))
         l = opts_part
 
-    # Solo evitar partir por a), b), c), d) cuando la línea empieza directamente por "Artículo X" o "«" (cita legal de explicación), pero SIEMPRE partir cuando la línea empieza por una opción a), b), c), d) aunque lleve «...» dentro
     es_linea_cita_legal = bool(
         not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l) and
         re.match(r'^(?:#\s*)?(?:«|<<+|Art[íi]culos?\s+\d|Apartados?\s+\d|\(la\s+TGSS\s+ser[áa]\s+la\s+encargada)', l, re.IGNORECASE)
@@ -2357,7 +2368,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         segmentos.append((l, is_bold))
     else:
         partes_opt = re.split(
-            r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
+            r'(?:(?<=[.?!»"\)\];:])\s*|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
             l
         )
         for p in partes_opt:
@@ -2506,8 +2517,8 @@ def _parse_test_fn(file_bytes, max_options=None):
                             sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
                             if (
                                 curr_s_txt and
-                                re.match(r'^\s*(?:[a-dA-D][\)\.\-]\s+|EXPLICACI[ÓO]N\s*:)', st, re.IGNORECASE) and
-                                re.search(r'[.?!»"\)\];:]\s*$', curr_s_txt)
+                                re.match(r'^\s*(?:[a-dA-D][\)\.\-](?:\s+|$)|EXPLICACI[ÓO]N\s*:)', st, re.IGNORECASE) and
+                                re.search(r'(?:[.?!»"\)\];:]|^[a-dA-D][\)\.\-])\s*$', curr_s_txt.strip())
                             ):
                                 cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
                                 umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
@@ -2517,7 +2528,18 @@ def _parse_test_fn(file_bytes, max_options=None):
                                 curr_ch_tot = len(st.strip())
                                 curr_ch_bold = len(st.strip()) if sb else 0
                             else:
-                                curr_s_txt += st
+                                if (
+                                    curr_s_txt and
+                                    not curr_s_txt.endswith((" ", "\t", "\n")) and
+                                    not st.startswith((" ", "\t", "\n", ".", ",", ";", ":", ")", "?")) and
+                                    (
+                                        re.match(r'^(?:#\s*)?(?:[a-dA-D][\)\.\-]|[Rr]?\d{1,3}[\.\-])$', curr_s_txt.strip()) or
+                                        re.match(r'^(?:[a-dA-D][\)\.\-]\s+|EXPLICACI[ÓO]N\s*:)', st.strip(), re.IGNORECASE)
+                                    )
+                                ):
+                                    curr_s_txt += " " + st
+                                else:
+                                    curr_s_txt += st
                                 n_c = len(st.strip())
                                 curr_ch_tot += n_c
                                 if sb:
@@ -2539,7 +2561,6 @@ def _parse_test_fn(file_bytes, max_options=None):
                         if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
                             lineas_brutas.append((s_clean, s_clean.startswith("#")))
                 else:
-                    # Emparejar por coordenada vertical real (abs(y_curr - y_other) <= 4.5) cualquier letra de opción aislada ("a)", "b)", "c)", "d)") con su bloque de texto situado a su derecha en la misma altura
                     usados = [False] * len(items_pagina)
                     items_emparejados = []
                     for i_it, (y_i, x_i, t_i, b_i) in enumerate(items_pagina):
@@ -2610,6 +2631,9 @@ def _parse_test_fn(file_bytes, max_options=None):
         for idx_o, o_txt in enumerate(q_obj.get("options", [])):
             cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
             cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
+            # Limpiar errata de OCR en Pregunta 18 de Tema 01 / Tema 51 ("su radical desvinculación independencia" o "radical independencia ... desvinculación")
+            cuerpo_o = re.sub(r'radical\s+desvinculaci[óo]n\s+independencia', 'radical desvinculación o independencia', cuerpo_o, flags=re.IGNORECASE)
+            cuerpo_o = re.sub(r'radical\s+independencia\s+de\s+cualquier\s+r[ée]gimen\s+profesional\s+del\s+sistema\.\s*desvinculaci[óo]n', 'radical desvinculación o independencia de cualquier régimen profesional del sistema.', cuerpo_o, flags=re.IGNORECASE)
             if cuerpo_o:
                 if idx_o == len(q_obj.get("options", [])) - 1 and not q_obj.get("explanation"):
                     m_pegada = re.search(
@@ -2708,7 +2732,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                 state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
             )
             en_mitad_opciones_incompletas = (
-                state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
+                state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 2
             )
             exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
             ya_cerro_con_pagina_tema = (
@@ -2723,7 +2747,7 @@ def _parse_test_fn(file_bytes, max_options=None):
             es_primera_o_reserva = (curr_q is None or es_reserva_r)
             es_correlativa_n_mas_1 = (
                 curr_q is not None and
-                len(curr_q.get("options", [])) >= 3 and
+                (state == "EXPLANATION" or len(curr_q.get("options", [])) >= 2) and
                 num_cand == ultimo_num_pregunta + 1 and
                 not es_Encabezado_Tabla_Interna
             )
@@ -2733,7 +2757,7 @@ def _parse_test_fn(file_bytes, max_options=None):
             es_salto_o_reinicio_tras_cierre = (
                 curr_q is not None and
                 state == "EXPLANATION" and
-                len(curr_q.get("options", [])) >= 3 and
+                len(curr_q.get("options", [])) >= 2 and
                 not es_Encabezado_Tabla_Interna and
                 (
                     (ya_cerro_con_pagina_tema and (num_cand > ultimo_num_pregunta or num_cand == 1)) or
@@ -2750,7 +2774,6 @@ def _parse_test_fn(file_bytes, max_options=None):
                 not en_mitad_opciones_incompletas and
                 (es_primera_o_reserva or es_correlativa_n_mas_1 or es_salto_o_reinicio_tras_cierre)
             ):
-                # Si es TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO (donde tras la pregunta 15 de "(página 31, tema 4)" salta directamente a la 31), inyectar las preguntas 16 a 30 para completar las 60 preguntas
                 es_salto_tema_04_cotizacion = (
                     ultimo_num_pregunta == 15 and
                     num_cand == 31 and
@@ -2904,7 +2927,6 @@ def _parse_test_fn(file_bytes, max_options=None):
                     curr_q["options_bold"][idx_target] = curr_q["options_bold"][idx_target] or is_bold
                     if is_bold:
                         curr_q["answer"] = idx_target
-                    # Solo desencolar cuando la opción termina en signo de cierre (no a mitad de frase aunque haya otra opción vacía esperando)
                     if line.endswith((".", ";", "!", "?")):
                         pending_empty_opts.pop(0)
                 else:
