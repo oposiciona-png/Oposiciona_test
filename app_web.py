@@ -2356,8 +2356,26 @@ def _parse_test_fn(file_bytes, max_options=None):
                             lineas_brutas.append((s_clean, s_clean.startswith("#")))
                 else:
                     items_pagina.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
-                    lineas_pag_ordenadas = [(it[2], it[3]) for it in items_pagina]
-                    lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
+                    # Si en una misma banda horizontal (abs(y1 - y0) <= 3.0) un elemento es una letra de opción vacía ("b)") y el otro es su texto, unirlos en orden "b) Texto"
+                    items_unificados_opt = []
+                    idx_it = 0
+                    while idx_it < len(items_pagina):
+                        y_a, x_a, t_a, b_a = items_pagina[idx_it]
+                        if idx_it + 1 < len(items_pagina):
+                            y_b, x_b, t_b, b_b = items_pagina[idx_it + 1]
+                            if abs(y_a - y_b) <= 3.2:
+                                if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_a) and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]', t_b):
+                                    items_unificados_opt.append((f"{t_a.strip()} {t_b.strip()}", b_a or b_b))
+                                    idx_it += 2
+                                    continue
+                                elif re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_b) and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]', t_a) and x_b < x_a:
+                                    items_unificados_opt.append((f"{t_b.strip()} {t_a.strip()}", b_a or b_b))
+                                    idx_it += 2
+                                    continue
+                        items_unificados_opt.append((t_a, b_a))
+                        idx_it += 1
+
+                    lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(items_unificados_opt)
                     lineas_brutas.extend(lineas_pag_reparadas)
             doc.close()
         except Exception:
@@ -2522,7 +2540,6 @@ def _parse_test_fn(file_bytes, max_options=None):
 
             aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
             cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
-            # Si la explicación ya cerró explícitamente con "(página X, tema Y)", se acepta cualquier salto de numeración hacia adelante (ej. 15 -> 31 en Tema 04) o reinicio a 1 (en Examen Repaso 1 a 14)
             es_salto_o_reinicio_tras_cierre = (
                 curr_q is not None and
                 state == "EXPLANATION" and
