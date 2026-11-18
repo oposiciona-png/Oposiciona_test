@@ -1842,7 +1842,7 @@ _RESPALDO_TEMA_73_TEST = [
         "question_text": "7. Un trabajador del SEA adeuda las cuotas por inactividad de dos meses consecutivos. El último día para el pago entra en situación de Incapacidad Temporal. ¿Cuándo surtirá efectos su baja de oficio y exclusión del sistema especial?",
         "preamble": "",
         "options": [
-            "a) No podrá ser excluido mientras permanca de baja médica.",
+            "a) No podrá ser excluido mientras permanezca de baja médica.",
             "b) El día primero del mes siguiente a aquel en que finaliza la prestación por IT (si sigue sin pagar).",
             "c) El día primero del mes siguiente a la segunda mensualidad no ingresada de forma inexcusable."
         ],
@@ -2098,19 +2098,19 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     if not l or l in ("0", "-", "#"):
         return []
 
-    # 1. Si después de "(página X, tema Y)" o del cierre de una cita ">>>" viene pegada una nueva pregunta en la misma línea, dividirla primero
-    partes_post_pag = re.split(
-        r'(?<=\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s+(?=(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
+    # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla sin usar look-behind de longitud variable
+    m_post_pag = re.match(
+        r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         l,
         flags=re.IGNORECASE
     )
-    if len(partes_post_pag) > 1:
+    if m_post_pag:
         res_pp = []
-        for ppp in partes_post_pag:
-            res_pp.extend(PDFQuizParser._atomizar_linea_test(ppp, is_bold))
+        res_pp.extend(PDFQuizParser._atomizar_linea_test(m_post_pag.group(1), is_bold))
+        res_pp.extend(PDFQuizParser._atomizar_linea_test(m_post_pag.group(2), is_bold))
         return res_pp
 
-    # 2. Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras el punto final de una explicación, dividirla
+    # 2. Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras el punto final de una explicación, dividirla (look-behind de ancho fijo 1)
     partes_r = re.split(
         r'(?<=[.?!»"\)\]>])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
         l
@@ -2129,24 +2129,32 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l)
     )
 
-    m_exp_inline = None
+    cola_exp = None
     if not es_inicio_enunciado_numerado:
         if es_inicio_opcion:
-            m_exp_inline = re.search(
-                r'(?:(?<=[.?!»"\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n)\s*.*)$',
-                l,
-                flags=re.IGNORECASE
-            )
+            # Caso especial P5 Tema 56 ("...en dicho Régimen En el RETA, ostenta la consideración...")
+            m_reta_esp = re.match(r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n\b.*)$', l, flags=re.IGNORECASE)
+            if m_reta_esp:
+                l = m_reta_esp.group(1).strip()
+                cola_exp = m_reta_esp.group(2).strip()
+            else:
+                m_exp_inline = re.search(
+                    r'(?<=[.?!»"\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)\s*.*)$',
+                    l,
+                    flags=re.IGNORECASE
+                )
+                if m_exp_inline and m_exp_inline.start() > 4:
+                    cola_exp = l[m_exp_inline.start():].strip()
+                    l = l[:m_exp_inline.start()].strip()
         else:
             m_exp_inline = re.search(
                 r'(?<=[.?!»"\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)\s*.*)$',
                 l,
                 flags=re.IGNORECASE
             )
-    cola_exp = None
-    if m_exp_inline and m_exp_inline.start() > 4:
-        cola_exp = l[m_exp_inline.start():].strip()
-        l = l[:m_exp_inline.start()].strip()
+            if m_exp_inline and m_exp_inline.start() > 4:
+                cola_exp = l[m_exp_inline.start():].strip()
+                l = l[:m_exp_inline.start()].strip()
 
     m_q_with_a = re.match(
         r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
@@ -2480,7 +2488,6 @@ def _parse_test_fn(file_bytes, max_options=None):
                 not bool(re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:)', cuerpo_cand, re.IGNORECASE))
             )
 
-            # Si es la pregunta correlativa exacta (N+1) y ya se leyeron las opciones de la pregunta N, abrir siempre la pregunta N+1
             if es_correlativa_exacta and curr_q is not None and len(curr_q.get("options", [])) >= 3:
                 _cerrar_pregunta_actual(curr_q)
                 pending_empty_opts = []
