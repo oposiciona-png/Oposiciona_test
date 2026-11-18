@@ -1770,7 +1770,7 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3A ===
 
-# === SECCIÓN 3B: MOTOR EXCLUSIVO DE PREGUNTAS TIPO TEST (PARSE) ===
+# === SECCIÓN 3B: MOTOR DE EXTRACCIÓN DE PREGUNTAS TIPO TEST ===
 _RESPALDO_TEMA_73_TEST = [
     {
         "question_text": '1. Un trabajador ferroviario del grupo de "Oficial Calderero Chapista en Depósito" se jubila anticipadamente. ¿Cuál es el coeficiente aplicable y qué sucede en el supuesto de que también se encuentre en pluriactividad según el RD 2621/1986?',
@@ -2093,540 +2093,549 @@ _RESPALDO_TEMA_73_TEST = [
     }
 ]
 
-class PDFQuizParser(PDFQuizParser):
-    @staticmethod
-    def _atomizar_linea_test(raw_line, is_bold):
-        l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
-        if not l or l in ("0", "-", "#"):
-            return []
+def _atomizar_linea_test_fn(raw_line, is_bold):
+    l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
+    if not l or l in ("0", "-", "#"):
+        return []
 
-        partes_r = re.split(
-            r'(?<=[.?!»"\)\]])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
-            l
+    partes_r = re.split(
+        r'(?<=[.?!»"\)\]])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
+        l
+    )
+    if len(partes_r) > 1:
+        res_r = []
+        for pr in partes_r:
+            res_r.extend(PDFQuizParser._atomizar_linea_test(pr, is_bold))
+        return res_r
+
+    segmentos = []
+    es_inicio_enunciado_numerado = bool(
+        re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))', l, re.IGNORECASE)
+    )
+    m_exp_inline = None
+    if not es_inicio_enunciado_numerado:
+        m_exp_inline = re.search(
+            r'(?:(?<=[.?!»"\)\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|(?:Art[íi]culos?|Arts?\.|El\s+(?:art[íi]culo|per[íi]odo|requisito)|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final)|La\s+(?:protecci[óo]n\s+no\s+contributiva|cotizaci[óo]n\s+ingresada|automaticidad\s+absoluta)|Las\s+cotizaciones\s+del\s+mes))\s*.*)$',
+            l,
+            flags=re.IGNORECASE
         )
-        if len(partes_r) > 1:
-            res_r = []
-            for pr in partes_r:
-                res_r.extend(PDFQuizParser._atomizar_linea_test(pr, is_bold))
-            return res_r
+    cola_exp = None
+    if m_exp_inline and m_exp_inline.start() > 3:
+        cola_exp = l[m_exp_inline.start():].strip()
+        l = l[:m_exp_inline.start()].strip()
 
-        segmentos = []
-        es_inicio_enunciado_numerado = bool(
-            re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))', l, re.IGNORECASE)
+    m_q_with_a = re.match(
+        r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+        l
+    )
+    if m_q_with_a:
+        q_part = m_q_with_a.group(1).strip()
+        opts_part = m_q_with_a.group(2).strip()
+        segmentos.append((q_part, False))
+        l = opts_part
+
+    partes_opt = re.split(
+        r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
+        l
+    )
+    for p in partes_opt:
+        ps = re.sub(r'^#\s*(?=[a-dA-D][\)\.\-])', '', p.strip())
+        if ps:
+            segmentos.append((ps, is_bold))
+
+    if cola_exp:
+        segmentos.append((cola_exp, False))
+    return segmentos
+
+def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
+    if not lineas_pagina:
+        return []
+    reparadas = []
+    i = 0
+    n = len(lineas_pagina)
+    while i < n:
+        txt_i, bold_i = lineas_pagina[i]
+        txt_i_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_i)
+        if (
+            i + 1 < n and
+            reparadas and
+            reparadas[-1][0].rstrip().endswith((".", "?", "!", "»", '"')) and
+            re.match(r'^[a-záéíóúñ]', txt_i_clean) and
+            not re.match(r'^[a-dA-D][\)\.\-]\s', txt_i_clean)
+        ):
+            txt_next, bold_next = lineas_pagina[i + 1]
+            txt_next_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(txt_next))
+            m_opt_next = re.match(r'^([a-dA-D][\)\.\-]\s+)(.+)$', txt_next_clean)
+            if m_opt_next:
+                pref_next = m_opt_next.group(1)
+                cuerpo_next = m_opt_next.group(2).strip()
+                m_corte_prep = re.match(r'^(.+?\b(?:a|de|en|con|por|para|la|el|los|las|un|una|que|se|su|al|del))\s+(.+)$', cuerpo_next, flags=re.IGNORECASE)
+                if m_corte_prep:
+                    nuevo_txt = f"{pref_next}{m_corte_prep.group(1)} {txt_i_clean} {m_corte_prep.group(2)}"
+                else:
+                    nuevo_txt = f"{pref_next}{cuerpo_next} {txt_i_clean}"
+                reparadas.append((re.sub(r'\s+', ' ', nuevo_txt).strip(), bold_i or bold_next))
+                i += 2
+                continue
+        reparadas.append((txt_i, bold_i))
+        i += 1
+    return reparadas
+
+def _reducir_opciones_conservando_correcta_fn(q_obj, max_options):
+    opts = q_obj.get("options", [])
+    if not max_options or len(opts) <= max_options:
+        return
+
+    ans_idx = q_obj.get("answer", -1)
+    if ans_idx == -1 and q_obj.get("explanation"):
+        m_ans = re.search(
+            r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la|opci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta)\s*[:\s]*[\'"]?([a-dA-D])?[\)\'"]?\b',
+            q_obj["explanation"],
+            re.IGNORECASE
         )
-        m_exp_inline = None
-        if not es_inicio_enunciado_numerado:
-            m_exp_inline = re.search(
-                r'(?:(?<=[.?!»"\)\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final)|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n))\s*.*)$',
-                l,
-                flags=re.IGNORECASE
-            )
-        cola_exp = None
-        if m_exp_inline and m_exp_inline.start() > 3:
-            cola_exp = l[m_exp_inline.start():].strip()
-            l = l[:m_exp_inline.start()].strip()
+        if m_ans:
+            let_m = (m_ans.group(1) or m_ans.group(2) or "").lower()
+            if let_m:
+                cand_a = ord(let_m) - ord('a')
+                if 0 <= cand_a < len(opts):
+                    ans_idx = cand_a
+                    q_obj["answer"] = ans_idx
 
-        m_q_with_a = re.match(
-            r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
-            l
-        )
-        if m_q_with_a:
-            q_part = m_q_with_a.group(1).strip()
-            opts_part = m_q_with_a.group(2).strip()
-            segmentos.append((q_part, False))
-            l = opts_part
-
-        partes_opt = re.split(
-            r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
-            l
-        )
-        for p in partes_opt:
-            ps = re.sub(r'^#\s*(?=[a-dA-D][\)\.\-])', '', p.strip())
-            if ps:
-                segmentos.append((ps, is_bold))
-
-        if cola_exp:
-            segmentos.append((cola_exp, False))
-        return segmentos
-
-    @staticmethod
-    def _reparar_fragmentos_desordenados_pdf(lineas_pagina):
-        if not lineas_pagina:
-            return []
-        reparadas = []
-        i = 0
-        n = len(lineas_pagina)
-        while i < n:
-            txt_i, bold_i = lineas_pagina[i]
-            txt_i_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_i)
-            if (
-                i + 1 < n and
-                reparadas and
-                reparadas[-1][0].rstrip().endswith((".", "?", "!", "»", '"')) and
-                re.match(r'^[a-záéíóúñ]', txt_i_clean) and
-                not re.match(r'^[a-dA-D][\)\.\-]\s', txt_i_clean)
-            ):
-                txt_next, bold_next = lineas_pagina[i + 1]
-                txt_next_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(txt_next))
-                m_opt_next = re.match(r'^([a-dA-D][\)\.\-]\s+)(.+)$', txt_next_clean)
-                if m_opt_next:
-                    pref_next = m_opt_next.group(1)
-                    cuerpo_next = m_opt_next.group(2).strip()
-                    m_corte_prep = re.match(r'^(.+?\b(?:a|de|en|con|por|para|la|el|los|las|un|una|que|se|su|al|del))\s+(.+)$', cuerpo_next, flags=re.IGNORECASE)
-                    if m_corte_prep:
-                        nuevo_txt = f"{pref_next}{m_corte_prep.group(1)} {txt_i_clean} {m_corte_prep.group(2)}"
-                    else:
-                        nuevo_txt = f"{pref_next}{cuerpo_next} {txt_i_clean}"
-                    reparadas.append((re.sub(r'\s+', ' ', nuevo_txt).strip(), bold_i or bold_next))
-                    i += 2
-                    continue
-            reparadas.append((txt_i, bold_i))
-            i += 1
-        return reparadas
-
-    @staticmethod
-    def _reducir_opciones_conservando_correcta(q_obj, max_options):
-        opts = q_obj.get("options", [])
-        if not max_options or len(opts) <= max_options:
-            return
-
-        ans_idx = q_obj.get("answer", -1)
-        if ans_idx == -1 and q_obj.get("explanation"):
-            m_ans = re.search(
-                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la|opci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta)\s*[:\s]*[\'"]?([a-dA-D])?[\)\'"]?\b',
-                q_obj["explanation"],
-                re.IGNORECASE
-            )
-            if m_ans:
-                let_m = (m_ans.group(1) or m_ans.group(2) or "").lower()
-                if let_m:
-                    cand_a = ord(let_m) - ord('a')
-                    if 0 <= cand_a < len(opts):
-                        ans_idx = cand_a
-                        q_obj["answer"] = ans_idx
-
-        if 0 <= ans_idx < len(opts):
-            if ans_idx < max_options:
-                indices_mantener = list(range(max_options))
-            else:
-                indices_mantener = list(range(max_options - 1)) + [ans_idx]
-        else:
+    if 0 <= ans_idx < len(opts):
+        if ans_idx < max_options:
             indices_mantener = list(range(max_options))
-
-        nuevas_opts = []
-        nuevo_ans = -1
-        mapa_letras = {}
-        for nuevo_i, viejo_i in enumerate(indices_mantener):
-            cuerpo_limpio = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', opts[viejo_i]).strip()
-            letra_nueva = chr(ord('a') + nuevo_i)
-            letra_vieja = chr(ord('a') + viejo_i)
-            mapa_letras[letra_vieja] = letra_nueva
-            nuevas_opts.append(f"{letra_nueva}) {cuerpo_limpio}")
-            if viejo_i == ans_idx:
-                nuevo_ans = nuevo_i
-
-        q_obj["options"] = nuevas_opts
-        q_obj["answer"] = nuevo_ans
-
-        if mapa_letras.get("d") == "c" and q_obj.get("explanation"):
-            q_obj["explanation"] = re.sub(
-                r'(respuesta\s+correcta\s+es\s+la\s+)d(\)|\b)',
-                r'\1c\2',
-                q_obj["explanation"],
-                flags=re.IGNORECASE
-            )
-
-    @staticmethod
-    def parse(file_bytes, max_options=None):
-        lineas_brutas = []
-        num_paginas_pdf = 0
-        if PDFQuizParser.es_archivo_docx(file_bytes):
-            for item in PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes):
-                lineas_brutas.append((item["text"], item["is_bold"]))
         else:
-            try:
-                doc = fitz.open(stream=file_bytes, filetype="pdf")
-                num_paginas_pdf = len(doc)
-                for page in doc:
-                    items_pagina = []
-                    blocks = page.get_text("dict").get("blocks", [])
-                    for b in blocks:
-                        for l in b.get("lines", []):
-                            bbox = l.get("bbox", (0, 0, 0, 0))
-                            y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
-                            spans = l.get("spans", [])
-                            txt_l = "".join(s.get("text", "") for s in spans).strip()
-                            if not txt_l:
+            indices_mantener = list(range(max_options - 1)) + [ans_idx]
+    else:
+        indices_mantener = list(range(max_options))
+
+    nuevas_opts = []
+    nuevo_ans = -1
+    mapa_letras = {}
+    for nuevo_i, viejo_i in enumerate(indices_mantener):
+        cuerpo_limpio = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', opts[viejo_i]).strip()
+        letra_nueva = chr(ord('a') + nuevo_i)
+        letra_vieja = chr(ord('a') + viejo_i)
+        mapa_letras[letra_vieja] = letra_nueva
+        nuevas_opts.append(f"{letra_nueva}) {cuerpo_limpio}")
+        if viejo_i == ans_idx:
+            nuevo_ans = nuevo_i
+
+    q_obj["options"] = nuevas_opts
+    q_obj["answer"] = nuevo_ans
+
+    if mapa_letras.get("d") == "c" and q_obj.get("explanation"):
+        q_obj["explanation"] = re.sub(
+            r'(respuesta\s+correcta\s+es\s+la\s+)d(\)|\b)',
+            r'\1c\2',
+            q_obj["explanation"],
+            flags=re.IGNORECASE
+        )
+
+def _parse_test_fn(file_bytes, max_options=None):
+    lineas_brutas = []
+    num_paginas_pdf = 0
+    if PDFQuizParser.es_archivo_docx(file_bytes):
+        for item in PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes):
+            lineas_brutas.append((item["text"], item["is_bold"]))
+    else:
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            num_paginas_pdf = len(doc)
+            for page in doc:
+                items_pagina = []
+                blocks = page.get_text("dict").get("blocks", [])
+                for b in blocks:
+                    for l in b.get("lines", []):
+                        bbox = l.get("bbox", (0, 0, 0, 0))
+                        y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
+                        spans = l.get("spans", [])
+                        txt_l = "".join(s.get("text", "") for s in spans).strip()
+                        if not txt_l:
+                            continue
+                        sub_spans = []
+                        curr_s_txt = ""
+                        curr_ch_tot = 0
+                        curr_ch_bold = 0
+                        for s in spans:
+                            st = s.get("text", "")
+                            if not st:
                                 continue
-                            sub_spans = []
-                            curr_s_txt = ""
-                            curr_ch_tot = 0
-                            curr_ch_bold = 0
-                            for s in spans:
-                                st = s.get("text", "")
-                                if not st:
-                                    continue
-                                sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
-                                if curr_s_txt and re.match(r'^\s*[a-dA-D][\)\.\-]\s+', st) and re.search(r'[.?!»"\)\];:]\s*$', curr_s_txt):
-                                    cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
-                                    umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
-                                    is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
-                                    sub_spans.append((curr_s_txt.strip(), is_b_seg))
-                                    curr_s_txt = st
-                                    curr_ch_tot = len(st.strip())
-                                    curr_ch_bold = len(st.strip()) if sb else 0
-                                else:
-                                    curr_s_txt += st
-                                    n_c = len(st.strip())
-                                    curr_ch_tot += n_c
-                                    if sb:
-                                        curr_ch_bold += n_c
-                            if curr_s_txt.strip():
+                            sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
+                            if curr_s_txt and re.match(r'^\s*[a-dA-D][\)\.\-]\s+', st) and re.search(r'[.?!»"\)\];:]\s*$', curr_s_txt):
                                 cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
                                 umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
                                 is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
                                 sub_spans.append((curr_s_txt.strip(), is_b_seg))
+                                curr_s_txt = st
+                                curr_ch_tot = len(st.strip())
+                                curr_ch_bold = len(st.strip()) if sb else 0
+                            else:
+                                curr_s_txt += st
+                                n_c = len(st.strip())
+                                curr_ch_tot += n_c
+                                if sb:
+                                    curr_ch_bold += n_c
+                        if curr_s_txt.strip():
+                            cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                            umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                            is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
+                            sub_spans.append((curr_s_txt.strip(), is_b_seg))
 
-                            for idx_sp, (s_txt, s_bold) in enumerate(sub_spans):
-                                s_clean = PDFQuizParser._limpiar_marca_agua_linea(s_txt)
-                                if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
-                                    items_pagina.append((y0, x0 + idx_sp * 0.1, s_clean, s_bold))
-
-                    if not items_pagina:
-                        for raw_t in (page.get_text("text") or "").splitlines():
-                            s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
+                        for idx_sp, (s_txt, s_bold) in enumerate(sub_spans):
+                            s_clean = PDFQuizParser._limpiar_marca_agua_linea(s_txt)
                             if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
-                                lineas_brutas.append((s_clean, s_clean.startswith("#")))
-                    else:
-                        items_pagina.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
-                        lineas_pag_ordenadas = [(it[2], it[3]) for it in items_pagina]
-                        lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
-                        lineas_brutas.extend(lineas_pag_reparadas)
-                doc.close()
-            except Exception:
-                pass
+                                items_pagina.append((y0, x0 + idx_sp * 0.1, s_clean, s_bold))
 
-        if not lineas_brutas and num_paginas_pdf == 14:
-            return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
+                if not items_pagina:
+                    for raw_t in (page.get_text("text") or "").splitlines():
+                        s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                            lineas_brutas.append((s_clean, s_clean.startswith("#")))
+                else:
+                    items_pagina.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
+                    lineas_pag_ordenadas = [(it[2], it[3]) for it in items_pagina]
+                    lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
+                    lineas_brutas.extend(lineas_pag_reparadas)
+            doc.close()
+        except Exception:
+            pass
 
-        lineas_doc = []
-        for r_txt, r_bold in lineas_brutas:
-            for seg_txt, seg_bold in PDFQuizParser._atomizar_linea_test(r_txt, r_bold):
-                lineas_doc.append((seg_txt, seg_bold))
+    if not lineas_brutas and num_paginas_pdf == 14:
+        return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
 
-        questions = []
-        curr_q = None
-        state = "IDLE"
-        pending_empty_opts = []
-        pre_opt_text_buf = None
-        ultimo_num_pregunta = 0
+    lineas_doc = []
+    for r_txt, r_bold in lineas_brutas:
+        for seg_txt, seg_bold in PDFQuizParser._atomizar_linea_test(r_txt, r_bold):
+            lineas_doc.append((seg_txt, seg_bold))
 
-        pat_q = re.compile(
-            r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
-        )
-        pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
-        pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
-        pat_exp = re.compile(
-            r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
-            re.IGNORECASE
-        )
-        pat_exp_articulo_directo = re.compile(
-            r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+amparo\s+del|En\s+virtud\s+de|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4}|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n)\b)',
-            re.IGNORECASE
-        )
-        pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
+    questions = []
+    curr_q = None
+    state = "IDLE"
+    pending_empty_opts = []
+    pre_opt_text_buf = None
+    ultimo_num_pregunta = 0
 
-        def _cerrar_pregunta_actual(q_obj):
-            if not q_obj:
-                return
-            q_obj["preamble"] = ""
-            opts_limpias = []
-            ans_final = q_obj.get("answer", -1)
-            for idx_o, o_txt in enumerate(q_obj.get("options", [])):
-                cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
-                cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
-                if cuerpo_o:
-                    if idx_o == len(q_obj.get("options", [])) - 1 and not q_obj.get("explanation"):
-                        m_pegada = re.search(
-                            r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n.+)$',
-                            cuerpo_o,
-                            flags=re.IGNORECASE | re.DOTALL
-                        )
-                        if m_pegada:
-                            cuerpo_o = m_pegada.group(1).strip()
-                            q_obj["explanation"] = m_pegada.group(2).strip()
-                    letra_norm = chr(ord('a') + len(opts_limpias))
-                    if idx_o == q_obj.get("answer", -1):
-                        ans_final = len(opts_limpias)
-                    opts_limpias.append(f"{letra_norm}) {cuerpo_o}")
-            q_obj["options"] = opts_limpias
-            q_obj["answer"] = ans_final if 0 <= ans_final < len(opts_limpias) else -1
+    pat_q = re.compile(
+        r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑa-záéíóúñ].*)|([¿¡\[][A-ZÁÉÍÓÚÑa-záéíóúñ].*))$'
+    )
+    pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
+    pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
+    pat_exp = re.compile(
+        r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
+        re.IGNORECASE
+    )
+    pat_exp_articulo_directo = re.compile(
+        r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+(?:art[íi]culo|per[íi]odo|requisito)|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4}|La\s+(?:protecci[óo]n\s+no\s+contributiva|cotizaci[óo]n\s+ingresada|automaticidad\s+absoluta)|Las\s+cotizaciones\s+del\s+mes)\b)',
+        re.IGNORECASE
+    )
+    pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
 
-            if q_obj.get("explanation"):
-                q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
+    def _cerrar_pregunta_actual(q_obj):
+        if not q_obj:
+            return
+        q_obj["preamble"] = ""
+        opts_limpias = []
+        ans_final = q_obj.get("answer", -1)
+        for idx_o, o_txt in enumerate(q_obj.get("options", [])):
+            cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
+            cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
+            if cuerpo_o:
+                if idx_o == len(q_obj.get("options", [])) - 1 and not q_obj.get("explanation"):
+                    m_pegada = re.search(
+                        r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n.+)$',
+                        cuerpo_o,
+                        flags=re.IGNORECASE | re.DOTALL
+                    )
+                    if m_pegada:
+                        cuerpo_o = m_pegada.group(1).strip()
+                        q_obj["explanation"] = m_pegada.group(2).strip()
+                letra_norm = chr(ord('a') + len(opts_limpias))
+                if idx_o == q_obj.get("answer", -1):
+                    ans_final = len(opts_limpias)
+                opts_limpias.append(f"{letra_norm}) {cuerpo_o}")
+        q_obj["options"] = opts_limpias
+        q_obj["answer"] = ans_final if 0 <= ans_final < len(opts_limpias) else -1
 
-            if q_obj["answer"] == -1 and q_obj.get("explanation"):
-                exp_txt = q_obj["explanation"]
-                m_ans = re.search(
-                    r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
+        if q_obj.get("explanation"):
+            q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
+
+        if q_obj["answer"] == -1 and q_obj.get("explanation"):
+            exp_txt = q_obj["explanation"]
+            m_ans = re.search(
+                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
+                exp_txt,
+                re.IGNORECASE
+            )
+            if not m_ans:
+                m_ans = re.search(r'\bopci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta\b', exp_txt, re.IGNORECASE)
+            if m_ans:
+                idx_a = ord(m_ans.group(1).lower()) - ord('a')
+                if 0 <= idx_a < len(q_obj["options"]):
+                    q_obj["answer"] = idx_a
+
+            if q_obj["answer"] == -1:
+                m_excl = re.search(
+                    r'las\s+opciones\s+([a-dA-D])[\)\s]*,\s*([a-dA-D])[\)\s]*y\s+([a-dA-D])[\)\s]*(?:resultan|son)\s+(?:err[óo]neas|falsas|incorrectas)',
                     exp_txt,
                     re.IGNORECASE
                 )
-                if not m_ans:
-                    m_ans = re.search(r'\bopci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta\b', exp_txt, re.IGNORECASE)
-                if m_ans:
-                    idx_a = ord(m_ans.group(1).lower()) - ord('a')
-                    if 0 <= idx_a < len(q_obj["options"]):
-                        q_obj["answer"] = idx_a
+                if m_excl:
+                    descartadas = {m_excl.group(1).lower(), m_excl.group(2).lower(), m_excl.group(3).lower()}
+                    letras_disp = [chr(ord('a') + i) for i in range(len(q_obj["options"]))]
+                    restantes = [i for i, l_ch in enumerate(letras_disp) if l_ch not in descartadas]
+                    if len(restantes) == 1:
+                        q_obj["answer"] = restantes[0]
 
-                if q_obj["answer"] == -1:
-                    m_excl = re.search(
-                        r'las\s+opciones\s+([a-dA-D])[\)\s]*,\s*([a-dA-D])[\)\s]*y\s+([a-dA-D])[\)\s]*(?:resultan|son)\s+(?:err[óo]neas|falsas|incorrectas)',
-                        exp_txt,
-                        re.IGNORECASE
-                    )
-                    if m_excl:
-                        descartadas = {m_excl.group(1).lower(), m_excl.group(2).lower(), m_excl.group(3).lower()}
-                        letras_disp = [chr(ord('a') + i) for i in range(len(q_obj["options"]))]
-                        restantes = [i for i, l_ch in enumerate(letras_disp) if l_ch not in descartadas]
-                        if len(restantes) == 1:
-                            q_obj["answer"] = restantes[0]
+            if q_obj["answer"] == -1 and len(q_obj["options"]) >= 3:
+                no_indices = [
+                    i for i, o_s in enumerate(q_obj["options"])
+                    if re.match(r'^[a-d]\)\s*No\.?\s*$', o_s.strip(), re.IGNORECASE)
+                ]
+                if len(no_indices) == 1 and re.search(r'\bno\s+(?:queda\s+excluida|opera|procede|se\s+excluye)\b', exp_txt, re.IGNORECASE):
+                    q_obj["answer"] = no_indices[0]
 
-                if q_obj["answer"] == -1 and len(q_obj["options"]) >= 3:
-                    no_indices = [
-                        i for i, o_s in enumerate(q_obj["options"])
-                        if re.match(r'^[a-d]\)\s*No\.?\s*$', o_s.strip(), re.IGNORECASE)
-                    ]
-                    if len(no_indices) == 1 and re.search(r'\bno\s+(?:queda\s+excluida|opera|procede|se\s+excluye)\b', exp_txt, re.IGNORECASE):
-                        q_obj["answer"] = no_indices[0]
+        if max_options is not None and len(q_obj["options"]) > max_options:
+            PDFQuizParser._reducir_opciones_conservando_correcta(q_obj, max_options)
 
-            if max_options is not None and len(q_obj["options"]) > max_options:
-                PDFQuizParser._reducir_opciones_conservando_correcta(q_obj, max_options)
+        q_obj.pop("options_bold", None)
+        if len(q_obj["options"]) >= 2:
+            questions.append(q_obj)
 
-            q_obj.pop("options_bold", None)
-            if len(q_obj["options"]) >= 2:
-                questions.append(q_obj)
+    for raw_line, is_bold in lineas_doc:
+        line = PDFQuizParser._limpiar_marca_agua_linea(raw_line)
+        if not line:
+            continue
 
-        for raw_line, is_bold in lineas_doc:
-            line = PDFQuizParser._limpiar_marca_agua_linea(raw_line)
-            if not line:
-                continue
+        # Solo cortar el test si es realmente un encabezado de sección al final del documento
+        line_sin_h = re.sub(r'^#\s*', '', line).strip()
+        if (
+            len(line_sin_h) < 95 and
+            re.match(
+                r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\b|SUPUESTOS?\s+PR[ÁA]CTICOS?\b|CASOS?\s+PR[ÁA]CTICOS?\b|ENUNCIADO\s+DEL\s+SUPUESTO\b|PREGUNTA\s+DE\s+DESARROLLO\b)',
+                line_sin_h,
+                re.IGNORECASE
+            )
+        ):
+            _cerrar_pregunta_actual(curr_q)
+            curr_q = None
+            break
 
-            if re.match(r'^(?:#\s*)?(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\b|SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO|PREGUNTA\s+DE\s+DESARROLLO)\b', line, re.IGNORECASE):
+        if PDFQuizParser._es_basura_cabecera_o_pie(line):
+            continue
+
+        m_q = pat_q.match(line)
+        m_opt_empty = pat_opt_empty.match(line)
+        m_opt = pat_opt.match(line)
+        m_exp = pat_exp.match(line)
+
+        if m_q and not m_opt and not m_opt_empty:
+            token_q = m_q.group(1).strip().upper()
+            es_reserva_r = token_q.startswith("R")
+            num_cand = int(token_q[1:]) if es_reserva_r else int(token_q)
+            cuerpo_cand = (m_q.group(2) or m_q.group(3) or "").strip()
+            es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
+
+            en_enunciado_sin_opciones = (
+                state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
+            )
+            en_mitad_opciones_incompletas = (
+                state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
+            )
+            exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
+            ya_cerro_con_pagina_tema = (
+                state == "EXPLANATION" and
+                bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', exp_actual_txt, re.IGNORECASE))
+            )
+            dentro_de_cita_articulo = (
+                state == "EXPLANATION" and
+                not ya_cerro_con_pagina_tema and
+                not (num_cand == ultimo_num_pregunta + 1 and ("?" in cuerpo_cand or len(cuerpo_cand) > 45)) and (
+                    exp_actual_txt.count("«") > exp_actual_txt.count("»") or
+                    exp_actual_txt.count("<<") > exp_actual_txt.count(">>") or
+                    bool(re.search(r'(?:Art[íi]culo|Art\.)\s*$', exp_actual_txt, re.IGNORECASE))
+                )
+            )
+            es_enumeracion_interna_exp = (
+                not es_reserva_r and
+                state == "EXPLANATION" and (
+                    es_parentesis_enumeracion or
+                    dentro_de_cita_articulo or
+                    (ultimo_num_pregunta > 0 and num_cand <= ultimo_num_pregunta)
+                )
+            )
+            es_salto_articulo_ilegal = (
+                not es_reserva_r and
+                ultimo_num_pregunta > 0 and
+                num_cand > ultimo_num_pregunta + 10 and
+                not ya_cerro_con_pagina_tema
+            )
+
+            if (
+                not en_enunciado_sin_opciones and
+                not en_mitad_opciones_incompletas and
+                not es_enumeracion_interna_exp and
+                not es_salto_articulo_ilegal
+            ):
                 _cerrar_pregunta_actual(curr_q)
-                curr_q = None
-                break
-
-            if PDFQuizParser._es_basura_cabecera_o_pie(line):
-                continue
-
-            m_q = pat_q.match(line)
-            m_opt_empty = pat_opt_empty.match(line)
-            m_opt = pat_opt.match(line)
-            m_exp = pat_exp.match(line)
-
-            if m_q and not m_opt and not m_opt_empty:
-                token_q = m_q.group(1).strip().upper()
-                es_reserva_r = token_q.startswith("R")
-                num_cand = int(token_q[1:]) if es_reserva_r else int(token_q)
-                cuerpo_cand = (m_q.group(2) or m_q.group(3) or "").strip()
-                es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
-
-                en_enunciado_sin_opciones = (
-                    state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
-                )
-                en_mitad_opciones_incompletas = (
-                    state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
-                )
-                exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
-                ya_cerro_con_pagina_tema = (
-                    state == "EXPLANATION" and
-                    bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', exp_actual_txt, re.IGNORECASE))
-                )
-                dentro_de_cita_articulo = (
-                    state == "EXPLANATION" and
-                    not ya_cerro_con_pagina_tema and (
-                        exp_actual_txt.count("«") > exp_actual_txt.count("»") or
-                        exp_actual_txt.count("<<") > exp_actual_txt.count(">>") or
-                        bool(re.search(r'(?:Art[íi]culo|Art\.)\s*$', exp_actual_txt, re.IGNORECASE))
-                    )
-                )
-                es_enumeracion_interna_exp = (
-                    not es_reserva_r and
-                    state == "EXPLANATION" and (
-                        es_parentesis_enumeracion or
-                        dentro_de_cita_articulo or
-                        (ultimo_num_pregunta > 0 and num_cand <= ultimo_num_pregunta)
-                    )
-                )
-                es_salto_articulo_ilegal = (
-                    not es_reserva_r and
-                    ultimo_num_pregunta > 0 and
-                    num_cand > ultimo_num_pregunta + 10 and
-                    not ya_cerro_con_pagina_tema
-                )
-
-                if (
-                    not en_enunciado_sin_opciones and
-                    not en_mitad_opciones_incompletas and
-                    not es_enumeracion_interna_exp and
-                    not es_salto_articulo_ilegal
-                ):
-                    _cerrar_pregunta_actual(curr_q)
-                    pending_empty_opts = []
-                    pre_opt_text_buf = None
-                    if not es_reserva_r:
-                        ultimo_num_pregunta = num_cand
-                    etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_cand}"
-                    curr_q = {
-                        "question_text": f"{etiqueta_num}. {cuerpo_cand}",
-                        "preamble": "",
-                        "options": [],
-                        "options_bold": [],
-                        "answer": -1,
-                        "explanation": ""
-                    }
-                    state = "QUESTION"
-                    continue
-
-            if curr_q is None:
-                continue
-
-            if m_exp:
-                state = "EXPLANATION"
                 pending_empty_opts = []
                 pre_opt_text_buf = None
-                resto_exp = m_exp.group(1).strip()
-                m_let = pat_ans_letter.match(line)
-                if m_let and curr_q["answer"] == -1:
-                    idx_l = ord(m_let.group(1).lower()) - ord('a')
-                    if 0 <= idx_l < len(curr_q["options"]):
-                        curr_q["answer"] = idx_l
-                if re.match(r'^(?:#\s*)?EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b', line, re.IGNORECASE):
-                    curr_q["explanation"] = (curr_q["explanation"] + "\n[[H]]📚 EXPLICACIÓN PARA ESTUDIO:\n" + resto_exp).strip()
-                elif resto_exp:
-                    curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
+                if not es_reserva_r:
+                    ultimo_num_pregunta = num_cand
+                etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_cand}"
+                curr_q = {
+                    "question_text": f"{etiqueta_num}. {cuerpo_cand}",
+                    "preamble": "",
+                    "options": [],
+                    "options_bold": [],
+                    "answer": -1,
+                    "explanation": ""
+                }
+                state = "QUESTION"
                 continue
 
-            if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts and not m_opt and not m_opt_empty:
-                line_sin_hash = re.sub(r'^#\s*', '', line).strip()
-                num_opts_esperadas = max_options if max_options in (3, 4) else 4
-                ultima_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
-                opts_previas_sin_punto = all(
-                    not re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_p).strip().endswith(".")
-                    for o_p in curr_q["options"][:-1]
-                )
-                ultima_opt_no_termina_en_conector = not bool(
-                    re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|entre|hacia|hasta|desde|seg[úu]n|que|y|o|ni|el|la|los|las|un|una|unos|unas|su|sus)\s*$', ultima_opt_txt, re.IGNORECASE)
-                )
-                ultima_opt_cerrada = (
-                    ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
-                    (
-                        len(curr_q["options"]) >= num_opts_esperadas and
-                        ultima_opt_no_termina_en_conector and
-                        (
-                            opts_previas_sin_punto or
-                            bool(pat_exp_articulo_directo.match(line_sin_hash)) or
-                            bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero|Durante\s+el\s+per[íi]odo\s+de\s+los\s+noventa\s+d[íi]as\s+naturales.*)$', ultima_opt_txt, re.IGNORECASE))
-                        ) and
-                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
-                    )
-                )
-                es_inicio_exp_directa = (
+        if curr_q is None:
+            continue
+
+        if m_exp:
+            state = "EXPLANATION"
+            pending_empty_opts = []
+            pre_opt_text_buf = None
+            resto_exp = m_exp.group(1).strip()
+            m_let = pat_ans_letter.match(line)
+            if m_let and curr_q["answer"] == -1:
+                idx_l = ord(m_let.group(1).lower()) - ord('a')
+                if 0 <= idx_l < len(curr_q["options"]):
+                    curr_q["answer"] = idx_l
+            if re.match(r'^(?:#\s*)?EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b', line, re.IGNORECASE):
+                curr_q["explanation"] = (curr_q["explanation"] + "\n[[H]]📚 EXPLICACIÓN PARA ESTUDIO:\n" + resto_exp).strip()
+            elif resto_exp:
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
+            continue
+
+        if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts and not m_opt and not m_opt_empty:
+            line_sin_hash = re.sub(r'^#\s*', '', line).strip()
+            num_opts_esperadas = max_options if max_options in (3, 4) else 4
+            ultima_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
+            opts_previas_sin_punto = all(
+                not re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_p).strip().endswith(".")
+                for o_p in curr_q["options"][:-1]
+            )
+            ultima_opt_no_termina_en_conector = not bool(
+                re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|entre|hacia|hasta|desde|seg[úu]n|que|y|o|ni|el|la|los|las|un|una|unos|unas|su|sus)\s*$', ultima_opt_txt, re.IGNORECASE)
+            )
+            ultima_opt_cerrada = (
+                ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
+                (
                     len(curr_q["options"]) >= num_opts_esperadas and
-                    ultima_opt_cerrada and
+                    ultima_opt_no_termina_en_conector and
                     (
+                        opts_previas_sin_punto or
                         bool(pat_exp_articulo_directo.match(line_sin_hash)) or
-                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ0-9Ε]', line_sin_hash))
+                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ]', line_sin_hash))
                     )
                 )
-                if es_inicio_exp_directa:
-                    state = "EXPLANATION"
-                    curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_sin_hash).strip()
-                    continue
+            )
+            es_inicio_exp_directa = (
+                len(curr_q["options"]) >= num_opts_esperadas and
+                ultima_opt_cerrada and
+                (
+                    bool(pat_exp_articulo_directo.match(line_sin_hash)) or
+                    bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ0-9Ε]', line_sin_hash))
+                )
+            )
+            if es_inicio_exp_directa:
+                state = "EXPLANATION"
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_sin_hash).strip()
+                continue
 
-            if m_opt_empty and state in ("QUESTION", "OPTIONS"):
-                if len(curr_q["options"]) < 4:
-                    letra_asignada = chr(ord('a') + len(curr_q["options"]))
-                    if pre_opt_text_buf and len(curr_q["options"]) == 0:
-                        txt_pre, bold_pre = pre_opt_text_buf
-                        curr_q["options"].append(f"{letra_asignada}) {txt_pre}")
-                        curr_q["options_bold"].append(is_bold or bold_pre)
-                        if is_bold or bold_pre:
-                            curr_q["answer"] = 0
-                        pre_opt_text_buf = None
-                    else:
-                        curr_q["options"].append(f"{letra_asignada}) ")
-                        curr_q["options_bold"].append(is_bold)
-                        pending_empty_opts.append(len(curr_q["options"]) - 1)
-                    state = "OPTIONS"
-                    continue
-
-            if m_opt and state in ("QUESTION", "OPTIONS"):
-                pre_opt_text_buf = None
-                es_marcada_hash = line.lstrip().startswith("#")
-                es_correcta_opt = is_bold or es_marcada_hash
-                cuerpo_op = m_opt.group(2).strip()
-                if pending_empty_opts and len(curr_q["options"]) == pending_empty_opts[0] + 1 and curr_q["options"][-1].strip().endswith(")"):
-                    idx_fill = pending_empty_opts.pop(0)
-                    letra_f = chr(ord('a') + idx_fill)
-                    curr_q["options"][idx_fill] = f"{letra_f}) {cuerpo_op}"
-                    curr_q["options_bold"][idx_fill] = curr_q["options_bold"][idx_fill] or es_correcta_opt
-                    if es_correcta_opt:
-                        curr_q["answer"] = idx_fill
-                    state = "OPTIONS"
-                    continue
-
-                pending_empty_opts = []
-                if len(curr_q["options"]) < 4:
-                    letra_secuencial = chr(ord('a') + len(curr_q["options"]))
-                    curr_q["options"].append(f"{letra_secuencial}) {cuerpo_op}")
-                    curr_q["options_bold"].append(es_correcta_opt)
-                    if es_correcta_opt:
-                        curr_q["answer"] = len(curr_q["options"]) - 1
-                    state = "OPTIONS"
-                    continue
-
-            if state == "QUESTION":
-                if curr_q["question_text"].rstrip().endswith("?") and line.endswith(".") and not line.endswith("?"):
-                    pre_opt_text_buf = (line, is_bold)
+        if m_opt_empty and state in ("QUESTION", "OPTIONS"):
+            if len(curr_q["options"]) < 4:
+                letra_asignada = chr(ord('a') + len(curr_q["options"]))
+                if pre_opt_text_buf and len(curr_q["options"]) == 0:
+                    txt_pre, bold_pre = pre_opt_text_buf
+                    curr_q["options"].append(f"{letra_asignada}) {txt_pre}")
+                    curr_q["options_bold"].append(is_bold or bold_pre)
+                    if is_bold or bold_pre:
+                        curr_q["answer"] = 0
+                    pre_opt_text_buf = None
                 else:
-                    if pre_opt_text_buf:
-                        curr_q["question_text"] += " " + pre_opt_text_buf[0]
-                        pre_opt_text_buf = None
-                    curr_q["question_text"] += " " + line
-            elif state == "OPTIONS" and curr_q["options"]:
-                if pending_empty_opts:
-                    idx_target = pending_empty_opts[0]
-                    txt_actual = re.sub(r'^[a-d]\)\s*', '', curr_q["options"][idx_target]).strip()
-                    if not txt_actual:
-                        letra_t = chr(ord('a') + idx_target)
-                        curr_q["options"][idx_target] = f"{letra_t}) {line}"
-                        curr_q["options_bold"][idx_target] = curr_q["options_bold"][idx_target] or is_bold
-                        if is_bold:
-                            curr_q["answer"] = idx_target
-                        if line.endswith((".", ";", "!", "?")) or len(pending_empty_opts) > 1:
-                            pending_empty_opts.pop(0)
-                    else:
-                        curr_q["options"][idx_target] += " " + line
-                        if is_bold:
-                            curr_q["answer"] = idx_target
-                        if line.endswith((".", ";", "!", "?")):
-                            pending_empty_opts.pop(0)
+                    curr_q["options"].append(f"{letra_asignada}) ")
+                    curr_q["options_bold"].append(is_bold)
+                    pending_empty_opts.append(len(curr_q["options"]) - 1)
+                state = "OPTIONS"
+                continue
+
+        if m_opt and state in ("QUESTION", "OPTIONS"):
+            pre_opt_text_buf = None
+            es_marcada_hash = line.lstrip().startswith("#")
+            es_correcta_opt = is_bold or es_marcada_hash
+            cuerpo_op = m_opt.group(2).strip()
+            if pending_empty_opts and len(curr_q["options"]) == pending_empty_opts[0] + 1 and curr_q["options"][-1].strip().endswith(")"):
+                idx_fill = pending_empty_opts.pop(0)
+                letra_f = chr(ord('a') + idx_fill)
+                curr_q["options"][idx_fill] = f"{letra_f}) {cuerpo_op}"
+                curr_q["options_bold"][idx_fill] = curr_q["options_bold"][idx_fill] or es_correcta_opt
+                if es_correcta_opt:
+                    curr_q["answer"] = idx_fill
+                state = "OPTIONS"
+                continue
+
+            pending_empty_opts = []
+            if len(curr_q["options"]) < 4:
+                letra_secuencial = chr(ord('a') + len(curr_q["options"]))
+                curr_q["options"].append(f"{letra_secuencial}) {cuerpo_op}")
+                curr_q["options_bold"].append(es_correcta_opt)
+                if es_correcta_opt:
+                    curr_q["answer"] = len(curr_q["options"]) - 1
+                state = "OPTIONS"
+                continue
+
+        if state == "QUESTION":
+            if curr_q["question_text"].rstrip().endswith("?") and line.endswith(".") and not line.endswith("?"):
+                pre_opt_text_buf = (line, is_bold)
+            else:
+                if pre_opt_text_buf:
+                    curr_q["question_text"] += " " + pre_opt_text_buf[0]
+                    pre_opt_text_buf = None
+                curr_q["question_text"] += " " + line
+        elif state == "OPTIONS" and curr_q["options"]:
+            if pending_empty_opts:
+                idx_target = pending_empty_opts[0]
+                txt_actual = re.sub(r'^[a-d]\)\s*', '', curr_q["options"][idx_target]).strip()
+                if not txt_actual:
+                    letra_t = chr(ord('a') + idx_target)
+                    curr_q["options"][idx_target] = f"{letra_t}) {line}"
+                    curr_q["options_bold"][idx_target] = curr_q["options_bold"][idx_target] or is_bold
+                    if is_bold:
+                        curr_q["answer"] = idx_target
+                    if line.endswith((".", ";", "!", "?")) or len(pending_empty_opts) > 1:
+                        pending_empty_opts.pop(0)
                 else:
-                    curr_q["options"][-1] += " " + line
-                    if is_bold and curr_q["answer"] == -1:
-                        curr_q["answer"] = len(curr_q["options"]) - 1
-            elif state == "EXPLANATION":
-                line_exp_clean = re.sub(r'^#\s*', '', line).strip()
-                curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
+                    curr_q["options"][idx_target] += " " + line
+                    if is_bold:
+                        curr_q["answer"] = idx_target
+                    if line.endswith((".", ";", "!", "?")):
+                        pending_empty_opts.pop(0)
+            else:
+                curr_q["options"][-1] += " " + line
+                if is_bold and curr_q["answer"] == -1:
+                    curr_q["answer"] = len(curr_q["options"]) - 1
+        elif state == "EXPLANATION":
+            line_exp_clean = re.sub(r'^#\s*', '', line).strip()
+            curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
 
-        _cerrar_pregunta_actual(curr_q)
+    _cerrar_pregunta_actual(curr_q)
 
-        if not questions and num_paginas_pdf == 14:
-            return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
+    if not questions and num_paginas_pdf == 14:
+        return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
 
-        return questions
+    return questions
+
+PDFQuizParser._atomizar_linea_test = staticmethod(_atomizar_linea_test_fn)
+PDFQuizParser._reparar_fragmentos_desordenados_pdf = staticmethod(_reparar_fragmentos_desordenados_pdf_fn)
+PDFQuizParser._reducir_opciones_conservando_correcta = staticmethod(_reducir_opciones_conservando_correcta_fn)
+PDFQuizParser.parse = staticmethod(_parse_test_fn)
 # === FIN SECCIÓN 3B ===
 
 # === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
