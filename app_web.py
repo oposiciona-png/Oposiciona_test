@@ -1545,7 +1545,7 @@ class PDFQuizParser:
     def _formatear_html_planteamiento_supuesto(lineas_planteamiento):
         bloques = []
         pat_ordinal_caso = re.compile(
-            r'^(?:[•·\-\*▪■]\s*)?(En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo(?:\s+y\s+[úu]ltimo)?)\s+lugar\b.*)$',
+            r'^(?:[•·\-\*▪■]|\d{1,2}\s*[\.\-\)])?\s*(En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo(?:\s+y\s+[úu]ltimo)?|el\s+plano)\b.*)$',
             re.IGNORECASE
         )
         for item in lineas_planteamiento:
@@ -1557,21 +1557,21 @@ class PDFQuizParser:
 
             m_ord = pat_ordinal_caso.match(txt_p)
             if m_ord or txt_p.startswith(("·", "•", "▪", "■")):
-                html_limpio = re.sub(r'^(?:<[^>]+>)*\s*[•·\-\*▪■]\s*', '', html_p).strip()
+                html_limpio = re.sub(r'^(?:<[^>]+>)*\s*(?:[•·\-\*▪■]|\d{1,2}\s*[\.\-\)])\s*', '', html_p).strip()
                 bloques.append(
-                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
-                    f"·&nbsp;&nbsp;{html_limpio}"
+                    f"<div style='margin:0 0 4px 0; padding-left:12px; text-indent:-8px; font-size:8.5pt !important; line-height:1.32; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
+                    f"·&nbsp;{html_limpio}"
                     f"</div>"
                 )
             elif es_lista:
                 bloques.append(
-                    f"<div style='margin:0 0 5px 0; padding-left:14px; text-indent:-10px; font-size:10pt !important; line-height:1.38; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
-                    f"·&nbsp;&nbsp;{html_p}"
+                    f"<div style='margin:0 0 4px 0; padding-left:12px; text-indent:-8px; font-size:8.5pt !important; line-height:1.32; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
+                    f"·&nbsp;{html_p}"
                     f"</div>"
                 )
             else:
                 bloques.append(
-                    f"<p style='margin:0 0 6px 0; font-size:10pt !important; line-height:1.4; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
+                    f"<p style='margin:0 0 4px 0; font-size:8.5pt !important; line-height:1.34; color:#1E293B !important; text-align:justify; font-weight:normal;'>"
                     f"{html_p}"
                     f"</p>"
                 )
@@ -1633,8 +1633,9 @@ class PDFQuizParser:
             r'(?:responda\s+de\s+forma\s+razonada|siguientes\s+(?:\w+\s+)?cuestiones\s+pr[áa]cticas|responda\s+a\s+las\s+siguientes\s+preguntas)\s*:\s*$',
             re.IGNORECASE
         )
+        # Reconoce párrafos del planteamiento tanto con viñeta como numerados ("1. En primer lugar...", "2. En segundo lugar...", "3. En el plano institucional...")
         pat_ordinal_enunciado = re.compile(
-            r'^(?:[•·\-\*▪■]\s*)?En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo(?:\s+y\s+[úu]ltimo)?)\s+lugar\b',
+            r'^(?:[•·\-\*▪■]|\d{1,2}\s*[\.\-\)])?\s*(?:En\s+(?:primer|segundo|tercer|cuarto|quinto|sexto|s[ée]ptimo|octavo|noveno|d[ée]cimo(?:\s+y\s+[úu]ltimo)?)\s+lugar|En\s+el\s+plano\s+(?:institucional|jur[íi]dico|empresarial|familiar|laboral))\b',
             re.IGNORECASE
         )
         pat_verbo_pregunta = re.compile(
@@ -1730,15 +1731,21 @@ class PDFQuizParser:
             if m_q and not es_subapartado_respuesta:
                 num_cand = int(m_q.group(1))
                 cuerpo_cand = (m_q.group(2) or "").strip()
-                es_correlativa = (
-                    (leyendo_planteamiento and num_cand == 1 and len(lineas_planteamiento) > 0) or
-                    (not leyendo_planteamiento and (num_cand == contador_preguntas + 1 or (curr_q is not None and len(curr_q["explanation_lines"]) > 0)))
-                )
-                if (
-                    es_correlativa or
-                    cierre_planteamiento_visto or
+                tiene_rasgo_pregunta = (
                     "?" in cuerpo_cand or
-                    pat_verbo_pregunta.match(cuerpo_cand)
+                    bool(pat_verbo_pregunta.match(cuerpo_cand)) or
+                    cuerpo_cand.rstrip().endswith(":")
+                )
+                es_correlativa_posterior = (
+                    not leyendo_planteamiento and (
+                        num_cand == contador_preguntas + 1 or
+                        (curr_q is not None and len(curr_q["explanation_lines"]) > 0)
+                    )
+                )
+                # Mientras estamos en el planteamiento, solo se abre la pregunta 1 si tiene rasgo real de pregunta (?, verbo de cuestión o cierre previo visto)
+                if (
+                    (leyendo_planteamiento and len(lineas_planteamiento) > 0 and (tiene_rasgo_pregunta or cierre_planteamiento_visto)) or
+                    (es_correlativa_posterior and (tiene_rasgo_pregunta or len(curr_q["explanation_lines"]) > 0))
                 ):
                     es_nueva_pregunta = True
                     num_q = num_cand
@@ -2037,7 +2044,6 @@ class PDFQuizParser:
         if not l or l in ("0", "-", "#"):
             return []
 
-        # Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras el punto final de una explicación, dividirla primero
         partes_r = re.split(
             r'(?<=[.?!»"\)\]])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
             l
@@ -2451,7 +2457,6 @@ class PDFQuizParser:
                     curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
                 continue
 
-            # Detección automática de explicaciones sin la palabra "EXPLICACIÓN" tras la última opción (3 opciones en Gestión o 4 en Administrativos)
             if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts and not m_opt and not m_opt_empty:
                 line_sin_hash = re.sub(r'^#\s*', '', line).strip()
                 num_opts_esperadas = max_options if max_options in (3, 4) else 4
