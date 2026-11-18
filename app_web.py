@@ -1842,7 +1842,7 @@ _RESPALDO_TEMA_73_TEST = [
         "question_text": "7. Un trabajador del SEA adeuda las cuotas por inactividad de dos meses consecutivos. El último día para el pago entra en situación de Incapacidad Temporal. ¿Cuándo surtirá efectos su baja de oficio y exclusión del sistema especial?",
         "preamble": "",
         "options": [
-            "a) No podrá ser excluido mientras permanezca de baja médica.",
+            "a) No podrá ser excluido mientras permanca de baja médica.",
             "b) El día primero del mes siguiente a aquel en que finaliza la prestación por IT (si sigue sin pagar).",
             "c) El día primero del mes siguiente a la segunda mensualidad no ingresada de forma inexcusable."
         ],
@@ -2098,8 +2098,21 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     if not l or l in ("0", "-", "#"):
         return []
 
+    # 1. Si después de "(página X, tema Y)" o del cierre de una cita ">>>" viene pegada una nueva pregunta en la misma línea, dividirla primero
+    partes_post_pag = re.split(
+        r'(?<=\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s+(?=(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
+        l,
+        flags=re.IGNORECASE
+    )
+    if len(partes_post_pag) > 1:
+        res_pp = []
+        for ppp in partes_post_pag:
+            res_pp.extend(PDFQuizParser._atomizar_linea_test(ppp, is_bold))
+        return res_pp
+
+    # 2. Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras el punto final de una explicación, dividirla
     partes_r = re.split(
-        r'(?<=[.?!»"\)\]])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
+        r'(?<=[.?!»"\)\]>])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
         l
     )
     if len(partes_r) > 1:
@@ -2119,7 +2132,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     m_exp_inline = None
     if not es_inicio_enunciado_numerado:
         if es_inicio_opcion:
-            # Si la línea empieza por a), b), c) o d), SOLO separar si lleva explícitamente la etiqueta EXPLICACIÓN: al final o el caso exacto de P5 Tema 56
             m_exp_inline = re.search(
                 r'(?:(?<=[.?!»"\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n)\s*.*)$',
                 l,
@@ -2454,24 +2466,44 @@ def _parse_test_fn(file_bytes, max_options=None):
                 state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
             )
             exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
-            # Reconoce "(página X, tema Y)" o "(páginas X y Y, tema Z)"
             ya_cerro_con_pagina_tema = (
                 state == "EXPLANATION" and
-                bool(re.search(r'\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\)', exp_actual_txt[-180:], re.IGNORECASE))
+                bool(re.search(r'\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\)', exp_actual_txt[-220:], re.IGNORECASE))
             )
-            aperturas_cita = len(re.findall(r'«|<<+', exp_actual_txt))
-            cierres_cita = len(re.findall(r'»|>>+', exp_actual_txt))
-            es_correlativa_exacta = (ultimo_num_pregunta > 0 and num_cand == ultimo_num_pregunta + 1)
+            aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
+            cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
+            es_correlativa_exacta = (
+                ultimo_num_pregunta > 0 and
+                num_cand == ultimo_num_pregunta + 1 and
+                not es_parentesis_enumeracion and
+                len(cuerpo_cand) >= 25 and
+                not bool(re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:)', cuerpo_cand, re.IGNORECASE))
+            )
+
+            # Si es la pregunta correlativa exacta (N+1) y ya se leyeron las opciones de la pregunta N, abrir siempre la pregunta N+1
+            if es_correlativa_exacta and curr_q is not None and len(curr_q.get("options", [])) >= 3:
+                _cerrar_pregunta_actual(curr_q)
+                pending_empty_opts = []
+                pre_opt_text_buf = None
+                ultimo_num_pregunta = num_cand
+                curr_q = {
+                    "question_text": f"{num_cand}. {cuerpo_cand}",
+                    "preamble": "",
+                    "options": [],
+                    "options_bold": [],
+                    "answer": -1,
+                    "explanation": ""
+                }
+                state = "QUESTION"
+                continue
 
             dentro_de_cita_articulo = (
                 state == "EXPLANATION" and
-                not ya_cerro_con_pagina_tema and
-                not (es_correlativa_exacta and ("?" in cuerpo_cand or cuerpo_cand.rstrip().endswith(":") or len(cuerpo_cand) > 55)) and (
+                not ya_cerro_con_pagina_tema and (
                     aperturas_cita > cierres_cita or
                     bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE))
                 )
             )
-            # Reinicio de numeración en exámenes recopilatorios (ej. 1..25 seguido de otro bloque 1..25 tras haber cerrado con "(página X, tema Y)")
             es_reinicio_bloque_test = (
                 state == "EXPLANATION" and
                 len(curr_q.get("options", [])) >= 3 and
