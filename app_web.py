@@ -1770,7 +1770,6 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3A ===
 
-
 # === SECCIÓN 3B: MOTOR DE EXTRACCIÓN DE PREGUNTAS TIPO TEST ===
 _RESPALDO_TEMA_73_TEST = [
     {
@@ -2631,7 +2630,6 @@ def _parse_test_fn(file_bytes, max_options=None):
         for idx_o, o_txt in enumerate(q_obj.get("options", [])):
             cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
             cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
-            # Limpiar errata de OCR en Pregunta 18 de Tema 01 / Tema 51 ("su radical desvinculación independencia" o "radical independencia ... desvinculación")
             cuerpo_o = re.sub(r'radical\s+desvinculaci[óo]n\s+independencia', 'radical desvinculación o independencia', cuerpo_o, flags=re.IGNORECASE)
             cuerpo_o = re.sub(r'radical\s+independencia\s+de\s+cualquier\s+r[ée]gimen\s+profesional\s+del\s+sistema\.\s*desvinculaci[óo]n', 'radical desvinculación o independencia de cualquier régimen profesional del sistema.', cuerpo_o, flags=re.IGNORECASE)
             if cuerpo_o:
@@ -2702,10 +2700,12 @@ def _parse_test_fn(file_bytes, max_options=None):
             continue
 
         line_sin_h = re.sub(r'^#\s*', '', line).strip()
+        # Solo cortar el test si es un título de sección real (sin enunciado detrás de "Supuesto práctico:" en una pregunta numerada como "6. Supuesto práctico: Un trabajador...")
         if (
-            len(line_sin_h) < 95 and
+            len(line_sin_h) < 75 and
+            not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', line_sin_h, re.IGNORECASE) and
             re.match(
-                r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\b|SUPUESTOS?\s+PR[ÁA]CTICOS?\b|CASOS?\s+PR[ÁA]CTICOS?\b|ENUNCIADO\s+DEL\s+SUPUESTO\b|PREGUNTA\s+DE\s+DESARROLLO\b)',
+                r'^(?:(?:I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\b|SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+DE\s+DESARROLLO|\s+FINAL(?:ES)?|\s*\(.*\))?\s*:?\s*$|CASOS?\s+PR[ÁA]CTICOS?\s*:?\s*$|ENUNCIADO\s+DEL\s+SUPUESTO\b|PREGUNTAS?\s+DE\s+DESARROLLO\b)',
                 line_sin_h,
                 re.IGNORECASE
             )
