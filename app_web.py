@@ -2112,15 +2112,27 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     es_inicio_enunciado_numerado = bool(
         re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))', l, re.IGNORECASE)
     )
+    es_inicio_opcion = bool(
+        re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l)
+    )
+
     m_exp_inline = None
     if not es_inicio_enunciado_numerado:
-        m_exp_inline = re.search(
-            r'(?:(?<=[.?!»"\)\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|(?:Art[íi]culos?|Arts?\.|El\s+(?:art[íi]culo|per[íi]odo|requisito)|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Disposici[óo]n\s+(?:adicional|transitoria|final)|La\s+(?:protecci[óo]n\s+no\s+contributiva|cotizaci[óo]n\s+ingresada|automaticidad\s+absoluta)|Las\s+cotizaciones\s+del\s+mes))\s*.*)$',
-            l,
-            flags=re.IGNORECASE
-        )
+        if es_inicio_opcion:
+            # Si la línea empieza por a), b), c) o d), SOLO separar si lleva explícitamente la etiqueta EXPLICACIÓN: al final o el caso exacto de P5 Tema 56
+            m_exp_inline = re.search(
+                r'(?:(?<=[.?!»"\]])\s+|(?<=\bR[ée]gimen)\s+)((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*|En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n)\s*.*)$',
+                l,
+                flags=re.IGNORECASE
+            )
+        else:
+            m_exp_inline = re.search(
+                r'(?<=[.?!»"\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)\s*.*)$',
+                l,
+                flags=re.IGNORECASE
+            )
     cola_exp = None
-    if m_exp_inline and m_exp_inline.start() > 3:
+    if m_exp_inline and m_exp_inline.start() > 4:
         cola_exp = l[m_exp_inline.start():].strip()
         l = l[:m_exp_inline.start()].strip()
 
@@ -2317,7 +2329,7 @@ def _parse_test_fn(file_bytes, max_options=None):
     ultimo_num_pregunta = 0
 
     pat_q = re.compile(
-        r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑa-záéíóúñ].*)|([¿¡\[][A-ZÁÉÍÓÚÑa-záéíóúñ].*))$'
+        r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
     )
     pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
     pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -2326,7 +2338,7 @@ def _parse_test_fn(file_bytes, max_options=None):
         re.IGNORECASE
     )
     pat_exp_articulo_directo = re.compile(
-        r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+(?:art[íi]culo|per[íi]odo|requisito)|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4}|La\s+(?:protecci[óo]n\s+no\s+contributiva|cotizaci[óo]n\s+ingresada|automaticidad\s+absoluta)|Las\s+cotizaciones\s+del\s+mes)\b)',
+        r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+art[íi]culo|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4})\b)',
         re.IGNORECASE
     )
     pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
@@ -2442,33 +2454,29 @@ def _parse_test_fn(file_bytes, max_options=None):
                 state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
             )
             exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
-            # Reconoce cierre de explicación con "(página X, tema Y)" incluso si el tema lleva letra (ej. "tema 5B") o si una palabra suelta de columna cayó debajo
+            # Reconoce "(página X, tema Y)" o "(páginas X y Y, tema Z)"
             ya_cerro_con_pagina_tema = (
                 state == "EXPLANATION" and
-                bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+[0-9A-Za-z]+\)', exp_actual_txt[-160:], re.IGNORECASE))
+                bool(re.search(r'\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\)', exp_actual_txt[-180:], re.IGNORECASE))
             )
-            # Conteo unificado de comillas angulares (por si abre con « y cierra con >> o >>>)
             aperturas_cita = len(re.findall(r'«|<<+', exp_actual_txt))
             cierres_cita = len(re.findall(r'»|>>+', exp_actual_txt))
-            tiene_aspecto_claro_de_enunciado = (
-                "?" in cuerpo_cand or
-                cuerpo_cand.rstrip().endswith(":") or
-                bool(re.match(r'^(?:Señal[ae]|Indiqu?e|Determin[ae]|Conforme|De\s+acuerdo|Seg[úu]n|En\s+relaci[óo]n|Respecto|Ante|Durante|Tras|Un[ao]?\s+|El\s+|La\s+|Los\s+|Las\s+|Si\s+|Para\s+|Al\s+|A\s+tenor)', cuerpo_cand, re.IGNORECASE))
-            )
+            es_correlativa_exacta = (ultimo_num_pregunta > 0 and num_cand == ultimo_num_pregunta + 1)
+
             dentro_de_cita_articulo = (
                 state == "EXPLANATION" and
                 not ya_cerro_con_pagina_tema and
-                not (tiene_aspecto_claro_de_enunciado and len(cuerpo_cand) > 40) and (
+                not (es_correlativa_exacta and ("?" in cuerpo_cand or cuerpo_cand.rstrip().endswith(":") or len(cuerpo_cand) > 55)) and (
                     aperturas_cita > cierres_cita or
-                    bool(re.search(r'(?:Art[íi]culo|Art\.)\s*$', exp_actual_txt, re.IGNORECASE))
+                    bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE))
                 )
             )
-            # Permitir reinicios de numeración (ej. bloques de 1..25 seguidos de otro 1..25 en exámenes recopilatorios) cuando la explicación ya cerró o el enunciado es inequívoco
+            # Reinicio de numeración en exámenes recopilatorios (ej. 1..25 seguido de otro bloque 1..25 tras haber cerrado con "(página X, tema Y)")
             es_reinicio_bloque_test = (
                 state == "EXPLANATION" and
                 len(curr_q.get("options", [])) >= 3 and
-                len(exp_actual_txt) >= 25 and
-                (ya_cerro_con_pagina_tema or (num_cand == 1 and tiene_aspecto_claro_de_enunciado and len(cuerpo_cand) > 45))
+                ya_cerro_con_pagina_tema and
+                num_cand == 1
             )
             es_enumeracion_interna_exp = (
                 not es_reserva_r and
@@ -2483,8 +2491,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                 not es_reserva_r and
                 ultimo_num_pregunta > 0 and
                 num_cand > ultimo_num_pregunta + 10 and
-                not ya_cerro_con_pagina_tema and
-                not (tiene_aspecto_claro_de_enunciado and len(cuerpo_cand) > 55)
+                not ya_cerro_con_pagina_tema
             )
 
             if (
@@ -2548,8 +2555,9 @@ def _parse_test_fn(file_bytes, max_options=None):
                     (
                         opts_previas_sin_punto or
                         bool(pat_exp_articulo_directo.match(line_sin_hash)) or
-                        bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ]', line_sin_hash))
-                    )
+                        bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero|Durante\s+el\s+per[íi]odo\s+de\s+los\s+noventa\s+d[íi]as\s+naturales.*)$', ultima_opt_txt, re.IGNORECASE))
+                    ) and
+                    bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
                 )
             )
             es_inicio_exp_directa = (
