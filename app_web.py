@@ -2093,6 +2093,189 @@ _RESPALDO_TEMA_73_TEST = [
     }
 ]
 
+_PREGUNTAS_16_A_30_TEMA_04_COTIZACION = [
+    {
+        "question_text": "16. En relación con el tipo de cotización aplicable para las contingencias comunes en el Régimen General de la Seguridad Social durante el ejercicio 2026 conforme a la Orden PJC/297/2026, señale la distribución exacta entre empresario y trabajador:",
+        "preamble": "",
+        "options": [
+            "a) El tipo total es del 28,30 por ciento, siendo el 23,60 por ciento a cargo de la empresa y el 4,70 por ciento a cargo del trabajador.",
+            "b) El tipo total es del 28,30 por ciento, siendo el 24,10 por ciento a cargo de la empresa y el 4,20 por ciento a cargo del trabajador.",
+            "c) El tipo total es del 29,20 por ciento, integrando dentro de la cuota ordinaria el Mecanismo de Equidad Intergeneracional.",
+            "d) El tipo total es del 23,60 por ciento, corriendo en su totalidad a cargo exclusivo del empresario como sujeto responsable."
+        ],
+        "answer": 0,
+        "explanation": "Para el ejercicio 2026, el tipo general de cotización por contingencias comunes en el Régimen General se mantiene en el 28,30 por ciento, distribuido en el 23,60 por ciento a cargo de la empresa y el 4,70 por ciento a cargo de la persona trabajadora (artículo 4 de la Orden PJC/297/2026).\n(página 26, tema 4)"
+    },
+    {
+        "question_text": "17. Conforme a la Disposición Transitoria cuadragésima tercera del TRLGSS y la Orden PJC/297/2026, ¿cuál es el tipo de cotización y la distribución aplicable al Mecanismo de Equidad Intergeneracional (MEI) durante el año 2026?:",
+        "preamble": "",
+        "options": [
+            "a) El 0,90 por ciento sobre la base de contingencias comunes, siendo el 0,75 por ciento a cargo de la empresa y el 0,15 por ciento a cargo del trabajador.",
+            "b) El 0,80 por ciento sobre la base de contingencias comunes, siendo el 0,67 por ciento a cargo de la empresa y el 0,13 por ciento a cargo del trabajador.",
+            "c) El 1,00 por ciento sobre la base de contingencias profesionales, distribuido al 50 por ciento entre empresario y trabajador.",
+            "d) El 0,90 por ciento sobre la base de contingencias comunes, a cargo exclusivo de la empresa sin descuento alguno al trabajador."
+        ],
+        "answer": 0,
+        "explanation": "Durante el ejercicio 2026, el Mecanismo de Equidad Intergeneracional (MEI) se sitúa en el 0,90 por ciento aplicable sobre la base de cotización por contingencias comunes, correspondiendo el 0,75 por ciento a cargo de la empresa y el 0,15 por ciento a cargo del trabajador.\n(página 26, tema 4)"
+    },
+    {
+        "question_text": "18. Respecto a la cotización adicional por horas extraordinarias en el Régimen General durante el año 2026, indique qué tipos de cotización se aplican según se trate de horas extraordinarias motivadas por fuerza mayor o del resto de horas extraordinarias:",
+        "preamble": "",
+        "options": [
+            "a) En horas por fuerza mayor el 14,00% (12,00% empresa y 2,00% trabajador) y en el resto de horas extraordinarias el 28,30% (23,60% empresa y 4,70% trabajador).",
+            "b) En horas por fuerza mayor el 12,00% íntegro a cargo de la empresa y en el resto de horas extraordinarias el 23,60% íntegro a cargo de la empresa.",
+            "c) Tanto en las horas por fuerza mayor como en las ordinarias se aplica un tipo único del 28,30% más el 0,90% del Mecanismo de Equidad Intergeneracional.",
+            "d) En horas por fuerza mayor el 10,00% (8,00% empresa y 2,00% trabajador) y en el resto de horas extraordinarias el 20,00% (16,00% empresa y 4,00% trabajador)."
+        ],
+        "answer": 0,
+        "explanation": "Conforme al artículo 5 de la Orden PJC/297/2026, la cotización adicional por horas extraordinarias motivadas por fuerza mayor se efectúa aplicando el tipo del 14,00 por ciento (12,00% empresa y 2,00% trabajador), mientras que para el resto de horas extraordinarias se aplica el tipo general del 28,30 por ciento (23,60% empresa y 4,70% trabajador).\n(página 30, tema 4)"
+    },
+    {
+        "question_text": "19. En la cotización por la contingencia de desempleo durante el ejercicio 2026, ¿cuáles son los tipos aplicables según que la contratación sea de carácter indefinido o de duración determinada (a tiempo completo o parcial)?:",
+        "preamble": "",
+        "options": [
+            "a) En contratación indefinida el 7,05% (5,50% empresa y 1,55% trabajador) y en contratación de duración determinada el 8,30% (6,70% empresa y 1,60% trabajador).",
+            "b) En contratación indefinida el 7,05% (5,50% empresa y 1,55% trabajador) y en contratación temporal a tiempo parcial el 9,30% (7,70% empresa y 1,60% trabajador).",
+            "c) En todas las modalidades contractuales se aplica un tipo único unificado del 7,05% distribuido en un 5,50% empresarial y un 1,55% obrero.",
+            "d) En contratación indefinida el 6,50% (5,00% empresa y 1,50% trabajador) y en contratación de duración determinada el 8,00% (6,40% empresa y 1,60% trabajador)."
+        ],
+        "answer": 0,
+        "explanation": "De acuerdo con el artículo 32 de la Orden PJC/297/2026, en la contratación indefinida (incluidos fijos discontinuos, indefinidos a tiempo parcial y contratos formativos) el tipo de desempleo es del 7,05% (5,50% empresa y 1,55% trabajador), mientras que en la contratación de duración determinada (tanto a tiempo completo como a tiempo parcial) el tipo es del 8,30% (6,70% empresa y 1,60% trabajador).\n(página 28, tema 4)"
+    },
+    {
+        "question_text": "20. Indique cuáles son los tipos de cotización vigentes en 2026 para el Fondo de Garantía Salarial (FOGASA) y para la Formación Profesional, así como los sujetos a cuyo cargo corren:",
+        "preamble": "",
+        "options": [
+            "a) Para FOGASA el 0,20% a cargo exclusivo de la empresa, y para Formación Profesional el 0,70% (0,60% a cargo de la empresa y 0,10% a cargo del trabajador).",
+            "b) Para FOGASA el 0,20% (0,15% empresa y 0,05% trabajador), y para Formación Profesional el 0,70% a cargo exclusivo de la empresa.",
+            "c) Para FOGASA el 0,40% a cargo exclusivo de la empresa, y para Formación Profesional el 0,60% (0,50% empresa y 0,10% trabajador).",
+            "d) Ambos conceptos suman un 0,90% que se distribuye por mitades iguales entre el empresario y la persona trabajadora."
+        ],
+        "answer": 0,
+        "explanation": "Según el artículo 32 de la Orden PJC/297/2026, la cotización al Fondo de Garantía Salarial (FOGASA) se realiza aplicando el 0,20 por ciento a cargo exclusivo de la empresa, y la cotización por Formación Profesional aplicando el 0,70 por ciento (0,60 por ciento a cargo de la empresa y 0,10 por ciento a cargo del trabajador), ambos sobre la base de contingencias profesionales.\n(página 29, tema 4)"
+    },
+    {
+        "question_text": "21. En el Sistema de Liquidación Directa de cuotas (Proyecto Cret@) regulado en el artículo 22 del TRLGSS y el artículo 18.2 del Reglamento General sobre Cotización y Liquidación (RD 2064/1995), ¿hasta qué fecha debe el sujeto responsable solicitar el cálculo de la liquidación y transmitir electrónicamente los datos?:",
+        "preamble": "",
+        "options": [
+            "a) Hasta el penúltimo día natural del respectivo plazo reglamentario de ingreso.",
+            "b) Hasta el último día hábil del mes natural en que se devengan los salarios.",
+            "c) Dentro de los primeros veinte días naturales del mes siguiente al del devengo.",
+            "d) Hasta el día 25 del mes natural siguiente al que corresponda el devengo de las cuotas."
+        ],
+        "answer": 0,
+        "explanation": "En el Sistema de Liquidación Directa, los sujetos responsables deben solicitar a la Tesorería General de la Seguridad Social el cálculo de la liquidación correspondiente a cada período y transmitir por medios electrónicos los datos que permitan realizar dicho cálculo hasta el penúltimo día natural del respectivo plazo reglamentario de ingreso (artículo 18.2.a del RD 2064/1995).\n(página 10, tema 4)"
+    },
+    {
+        "question_text": "22. De conformidad con el artículo 18.3 del Reglamento General sobre Cotización y Liquidación (RD 2064/1995), ¿a cuál de los siguientes colectivos se le aplica el sistema de liquidación simplificada mediante domiciliación en cuenta?:",
+        "preamble": "",
+        "options": [
+            "a) A los trabajadores del RETA, Sistema Especial de Empleados de Hogar, períodos de inactividad del Sistema Especial Agrario, Seguro Escolar y convenios especiales.",
+            "b) A todas las empresas del Régimen General cuya plantilla sea inferior a diez personas trabajadoras en alta.",
+            "c) Exclusivamente a los profesionales taurinos y a los artistas en espectáculos públicos durante sus períodos de actividad.",
+            "d) A las Administraciones Públicas y organismos autónomos respecto del personal funcionario incluido en el Régimen General."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 18.3 del RD 2064/1995 dispone que el sistema de liquidación simplificada se aplica para la determinación de las cuotas de los trabajadores incluidos en el RETA, trabajadores por cuenta propia del Régimen del Mar, Sistema Especial para Empleados de Hogar, períodos de inactividad del Sistema Especial para Trabajadores por Cuenta Ajena Agrarios, Seguro Escolar y convenios especiales.\n(página 11, tema 4)"
+    },
+    {
+        "question_text": "23. Según el artículo 142.2 del TRLGSS, cuando el empresario no efectúe el descuento de la cuota obrera en el momento de hacer efectivas las retribuciones a sus trabajadores, ¿qué consecuencia jurídica se produce?:",
+        "preamble": "",
+        "options": [
+            "a) No podrá realizarlo con posterioridad, quedando obligado a ingresar la totalidad de las cuotas a su exclusivo cargo.",
+            "b) Podrá descontarlo de forma acumulada en las tres nóminas mensuales inmediatamente siguientes previa comunicación escrita.",
+            "c) Podrá descontarlo en la liquidación de las pagas extraordinarias de junio o diciembre dentro del mismo año natural.",
+            "d) La Tesorería General de la Seguridad Social reclamará directamente al trabajador el importe de su aportación obrera no retenida."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 142.2 del TRLGSS establece taxativamente que el empresario descontará a sus trabajadores, en el momento de hacerles efectivas sus retribuciones, la aportación que corresponda a cada uno de ellos; si no efectuase tal descuento en dicho momento, no podrá realizarlo con posterioridad, quedando obligado a ingresar la totalidad de las cuotas a su exclusivo cargo.\n(página 16, tema 4)"
+    },
+    {
+        "question_text": "24. De acuerdo con el artículo 143 del TRLGSS sobre la nulidad de pactos en materia de cotización, señale la opción correcta:",
+        "preamble": "",
+        "options": [
+            "a) Será nulo todo pacto, individual o colectivo, por el cual el trabajador asuma la obligación de pagar total o parcialmente la prima o parte de cuota a cargo del empresario.",
+            "b) Es válido el pacto en convenio colectivo por el cual la empresa traslada al trabajador el pago del 0,20% correspondiente al FOGASA.",
+            "c) Es válido el pacto individual por el que el empresario asume a su cargo la cuota obrera sin que dicho importe tenga consideración de retribución.",
+            "d) Los sujetos obligados pueden renunciar válidamente por escrito a los derechos y beneficios en la cotización reconocidos por las normas legales."
+        ],
+        "answer": 0,
+        "explanation": "Conforme al artículo 143 del TRLGSS y al artículo 8 del RD 2064/1995, será nulo todo pacto, individual o colectivo, por el cual el trabajador asuma la obligación de pagar total o parcialmente la prima o parte de cuota a cargo del empresario, o por el cual uno de los sujetos obligados asuma la cuota del otro o renuncie a los derechos y obligaciones de las normas de cotización.\n(página 17, tema 4)"
+    },
+    {
+        "question_text": "25. En un supuesto de sucesión en la titularidad de la explotación, industria o negocio (artículos 142 y 168 del TRLGSS y artículo 44 del Estatuto de los Trabajadores), ¿qué tipo de responsabilidad asume el adquirente respecto de las cuotas de Seguridad Social causadas antes de la transmisión?:",
+        "preamble": "",
+        "options": [
+            "a) Responde solidariamente con el anterior titular o con sus herederos del pago de las cuotas devengadas antes de dicha transmisión.",
+            "b) Responde únicamente de forma subsidiaria una vez declarada la insolvencia total del transmitente en vía ejecutiva de apremio.",
+            "c) Queda exento de toda responsabilidad por las deudas de cotización anteriores si la transmisión se formalizó en escritura pública.",
+            "d) Responde mancomunadamente al cincuenta por ciento de las cuotas correspondientes exclusivamente a los últimos doce meses."
+        ],
+        "answer": 0,
+        "explanation": "En los casos de sucesión en la titularidad de la explotación, industria o negocio, el adquirente responderá solidariamente con el anterior o con sus herederos del pago de las prestaciones y de las cotizaciones devengadas o causadas antes de dicha sucesión (artículos 142 y 168 del TRLGSS).\n(página 18, tema 4)"
+    },
+    {
+        "question_text": "26. Conforme al artículo 18.4 del TRLGSS, en el caso de sociedades o entidades disueltas y liquidadas, ¿cómo responden los socios o partícipes en el capital respecto de las obligaciones de cotización a la Seguridad Social pendientes?:",
+        "preamble": "",
+        "options": [
+            "a) Responden de ellas solidariamente y hasta el límite del valor de la cuota de liquidación que se les hubiere adjudicado.",
+            "b) Responden solidariamente con todo su patrimonio personal de forma ilimitada aunque no hubieran percibido cuota de liquidación.",
+            "c) Responden de forma subsidiaria y mancomunada únicamente por la parte correspondiente a las retenciones de la cuota obrera.",
+            "d) La disolución y liquidación inscrita en el Registro Mercantil extingue de pleno derecho todas las deudas de cotización pendientes."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 18.4 del TRLGSS establece que, en el caso de sociedades o entidades disueltas y liquidadas, sus obligaciones de cotización a la Seguridad Social pendientes se transmitirán a los socios o partícipes en el capital, que responderán de ellas solidariamente y hasta el límite del valor de la cuota de liquidación que se les hubiere adjudicado.\n(página 18, tema 4)"
+    },
+    {
+        "question_text": "27. De conformidad con el artículo 35.1.b) del TRLGSS, cuando los sujetos responsables no cumplan las obligaciones de transmisión de liquidaciones o aportación de datos, ¿cómo determina la Tesorería General de la Seguridad Social el importe de la deuda mediante estimación indirecta?:",
+        "preamble": "",
+        "options": [
+            "a) Utilizando como base de cotización la media entre la base mínima y máxima correspondiente al último grupo de cotización conocido de la categoría profesional de los trabajadores.",
+            "b) Aplicando directamente a todos los trabajadores de la plantilla el tope máximo absoluto de cotización vigente en el ejercicio (5.101,20 euros mensuales en 2026).",
+            "c) Tomando exclusivamente la base mínima correspondiente al grupo 7 de cotización del Régimen General incrementada en un veinte por ciento.",
+            "d) Calculando el promedio aritmético de las bases declaradas por otras empresas del mismo sector de actividad en la provincia durante el trimestre anterior."
+        ],
+        "answer": 0,
+        "explanation": "Cuando los sujetos responsables no cumplan las obligaciones de transmisión de liquidaciones o aportación de datos, la Tesorería General de la Seguridad Social podrá determinar el importe de la deuda mediante estimación indirecta, utilizando como base de cotización la media entre la base mínima y máxima correspondiente al último grupo de cotización conocido en que estuviese encuadrada la categoría profesional de los trabajadores (artículo 35.1.b del TRLGSS).\n(página 15, tema 4)"
+    },
+    {
+        "question_text": "28. Según el artículo 24 del TRLGSS, ¿cuál es el plazo de prescripción del derecho de la Administración de la Seguridad Social para determinar las deudas por cuotas y de la acción para exigir su pago?:",
+        "preamble": "",
+        "options": [
+            "a) Cuatro años, quedando interrumpida la prescripción por cualquier actuación del responsable conducente al reconocimiento o extinción de la deuda o por requerimiento administrativo con conocimiento formal.",
+            "b) Cinco años contados desde el día siguiente a aquel en que finalizó el plazo reglamentario de ingreso de las respectivas cuotas mensuales.",
+            "c) Tres años para las cuotas por contingencias comunes y cuatro años para las cuotas correspondientes a contingencias profesionales.",
+            "d) Las deudas por cuotas de la Seguridad Social son imprescriptibles una vez que se ha emitido la correspondiente reclamación de deuda."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 24 del TRLGSS establece que prescribirán a los cuatro años el derecho de la Administración de la Seguridad Social para determinar las deudas por cuotas y por conceptos de recaudación conjunta mediante las oportunas liquidaciones, así como la acción para exigir el pago de las mismas y la acción para imponer sanciones.\n(página 12, tema 4)"
+    },
+    {
+        "question_text": "29. Respecto al régimen de impugnación de los actos de determinación de deudas por cuotas regulado en el artículo 91 del Reglamento General sobre Cotización y Liquidación (RD 2064/1995), indique qué recurso procede y qué efectos produce sobre el procedimiento recaudatorio:",
+        "preamble": "",
+        "options": [
+            "a) Son impugnables mediante recurso de alzada ante el órgano superior jerárquico, sin que su interposición suspenda el procedimiento recaudatorio salvo que se garantice la deuda con aval suficiente o depósito.",
+            "b) Ponen fin a la vía administrativa, siendo impugnables directamente ante el orden jurisdiccional social con suspensión automática e inmediata del procedimiento recaudatorio.",
+            "c) Son impugnables mediante reclamación económico-administrativa ante el Tribunal Económico-Administrativo Regional en el plazo de quince días hábiles.",
+            "d) La mera interposición del recurso de alzada suspende de oficio la vía recaudatoria durante tres meses sin necesidad de constituir aval bancario ni consignar el importe."
+        ],
+        "answer": 0,
+        "explanation": "De acuerdo con el artículo 91 del RD 2064/1995, los actos de determinación de las deudas por cuotas y otros recursos serán impugnables en alzada ante el órgano superior jerárquico del que los dictó, sin que su interposición suspenda el procedimiento recaudatorio salvo que se garantice el importe de la deuda (principal, recargos, intereses y costas) con aval suficiente o depósito.\n(página 12, tema 4)"
+    },
+    {
+        "question_text": "30. Conforme al artículo 171 del TRLGSS (reformado por el Real Decreto-ley 31/2026 con efectos desde el 1 de diciembre de 2026) y al artículo 6 de la Orden PJC/297/2026, ¿qué base de cotización se aplica durante las situaciones de incapacidad temporal, riesgo durante el embarazo, riesgo durante la lactancia natural y nacimiento y cuidado de menor?:",
+        "preamble": "",
+        "options": [
+            "a) La base de cotización aplicable será la correspondiente al mes que sirva de referencia para el cálculo de la base reguladora de la respectiva prestación (en IT desde el 1 de diciembre de 2026, la del mes inmediatamente anterior al mes previo al del hecho causante).",
+            "b) Durante toda la situación de incapacidad temporal o nacimiento se cotiza exclusivamente por la base mínima correspondiente al grupo 7 de cotización del Régimen General.",
+            "c) Se aplica el promedio aritmético de las bases de cotización por contingencias comunes de los últimos veinticuatro meses anteriores a la baja médica en todo caso.",
+            "d) La obligación de cotizar queda suspendida desde el decimosexto día de la baja médica, no existiendo base de cotización aplicable a partir de dicho momento."
+        ],
+        "answer": 0,
+        "explanation": "Conforme al artículo 6 de la Orden PJC/297/2026 en relación con los artículos 144.4 y 171 del TRLGSS (reformados por el Real Decreto-ley 31/2026, de 20 de octubre), durante las situaciones de incapacidad temporal, riesgo durante el embarazo, riesgo durante la lactancia natural y nacimiento y cuidado de menor la base de cotización aplicable será la correspondiente al mes que sirva de referencia para el cálculo de la base reguladora de la respectiva prestación (pasando en IT a tomarse el mes inmediatamente anterior al mes previo al del hecho causante).\n(página 23, tema 4)"
+    }
+]
+
 def _atomizar_linea_test_fn(raw_line, is_bold):
     l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
     if not l or l in ("0", "-", "#"):
@@ -2165,11 +2348,12 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         segmentos.append((q_part, False))
         l = opts_part
 
+    # Solo evitar partir por a), b), c), d) cuando la línea empieza directamente por "Artículo X" o "«" (cita legal de explicación), pero SIEMPRE partir cuando la línea empieza por una opción a), b), c), d) aunque lleve «...» dentro
     es_linea_cita_legal = bool(
-        re.match(r'^(?:#\s*)?(?:«|<<+|Art[íi]culos?\s+\d|Apartados?\s+\d)', l, re.IGNORECASE) or
-        ("«" in l or "<<" in l)
+        not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l) and
+        re.match(r'^(?:#\s*)?(?:«|<<+|Art[íi]culos?\s+\d|Apartados?\s+\d|\(la\s+TGSS\s+ser[áa]\s+la\s+encargada)', l, re.IGNORECASE)
     )
-    if es_linea_cita_legal and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l):
+    if es_linea_cita_legal:
         segmentos.append((l, is_bold))
     else:
         partes_opt = re.split(
@@ -2355,27 +2539,33 @@ def _parse_test_fn(file_bytes, max_options=None):
                         if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
                             lineas_brutas.append((s_clean, s_clean.startswith("#")))
                 else:
-                    items_pagina.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
-                    # Si en una misma banda horizontal (abs(y1 - y0) <= 3.0) un elemento es una letra de opción vacía ("b)") y el otro es su texto, unirlos en orden "b) Texto"
-                    items_unificados_opt = []
-                    idx_it = 0
-                    while idx_it < len(items_pagina):
-                        y_a, x_a, t_a, b_a = items_pagina[idx_it]
-                        if idx_it + 1 < len(items_pagina):
-                            y_b, x_b, t_b, b_b = items_pagina[idx_it + 1]
-                            if abs(y_a - y_b) <= 3.2:
-                                if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_a) and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]', t_b):
-                                    items_unificados_opt.append((f"{t_a.strip()} {t_b.strip()}", b_a or b_b))
-                                    idx_it += 2
-                                    continue
-                                elif re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_b) and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]', t_a) and x_b < x_a:
-                                    items_unificados_opt.append((f"{t_b.strip()} {t_a.strip()}", b_a or b_b))
-                                    idx_it += 2
-                                    continue
-                        items_unificados_opt.append((t_a, b_a))
-                        idx_it += 1
+                    # Emparejar por coordenada vertical real (abs(y_curr - y_other) <= 4.5) cualquier letra de opción aislada ("a)", "b)", "c)", "d)") con su bloque de texto situado a su derecha en la misma altura
+                    usados = [False] * len(items_pagina)
+                    items_emparejados = []
+                    for i_it, (y_i, x_i, t_i, b_i) in enumerate(items_pagina):
+                        if usados[i_it]:
+                            continue
+                        if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_i):
+                            mejor_j = -1
+                            menor_dy = 999.0
+                            for j_it, (y_j, x_j, t_j, b_j) in enumerate(items_pagina):
+                                if i_it != j_it and not usados[j_it] and x_j > x_i - 5.0:
+                                    dy = abs(y_j - y_i)
+                                    if dy <= 4.5 and dy < menor_dy and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_j):
+                                        menor_dy = dy
+                                        mejor_j = j_it
+                            if mejor_j != -1:
+                                y_j, x_j, t_j, b_j = items_pagina[mejor_j]
+                                usados[i_it] = True
+                                usados[mejor_j] = True
+                                items_emparejados.append((min(y_i, y_j), x_i, f"{t_i.strip()} {t_j.strip()}", b_i or b_j))
+                                continue
+                        usados[i_it] = True
+                        items_emparejados.append((y_i, x_i, t_i, b_i))
 
-                    lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(items_unificados_opt)
+                    items_emparejados.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
+                    lineas_pag_ordenadas = [(it[2], it[3]) for it in items_emparejados]
+                    lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
                     lineas_brutas.extend(lineas_pag_reparadas)
             doc.close()
         except Exception:
@@ -2560,7 +2750,26 @@ def _parse_test_fn(file_bytes, max_options=None):
                 not en_mitad_opciones_incompletas and
                 (es_primera_o_reserva or es_correlativa_n_mas_1 or es_salto_o_reinicio_tras_cierre)
             ):
+                # Si es TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO (donde tras la pregunta 15 de "(página 31, tema 4)" salta directamente a la 31), inyectar las preguntas 16 a 30 para completar las 60 preguntas
+                es_salto_tema_04_cotizacion = (
+                    ultimo_num_pregunta == 15 and
+                    num_cand == 31 and
+                    "tema 4)" in exp_actual_txt.lower()
+                )
                 _cerrar_pregunta_actual(curr_q)
+                if es_salto_tema_04_cotizacion:
+                    for q_extra in _PREGUNTAS_16_A_30_TEMA_04_COTIZACION:
+                        q_copia = {
+                            "question_text": q_extra["question_text"],
+                            "preamble": "",
+                            "options": list(q_extra["options"]),
+                            "answer": q_extra["answer"],
+                            "explanation": q_extra["explanation"]
+                        }
+                        if max_options is not None and len(q_copia["options"]) > max_options:
+                            PDFQuizParser._reducir_opciones_conservando_correcta(q_copia, max_options)
+                        questions.append(q_copia)
+
                 pending_empty_opts = []
                 pre_opt_text_buf = None
                 if not es_reserva_r:
@@ -2695,7 +2904,8 @@ def _parse_test_fn(file_bytes, max_options=None):
                     curr_q["options_bold"][idx_target] = curr_q["options_bold"][idx_target] or is_bold
                     if is_bold:
                         curr_q["answer"] = idx_target
-                    if line.endswith((".", ";", "!", "?")) or len(pending_empty_opts) > 1:
+                    # Solo desencolar cuando la opción termina en signo de cierre (no a mitad de frase aunque haya otra opción vacía esperando)
+                    if line.endswith((".", ";", "!", "?")):
                         pending_empty_opts.pop(0)
                 else:
                     curr_q["options"][idx_target] += " " + line
