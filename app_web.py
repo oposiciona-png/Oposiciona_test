@@ -1,6 +1,6 @@
 # === SECCIÓN 1: CONFIGURACIÓN, ESTILOS Y REGISTRO SHEETS ===
 import streamlit as st
-import streamlit.components.v1 as components
+import streamliFt.components.v1 as components
 import fitz  # PyMuPDF
 import re, random, requests, os, unicodedata, time, json, threading, base64, zlib
 from datetime import datetime
@@ -2134,10 +2134,9 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
 
     segmentos = []
     es_inicio_enunciado_numerado = bool(
-        re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))', l, re.IGNORECASE)
+        re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)', l, re.IGNORECASE)
     )
 
-    # 4. Separar siempre cualquier etiqueta EXPLICACIÓN: que venga pegada al final de un renglón (incluso tras una palabra corta de 1-4 letras o sin espacio tras el punto)
     cola_exp = None
     if not es_inicio_enunciado_numerado:
         m_reta_esp = re.match(r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n\b.*)$', l, flags=re.IGNORECASE)
@@ -2152,13 +2151,12 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
             )
             if m_exp_inline and m_exp_inline.start() >= 1:
                 pref_antes_exp = l[:m_exp_inline.start()].strip()
-                # Asegurarse de que lo que hay antes no sea simplemente "#"
                 if pref_antes_exp and pref_antes_exp != "#":
                     cola_exp = l[m_exp_inline.start():].strip()
                     l = pref_antes_exp
 
     m_q_with_a = re.match(
-        r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+        r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
         l
     )
     if m_q_with_a:
@@ -2167,14 +2165,22 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         segmentos.append((q_part, False))
         l = opts_part
 
-    partes_opt = re.split(
-        r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
-        l
+    # No partir en sub-opciones a), b), c), d) una línea que sea una cita de artículo legal («... o Artículo X:)
+    es_linea_cita_legal = bool(
+        re.match(r'^(?:#\s*)?(?:«|<<+|Art[íi]culos?\s+\d|Apartados?\s+\d)', l, re.IGNORECASE) or
+        ("«" in l or "<<" in l)
     )
-    for p in partes_opt:
-        ps = re.sub(r'^#\s*(?=[a-dA-D][\)\.\-])', '', p.strip())
-        if ps:
-            segmentos.append((ps, is_bold))
+    if es_linea_cita_legal and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l):
+        segmentos.append((l, is_bold))
+    else:
+        partes_opt = re.split(
+            r'(?:(?<=[.?!»"\)\];:])\s+|\s{2,})(?=(?:#\s*)?[a-dA-D][\)\.\-]\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
+            l
+        )
+        for p in partes_opt:
+            ps = re.sub(r'^#\s*(?=[a-dA-D][\)\.\-])', '', p.strip())
+            if ps:
+                segmentos.append((ps, is_bold))
 
     if cola_exp:
         segmentos.append((cola_exp, False))
@@ -2184,7 +2190,6 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
     if not lineas_pagina:
         return []
 
-    # Paso 1: Si un elemento de la página es únicamente un número de pregunta aislado (ej. "18." o "# 24."), unirlo con la línea siguiente
     compactadas = []
     idx_c = 0
     n_c = len(lineas_pagina)
@@ -2193,7 +2198,7 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
         t_c_clean = PDFQuizParser._limpiar_marca_agua_linea(t_c).strip()
         if (
             idx_c + 1 < n_c and
-            re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-|\))$', t_c_clean, re.IGNORECASE)
+            re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)$', t_c_clean, re.IGNORECASE)
         ):
             t_nx, b_nx = lineas_pagina[idx_c + 1]
             t_nx_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(t_nx)).strip()
@@ -2204,7 +2209,6 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
         compactadas.append((t_c, b_c))
         idx_c += 1
 
-    # Paso 2: Reparar fragmentos en minúscula descolocados antes de una opción
     reparadas = []
     i = 0
     n = len(compactadas)
@@ -2375,8 +2379,9 @@ def _parse_test_fn(file_bytes, max_options=None):
     pre_opt_text_buf = None
     ultimo_num_pregunta = 0
 
+    # Exige punto o guion tras el número de pregunta (no paréntesis de cierre como "29) el recargo...")
     pat_q = re.compile(
-        r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-|\))\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
+        r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-)\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
     )
     pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
     pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
@@ -2492,7 +2497,6 @@ def _parse_test_fn(file_bytes, max_options=None):
             es_reserva_r = token_q.startswith("R")
             num_cand = int(token_q[1:]) if es_reserva_r else int(token_q)
             cuerpo_cand = (m_q.group(2) or m_q.group(3) or "").strip()
-            es_parentesis_enumeracion = bool(re.match(r'^(?:#\s*)?\d{1,3}\s*\)\s+', line))
 
             en_enunciado_sin_opciones = (
                 state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
@@ -2505,66 +2509,44 @@ def _parse_test_fn(file_bytes, max_options=None):
                 state == "EXPLANATION" and
                 bool(re.search(r'\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\)', exp_actual_txt[-220:], re.IGNORECASE))
             )
+
+            es_Encabezado_Tabla_Interna = bool(
+                re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:|El\s+titular\s+de\s+la\s+Subdirecci[óo]n|S[óo]lo\s+en\s+el\s+caso\s+de\s+que\s+el\s+aplazamiento|Recargo\s+del\s+\d+\s+por\s+ciento|El\s+plazo\s+reglamentario\s+de\s+ingreso\s+de\s+los\s+capitales|Transcurrido\s+el\s+plazo\s+reglamentario\s+de\s+ingreso)', cuerpo_cand, re.IGNORECASE)
+            )
+
+            # 1) Si es la primera pregunta del documento (curr_q is None) o es una pregunta de reserva R1..R10
+            es_primera_o_reserva = (curr_q is None or es_reserva_r)
+
+            # 2) Si es exactamente la pregunta correlativa N+1 (y ya hemos leído al menos 3 opciones de la pregunta N)
+            es_correlativa_n_mas_1 = (
+                curr_q is not None and
+                len(curr_q.get("options", [])) >= 3 and
+                num_cand == ultimo_num_pregunta + 1 and
+                not es_Encabezado_Tabla_Interna
+            )
+
+            # 3) Si hay un salto de 1 a 3 números por errata de numeración del PDF (ej. 3 -> 6 en Tema 11 Repaso 1) o un reinicio a 1 (en Examen Repaso 1 a 14), exigiendo que la pregunta actual ya esté en EXPLANATION y haya cerrado con "(página X, tema Y)" (o no tenga citas abiertas)
             aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
             cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
-            es_correlativa_exacta = (
-                ultimo_num_pregunta > 0 and
-                num_cand == ultimo_num_pregunta + 1 and
-                not es_parentesis_enumeracion and
-                len(cuerpo_cand) >= 18 and
-                not bool(re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:)', cuerpo_cand, re.IGNORECASE))
-            )
-
-            if es_correlativa_exacta and curr_q is not None and len(curr_q.get("options", [])) >= 3:
-                _cerrar_pregunta_actual(curr_q)
-                pending_empty_opts = []
-                pre_opt_text_buf = None
-                ultimo_num_pregunta = num_cand
-                curr_q = {
-                    "question_text": f"{num_cand}. {cuerpo_cand}",
-                    "preamble": "",
-                    "options": [],
-                    "options_bold": [],
-                    "answer": -1,
-                    "explanation": ""
-                }
-                state = "QUESTION"
-                continue
-
-            dentro_de_cita_articulo = (
-                state == "EXPLANATION" and
-                not ya_cerro_con_pagina_tema and (
-                    aperturas_cita > cierres_cita or
-                    bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE))
-                )
-            )
-            es_reinicio_bloque_test = (
+            es_salto_corto_o_reinicio_valido = (
+                curr_q is not None and
                 state == "EXPLANATION" and
                 len(curr_q.get("options", [])) >= 3 and
-                ya_cerro_con_pagina_tema and
-                num_cand == 1
-            )
-            es_enumeracion_interna_exp = (
-                not es_reserva_r and
-                not es_reinicio_bloque_test and
-                state == "EXPLANATION" and (
-                    es_parentesis_enumeracion or
-                    dentro_de_cita_articulo or
-                    (ultimo_num_pregunta > 0 and num_cand <= ultimo_num_pregunta)
+                not es_Encabezado_Tabla_Interna and
+                (
+                    ya_cerro_con_pagina_tema or
+                    (aperturas_cita <= cierres_cita and not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE)))
+                ) and
+                (
+                    (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4) or
+                    (num_cand == 1 and ya_cerro_con_pagina_tema)
                 )
-            )
-            es_salto_articulo_ilegal = (
-                not es_reserva_r and
-                ultimo_num_pregunta > 0 and
-                num_cand > ultimo_num_pregunta + 10 and
-                not ya_cerro_con_pagina_tema
             )
 
             if (
                 not en_enunciado_sin_opciones and
                 not en_mitad_opciones_incompletas and
-                not es_enumeracion_interna_exp and
-                not es_salto_articulo_ilegal
+                (es_primera_o_reserva or es_correlativa_n_mas_1 or es_salto_corto_o_reinicio_valido)
             ):
                 _cerrar_pregunta_actual(curr_q)
                 pending_empty_opts = []
