@@ -2407,7 +2407,6 @@ def _parse_test_fn(file_bytes, max_options=None):
         if not line:
             continue
 
-        # Solo cortar el test si es realmente un encabezado de sección al final del documento
         line_sin_h = re.sub(r'^#\s*', '', line).strip()
         if (
             len(line_sin_h) < 95 and
@@ -2443,21 +2442,37 @@ def _parse_test_fn(file_bytes, max_options=None):
                 state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 3
             )
             exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
+            # Reconoce cierre de explicación con "(página X, tema Y)" incluso si el tema lleva letra (ej. "tema 5B") o si una palabra suelta de columna cayó debajo
             ya_cerro_con_pagina_tema = (
                 state == "EXPLANATION" and
-                bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+\d+\)\s*$', exp_actual_txt, re.IGNORECASE))
+                bool(re.search(r'\(p[áa]gina\s+\d+[^)]*,\s*tema\s+[0-9A-Za-z]+\)', exp_actual_txt[-160:], re.IGNORECASE))
+            )
+            # Conteo unificado de comillas angulares (por si abre con « y cierra con >> o >>>)
+            aperturas_cita = len(re.findall(r'«|<<+', exp_actual_txt))
+            cierres_cita = len(re.findall(r'»|>>+', exp_actual_txt))
+            tiene_aspecto_claro_de_enunciado = (
+                "?" in cuerpo_cand or
+                cuerpo_cand.rstrip().endswith(":") or
+                bool(re.match(r'^(?:Señal[ae]|Indiqu?e|Determin[ae]|Conforme|De\s+acuerdo|Seg[úu]n|En\s+relaci[óo]n|Respecto|Ante|Durante|Tras|Un[ao]?\s+|El\s+|La\s+|Los\s+|Las\s+|Si\s+|Para\s+|Al\s+|A\s+tenor)', cuerpo_cand, re.IGNORECASE))
             )
             dentro_de_cita_articulo = (
                 state == "EXPLANATION" and
                 not ya_cerro_con_pagina_tema and
-                not (num_cand == ultimo_num_pregunta + 1 and ("?" in cuerpo_cand or len(cuerpo_cand) > 45)) and (
-                    exp_actual_txt.count("«") > exp_actual_txt.count("»") or
-                    exp_actual_txt.count("<<") > exp_actual_txt.count(">>") or
+                not (tiene_aspecto_claro_de_enunciado and len(cuerpo_cand) > 40) and (
+                    aperturas_cita > cierres_cita or
                     bool(re.search(r'(?:Art[íi]culo|Art\.)\s*$', exp_actual_txt, re.IGNORECASE))
                 )
             )
+            # Permitir reinicios de numeración (ej. bloques de 1..25 seguidos de otro 1..25 en exámenes recopilatorios) cuando la explicación ya cerró o el enunciado es inequívoco
+            es_reinicio_bloque_test = (
+                state == "EXPLANATION" and
+                len(curr_q.get("options", [])) >= 3 and
+                len(exp_actual_txt) >= 25 and
+                (ya_cerro_con_pagina_tema or (num_cand == 1 and tiene_aspecto_claro_de_enunciado and len(cuerpo_cand) > 45))
+            )
             es_enumeracion_interna_exp = (
                 not es_reserva_r and
+                not es_reinicio_bloque_test and
                 state == "EXPLANATION" and (
                     es_parentesis_enumeracion or
                     dentro_de_cita_articulo or
@@ -2468,7 +2483,8 @@ def _parse_test_fn(file_bytes, max_options=None):
                 not es_reserva_r and
                 ultimo_num_pregunta > 0 and
                 num_cand > ultimo_num_pregunta + 10 and
-                not ya_cerro_con_pagina_tema
+                not ya_cerro_con_pagina_tema and
+                not (tiene_aspecto_claro_de_enunciado and len(cuerpo_cand) > 55)
             )
 
             if (
