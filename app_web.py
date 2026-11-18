@@ -1,6 +1,6 @@
 # === SECCIÓN 1: CONFIGURACIÓN, ESTILOS Y REGISTRO SHEETS ===
 import streamlit as st
-import streamliFt.components.v1 as components
+import streamlit.components.v1 as components
 import fitz  # PyMuPDF
 import re, random, requests, os, unicodedata, time, json, threading, base64, zlib
 from datetime import datetime
