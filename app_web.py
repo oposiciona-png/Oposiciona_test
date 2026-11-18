@@ -2100,7 +2100,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
 
     # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_pag = re.match(
-        r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
+        r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         l,
         flags=re.IGNORECASE
     )
@@ -2112,7 +2112,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
 
     # 2. Si después de ">>>" o "»" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_cita = re.match(
-        r'^(.+?(?:»|>>+))\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
+        r'^(.+?(?:»|>>+))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         l
     )
     if m_post_cita:
@@ -2136,35 +2136,26 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     es_inicio_enunciado_numerado = bool(
         re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))', l, re.IGNORECASE)
     )
-    es_inicio_opcion = bool(
-        re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l)
-    )
 
+    # 4. Separar siempre cualquier etiqueta EXPLICACIÓN: que venga pegada al final de un renglón (incluso tras una palabra corta de 1-4 letras o sin espacio tras el punto)
     cola_exp = None
     if not es_inicio_enunciado_numerado:
-        if es_inicio_opcion:
-            m_reta_esp = re.match(r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n\b.*)$', l, flags=re.IGNORECASE)
-            if m_reta_esp:
-                l = m_reta_esp.group(1).strip()
-                cola_exp = m_reta_esp.group(2).strip()
-            else:
-                m_exp_inline = re.search(
-                    r'(?<=[.?!»"\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)\s*.*)$',
-                    l,
-                    flags=re.IGNORECASE
-                )
-                if m_exp_inline and m_exp_inline.start() > 4:
-                    cola_exp = l[m_exp_inline.start():].strip()
-                    l = l[:m_exp_inline.start()].strip()
+        m_reta_esp = re.match(r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n\b.*)$', l, flags=re.IGNORECASE)
+        if m_reta_esp:
+            l = m_reta_esp.group(1).strip()
+            cola_exp = m_reta_esp.group(2).strip()
         else:
             m_exp_inline = re.search(
-                r'(?<=[.?!»"\]])\s+((?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]|\s+[A-ZÁÉÍÓÚÑ])|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)\s*.*)$',
+                r'(?<=[.?!»"\)\]])\s*((?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:)\s*.*)$',
                 l,
                 flags=re.IGNORECASE
             )
-            if m_exp_inline and m_exp_inline.start() > 4:
-                cola_exp = l[m_exp_inline.start():].strip()
-                l = l[:m_exp_inline.start()].strip()
+            if m_exp_inline and m_exp_inline.start() >= 1:
+                pref_antes_exp = l[:m_exp_inline.start()].strip()
+                # Asegurarse de que lo que hay antes no sea simplemente "#"
+                if pref_antes_exp and pref_antes_exp != "#":
+                    cola_exp = l[m_exp_inline.start():].strip()
+                    l = pref_antes_exp
 
     m_q_with_a = re.match(
         r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
@@ -2326,7 +2317,11 @@ def _parse_test_fn(file_bytes, max_options=None):
                             if not st:
                                 continue
                             sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
-                            if curr_s_txt and re.match(r'^\s*[a-dA-D][\)\.\-]\s+', st) and re.search(r'[.?!»"\)\];:]\s*$', curr_s_txt):
+                            if (
+                                curr_s_txt and
+                                re.match(r'^\s*(?:[a-dA-D][\)\.\-]\s+|EXPLICACI[ÓO]N\s*:)', st, re.IGNORECASE) and
+                                re.search(r'[.?!»"\)\];:]\s*$', curr_s_txt)
+                            ):
                                 cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
                                 umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
                                 is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
@@ -2358,21 +2353,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                             lineas_brutas.append((s_clean, s_clean.startswith("#")))
                 else:
                     items_pagina.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
-                    # Unir fragmentos que pertenezcan a la misma línea horizontal (mismo round(y0 / 2.5)) y no sean opciones independientes
-                    items_misma_linea = []
-                    for y_it, x_it, txt_it, b_it in items_pagina:
-                        y_bucket = round(y_it / 2.5)
-                        if (
-                            items_misma_linea and
-                            items_misma_linea[-1][0] == y_bucket and
-                            not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', txt_it)
-                        ):
-                            prev_yb, prev_txt, prev_b = items_misma_linea[-1]
-                            items_misma_linea[-1] = (prev_yb, f"{prev_txt} {txt_it}".strip(), prev_b or b_it)
-                        else:
-                            items_misma_linea.append((y_bucket, txt_it, b_it))
-
-                    lineas_pag_ordenadas = [(it[1], it[2]) for it in items_misma_linea]
+                    lineas_pag_ordenadas = [(it[2], it[3]) for it in items_pagina]
                     lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
                     lineas_brutas.extend(lineas_pag_reparadas)
             doc.close()
