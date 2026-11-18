@@ -2098,7 +2098,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     if not l or l in ("0", "-", "#"):
         return []
 
-    # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla sin usar look-behind de longitud variable
+    # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_pag = re.match(
         r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         l,
@@ -2110,7 +2110,18 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         res_pp.extend(PDFQuizParser._atomizar_linea_test(m_post_pag.group(2), is_bold))
         return res_pp
 
-    # 2. Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras el punto final de una explicación, dividirla (look-behind de ancho fijo 1)
+    # 2. Si después de ">>>" o "»" viene pegada una nueva pregunta en la misma línea, dividirla
+    m_post_cita = re.match(
+        r'^(.+?(?:»|>>+))\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
+        l
+    )
+    if m_post_cita:
+        res_pc = []
+        res_pc.extend(PDFQuizParser._atomizar_linea_test(m_post_cita.group(1), is_bold))
+        res_pc.extend(PDFQuizParser._atomizar_linea_test(m_post_cita.group(2), is_bold))
+        return res_pc
+
+    # 3. Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras puntuación, dividirla
     partes_r = re.split(
         r'(?<=[.?!»"\)\]>])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
         l
@@ -2132,7 +2143,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     cola_exp = None
     if not es_inicio_enunciado_numerado:
         if es_inicio_opcion:
-            # Caso especial P5 Tema 56 ("...en dicho Régimen En el RETA, ostenta la consideración...")
             m_reta_esp = re.match(r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n\b.*)$', l, flags=re.IGNORECASE)
             if m_reta_esp:
                 l = m_reta_esp.group(1).strip()
@@ -2182,11 +2192,33 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
 def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
     if not lineas_pagina:
         return []
+
+    # Paso 1: Si un elemento de la página es únicamente un número de pregunta aislado (ej. "18." o "# 24."), unirlo con la línea siguiente
+    compactadas = []
+    idx_c = 0
+    n_c = len(lineas_pagina)
+    while idx_c < n_c:
+        t_c, b_c = lineas_pagina[idx_c]
+        t_c_clean = PDFQuizParser._limpiar_marca_agua_linea(t_c).strip()
+        if (
+            idx_c + 1 < n_c and
+            re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-|\))$', t_c_clean, re.IGNORECASE)
+        ):
+            t_nx, b_nx = lineas_pagina[idx_c + 1]
+            t_nx_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(t_nx)).strip()
+            if t_nx_clean and not re.match(r'^[a-dA-D][\)\.\-]\s', t_nx_clean):
+                compactadas.append((f"{t_c_clean} {t_nx_clean}", b_c or b_nx))
+                idx_c += 2
+                continue
+        compactadas.append((t_c, b_c))
+        idx_c += 1
+
+    # Paso 2: Reparar fragmentos en minúscula descolocados antes de una opción
     reparadas = []
     i = 0
-    n = len(lineas_pagina)
+    n = len(compactadas)
     while i < n:
-        txt_i, bold_i = lineas_pagina[i]
+        txt_i, bold_i = compactadas[i]
         txt_i_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_i)
         if (
             i + 1 < n and
@@ -2195,7 +2227,7 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
             re.match(r'^[a-záéíóúñ]', txt_i_clean) and
             not re.match(r'^[a-dA-D][\)\.\-]\s', txt_i_clean)
         ):
-            txt_next, bold_next = lineas_pagina[i + 1]
+            txt_next, bold_next = compactadas[i + 1]
             txt_next_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(txt_next))
             m_opt_next = re.match(r'^([a-dA-D][\)\.\-]\s+)(.+)$', txt_next_clean)
             if m_opt_next:
@@ -2326,7 +2358,21 @@ def _parse_test_fn(file_bytes, max_options=None):
                             lineas_brutas.append((s_clean, s_clean.startswith("#")))
                 else:
                     items_pagina.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
-                    lineas_pag_ordenadas = [(it[2], it[3]) for it in items_pagina]
+                    # Unir fragmentos que pertenezcan a la misma línea horizontal (mismo round(y0 / 2.5)) y no sean opciones independientes
+                    items_misma_linea = []
+                    for y_it, x_it, txt_it, b_it in items_pagina:
+                        y_bucket = round(y_it / 2.5)
+                        if (
+                            items_misma_linea and
+                            items_misma_linea[-1][0] == y_bucket and
+                            not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', txt_it)
+                        ):
+                            prev_yb, prev_txt, prev_b = items_misma_linea[-1]
+                            items_misma_linea[-1] = (prev_yb, f"{prev_txt} {txt_it}".strip(), prev_b or b_it)
+                        else:
+                            items_misma_linea.append((y_bucket, txt_it, b_it))
+
+                    lineas_pag_ordenadas = [(it[1], it[2]) for it in items_misma_linea]
                     lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
                     lineas_brutas.extend(lineas_pag_reparadas)
             doc.close()
@@ -2484,7 +2530,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                 ultimo_num_pregunta > 0 and
                 num_cand == ultimo_num_pregunta + 1 and
                 not es_parentesis_enumeracion and
-                len(cuerpo_cand) >= 25 and
+                len(cuerpo_cand) >= 18 and
                 not bool(re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:)', cuerpo_cand, re.IGNORECASE))
             )
 
@@ -2630,7 +2676,9 @@ def _parse_test_fn(file_bytes, max_options=None):
                 continue
 
         if m_opt and state in ("QUESTION", "OPTIONS"):
-            pre_opt_text_buf = None
+            if pre_opt_text_buf:
+                curr_q["question_text"] += " " + pre_opt_text_buf[0]
+                pre_opt_text_buf = None
             es_marcada_hash = line.lstrip().startswith("#")
             es_correcta_opt = is_bold or es_marcada_hash
             cuerpo_op = m_opt.group(2).strip()
