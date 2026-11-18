@@ -854,332 +854,9 @@ NUEVOS_HOY = [
 ]
 # === FIN SECCIÓN 2 ===
 
-# === SECCIÓN 3: MOTOR DE EXTRACCIÓN DE PDF Y WORD (.DOCX) ===
+# === SECCIÓN 3A: MOTOR DE WORD (.DOCX), DESARROLLO Y SUPUESTOS PRÁCTICOS ===
 import io, zipfile
 import xml.etree.ElementTree as ET
-
-_RESPALDO_TEMA_73_TEST = [
-    {
-        "question_text": '1. Un trabajador ferroviario del grupo de "Oficial Calderero Chapista en Depósito" se jubila anticipadamente. ¿Cuál es el coeficiente aplicable y qué sucede en el supuesto de que también se encuentre en pluriactividad según el RD 2621/1986?',
-        "preamble": "",
-        "options": [
-            "a) 0,15 y la reducción sólo se aplicará a efectos de la edad.",
-            "b) 0,10 y la reducción sólo se aplicará a efectos de la edad.",
-            "c) 0,15 y la reducción se aplicará a efectos de la edad y del porcentaje de la pensión computable."
-        ],
-        "answer": 0,
-        "explanation": "El art. 3 del RD 2621/1986 establece un coeficiente reductor de 0,15 específicamente para la categoría de Oficial Calderero Chapista en Depósito. Es común pensar que en un sistema tan específico, la pluriactividad bonifica también la base o porcentaje de la pensión final por haber aportado a dos regímenes, pero la ley establece claramente que en supuestos de pluriactividad, la reducción sólo se aplicará a efectos de la edad."
-    },
-    {
-        "question_text": "2. Según la categorización de los jugadores profesionales de fútbol para su cotización a la Seguridad Social, ¿en qué grupo de cotización se encuadra preceptivamente un jugador que milita en la Segunda División B?",
-        "preamble": "",
-        "options": [
-            "a) Grupo 5.",
-            "b) Grupo 3.",
-            "c) Grupo 7."
-        ],
-        "answer": 0,
-        "explanation": "De acuerdo a la tabla de asimilación del RD 2621/1986, la Primera División corresponde al Grupo 2, la Segunda División A al Grupo 3, y la Segunda División B corresponde al Grupo 5."
-    },
-    {
-        "question_text": "3. En el régimen aplicable a los Representantes de Comercio integrados en el Régimen General, ¿quién ostenta la condición de sujeto responsable de cotizar e ingresar la totalidad de la cuota (tanto la aportación obrera como la empresarial)?",
-        "preamble": "",
-        "options": [
-            "a) La Tesorería General de la Seguridad Social de oficio, previa deducción de las facturas comerciales.",
-            "b) El Empresario, respondiendo subsidiariamente el Representante.",
-            "c) El Representante de Comercio."
-        ],
-        "answer": 2,
-        "explanation": "El Representante de Comercio es el sujeto responsable de cotizar e ingresar la totalidad de la cuota, según las disposiciones del RD 2621/1986. En el Régimen General común, el sujeto responsable del ingreso es SIEMPRE el empresario. Aquí se invierte la regla: es el trabajador (Representante) quien ingresa, y el empresario está obligado a entregarle a este su parte de la aportación empresarial. Si el empresario incumple, la TGSS reintegra al representante el importe iniciando acción recaudatoria contra la empresa."
-    },
-    {
-        "question_text": "4. Según la Orden PJC/297/2026, ¿cuál será la base y el tipo de cotización durante los períodos de inactividad de los artistas que decidan mantener voluntariamente su situación de alta?",
-        "preamble": "",
-        "options": [
-            "a) La base mínima del grupo 7, con un tipo del 11,50%.",
-            "b) La base mínima del grupo 1, con un tipo del 15,50%.",
-            "c) La base máxima del grupo 7, con un tipo del 11,50%."
-        ],
-        "answer": 0,
-        "explanation": "Para los artistas, la base de cotización durante los períodos de inactividad manteniendo voluntariamente el alta (art. 32.5 RD 2064/1995 y Orden PJC/297/2026) será la base mínima del grupo 7, con un tipo muy específico del 11,50%."
-    },
-    {
-        "question_text": '5. Un Picador taurino que acompaña habitualmente a un Matador de Toros clasificado en el grupo "C", ¿en qué grupo de cotización debe encuadrarse a efectos de la Seguridad Social?',
-        "preamble": "",
-        "options": [
-            "a) Grupo 2.",
-            "b) Grupo 3.",
-            "c) Grupo 1."
-        ],
-        "answer": 1,
-        "explanation": 'El baremo especifica que los Picadores y Banderilleros que acompañan al Grupo A van al Grupo 2. Al no mencionar explícitamente a los que acompañan al grupo C, debemos deducir que encajan en el epígrafe "Restantes Picadores y Banderilleros", a los cuales la norma les asigna el Grupo 3.'
-    },
-    {
-        "question_text": "6. En el Sistema Especial para Trabajadores Agrarios (SEA), ¿cuándo se considera legalmente que existen períodos de inactividad dentro de un mes natural?",
-        "preamble": "",
-        "options": [
-            "a) Cuando el número de jornadas reales sea inferior al 76,67% de los días hábiles en que figure incluido en el sistema.",
-            "b) Cuando el número de días naturales en alta sea superior a las jornadas reales multiplicadas por 1,5.",
-            "c) Cuando el número de jornadas reales en él realizadas sea inferior al 76,67% de los días naturales en que el trabajador figure incluido en el sistema en dicho mes."
-        ],
-        "answer": 2,
-        "explanation": 'Conforme al art. 253 del TRLGSS, existen períodos de inactividad cuando las jornadas reales son inferiores al 76,67% de los días NATURALES de alta en el sistema especial en dicho mes. Confundir "días naturales" con "días hábiles", lo cual cambiaría drásticamente el cálculo numérico.'
-    },
-    {
-        "question_text": "7. Un trabajador del SEA adeuda las cuotas por inactividad de dos meses consecutivos. El último día para el pago entra en situación de Incapacidad Temporal. ¿Cuándo surtirá efectos su baja de oficio y exclusión del sistema especial?",
-        "preamble": "",
-        "options": [
-            "a) No podrá ser excluido mientras permanezca de baja médica.",
-            "b) El día primero del mes siguiente a aquel en que finaliza la prestación por IT (si sigue sin pagar).",
-            "c) El día primero del mes siguiente a la segunda mensualidad no ingresada de forma inexcusable."
-        ],
-        "answer": 1,
-        "explanation": "Como regla general, la exclusión opera el día primero del mes siguiente a la segunda mensualidad no ingresada. El art. 253 del TRLGSS introduce una excepción fundamental: si en esa fecha de exclusión el trabajador se encuentra en IT, riesgo durante el embarazo o maternidad/paternidad, los efectos se posponen y operan el primer día del mes siguiente a que finalice la prestación."
-    },
-    {
-        "question_text": "8. Según el TRLGSS aplicable al SEA, ¿qué circunstancia EXCLUYE la existencia de períodos de inactividad en un mes natural, invalidando la aplicación de la regla del 76,67%?",
-        "preamble": "",
-        "options": [
-            "a) Realizar, para un mismo empresario, un mínimo de cinco jornadas reales semanales en cumplimiento de convenio colectivo aplicable.",
-            "b) Realizar para distintos empresarios más de 20 jornadas reales al mes.",
-            "c) Que el trabajador esté percibiendo simultáneamente el subsidio agrario de desempleo."
-        ],
-        "answer": 0,
-        "explanation": "El TRLGSS señala taxativamente que no existirán períodos de inactividad dentro del mes natural cuando el trabajador realice, para UN MISMO empresario, un mínimo de cinco jornadas reales semanales en cumplimiento del convenio colectivo de aplicación. Si las 5 jornadas se hacen para empresarios distintos, no se activa esta excepción directa a la regla."
-    },
-    {
-        "question_text": "9. En cuanto a la obligación de cotización durante los períodos de actividad en el Sistema Especial Agrario, ¿cuál de estas afirmaciones es correcta para un trabajador con contrato de carácter fijo discontinuo?",
-        "preamble": "",
-        "options": [
-            "a) La cotización por bases mensuales resulta estrictamente obligatoria, igual que para los indefinidos ordinarios.",
-            "b) Siempre se deberá cotizar por bases diarias obligatoriamente.",
-            "c) La cotización por bases mensuales es opcional, a elección del empresario."
-        ],
-        "answer": 2,
-        "explanation": "La cotización por bases mensuales resultará obligatoria para los trabajadores con contrato indefinido. Se exceptúa expresamente a los indefinidos que prestan servicios con carácter fijo discontinuo, para los cuales la cotización mensual se mantiene como una opción del empresario, no como una imposición. Si no elige, se entiende mensual, pero normativamente es opcional."
-    },
-    {
-        "question_text": "10. En el Sistema Especial Agrario (SEA), si un empleador contrata a un eventual el mismo día de comienzo de la prestación y no pudo dar el alta previa obligatoria, ¿hasta qué momento exacto puede cursar la solicitud si la jornada laboral de ese día termina a las 11:30 horas?",
-        "preamble": "",
-        "options": [
-            "a) Hasta las 12:00 horas de ese mismo día.",
-            "b) Antes de la finalización de dicha jornada (es decir, antes de las 11:30 horas).",
-            "c) Dentro del plazo excepcional de los 3 días naturales siguientes."
-        ],
-        "answer": 1,
-        "explanation": 'La norma permite, en eventuales/fijos discontinuos cuando no fue posible el alta previa, hacerlo hasta las 12:00 del mismo día de inicio. Hay una salvedad literal que dice: "Si la jornada de trabajo finalizase antes de las 12 horas, las solicitudes de alta deberán presentarse antes de la finalización de esa jornada". Al terminar a las 11:30, el límite se acorta.'
-    },
-    {
-        "question_text": "11. En 2026, dentro del Sistema Especial Agrario, un Ingeniero (Grupo 1) tiene una reducción de 8,10 puntos porcentuales en la cuota empresarial por contingencias comunes. ¿Cuál es el límite máximo absoluto estipulado legalmente para dicha cuota empresarial resultante?",
-        "preamble": "",
-        "options": [
-            "a) No hay tope máximo, únicamente una cuota empresarial resultante no inferior a 179,44 euros.",
-            "b) No podrá superar los 279,00 euros al mes o 12,68 euros por jornada real trabajada.",
-            "c) No podrá superar los 179,44 euros al mes o 8,16 euros por jornada real trabajada."
-        ],
-        "answer": 1,
-        "explanation": "La normativa de actualización para 2026 marca que, para el grupo 1, en ningún caso la cuota empresarial resultante será superior a 279,00 euros al mes o 12,68 euros por jornada real trabajada. (Los 179,44 euros operan como límite mínimo, pero para los grupos 2 a 11)."
-    },
-    {
-        "question_text": "12. Según la normativa vigente (Ley 27/2011 y RD 1620/2011) ¿está amparada por el Sistema Especial de Empleados de Hogar la relación laboral suscrita con una persona jurídica (empresa) cuyo objeto social sea prestar tareas de limpieza a domicilios particulares?",
-        "preamble": "",
-        "options": [
-            "a) Sí, porque lo que define el sistema es que la prestación material se realice en un hogar familiar.",
-            "b) No, quedan excluidas legalmente y se rigen por la normativa laboral común.",
-            "c) Sí, salvo que la persona jurídica actúe como Empresa de Trabajo Temporal."
-        ],
-        "answer": 1,
-        "explanation": 'La Disposición adicional 17.ª de la Ley 27/2011 excluye expresamente "las relaciones concertadas por personas jurídicas, de carácter civil o mercantil, aunque su objeto sea la prestación de servicios o tareas domésticas". Para este Régimen Especial, el empleador debe ser forzosamente el "titular del hogar familiar" (persona física).'
-    },
-    {
-        "question_text": "13. Una persona contrata a su suegra (que convive en su mismo domicilio) para que se encargue del cuidado de sus hijos de manera retribuida. ¿Se encuentra esta relación incluida inicialmente en el Sistema Especial de Empleadas de Hogar?",
-        "preamble": "",
-        "options": [
-            "a) No, quedan absolutamente excluidas sin admitir prueba en contrario por ser parentesco de primer grado por afinidad.",
-            "b) Sí, el cuidado de menores está plenamente amparado por el SEEEHH, sea quien sea el prestador.",
-            "c) No, quedan excluidas las relaciones entre familiares hasta el segundo grado que convivan, salvo prueba en contrario de la condición de asalariado."
-        ],
-        "answer": 2,
-        "explanation": "Según la Ley 27/2011, se excluyen las relaciones concertadas entre familiares (hasta el 2.º grado de consanguinidad o afinidad que convivan con el empleador) SALVO QUE se demuestre la condición de asalariados. La ley admite prueba en contrario. (La suegra es primer grado de afinidad)."
-    },
-    {
-        "question_text": "14. Un trabajador por cuenta propia (Régimen de Autónomos) decide contratar a una empleada de hogar para su residencia privada. ¿Qué requerimiento burocrático específico en materia de afiliación debe cumplir el empleador?",
-        "preamble": "",
-        "options": [
-            "a) Deberá disponer, obligatoriamente, de un Código de Cuenta Cotización específico y exclusivo para este Sistema Especial.",
-            "b) No necesita Cuenta de Cotización propia, operando el pago directamente a través de su DNI/NIF.",
-            "c) Podrá agrupar las cotizaciones bajo su Código de Cuenta Cotización de empresario individual."
-        ],
-        "answer": 0,
-        "explanation": '"Los empleadores deberán disponer de un Código de Cuenta Cotización específico para este Sistema Especial". No sirve usar el CCC de su negocio.'
-    },
-    {
-        "question_text": "15. En el supuesto de que una empleada de hogar sufra una incapacidad temporal por accidente no laboral grave, o bien inicie una de las situaciones especiales de incapacidad temporal por contingencias comunes del artículo 169.1.a) del TRLGSS tras la entrada en vigor del Real Decreto-ley 31/2026 (como patología limitante por trastorno menopáusico secundario codificado o lesiones por violencia de género), ¿quién y desde cuándo asume el abono del subsidio?",
-        "preamble": "",
-        "options": [
-            "a) En ambos casos, del cuarto al decimoquinto día lo asume el empleador a su exclusivo cargo, y a partir del decimosexto entra el pago directo de la entidad gestora o colaboradora.",
-            "b) En accidente no laboral a partir del 9.º día y en situaciones especiales desde el día siguiente a la baja, siempre en pago directo por la entidad gestora o mutua.",
-            "c) En las situaciones especiales del art. 169.1.a) lo abona el empleador mediante pago delegado desde el día siguiente al de la baja, descontándolo de su boletín de cotización mensual, mientras que en el accidente no laboral se abona en pago directo desde el 9.º día."
-        ],
-        "answer": 1,
-        "explanation": "Según el art. 251 del TRLGSS, en el Sistema Especial de Empleados de Hogar el pago del subsidio por IT se efectúa directamente por la entidad gestora o colaboradora, no procediendo en ningún caso el pago delegado. En enfermedad común o accidente no laboral ordinario, se abona a partir del 9.º día (estando del 4.º al 8.º a cargo del empleador). No obstante, en las situaciones especiales de IT previstas en el art. 169.1.a) del TRLGSS (en su redacción dada por el Real Decreto-ley 31/2026, de 20 de octubre, que incluye menstruación incapacitante secundaria, interrupción del embarazo, gestación desde la semana 39, donación de órganos, trastorno menopáusico secundario codificado y lesiones por violencia de género), el art. 173.1 del TRLGSS establece que el subsidio se abonará a cargo de la entidad gestora o colaboradora desde el día siguiente al de la baja en el trabajo, estando a cargo del empleador únicamente el salario íntegro del día de la baja."
-    },
-    {
-        "question_text": "16. Si se demuestra que una empleada de hogar ha sufrido un Accidente de Trabajo por falta grave de medidas de seguridad por parte del empleador (ej. material eléctrico defectuoso no reparado), ¿se le aplica al titular del hogar el recargo de prestaciones por responsabilidad (Capital Coste)?",
-        "preamble": "",
-        "options": [
-            "a) Sí, pero se aminorará a un 30% fijo de recargo debido a la naturaleza doméstica del accidente.",
-            "b) No, no resulta de aplicación el régimen de responsabilidades en orden a las prestaciones regulado en el art. 167 del TRLGSS.",
-            "c) Sí, respondiendo con su patrimonio del capital coste que dicte el art. 167 del TRLGSS."
-        ],
-        "answer": 1,
-        "explanation": "El art. 251 del TRLGSS especifica de forma concreta que con respecto a las contingencias profesionales del sistema especial para empleados de hogar, NO resulta de aplicación el régimen de responsabilidades por capital coste del artículo 167."
-    },
-    {
-        "question_text": "17. Un empleador cuenta con el título de familia numerosa vigente y formaliza un alta en el SEEEHH, ¿cómo se aplica el beneficio estatal del 45% en la cuota desde las reformas de octubre de 2022?",
-        "preamble": "",
-        "options": [
-            "a) Se suma aritméticamente al descuento general del 20%, resultando en un 65% total de bonificación por contingencias comunes.",
-            "b) Quedó derogado, por lo que las familias numerosas ahora solo disfrutan del descuento general del 20%.",
-            "c) No se suma al descuento general del 20%, pero sí es compatible y se suma a las bonificaciones del 80% por desempleo y FOGASA."
-        ],
-        "answer": 2,
-        "explanation": 'Según se precisa en las directrices de la TGSS actualizadas: "desde el 1 de octubre de 2022 el beneficio por familia numerosa no se suma al descuento general del 20%, pero sí a las bonificaciones del 80% por desempleo y FOGASA".'
-    },
-    {
-        "question_text": "18. Tras una reforma legal (RD 505/1985 modificado), si un contrato del servicio doméstico se extingue por las causas previstas en el art. 11.2 (despido disciplinario inminente) y el empleador se declara en insolvencia, ¿qué cuantía indemnizatoria asume el FOGASA?",
-        "preamble": "",
-        "options": [
-            "a) 33 días de salario por año de servicio, topado a un máximo de la base mínima anual.",
-            "b) 20 días de salario por año de servicio, con el límite máximo de doce mensualidades.",
-            "c) 12 días de salario por año de servicio, con el límite máximo de seis mensualidades."
-        ],
-        "answer": 2,
-        "explanation": "La cuantía que el FOGASA garantiza a las Empleadas de Hogar en estos casos (art. 11.2 RD 1620/2011) es a razón de 12 días de salario por año de servicio, prorrateándose, con el límite de SEIS mensualidades. No debemos confundirlo con las indemnizaciones estándar del Estatuto de los Trabajadores (20/33 días) o con los límites ordinarios del FOGASA (1 anualidad)."
-    },
-    {
-        "question_text": "19. Durante la situación de inactividad de un trabajador del Sistema Especial Agrario, este comienza a percibir una prestación por desempleo de nivel contributivo. En este caso específico, ¿qué ocurre con su base y tipo de cotización a la Seguridad Social?",
-        "preamble": "",
-        "options": [
-            "a) Pasa a cotizar a cargo directo del SEPE con base mínima irreductible e inamovible.",
-            "b) La base se mantendrá en los 1.424,40 euros (base mínima grupo 7) con un tipo del 11,50%.",
-            "c) La base de cotización será la base reguladora de la prestación por desempleo y el tipo de cotización será el 11%."
-        ],
-        "answer": 2,
-        "explanation": "Durante la percepción de la prestación por desempleo contributiva, la base pasará a ser la base reguladora del desempleo (no la base fija de inactividad de 1.424,40 €) y el tipo especial será del 11%."
-    },
-    {
-        "question_text": "20. En el caso de contratos de trabajo a tiempo parcial en el Sistema Especial para Empleados de Hogar para el año 2026, ¿qué regla matemática define obligatoriamente la retribución que servirá de tope inferior para encuadrar en el tramo correcto de cotización?",
-        "preamble": "",
-        "options": [
-            "a) La base de cotización se reducirá linealmente mediante un factor de parcialidad, partiendo siempre del Tramo 1.",
-            "b) La retribución para buscar el tramo no podrá ser inferior a multiplicar el salario mínimo por hora vigente por el número de horas mensuales trabajadas.",
-            "c) A tiempo parcial, todas las cotizaciones se agrupan en un tramo único fijado en 436,00 euros al mes."
-        ],
-        "answer": 1,
-        "explanation": 'La normativa de aplicación indica expresamente para tiempos parciales: "no podrá ser inferior a la prevista para el tramo en el que se incluya la retribución que resulte de multiplicar el salario mínimo por hora vigente por el número de horas mensuales de trabajo". En el Régimen General se calculan horas sobre base mínima directamente; aquí, el empleado de hogar cuenta con una escala rígida de 8 Tramos de cotización, por lo que la comprobación con el SMI-hora sirve para no encuadrarlo en un "Tramo" inferior al legal permitido.'
-    },
-    {
-        "question_text": "21. ¿Con qué efectos temporales exactos se produjo jurídicamente la integración en el Régimen General de los Regímenes Especiales de Empleados de Hogar y de Trabajadores Agrarios por cuenta ajena?",
-        "preamble": "",
-        "options": [
-            "a) El 1 de enero de 2012.",
-            "b) El 1 de agosto de 2011.",
-            "c) El 22 de septiembre de 2011."
-        ],
-        "answer": 0,
-        "explanation": "Aunque la Ley 27/2011 y la Ley 28/2011 se publicaron en agosto y septiembre de 2011 respectivamente, la Disposición Adicional correspondiente en ambos textos legales estableció que la integración efectiva en el Régimen General (creando los Sistemas Especiales actuales) surtiría efectos a partir del 1 de enero de 2012."
-    },
-    {
-        "question_text": "22. Para la determinación de la reducción de la edad mínima de jubilación de un trabajador ferroviario, si al computar el tiempo efectivamente trabajado en una categoría peligrosa resultan 14 años y 7 meses, ¿cómo se cuantifica legalmente este periodo?",
-        "preamble": "",
-        "options": [
-            "a) Se aplican los coeficientes sobre 14 años y 7 meses, ya que se computa el periodo exacto al día.",
-            "b) Se considerará un periodo efectivo de 15 años completos a efectos de cálculo de la reducción.",
-            "c) Se considerará un periodo de 14 años, al despreciarse cualquier fracción inferior al año natural."
-        ],
-        "answer": 1,
-        "explanation": "El artículo 3 del Real Decreto 2621/1986 establece una regla de redondeo muy particular. Exige que el período computable se fije en un número entero de años, pero matiza expresamente que 'si existen fracciones de año, las que excedan de seis meses se computan como un año completo y las inferiores no se computan en absoluto'. Al ser 7 meses (excede de 6), el periodo se eleva a 15 años."
-    },
-    {
-        "question_text": "23. ¿En qué grupo de cotización se encuadra preceptivamente a los Jugadores Profesionales de Fútbol que militan en equipos de la Segunda División A?",
-        "preamble": "",
-        "options": [
-            "a) Grupo 2.",
-            "b) Grupo 3.",
-            "c) Grupo 5."
-        ],
-        "answer": 1,
-        "explanation": "Conforme a la normativa de integración de este colectivo y el desarrollo de las normas de cotización (Reglamento General de Cotización), la adscripción es tasada: Primera División (Grupo 2), Segunda A (Grupo 3), Segunda B (Grupo 5) y restantes categorías (Grupo 7)."
-    },
-    {
-        "question_text": "24. Tras las modificaciones operadas por el Real Decreto 708/2015 ¿cuáles son los límites que operan sobre la base de cotización mensual para contingencias comunes de los Representantes de Comercio?",
-        "preamble": "",
-        "options": [
-            "a) Debe situarse siempre, a elección del trabajador, entre las bases mínima y máxima del grupo 5 del Régimen General.",
-            "b) Estará determinada por sus ingresos reales declarados en IRPF, con el límite del tope máximo absoluto del Régimen General.",
-            "c) Se ajustará a la base mínima del grupo 7 de cotización, salvo que decidan cotizar voluntariamente por una base superior."
-        ],
-        "answer": 0,
-        "explanation": "La modificación introducida por el Real Decreto 708/2015 estandarizó la cotización de los Representantes de Comercio, obligando a que su base de cotización mensual para contingencias comunes quede encorsetada estrictamente entre la base mínima y máxima correspondientes al grupo 5 de cotización."
-    },
-    {
-        "question_text": "25. Los profesionales taurinos clasificados como 'Picadores y Banderilleros que acompañan a Matadores de Toros del grupo A', ¿en qué grupo de cotización se integran a efectos de sus bases de cotización a cuenta?",
-        "preamble": "",
-        "options": [
-            "a) Grupo 1.",
-            "b) Grupo 2.",
-            "c) Grupo 3."
-        ],
-        "answer": 1,
-        "explanation": "De acuerdo con el encuadramiento derivado del Real Decreto 2064/1995 y la Orden PJC/297/2026, si bien los Matadores del Grupo A y B están en el Grupo 1, sus cuadrillas de Picadores y Banderilleros sufren una rebaja de categoría integrándose en el Grupo de cotización 2 (mientras que el resto de picadores caen al Grupo 3)."
-    },
-    {
-        "question_text": "26. ¿Qué consideración otorga el texto refundido de la Ley General de la Seguridad Social (TRLGSS) a las operaciones de comercialización del plátano realizadas por cosecheros exportadores, respecto al Sistema Especial Agrario (SEA)?",
-        "preamble": "",
-        "options": [
-            "a) Se consideran labores agrarias a todos los efectos, debiendo afiliarse siempre al Sistema Especial Agrario.",
-            "b) No tendrán la consideración de labores agrarias en ningún caso, y por tanto, excluyen al trabajador de este Sistema Especial.",
-            "c) Solo se considerarán agrarias si las operaciones se realizan en la propia finca donde el plátano fue recolectado."
-        ],
-        "answer": 1,
-        "explanation": "El artículo 252 del texto refundido de la Ley General de la Seguridad Social, aprobado por RD Legislativo 8/2015, excluye explícitamente estas labores: 'No tendrán la consideración de labores agrarias las operaciones de manipulado, empaquetado, envasado y comercialización del plátano... aunque para el mismo empresario presten servicios otros trabajadores dedicados a la obtención directa'."
-    },
-    {
-        "question_text": "27. Si un peón agrícola finaliza una campaña y desea ser excluido del régimen de inactividad del Sistema Especial Agrario a solicitud propia, ¿cuándo comenzará a surtir efecto su baja en el Régimen General por esta inactividad?",
-        "preamble": "",
-        "options": [
-            "a) De forma inmediata, desde las 24 horas del día en que curse telemáticamente la solicitud.",
-            "b) A partir del día primero del mes siguiente al de la presentación de dicha solicitud.",
-            "c) Transcurridos tres meses naturales desde la fecha de registro de la solicitud."
-        ],
-        "answer": 1,
-        "explanation": "El artículo 253 del texto refundido de la Ley General de la Seguridad Social estipula que la exclusión del sistema durante los periodos de inactividad por voluntad del trabajador produce efectos a partir del 'día primero del mes siguiente al de la presentación de la solicitud'."
-    },
-    {
-        "question_text": "28. Se contrata a un trabajador agrícola el día 15 del mes con un contrato indefinido fijo discontinuo. Respecto a su cotización durante los periodos de actividad, ¿está la empresa obligada a utilizar bases mensuales?",
-        "preamble": "",
-        "options": [
-            "a) Sí, es obligatorio e ineludible al tratarse de un contrato indefinido.",
-            "b) No, para los trabajadores fijos discontinuos la base mensual es una opción expresa que puede ejercer el empresario.",
-            "c) No, los trabajadores fijos discontinuos deben cotizar siempre y exclusivamente por jornadas reales trabajadas."
-        ],
-        "answer": 1,
-        "explanation": "El TRLGSS y las normas de cotización aplicables al Régimen Agrario establecen la regla general de que la base mensual es obligatoria para los contratos indefinidos. No obstante, articulan una excepción textual y directa para este colectivo: 'sin incluir entre ellos a los que presten servicios con carácter fijo discontinuo', para los cuales la base mensual sigue siendo una opción y no una obligación."
-    },
-    {
-        "question_text": "29. En el Sistema Especial Agrario (SEA), si el empresario opta por cotizar por bases diarias (jornadas reales), ¿cuál es el límite inferior de la base por contingencias comunes aplicable a una sola jornada real?",
-        "preamble": "",
-        "options": [
-            "a) Puede ser cualquier cuantía pactada si respeta el Salario Mínimo Interprofesional diario prorrateado.",
-            "b) Nunca podrá ser inferior a la base mínima de cotización diaria que se establezca legalmente para su grupo profesional.",
-            "c) Existe una base mínima unificada para todas las categorías equivalente a la base del grupo 10 dividida por 30."
-        ],
-        "answer": 1,
-        "explanation": "Las reglas de cotización durante los períodos de actividad en el SEA disponen que 'cuando la cotización se efectúe por bases diarias, se entenderá referida a cada jornada real realizada, sin que pueda ser inferior a la base mínima de cotización que se establezca legalmente'."
-    }
-]
-
 
 class PDFQuizParser:
     @staticmethod
@@ -2091,7 +1768,332 @@ class PDFQuizParser:
                 q_des["question_text"] = qt
 
         return questions
+# === FIN SECCIÓN 3A ===
 
+# === SECCIÓN 3B: MOTOR EXCLUSIVO DE PREGUNTAS TIPO TEST (PARSE) ===
+_RESPALDO_TEMA_73_TEST = [
+    {
+        "question_text": '1. Un trabajador ferroviario del grupo de "Oficial Calderero Chapista en Depósito" se jubila anticipadamente. ¿Cuál es el coeficiente aplicable y qué sucede en el supuesto de que también se encuentre en pluriactividad según el RD 2621/1986?',
+        "preamble": "",
+        "options": [
+            "a) 0,15 y la reducción sólo se aplicará a efectos de la edad.",
+            "b) 0,10 y la reducción sólo se aplicará a efectos de la edad.",
+            "c) 0,15 y la reducción se aplicará a efectos de la edad y del porcentaje de la pensión computable."
+        ],
+        "answer": 0,
+        "explanation": "El art. 3 del RD 2621/1986 establece un coeficiente reductor de 0,15 específicamente para la categoría de Oficial Calderero Chapista en Depósito. Es común pensar que en un sistema tan específico, la pluriactividad bonifica también la base o porcentaje de la pensión final por haber aportado a dos regímenes, pero la ley establece claramente que en supuestos de pluriactividad, la reducción sólo se aplicará a efectos de la edad."
+    },
+    {
+        "question_text": "2. Según la categorización de los jugadores profesionales de fútbol para su cotización a la Seguridad Social, ¿en qué grupo de cotización se encuadra preceptivamente un jugador que milita en la Segunda División B?",
+        "preamble": "",
+        "options": [
+            "a) Grupo 5.",
+            "b) Grupo 3.",
+            "c) Grupo 7."
+        ],
+        "answer": 0,
+        "explanation": "De acuerdo a la tabla de asimilación del RD 2621/1986, la Primera División corresponde al Grupo 2, la Segunda División A al Grupo 3, y la Segunda División B corresponde al Grupo 5."
+    },
+    {
+        "question_text": "3. En el régimen aplicable a los Representantes de Comercio integrados en el Régimen General, ¿quién ostenta la condición de sujeto responsable de cotizar e ingresar la totalidad de la cuota (tanto la aportación obrera como la empresarial)?",
+        "preamble": "",
+        "options": [
+            "a) La Tesorería General de la Seguridad Social de oficio, previa deducción de las facturas comerciales.",
+            "b) El Empresario, respondiendo subsidiariamente el Representante.",
+            "c) El Representante de Comercio."
+        ],
+        "answer": 2,
+        "explanation": "El Representante de Comercio es el sujeto responsable de cotizar e ingresar la totalidad de la cuota, según las disposiciones del RD 2621/1986. En el Régimen General común, el sujeto responsable del ingreso es SIEMPRE el empresario. Aquí se invierte la regla: es el trabajador (Representante) quien ingresa, y el empresario está obligado a entregarle a este su parte de la aportación empresarial. Si el empresario incumple, la TGSS reintegra al representante el importe iniciando acción recaudatoria contra la empresa."
+    },
+    {
+        "question_text": "4. Según la Orden PJC/297/2026, ¿cuál será la base y el tipo de cotización durante los períodos de inactividad de los artistas que decidan mantener voluntariamente su situación de alta?",
+        "preamble": "",
+        "options": [
+            "a) La base mínima del grupo 7, con un tipo del 11,50%.",
+            "b) La base mínima del grupo 1, con un tipo del 15,50%.",
+            "c) La base máxima del grupo 7, con un tipo del 11,50%."
+        ],
+        "answer": 0,
+        "explanation": "Para los artistas, la base de cotización durante los períodos de inactividad manteniendo voluntariamente el alta (art. 32.5 RD 2064/1995 y Orden PJC/297/2026) será la base mínima del grupo 7, con un tipo muy específico del 11,50%."
+    },
+    {
+        "question_text": '5. Un Picador taurino que acompaña habitualmente a un Matador de Toros clasificado en el grupo "C", ¿en qué grupo de cotización debe encuadrarse a efectos de la Seguridad Social?',
+        "preamble": "",
+        "options": [
+            "a) Grupo 2.",
+            "b) Grupo 3.",
+            "c) Grupo 1."
+        ],
+        "answer": 1,
+        "explanation": 'El baremo especifica que los Picadores y Banderilleros que acompañan al Grupo A van al Grupo 2. Al no mencionar explícitamente a los que acompañan al grupo C, debemos deducir que encajan en el epígrafe "Restantes Picadores y Banderilleros", a los cuales la norma les asigna el Grupo 3.'
+    },
+    {
+        "question_text": "6. En el Sistema Especial para Trabajadores Agrarios (SEA), ¿cuándo se considera legalmente que existen períodos de inactividad dentro de un mes natural?",
+        "preamble": "",
+        "options": [
+            "a) Cuando el número de jornadas reales sea inferior al 76,67% de los días hábiles en que figure incluido en el sistema.",
+            "b) Cuando el número de días naturales en alta sea superior a las jornadas reales multiplicadas por 1,5.",
+            "c) Cuando el número de jornadas reales en él realizadas sea inferior al 76,67% de los días naturales en que el trabajador figure incluido en el sistema en dicho mes."
+        ],
+        "answer": 2,
+        "explanation": 'Conforme al art. 253 del TRLGSS, existen períodos de inactividad cuando las jornadas reales son inferiores al 76,67% de los días NATURALES de alta en el sistema especial en dicho mes. Confundir "días naturales" con "días hábiles", lo cual cambiaría drásticamente el cálculo numérico.'
+    },
+    {
+        "question_text": "7. Un trabajador del SEA adeuda las cuotas por inactividad de dos meses consecutivos. El último día para el pago entra en situación de Incapacidad Temporal. ¿Cuándo surtirá efectos su baja de oficio y exclusión del sistema especial?",
+        "preamble": "",
+        "options": [
+            "a) No podrá ser excluido mientras permanezca de baja médica.",
+            "b) El día primero del mes siguiente a aquel en que finaliza la prestación por IT (si sigue sin pagar).",
+            "c) El día primero del mes siguiente a la segunda mensualidad no ingresada de forma inexcusable."
+        ],
+        "answer": 1,
+        "explanation": "Como regla general, la exclusión opera el día primero del mes siguiente a la segunda mensualidad no ingresada. El art. 253 del TRLGSS introduce una excepción fundamental: si en esa fecha de exclusión el trabajador se encuentra en IT, riesgo durante el embarazo o maternidad/paternidad, los efectos se posponen y operan el primer día del mes siguiente a que finalice la prestación."
+    },
+    {
+        "question_text": "8. Según el TRLGSS aplicable al SEA, ¿qué circunstancia EXCLUYE la existencia de períodos de inactividad en un mes natural, invalidando la aplicación de la regla del 76,67%?",
+        "preamble": "",
+        "options": [
+            "a) Realizar, para un mismo empresario, un mínimo de cinco jornadas reales semanales en cumplimiento de convenio colectivo aplicable.",
+            "b) Realizar para distintos empresarios más de 20 jornadas reales al mes.",
+            "c) Que el trabajador esté percibiendo simultáneamente el subsidio agrario de desempleo."
+        ],
+        "answer": 0,
+        "explanation": "El TRLGSS señala taxativamente que no existirán períodos de inactividad dentro del mes natural cuando el trabajador realice, para UN MISMO empresario, un mínimo de cinco jornadas reales semanales en cumplimiento del convenio colectivo de aplicación. Si las 5 jornadas se hacen para empresarios distintos, no se activa esta excepción directa a la regla."
+    },
+    {
+        "question_text": "9. En cuanto a la obligación de cotización durante los períodos de actividad en el Sistema Especial Agrario, ¿cuál de estas afirmaciones es correcta para un trabajador con contrato de carácter fijo discontinuo?",
+        "preamble": "",
+        "options": [
+            "a) La cotización por bases mensuales resulta estrictamente obligatoria, igual que para los indefinidos ordinarios.",
+            "b) Siempre se deberá cotizar por bases diarias obligatoriamente.",
+            "c) La cotización por bases mensuales es opcional, a elección del empresario."
+        ],
+        "answer": 2,
+        "explanation": "La cotización por bases mensuales resultará obligatoria para los trabajadores con contrato indefinido. Se exceptúa expresamente a los indefinidos que prestan servicios con carácter fijo discontinuo, para los cuales la cotización mensual se mantiene como una opción del empresario, no como una imposición. Si no elige, se entiende mensual, pero normativamente es opcional."
+    },
+    {
+        "question_text": "10. En el Sistema Especial Agrario (SEA), si un empleador contrata a un eventual el mismo día de comienzo de la prestación y no pudo dar el alta previa obligatoria, ¿hasta qué momento exacto puede cursar la solicitud si la jornada laboral de ese día termina a las 11:30 horas?",
+        "preamble": "",
+        "options": [
+            "a) Hasta las 12:00 horas de ese mismo día.",
+            "b) Antes de la finalización de dicha jornada (es decir, antes de las 11:30 horas).",
+            "c) Dentro del plazo excepcional de los 3 días naturales siguientes."
+        ],
+        "answer": 1,
+        "explanation": 'La norma permite, en eventuales/fijos discontinuos cuando no fue posible el alta previa, hacerlo hasta las 12:00 del mismo día de inicio. Hay una salvedad literal que dice: "Si la jornada de trabajo finalizase antes de las 12 horas, las solicitudes de alta deberán presentarse antes de la finalización de esa jornada". Al terminar a las 11:30, el límite se acorta.'
+    },
+    {
+        "question_text": "11. En 2026, dentro del Sistema Especial Agrario, un Ingeniero (Grupo 1) tiene una reducción de 8,10 puntos porcentuales en la cuota empresarial por contingencias comunes. ¿Cuál es el límite máximo absoluto estipulado legalmente para dicha cuota empresarial resultante?",
+        "preamble": "",
+        "options": [
+            "a) No hay tope máximo, únicamente una cuota empresarial resultante no inferior a 179,44 euros.",
+            "b) No podrá superar los 279,00 euros al mes o 12,68 euros por jornada real trabajada.",
+            "c) No podrá superar los 179,44 euros al mes o 8,16 euros por jornada real trabajada."
+        ],
+        "answer": 1,
+        "explanation": "La normativa de actualización para 2026 marca que, para el grupo 1, en ningún caso la cuota empresarial resultante será superior a 279,00 euros al mes o 12,68 euros por jornada real trabajada. (Los 179,44 euros operan como límite mínimo, pero para los grupos 2 a 11)."
+    },
+    {
+        "question_text": "12. Según la normativa vigente (Ley 27/2011 y RD 1620/2011) ¿está amparada por el Sistema Especial de Empleados de Hogar la relación laboral suscrita con una persona jurídica (empresa) cuyo objeto social sea prestar tareas de limpieza a domicilios particulares?",
+        "preamble": "",
+        "options": [
+            "a) Sí, porque lo que define el sistema es que la prestación material se realice en un hogar familiar.",
+            "b) No, quedan excluidas legalmente y se rigen por la normativa laboral común.",
+            "c) Sí, salvo que la persona jurídica actúe como Empresa de Trabajo Temporal."
+        ],
+        "answer": 1,
+        "explanation": 'La Disposición adicional 17.ª de la Ley 27/2011 excluye expresamente "las relaciones concertadas por personas jurídicas, de carácter civil o mercantil, aunque su objeto sea la prestación de servicios o tareas domésticas". Para este Régimen Especial, el empleador debe ser forzosamente el "titular del hogar familiar" (persona física).'
+    },
+    {
+        "question_text": "13. Una persona contrata a su suegra (que convive en su mismo domicilio) para que se encargue del cuidado de sus hijos de manera retribuida. ¿Se encuentra esta relación incluida inicialmente en el Sistema Especial de Empleadas de Hogar?",
+        "preamble": "",
+        "options": [
+            "a) No, quedan absolutamente excluidas sin admitir prueba en contrario por ser parentesco de primer grado por afinidad.",
+            "b) Sí, el cuidado de menores está plenamente amparado por el SEEEHH, sea quien sea el prestador.",
+            "c) No, quedan excluidas las relaciones entre familiares hasta el segundo grado que convivan, salvo prueba en contrario de la condición de asalariado."
+        ],
+        "answer": 2,
+        "explanation": "Según la Ley 27/2011, se excluyen las relaciones concertadas entre familiares (hasta el 2.º grado de consanguinidad o afinidad que convivan con el empleador) SALVO QUE se demuestre la condición de asalariados. La ley admite prueba en contrario. (La suegra es primer grado de afinidad)."
+    },
+    {
+        "question_text": "14. Un trabajador por cuenta propia (Régimen de Autónomos) decide contratar a una empleada de hogar para su residencia privada. ¿Qué requerimiento burocrático específico en materia de afiliación debe cumplir el empleador?",
+        "preamble": "",
+        "options": [
+            "a) Deberá disponer, obligatoriamente, de un Código de Cuenta Cotización específico y exclusivo para este Sistema Especial.",
+            "b) No necesita Cuenta de Cotización propia, operando el pago directamente a través de su DNI/NIF.",
+            "c) Podrá agrupar las cotizaciones bajo su Código de Cuenta Cotización de empresario individual."
+        ],
+        "answer": 0,
+        "explanation": '"Los empleadores deberán disponer de un Código de Cuenta Cotización específico para este Sistema Especial". No sirve usar el CCC de su negocio.'
+    },
+    {
+        "question_text": "15. En el supuesto de que una empleada de hogar sufra una incapacidad temporal por accidente no laboral grave, o bien inicie una de las situaciones especiales de incapacidad temporal por contingencias comunes del artículo 169.1.a) del TRLGSS tras la entrada en vigor del Real Decreto-ley 31/2026 (como patología limitante por trastorno menopáusico secundario codificado o lesiones por violencia de género), ¿quién y desde cuándo asume el abono del subsidio?",
+        "preamble": "",
+        "options": [
+            "a) En ambos casos, del cuarto al decimoquinto día lo asume el empleador a su exclusivo cargo, y a partir del decimosexto entra el pago directo de la entidad gestora o colaboradora.",
+            "b) En accidente no laboral a partir del 9.º día y en situaciones especiales desde el día siguiente a la baja, siempre en pago directo por la entidad gestora o mutua.",
+            "c) En las situaciones especiales del art. 169.1.a) lo abona el empleador mediante pago delegado desde el día siguiente al de la baja, descontándolo de su boletín de cotización mensual, mientras que en el accidente no laboral se abona en pago directo desde el 9.º día."
+        ],
+        "answer": 1,
+        "explanation": "Según el art. 251 del TRLGSS, en el Sistema Especial de Empleados de Hogar el pago del subsidio por IT se efectúa directamente por la entidad gestora o colaboradora, no procediendo en ningún caso el pago delegado. En enfermedad común o accidente no laboral ordinario, se abona a partir del 9.º día (estando del 4.º al 8.º a cargo del empleador). No obstante, en las situaciones especiales de IT previstas en el art. 169.1.a) del TRLGSS (en su redacción dada por el Real Decreto-ley 31/2026, de 20 de octubre, que incluye menstruación incapacitante secundaria, interrupción del embarazo, gestación desde la semana 39, donación de órganos, trastorno menopáusico secundario codificado y lesiones por violencia de género), el art. 173.1 del TRLGSS establece que el subsidio se abonará a cargo de la entidad gestora o colaboradora desde el día siguiente al de la baja en el trabajo, estando a cargo del empleador únicamente el salario íntegro del día de la baja."
+    },
+    {
+        "question_text": "16. Si se demuestra que una empleada de hogar ha sufrido un Accidente de Trabajo por falta grave de medidas de seguridad por parte del empleador (ej. material eléctrico defectuoso no reparado), ¿se le aplica al titular del hogar el recargo de prestaciones por responsabilidad (Capital Coste)?",
+        "preamble": "",
+        "options": [
+            "a) Sí, pero se aminorará a un 30% fijo de recargo debido a la naturaleza doméstica del accidente.",
+            "b) No, no resulta de aplicación el régimen de responsabilidades en orden a las prestaciones regulado en el art. 167 del TRLGSS.",
+            "c) Sí, respondiendo con su patrimonio del capital coste que dicte el art. 167 del TRLGSS."
+        ],
+        "answer": 1,
+        "explanation": "El art. 251 del TRLGSS especifica de forma concreta que con respecto a las contingencias profesionales del sistema especial para empleados de hogar, NO resulta de aplicación el régimen de responsabilidades por capital coste del artículo 167."
+    },
+    {
+        "question_text": "17. Un empleador cuenta con el título de familia numerosa vigente y formaliza un alta en el SEEEHH, ¿cómo se aplica el beneficio estatal del 45% en la cuota desde las reformas de octubre de 2022?",
+        "preamble": "",
+        "options": [
+            "a) Se suma aritméticamente al descuento general del 20%, resultando en un 65% total de bonificación por contingencias comunes.",
+            "b) Quedó derogado, por lo que las familias numerosas ahora solo disfrutan del descuento general del 20%.",
+            "c) No se suma al descuento general del 20%, pero sí es compatible y se suma a las bonificaciones del 80% por desempleo y FOGASA."
+        ],
+        "answer": 2,
+        "explanation": 'Según se precisa en las directrices de la TGSS actualizadas: "desde el 1 de octubre de 2022 el beneficio por familia numerosa no se suma al descuento general del 20%, pero sí a las bonificaciones del 80% por desempleo y FOGASA".'
+    },
+    {
+        "question_text": "18. Tras una reforma legal (RD 505/1985 modificado), si un contrato del servicio doméstico se extingue por las causas previstas en el art. 11.2 (despido disciplinario inminente) y el empleador se declara en insolvencia, ¿qué cuantía indemnizatoria asume el FOGASA?",
+        "preamble": "",
+        "options": [
+            "a) 33 días de salario por año de servicio, topado a un máximo de la base mínima anual.",
+            "b) 20 días de salario por año de servicio, con el límite máximo de doce mensualidades.",
+            "c) 12 días de salario por año de servicio, con el límite máximo de seis mensualidades."
+        ],
+        "answer": 2,
+        "explanation": "La cuantía que el FOGASA garantiza a las Empleadas de Hogar en estos casos (art. 11.2 RD 1620/2011) es a razón de 12 días de salario por año de servicio, prorrateándose, con el límite de SEIS mensualidades. No debemos confundirlo con las indemnizaciones estándar del Estatuto de los Trabajadores (20/33 días) o con los límites ordinarios del FOGASA (1 anualidad)."
+    },
+    {
+        "question_text": "19. Durante la situación de inactividad de un trabajador del Sistema Especial Agrario, este comienza a percibir una prestación por desempleo de nivel contributivo. En este caso específico, ¿qué ocurre con su base y tipo de cotización a la Seguridad Social?",
+        "preamble": "",
+        "options": [
+            "a) Pasa a cotizar a cargo directo del SEPE con base mínima irreductible e inamovible.",
+            "b) La base se mantendrá en los 1.424,40 euros (base mínima grupo 7) con un tipo del 11,50%.",
+            "c) La base de cotización será la base reguladora de la prestación por desempleo y el tipo de cotización será el 11%."
+        ],
+        "answer": 2,
+        "explanation": "Durante la percepción de la prestación por desempleo contributiva, la base pasará a ser la base reguladora del desempleo (no la base fija de inactividad de 1.424,40 €) y el tipo especial será del 11%."
+    },
+    {
+        "question_text": "20. En el caso de contratos de trabajo a tiempo parcial en el Sistema Especial para Empleados de Hogar para el año 2026, ¿qué regla matemática define obligatoriamente la retribución que servirá de tope inferior para encuadrar en el tramo correcto de cotización?",
+        "preamble": "",
+        "options": [
+            "a) La base de cotización se reducirá linealmente mediante un factor de parcialidad, partiendo siempre del Tramo 1.",
+            "b) La retribución para buscar el tramo no podrá ser inferior a multiplicar el salario mínimo por hora vigente por el número de horas mensuales trabajadas.",
+            "c) A tiempo parcial, todas las cotizaciones se agrupan en un tramo único fijado en 436,00 euros al mes."
+        ],
+        "answer": 1,
+        "explanation": 'La normativa de aplicación indica expresamente para tiempos parciales: "no podrá ser inferior a la prevista para el tramo en el que se incluya la retribución que resulte de multiplicar el salario mínimo por hora vigente por el número de horas mensuales de trabajo". En el Régimen General se calculan horas sobre base mínima directamente; aquí, el empleado de hogar cuenta con una escala rígida de 8 Tramos de cotización, por lo que la comprobación con el SMI-hora sirve para no encuadrarlo en un "Tramo" inferior al legal permitido.'
+    },
+    {
+        "question_text": "21. ¿Con qué efectos temporales exactos se produjo jurídicamente la integración en el Régimen General de los Regímenes Especiales de Empleados de Hogar y de Trabajadores Agrarios por cuenta ajena?",
+        "preamble": "",
+        "options": [
+            "a) El 1 de enero de 2012.",
+            "b) El 1 de agosto de 2011.",
+            "c) El 22 de septiembre de 2011."
+        ],
+        "answer": 0,
+        "explanation": "Aunque la Ley 27/2011 y la Ley 28/2011 se publicaron en agosto y septiembre de 2011 respectivamente, la Disposición Adicional correspondiente en ambos textos legales estableció que la integración efectiva en el Régimen General (creando los Sistemas Especiales actuales) surtiría efectos a partir del 1 de enero de 2012."
+    },
+    {
+        "question_text": "22. Para la determinación de la reducción de la edad mínima de jubilación de un trabajador ferroviario, si al computar el tiempo efectivamente trabajado en una categoría peligrosa resultan 14 años y 7 meses, ¿cómo se cuantifica legalmente este periodo?",
+        "preamble": "",
+        "options": [
+            "a) Se aplican los coeficientes sobre 14 años y 7 meses, ya que se computa el periodo exacto al día.",
+            "b) Se considerará un periodo efectivo de 15 años completos a efectos de cálculo de la reducción.",
+            "c) Se considerará un periodo de 14 años, al despreciarse cualquier fracción inferior al año natural."
+        ],
+        "answer": 1,
+        "explanation": "El artículo 3 del Real Decreto 2621/1986 establece una regla de redondeo muy particular. Exige que el período computable se fije en un número entero de años, pero matiza expresamente que 'si existen fracciones de año, las que excedan de seis meses se computan como un año completo y las inferiores no se computan en absoluto'. Al ser 7 meses (excede de 6), el periodo se eleva a 15 años."
+    },
+    {
+        "question_text": "23. ¿En qué grupo de cotización se encuadra preceptivamente a los Jugadores Profesionales de Fútbol que militan en equipos de la Segunda División A?",
+        "preamble": "",
+        "options": [
+            "a) Grupo 2.",
+            "b) Grupo 3.",
+            "c) Grupo 5."
+        ],
+        "answer": 1,
+        "explanation": "Conforme a la normativa de integración de este colectivo y el desarrollo de las normas de cotización (Reglamento General de Cotización), la adscripción es tasada: Primera División (Grupo 2), Segunda A (Grupo 3), Segunda B (Grupo 5) y restantes categorías (Grupo 7)."
+    },
+    {
+        "question_text": "24. Tras las modificaciones operadas por el Real Decreto 708/2015 ¿cuáles son los límites que operan sobre la base de cotización mensual para contingencias comunes de los Representantes de Comercio?",
+        "preamble": "",
+        "options": [
+            "a) Debe situarse siempre, a elección del trabajador, entre las bases mínima y máxima del grupo 5 del Régimen General.",
+            "b) Estará determinada por sus ingresos reales declarados en IRPF, con el límite del tope máximo absoluto del Régimen General.",
+            "c) Se ajustará a la base mínima del grupo 7 de cotización, salvo que decidan cotizar voluntariamente por una base superior."
+        ],
+        "answer": 0,
+        "explanation": "La modificación introducida por el Real Decreto 708/2015 estandarizó la cotización de los Representantes de Comercio, obligando a que su base de cotización mensual para contingencias comunes quede encorsetada estrictamente entre la base mínima y máxima correspondientes al grupo 5 de cotización."
+    },
+    {
+        "question_text": "25. Los profesionales taurinos clasificados como 'Picadores y Banderilleros que acompañan a Matadores de Toros del grupo A', ¿en qué grupo de cotización se integran a efectos de sus bases de cotización a cuenta?",
+        "preamble": "",
+        "options": [
+            "a) Grupo 1.",
+            "b) Grupo 2.",
+            "c) Grupo 3."
+        ],
+        "answer": 1,
+        "explanation": "De acuerdo con el encuadramiento derivado del Real Decreto 2064/1995 y la Orden PJC/297/2026, si bien los Matadores del Grupo A y B están en el Grupo 1, sus cuadrillas de Picadores y Banderilleros sufren una rebaja de categoría integrándose en el Grupo de cotización 2 (mientras que el resto de picadores caen al Grupo 3)."
+    },
+    {
+        "question_text": "26. ¿Qué consideración otorga el texto refundido de la Ley General de la Seguridad Social (TRLGSS) a las operaciones de comercialización del plátano realizadas por cosecheros exportadores, respecto al Sistema Especial Agrario (SEA)?",
+        "preamble": "",
+        "options": [
+            "a) Se consideran labores agrarias a todos los efectos, debiendo afiliarse siempre al Sistema Especial Agrario.",
+            "b) No tendrán la consideración de labores agrarias en ningún caso, y por tanto, excluyen al trabajador de este Sistema Especial.",
+            "c) Solo se considerarán agrarias si las operaciones se realizan en la propia finca donde el plátano fue recolectado."
+        ],
+        "answer": 1,
+        "explanation": "El artículo 252 del texto refundido de la Ley General de la Seguridad Social, aprobado por RD Legislativo 8/2015, excluye explícitamente estas labores: 'No tendrán la consideración de labores agrarias las operaciones de manipulado, empaquetado, envasado y comercialización del plátano... aunque para el mismo empresario presten servicios otros trabajadores dedicados a la obtención directa'."
+    },
+    {
+        "question_text": "27. Si un peón agrícola finaliza una campaña y desea ser excluido del régimen de inactividad del Sistema Especial Agrario a solicitud propia, ¿cuándo comenzará a surtir efecto su baja en el Régimen General por esta inactividad?",
+        "preamble": "",
+        "options": [
+            "a) De forma inmediata, desde las 24 horas del día en que curse telemáticamente la solicitud.",
+            "b) A partir del día primero del mes siguiente al de la presentación de dicha solicitud.",
+            "c) Transcurridos tres meses naturales desde la fecha de registro de la solicitud."
+        ],
+        "answer": 1,
+        "explanation": "El artículo 253 del texto refundido de la Ley General de la Seguridad Social estipula que la exclusión del sistema durante los periodos de inactividad por voluntad del trabajador produce efectos a partir del 'día primero del mes siguiente al de la presentación de la solicitud'."
+    },
+    {
+        "question_text": "28. Se contrata a un trabajador agrícola el día 15 del mes con un contrato indefinido fijo discontinuo. Respecto a su cotización durante los periodos de actividad, ¿está la empresa obligada a utilizar bases mensuales?",
+        "preamble": "",
+        "options": [
+            "a) Sí, es obligatorio e ineludible al tratarse de un contrato indefinido.",
+            "b) No, para los trabajadores fijos discontinuos la base mensual es una opción expresa que puede ejercer el empresario.",
+            "c) No, los trabajadores fijos discontinuos deben cotizar siempre y exclusivamente por jornadas reales trabajadas."
+        ],
+        "answer": 1,
+        "explanation": "El TRLGSS y las normas de cotización aplicables al Régimen Agrario establecen la regla general de que la base mensual es obligatoria para los contratos indefinidos. No obstante, articulan una excepción textual y directa para este colectivo: 'sin incluir entre ellos a los que presten servicios con carácter fijo discontinuo', para los cuales la base mensual sigue siendo una opción y no una obligación."
+    },
+    {
+        "question_text": "29. En el Sistema Especial Agrario (SEA), si el empresario opta por cotizar por bases diarias (jornadas reales), ¿cuál es el límite inferior de la base por contingencias comunes aplicable a una sola jornada real?",
+        "preamble": "",
+        "options": [
+            "a) Puede ser cualquier cuantía pactada si respeta el Salario Mínimo Interprofesional diario prorrateado.",
+            "b) Nunca podrá ser inferior a la base mínima de cotización diaria que se establezca legalmente para su grupo profesional.",
+            "c) Existe una base mínima unificada para todas las categorías equivalente a la base del grupo 10 dividida por 30."
+        ],
+        "answer": 1,
+        "explanation": "Las reglas de cotización durante los períodos de actividad en el SEA disponen que 'cuando la cotización se efectúe por bases diarias, se entenderá referida a cada jornada real realizada, sin que pueda ser inferior a la base mínima de cotización que se establezca legalmente'."
+    }
+]
+
+class PDFQuizParser(PDFQuizParser):
     @staticmethod
     def _atomizar_linea_test(raw_line, is_bold):
         l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
@@ -2236,11 +2238,6 @@ class PDFQuizParser:
 
     @staticmethod
     def parse(file_bytes, max_options=None):
-        """
-        Extrae EXCLUSIVAMENTE las preguntas tipo test (a, b, c, d), incluyendo preguntas de reserva R1, R2, R3.
-        En cuanto aparece el encabezado 'SEGUNDA PARTE', 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS' / 'CASO PRÁCTICO'
-        o 'PREGUNTA DE DESARROLLO', cierra la última pregunta de test y detiene la lectura (break).
-        """
         lineas_brutas = []
         num_paginas_pdf = 0
         if PDFQuizParser.es_archivo_docx(file_bytes):
@@ -2630,9 +2627,9 @@ class PDFQuizParser:
             return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
 
         return questions
-# === FIN SECCIÓN 3 ===
+# === FIN SECCIÓN 3B ===
 
-# === SECCIÓN 4: FUNCIONES Y LÓGICA DEL TEST ===
+# === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
     TESTS_DISPONIBLES_COMPLETO = globals().get("TESTS_DISPONIBLES", globals().get("ESTS_DISPONIBLES", {}))
@@ -2879,6 +2876,128 @@ def obtener_etiqueta_tema_visible(nombre_test, q=None):
         return titulos_conocidos.get(num_t, f"TEMA {num_t:02d} ({nt})")
     return nt or "Tema en curso"
 
+def sincronizar_progreso_navegador():
+    try:
+        correo_usr = (st.session_state.get("email") or "").lower().strip()
+        if not correo_usr:
+            return
+        datos_auth = {
+            "email": correo_usr,
+            "rol": st.session_state.get("rol"),
+            "es_admin": st.session_state.get("es_admin", False),
+            "saved_esp": st.session_state.get("saved_esp", "ADMINISTRATIVOS"),
+            "saved_cat": st.session_state.get("saved_cat", "ESPECIFICO"),
+            "modo_avance": st.session_state.get("modo_avance", "")
+        }
+        b64_auth = _cifrar_backup_sesion(datos_auth)
+        sid_key = "sid4_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
+        almacen_srv = _obtener_almacen_sesiones_servidor()
+
+        if st.session_state.get("questions"):
+            datos_test = dict(datos_auth)
+            datos_test.update({
+                "questions": st.session_state.get("questions", []),
+                "stats": {str(k): v for k, v in st.session_state.get("stats", {}).items()},
+                "current_index": st.session_state.get("current_index", 0),
+                "finished": st.session_state.get("finished", False),
+                "checked": st.session_state.get("checked", False),
+                "test_name": st.session_state.get("test_name"),
+                "test_esp": st.session_state.get("test_esp", ""),
+                "test_cat": st.session_state.get("test_cat", ""),
+                "test_start_ts": st.session_state.get("test_start_ts"),
+                "fecha_inicio_str": st.session_state.get("fecha_inicio_str", ""),
+                "hora_inicio_str": st.session_state.get("hora_inicio_str", ""),
+                "inicio_registrado_sheets": st.session_state.get("inicio_registrado_sheets", False),
+                "resultado_registrado": st.session_state.get("resultado_registrado", False)
+            })
+            almacen_srv[sid_key] = datos_test
+            b64_test = _cifrar_backup_sesion(datos_test)
+            idx_act = st.session_state.get("current_index", 0)
+            borrador_actual = (st.session_state.get("stats", {}).get(idx_act, {}).get("selected") or "") if st.session_state.get("questions", [{}])[idx_act].get("is_open") else ""
+            borrador_js = json.dumps(str(borrador_actual))
+            components.html(f"""<script>
+            try {{
+                window.parent.sessionStorage.setItem("oposiciona_sid_v4", "{sid_key}");
+                window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.sessionStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
+                window.parent.sessionStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
+                window.parent.localStorage.setItem("oposiciona_sid_v4", "{sid_key}");
+                window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.localStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
+                window.parent.localStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
+            }} catch(e) {{}}
+            </script>""", height=0)
+        else:
+            almacen_srv[sid_key] = datos_auth
+            components.html(f"""<script>
+            try {{
+                window.parent.sessionStorage.setItem("oposiciona_sid_v4", "{sid_key}");
+                window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.sessionStorage.removeItem("oposiciona_test_backup_v1");
+                window.parent.sessionStorage.removeItem("oposiciona_live_draft_txt");
+                window.parent.localStorage.setItem("oposiciona_sid_v4", "{sid_key}");
+                window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
+                window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
+                window.parent.localStorage.removeItem("oposiciona_live_draft_txt");
+            }} catch(e) {{}}
+            </script>""", height=0)
+    except Exception:
+        pass
+
+@st.cache_resource
+def _obtener_cache_binarios_drive():
+    return {}
+
+def descargar_pdf_fresco(url):
+    cache_bin = _obtener_cache_binarios_drive()
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    }
+    m_id = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url or "")
+    file_id = m_id.group(1) if m_id else ""
+
+    urls_a_probar = []
+    if file_id:
+        urls_a_probar.append(f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t")
+    sep = "&" if "?" in url else "?"
+    urls_a_probar.append(f"{url}{sep}_cb={int(time.time() * 1000)}")
+
+    ultimo_resp = None
+    for u_try in urls_a_probar:
+        for intento in range(2):
+            try:
+                r = requests.get(u_try, headers=headers, timeout=20, allow_redirects=True)
+                ultimo_resp = r
+                if r.status_code == 200 and r.content and (r.content[:4] in (b"%PDF", b"PK\x03\x04")):
+                    cache_bin[url] = r.content
+                    return r
+                if r.status_code == 200 and b"confirm=" in r.content and file_id:
+                    r2 = requests.get(
+                        f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t",
+                        headers=headers,
+                        timeout=20,
+                        allow_redirects=True
+                    )
+                    if r2.status_code == 200 and r2.content and (r2.content[:4] in (b"%PDF", b"PK\x03\x04")):
+                        cache_bin[url] = r2.content
+                        return r2
+            except Exception:
+                pass
+            time.sleep(0.35)
+
+    if url in cache_bin:
+        class _CachedResp:
+            status_code = 200
+            content = cache_bin[url]
+        return _CachedResp()
+
+    return ultimo_resp if ultimo_resp is not None else requests.get(url, headers=headers, timeout=20)
+# === FIN SECCIÓN 4A ===
+
+# === SECCIÓN 4B: MOTOR DE INTELIGENCIA ARTIFICIAL (GEMINI) Y EVALUACIÓN DE DESARROLLO Y SUPUESTOS ===
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
     if not t_raw:
@@ -3702,127 +3821,9 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             continue
 
     return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo=modo)
+# === FIN SECCIÓN 4B ===
 
-def sincronizar_progreso_navegador():
-    try:
-        correo_usr = (st.session_state.get("email") or "").lower().strip()
-        if not correo_usr:
-            return
-        datos_auth = {
-            "email": correo_usr,
-            "rol": st.session_state.get("rol"),
-            "es_admin": st.session_state.get("es_admin", False),
-            "saved_esp": st.session_state.get("saved_esp", "ADMINISTRATIVOS"),
-            "saved_cat": st.session_state.get("saved_cat", "ESPECIFICO"),
-            "modo_avance": st.session_state.get("modo_avance", "")
-        }
-        b64_auth = _cifrar_backup_sesion(datos_auth)
-        sid_key = "sid4_" + base64.urlsafe_b64encode(correo_usr.encode("utf-8")).decode("ascii").rstrip("=")
-        almacen_srv = _obtener_almacen_sesiones_servidor()
-
-        if st.session_state.get("questions"):
-            datos_test = dict(datos_auth)
-            datos_test.update({
-                "questions": st.session_state.get("questions", []),
-                "stats": {str(k): v for k, v in st.session_state.get("stats", {}).items()},
-                "current_index": st.session_state.get("current_index", 0),
-                "finished": st.session_state.get("finished", False),
-                "checked": st.session_state.get("checked", False),
-                "test_name": st.session_state.get("test_name"),
-                "test_esp": st.session_state.get("test_esp", ""),
-                "test_cat": st.session_state.get("test_cat", ""),
-                "test_start_ts": st.session_state.get("test_start_ts"),
-                "fecha_inicio_str": st.session_state.get("fecha_inicio_str", ""),
-                "hora_inicio_str": st.session_state.get("hora_inicio_str", ""),
-                "inicio_registrado_sheets": st.session_state.get("inicio_registrado_sheets", False),
-                "resultado_registrado": st.session_state.get("resultado_registrado", False)
-            })
-            almacen_srv[sid_key] = datos_test
-            b64_test = _cifrar_backup_sesion(datos_test)
-            idx_act = st.session_state.get("current_index", 0)
-            borrador_actual = (st.session_state.get("stats", {}).get(idx_act, {}).get("selected") or "") if st.session_state.get("questions", [{}])[idx_act].get("is_open") else ""
-            borrador_js = json.dumps(str(borrador_actual))
-            components.html(f"""<script>
-            try {{
-                window.parent.sessionStorage.setItem("oposiciona_sid_v4", "{sid_key}");
-                window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
-                window.parent.sessionStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
-                window.parent.sessionStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
-                window.parent.localStorage.setItem("oposiciona_sid_v4", "{sid_key}");
-                window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
-                window.parent.localStorage.setItem("oposiciona_test_backup_v1", "{b64_test}");
-                window.parent.localStorage.setItem("oposiciona_live_draft_txt", {borrador_js});
-            }} catch(e) {{}}
-            </script>""", height=0)
-        else:
-            almacen_srv[sid_key] = datos_auth
-            components.html(f"""<script>
-            try {{
-                window.parent.sessionStorage.setItem("oposiciona_sid_v4", "{sid_key}");
-                window.parent.sessionStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
-                window.parent.sessionStorage.removeItem("oposiciona_test_backup_v1");
-                window.parent.sessionStorage.removeItem("oposiciona_live_draft_txt");
-                window.parent.localStorage.setItem("oposiciona_sid_v4", "{sid_key}");
-                window.parent.localStorage.setItem("oposiciona_auth_backup_v1", "{b64_auth}");
-                window.parent.localStorage.removeItem("oposiciona_test_backup_v1");
-                window.parent.localStorage.removeItem("oposiciona_live_draft_txt");
-            }} catch(e) {{}}
-            </script>""", height=0)
-    except Exception:
-        pass
-
-@st.cache_resource
-def _obtener_cache_binarios_drive():
-    return {}
-
-def descargar_pdf_fresco(url):
-    cache_bin = _obtener_cache_binarios_drive()
-    headers = {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    }
-    m_id = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url or "")
-    file_id = m_id.group(1) if m_id else ""
-
-    urls_a_probar = []
-    if file_id:
-        urls_a_probar.append(f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t")
-    sep = "&" if "?" in url else "?"
-    urls_a_probar.append(f"{url}{sep}_cb={int(time.time() * 1000)}")
-
-    ultimo_resp = None
-    for u_try in urls_a_probar:
-        for intento in range(2):
-            try:
-                r = requests.get(u_try, headers=headers, timeout=20, allow_redirects=True)
-                ultimo_resp = r
-                if r.status_code == 200 and r.content and (r.content[:4] in (b"%PDF", b"PK\x03\x04")):
-                    cache_bin[url] = r.content
-                    return r
-                if r.status_code == 200 and b"confirm=" in r.content and file_id:
-                    r2 = requests.get(
-                        f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t",
-                        headers=headers,
-                        timeout=20,
-                        allow_redirects=True
-                    )
-                    if r2.status_code == 200 and r2.content and (r2.content[:4] in (b"%PDF", b"PK\x03\x04")):
-                        cache_bin[url] = r2.content
-                        return r2
-            except Exception:
-                pass
-            time.sleep(0.35)
-
-    if url in cache_bin:
-        class _CachedResp:
-            status_code = 200
-            content = cache_bin[url]
-        return _CachedResp()
-
-    return ultimo_resp if ultimo_resp is not None else requests.get(url, headers=headers, timeout=20)
-
+# === SECCIÓN 4C: NAVEGACIÓN DEL TEST, SIMULACROS, AUDITORÍA Y REPORTE DE ERRORES ===
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     if not usuario_puede_reportar():
         return
@@ -4620,9 +4621,9 @@ def action_finalizar_sesion():
     st.session_state.clear()
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
-# === FIN SECCIÓN 4 ===
+# === FIN SECCIÓN 4C ===
 
-# === SECCIÓN 5: INTERFAZ Y RESULTADOS ===
+# === SECCIÓN 5A: PANTALLA DE INICIO, MENÚ DE SELECCIÓN Y AUDITORÍA ADMIN ===
 sincronizar_progreso_navegador()
 activar_proteccion_antirecortes_alumno()
 
@@ -5196,7 +5197,9 @@ if not st.session_state.questions:
                     st.balloons()
                     st.success("🎉 ¡Todos los documentos han superado la auditoría de extracción sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
+# === FIN SECCIÓN 5A ===
 
+# === SECCIÓN 5B: PANTALLA DE PREGUNTA ACTIVA (TEST, SUPUESTOS Y DESARROLLO) ===
 elif not st.session_state.finished:
     # Estilos del examen activo + transformación visual de los checkboxes de opciones en círculos idénticos a st.radio
     st.markdown("""<style>
@@ -5252,20 +5255,53 @@ elif not st.session_state.finished:
     }
     </style>""", unsafe_allow_html=True)
 
+    c_r, c_s, c_c, _ = st.columns([1.4, 1.3, 1.3, 2.0])
+    with c_r: st.button("🔄 Repetir test", on_click=action_repetir_test, use_container_width=True)
+    with c_s: st.button("📂 Subir otro", on_click=action_subir_otro, use_container_width=True)
+    with c_c: st.button("🚪 Cerrar sesión", on_click=action_finalizar_sesion, use_container_width=True)
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
+
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
+    tot = len(st.session_state.questions)
     puede_rep = usuario_puede_reportar()
     es_abierta = bool(q.get("is_open", False))
     es_supuesto_q = bool(q.get("tipo_abierta") == "SUPUESTO")
+    es_desarrollo_epigrafe = bool(q.get("tipo_abierta") == "DESARROLLO")
     nombre_test_act = st.session_state.get("test_name") or "Test"
     id_test_act = re.sub(r'\W+', '_', nombre_test_act)
 
     etiqueta_tema = obtener_etiqueta_tema_visible(nombre_test_act, q)
-    tipo_item_lbl = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if es_abierta else "Pregunta")
+    tipo_item_lbl = "Epígrafe" if es_desarrollo_epigrafe else ("Cuestión" if es_abierta else "Pregunta")
+
+    if es_abierta and tot > 1:
+        etiquetas_nav = []
+        for i_q, q_nav in enumerate(st.session_state.questions):
+            t_nav = re.sub(r'\s+', ' ', q_nav.get("question_text", f"{tipo_item_lbl} {i_q+1}")).strip()
+            t_corto = t_nav[:92] + ("..." if len(t_nav) > 92 else "")
+            etiquetas_nav.append(f"{i_q+1}. {t_corto}" if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA|\d+)', t_corto, re.IGNORECASE) else t_corto)
+
+        def _cambiar_epigrafe_selector():
+            limpiar_estados_reportes_error()
+            sel_lbl = st.session_state.get("sel_nav_abierta")
+            if sel_lbl in etiquetas_nav:
+                st.session_state.current_index = etiquetas_nav.index(sel_lbl)
+                st.session_state.checked = False
+                st.session_state.do_scroll = True
+
+        st.selectbox(
+            f"📌 Navegación directa ({tot} {tipo_item_lbl.lower()}s disponibles en este documento):",
+            options=etiquetas_nav,
+            index=idx,
+            key="sel_nav_abierta",
+            on_change=_cambiar_epigrafe_selector
+        )
+
+    st.progress((idx + 1) / tot)
     st.markdown(
-        f"<div style='background-color:#EFF6FF; border:1px solid #93C5FD; border-left:5px solid #1D4ED8; border-radius:6px; padding:8px 12px; margin-top:-8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;'>"
+        f"<div style='background-color:#EFF6FF; border:1px solid #93C5FD; border-left:5px solid #1D4ED8; border-radius:6px; padding:8px 12px; margin-top:-4px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;'>"
         f"<span style='font-size:14px; font-weight:700; color:#1E3A8A !important;'>📘 {etiqueta_tema}</span>"
-        f"<span style='font-size:13px; font-weight:700; color:#1D4ED8 !important; background:#DBEAFE; padding:2px 8px; border-radius:4px;'>{tipo_item_lbl} {idx + 1} de {len(st.session_state.questions)}</span>"
+        f"<span style='font-size:13px; font-weight:700; color:#1D4ED8 !important; background:#DBEAFE; padding:2px 8px; border-radius:4px;'>{tipo_item_lbl} {idx + 1} de {tot}</span>"
         f"</div>",
         unsafe_allow_html=True
     )
@@ -5287,7 +5323,7 @@ elif not st.session_state.finished:
                 unsafe_allow_html=True
             )
 
-    if q.get("tipo_abierta") == "DESARROLLO":
+    if es_desarrollo_epigrafe:
         txt_ep_mostrar = (q.get("question_text") or "").strip()
         if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', txt_ep_mostrar, re.IGNORECASE):
             txt_ep_mostrar = f"EPÍGRAFE {idx + 1}: {txt_ep_mostrar}"
@@ -5304,7 +5340,7 @@ elif not st.session_state.finished:
     if es_abierta:
         render_dictado_voz_tiempo_real(idx)
 
-        altura_caja = 260 if q.get("tipo_abierta") == "DESARROLLO" else 170
+        altura_caja = 260 if es_desarrollo_epigrafe else 170
         lbl_textarea = (
             "✍️ Escribe o dicta por voz tu respuesta razonada a la cuestión planteada (o pulsa «Comprobar» en blanco si deseas consultar directamente la solución oficial):"
             if es_supuesto_q else
@@ -5353,7 +5389,7 @@ elif not st.session_state.finished:
         if es_abierta:
             save_answer(sel_opt)
         st.session_state.update(checked=True, do_scroll=True); st.rerun()
-    if idx < len(st.session_state.questions) - 1:
+    if idx < tot - 1:
         if c3.button("Siguiente ➔", use_container_width=True):
             if es_abierta:
                 save_answer(sel_opt)
@@ -5374,7 +5410,7 @@ elif not st.session_state.finished:
     key_rep_test = f"rep_open_test_{id_test_act}_{idx + 1}"
     if key_rep_test not in st.session_state:
         st.session_state[key_rep_test] = False
-    lbl_btn_reporte_top = "⚠️ Reportar Error en Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else "⚠️ Reportar Error"
+    lbl_btn_reporte_top = "⚠️ Reportar Error en Epígrafe" if es_desarrollo_epigrafe else "⚠️ Reportar Error"
     if puede_rep and c5 is not None:
         if c5.button(lbl_btn_reporte_top, key=f"btn_err_top_{id_test_act}_{idx + 1}", use_container_width=True, type="primary"):
             st.session_state[key_rep_test] = not st.session_state[key_rep_test]
@@ -5396,7 +5432,7 @@ elif not st.session_state.finished:
             if not txt_alumno:
                 stat["open_score"] = 0.0
                 stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
-                if q.get("tipo_abierta") == "DESARROLLO":
+                if es_desarrollo_epigrafe:
                     registrar_epigrafe_desarrollo_en_sheets(idx)
                 st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres que la IA evalúe tu redacción, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
             else:
@@ -5416,7 +5452,7 @@ elif not st.session_state.finished:
                     stat["ai_eval"] = ev
                     stat["open_score"] = ev.get("nota", 0.0)
 
-                    if q.get("tipo_abierta") == "DESARROLLO":
+                    if es_desarrollo_epigrafe:
                         registrar_epigrafe_desarrollo_en_sheets(idx)
                     elif es_supuesto_q:
                         nota_celda_sup = calcular_nota_final_supuestos_sheets(indice_actual=idx)
@@ -5509,7 +5545,7 @@ elif not st.session_state.finished:
                 )
             if exp_of:
                 eh = PDFQuizParser.renderizar_explicacion_html(exp_of, etiqueta_tema)
-                if q.get("tipo_abierta") == "DESARROLLO":
+                if es_desarrollo_epigrafe:
                     cabecera_exp_html = (
                         f"<div style='font-size: 15.5px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
                         f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 8px; border-bottom: 1px solid #b6e0ea; padding-bottom: 6px;'>{etiqueta_tema}</div>"
@@ -5539,7 +5575,9 @@ elif not st.session_state.finished:
             et = re.sub(r'(?i)^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip()).strip() or "No hay explicación disponible."
             eh = PDFQuizParser.renderizar_explicacion_html(et, etiqueta_tema)
             st.markdown(f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 12px 15px; border-radius: 6px; margin-top: 10px;'><div style='font-size: 14.5px; font-weight: 800; margin-bottom: 4px; color: #083B46 !important;'>📖 Explicación:</div><div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>", unsafe_allow_html=True)
+# === FIN SECCIÓN 5B ===
 
+# === SECCIÓN 5C: PANTALLA DE RESULTADOS FINALES Y REVISIÓN DETALLADA ===
 else:
     st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 500);</script>", height=0)
@@ -5721,7 +5759,14 @@ else:
                 } else disp();
             })();
             </script>""", height=0)
-        msg_enhorabuena = "🎉 ¡ENHORABUENA, HAS SUPERADO EL SUPUESTO PRÁCTICO! 🎉" if es_test_supuestos else "🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉"
+        msg_enhorabuena = (
+            "🎉 ¡ENHORABUENA, HAS SUPERADO EL SUPUESTO PRÁCTICO! 🎉"
+            if es_test_supuestos else (
+                "🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉"
+                if es_test_abierto else
+                "🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉"
+            )
+        )
         st.markdown(f"<div style='background: linear-gradient(90deg, #e8f5e9, #c8e6c9, #e8f5e9); border: 2px solid #2e7d32; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px;'><div style='color: #1b5e20 !important; margin: 0; font-size: 22px; font-weight: 700;'>{msg_enhorabuena}</div><p style='color: #2e7d32 !important; margin: 4px 0 0 0; font-size: 14px; font-weight: 600;'>¡Sigue así, estás cada vez más cerca de tu plaza!</p></div>", unsafe_allow_html=True)
         cr1, cr2, cr3 = st.columns([1, 0.4, 1])
         with cr2:
@@ -5879,4 +5924,4 @@ else:
     c1_b.button(lbl_repetir, key="btn_rep_bot", on_click=action_repetir_test, use_container_width=True)
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
-# === FIN SECCIÓN 5 ===
+# === FIN SECCIÓN 5C ===
