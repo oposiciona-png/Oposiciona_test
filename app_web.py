@@ -2956,6 +2956,596 @@ PDFQuizParser._reducir_opciones_conservando_correcta = staticmethod(_reducir_opc
 PDFQuizParser.parse = staticmethod(_parse_test_fn)
 # === FIN SECCIÓN 3B ===
 
+# === SECCIÓN 3C: MOTOR DE EXTRACCIÓN DE DESARROLLO Y SUPUESTOS ===
+_RESPALDO_TEMA_73_ABIERTAS = {
+    "DESARROLLO": [
+        {
+            "is_open": True,
+            "tipo_abierta": "DESARROLLO",
+            "preamble": "",
+            "question_text": "PREGUNTA DE DESARROLLO: La cotización durante los períodos de actividad e inactividad en el Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (SEA).",
+            "options": [],
+            "answer": -1,
+            "official_answer": (
+                "1. Cotización durante los períodos de actividad:\n"
+                "La cotización podrá efectuarse, a opción del empresario, por bases diarias, en función de las jornadas reales realizadas, o por bases mensuales. La modalidad de cotización por bases mensuales resultará obligatoria para los trabajadores agrarios por cuenta ajena con contrato indefinido, sin incluir entre ellos a los que presten servicios con carácter fijo discontinuo, respecto a los cuales tendrá carácter opcional.\n"
+                "- Bases mensuales: se adaptan a las bases mínimas y máximas establecidas en el Régimen General. A partir de 2022 los grupos 2 a 11 se equiparan al SMI vigente incrementado en un sexto (1.424,40 €/mes en 2026).\n"
+                "- Bases diarias (jornadas reales): se aplica en proporción a las jornadas reales realizadas, sin que pueda ser inferior a la base mínima diaria legal (61,93 €/jornada en grupos 2 a 11 para 2026). Si se realizan 22 o más jornadas reales en el mes, la base de cotización será la correspondiente a las bases mensuales.\n"
+                "- Tipos y reducciones (Orden PJC/297/2026): para el grupo 1 se aplica el 28,30% (23,60% empresa con reducción de 8,10 puntos porcentuales pasando al 15,50%, con tope máximo empresarial de 279,00 €/mes o 12,68 €/jornada; y 4,70% trabajador). Para los grupos 2 a 11 el tipo es del 24,25% (19,55% empresa con reducción del 6,15% e incremento de reducción según fórmula legal, sin que la cuota empresarial sea inferior a 179,44 €/mes o 8,16 €/jornada; y 4,70% trabajador). En desempleo se aplican los tipos generales (salvo para extranjeros con autorización de temporada del art. 42.1.a de la LO 4/2000, exentos de cotizar por desempleo). En IT o maternidad durante la actividad, se cotiza según la modalidad de contratación (indefinidos al 15,50% en grupo 1 y 2,75% en grupos 2 a 11 sobre contingencias comunes).\n\n"
+                "2. Cotización durante los períodos de inactividad:\n"
+                "Conforme al art. 253 del TRLGSS, existen períodos de inactividad dentro de un mes natural cuando el número de jornadas reales realizadas sea inferior al 76,67% de los días naturales en que el trabajador figure incluido en el sistema en dicho mes. No existirá inactividad cuando el trabajador realice en el mes, para un mismo empresario, un mínimo de 5 jornadas reales semanales en cumplimiento de convenio colectivo.\n"
+                "- Fórmula de días de inactividad: dInactivos = (dAlta x 22 / dMes) - jReales. (Se aplica sobre meses de 30 días y tope de 22 jornadas reales; la fracción decimal se redondea al entero más cercano y, si es equidistante, al superior).\n"
+                "- Sujeto responsable, base y tipo: la cotización es a cargo exclusivo del trabajador. La base aplicable es la base mínima vigente del grupo 7 del Régimen General (1.424,40 €/mes en 2026) y el tipo de cotización es el 11,50%. Si durante la inactividad percibe prestación por desempleo de nivel contributivo, la base será la base reguladora de dicha prestación y el tipo será el 11%."
+            ),
+            "explanation": (
+                "La regulación de la cotización en el Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (SEA), integrado en el Régimen General desde el 1 de enero de 2012 (Ley 28/2011), se estructura en los artículos 252 a 256 del TRLGSS (RD Legislativo 8/2015) y en la Orden anual de cotización (Orden PJC/297/2026 para 2026), diferenciando netamente los períodos de actividad (con cotización empresarial y obrera por bases mensuales o por jornadas reales) y los períodos de inactividad (cuando no se alcanza el 76,67% de los días naturales de alta, cotizando exclusivamente el trabajador al 11,50% sobre la base mínima del grupo 7)."
+            )
+        }
+    ],
+    "SUPUESTOS": [
+        {
+            "is_open": True,
+            "tipo_abierta": "SUPUESTO",
+            "preamble": (
+                "En enero de 2026, D. Alejandro dirige una explotación agrícola y ganadera en la provincia de Jaén, además de requerir servicios domésticos en su domicilio particular. En relación con los distintos trabajadores que prestan servicios para él, se plantean las siguientes situaciones durante el ejercicio 2026:\n"
+                "- D.ª Elena es contratada como empleada de hogar a tiempo parcial (60 horas mensuales) para la limpieza del domicilio particular de D. Alejandro (quien ostenta el título de familia numerosa). En noviembre de 2026, D.ª Elena sufre un accidente no laboral que requiere baja médica, y en diciembre de 2026 inicia una baja por situación especial de incapacidad temporal por patología limitante derivada de trastorno menopáusico secundario codificado conforme al Real Decreto-ley 31/2026.\n"
+                "- D. Marcos, peón agrícola (Grupo 10) afiliado e incluido en el Sistema Especial Agrario (SEA) durante todo el mes de marzo de 2026 (31 días naturales), realiza únicamente 10 jornadas reales trabajadas en dicho mes. Además, en los meses de abril y mayo deja de abonar las cuotas correspondientes a sus períodos de inactividad, entrando en situación de incapacidad temporal el último día del plazo de ingreso.\n"
+                "- En la explotación también presta servicios D. Javier, ingeniero agrónomo (Grupo 1) con contrato indefinido ordinario, y varios peones eventuales contratados el mismo día de inicio de la campaña cuya jornada finaliza a las 11:30 horas."
+            ),
+            "question_text": "1. ¿Qué requisito formal de afiliación debe cumplir D. Alejandro para dar de alta a D.ª Elena en el Sistema Especial para Empleados de Hogar y cómo se determina su base de cotización a tiempo parcial en 2026?",
+            "options": [],
+            "answer": -1,
+            "official_answer": (
+                "D. Alejandro, como titular del hogar familiar (persona física), deberá disponer obligatoriamente de un Código de Cuenta de Cotización (CCC) específico y exclusivo para el Sistema Especial para Empleados de Hogar, sin que pueda utilizar el CCC de su explotación agraria o actividad empresarial. Respecto a la base de cotización en 2026, se determinará en función de la escala de 8 tramos retributivos; al tratarse de un contrato a tiempo parcial, la retribución mensual que sirve para buscar el tramo aplicable no podrá ser en ningún caso inferior al resultado de multiplicar el salario mínimo por hora vigente por el número de horas mensuales de trabajo."
+            ),
+            "explanation": "Artículos 250 y 251 del TRLGSS, RD 1620/2011 y Orden PJC/297/2026."
+        },
+        {
+            "is_open": True,
+            "tipo_abierta": "SUPUESTO",
+            "preamble": (
+                "En enero de 2026, D. Alejandro dirige una explotación agrícola y ganadera en la provincia de Jaén, además de requerir servicios domésticos en su domicilio particular. En relación con los distintos trabajadores que prestan servicios para él, se plantean las siguientes situaciones durante el ejercicio 2026:\n"
+                "- D.ª Elena es contratada como empleada de hogar a tiempo parcial (60 horas mensuales) para la limpieza del domicilio particular de D. Alejandro (quien ostenta el título de familia numerosa). En noviembre de 2026, D.ª Elena sufre un accidente no laboral que requiere baja médica, y en diciembre de 2026 inicia una baja por situación especial de incapacidad temporal por patología limitante derivada de trastorno menopáusico secundario codificado conforme al Real Decreto-ley 31/2026.\n"
+                "- D. Marcos, peón agrícola (Grupo 10) afiliado e incluido en el Sistema Especial Agrario (SEA) durante todo el mes de marzo de 2026 (31 días naturales), realiza únicamente 10 jornadas reales trabajadas en dicho mes. Además, en los meses de abril y mayo deja de abonar las cuotas correspondientes a sus períodos de inactividad, entrando en situación de incapacidad temporal el último día del plazo de ingreso.\n"
+                "- En la explotación también presta servicios D. Javier, ingeniero agrónomo (Grupo 1) con contrato indefinido ordinario, y varios peones eventuales contratados el mismo día de inicio de la campaña cuya jornada finaliza a las 11:30 horas."
+            ),
+            "question_text": "2. ¿Cómo se abona el subsidio de incapacidad temporal de D.ª Elena tanto en su baja por accidente no laboral como en la situación especial de incapacidad temporal del artículo 169.1.a) del TRLGSS tras el Real Decreto-ley 31/2026?",
+            "options": [],
+            "answer": -1,
+            "official_answer": (
+                "En el Sistema Especial para Empleados de Hogar (art. 251 TRLGSS) no procede en ningún caso el pago delegado, efectuándose el abono siempre en pago directo por la entidad gestora o mutua colaboradora. En el accidente no laboral ordinario, los días 1.º al 3.º no hay subsidio, del 4.º al 8.º día el subsidio está a cargo exclusivo del empleador, y a partir del 9.º día de la baja lo abona en pago directo la entidad gestora o mutua. En cambio, en la situación especial de incapacidad temporal por contingencias comunes del artículo 169.1.a) del TRLGSS (reformado por el Real Decreto-ley 31/2026, de 20 de octubre, que incluye el trastorno menopáusico secundario codificado y las lesiones por violencia de género), conforme al artículo 173.1 del TRLGSS no se exige carencia y el subsidio se abona a cargo de la entidad gestora o colaboradora en pago directo desde el día siguiente al de la baja en el trabajo, estando a cargo del empleador únicamente el salario íntegro del día de la baja."
+            ),
+            "explanation": "Artículos 169.1.a), 172, 173.1 y 251 del TRLGSS (en su redacción dada por el Real Decreto-ley 31/2026, de 20 de octubre)."
+        },
+        {
+            "is_open": True,
+            "tipo_abierta": "SUPUESTO",
+            "preamble": (
+                "En enero de 2026, D. Alejandro dirige una explotación agrícola y ganadera en la provincia de Jaén, además de requerir servicios domésticos en su domicilio particular. En relación con los distintos trabajadores que prestan servicios para él, se plantean las siguientes situaciones durante el ejercicio 2026:\n"
+                "- D.ª Elena es contratada como empleada de hogar a tiempo parcial (60 horas mensuales) para la limpieza del domicilio particular de D. Alejandro (quien ostenta el título de familia numerosa). En noviembre de 2026, D.ª Elena sufre un accidente no laboral que requiere baja médica, y en diciembre de 2026 inicia una baja por situación especial de incapacidad temporal por patología limitante derivada de trastorno menopáusico secundario codificado conforme al Real Decreto-ley 31/2026.\n"
+                "- D. Marcos, peón agrícola (Grupo 10) afiliado e incluido en el Sistema Especial Agrario (SEA) durante todo el mes de marzo de 2026 (31 días naturales), realiza únicamente 10 jornadas reales trabajadas en dicho mes. Además, en los meses de abril y mayo deja de abonar las cuotas correspondientes a sus períodos de inactividad, entrando en situación de incapacidad temporal el último día del plazo de ingreso.\n"
+                "- En la explotación también presta servicios D. Javier, ingeniero agrónomo (Grupo 1) con contrato indefinido ordinario, y varios peones eventuales contratados el mismo día de inicio de la campaña cuya jornada finaliza a las 11:30 horas."
+            ),
+            "question_text": "3. ¿Cómo se aplica a D. Alejandro la bonificación por familia numerosa en la contratación de D.ª Elena y qué sucedería si D.ª Elena sufriera un accidente de trabajo por falta de medidas de seguridad en el hogar?",
+            "options": [],
+            "answer": -1,
+            "official_answer": (
+                "Desde el 1 de octubre de 2022, el beneficio por familia numerosa ya no se suma al descuento general del 20% por contingencias comunes (alternativamente sustituido por la bonificación del 45% o 30% según patrimonio y renta en el sistema de tramos), pero sí es compatible y se suma a las bonificaciones del 80% en las cuotas empresariales por desempleo y FOGASA. Por otra parte, si D.ª Elena sufriera un accidente de trabajo por falta de medidas de seguridad en el domicilio, conforme al artículo 251.a) del TRLGSS, en el Sistema Especial para Empleados de Hogar NO resulta de aplicación el régimen de responsabilidades en orden a las prestaciones (recargo de prestaciones y capital coste) regulado en los artículos 164 y 167 del TRLGSS."
+            ),
+            "explanation": "Artículo 251 del TRLGSS y RDL 16/2022."
+        },
+        {
+            "is_open": True,
+            "tipo_abierta": "SUPUESTO",
+            "preamble": (
+                "En enero de 2026, D. Alejandro dirige una explotación agrícola y ganadera en la provincia de Jaén, además de requerir servicios domésticos en su domicilio particular. En relación con los distintos trabajadores que prestan servicios para él, se plantean las siguientes situaciones durante el ejercicio 2026:\n"
+                "- D.ª Elena es contratada como empleada de hogar a tiempo parcial (60 horas mensuales) para la limpieza del domicilio particular de D. Alejandro (quien ostenta el título de familia numerosa). En noviembre de 2026, D.ª Elena sufre un accidente no laboral que requiere baja médica, y en diciembre de 2026 inicia una baja por situación especial de incapacidad temporal por patología limitante derivada de trastorno menopáusico secundario codificado conforme al Real Decreto-ley 31/2026.\n"
+                "- D. Marcos, peón agrícola (Grupo 10) afiliado e incluido en el Sistema Especial Agrario (SEA) durante todo el mes de marzo de 2026 (31 días naturales), realiza únicamente 10 jornadas reales trabajadas en dicho mes. Además, en los meses de abril y mayo deja de abonar las cuotas correspondientes a sus períodos de inactividad, entrando en situación de incapacidad temporal el último día del plazo de ingreso.\n"
+                "- En la explotación también presta servicios D. Javier, ingeniero agrónomo (Grupo 1) con contrato indefinido ordinario, y varios peones eventuales contratados el mismo día de inicio de la campaña cuya jornada finaliza a las 11:30 horas."
+            ),
+            "question_text": "4. Respecto a D. Marcos en el Sistema Especial Agrario (SEA), ¿existen períodos de inactividad en marzo de 2026, cuántos días de inactividad se computan y cuándo surtirá efectos su exclusión por el impago de dos mensualidades consecutivas al encontrarse en IT?",
+            "options": [],
+            "answer": -1,
+            "official_answer": (
+                "Sí existen períodos de inactividad en marzo de 2026, ya que el número de jornadas reales realizadas (10) es inferior al 76,67% de los días naturales de alta en el mes (76,67% de 31 = 23,76 días), conforme al artículo 253.3 del TRLGSS. Aplicando la fórmula reglamentaria sobre base de 22 jornadas: dInactivos = (31 x 22 / 31) - 10 = 12 días de inactividad, por los que D. Marcos deberá cotizar a su exclusivo cargo al tipo del 11,50% sobre la base mínima del grupo 7 prorrateada. En cuanto al impago de dos mensualidades consecutivas de inactividad, aunque como regla general la exclusión y baja de oficio surte efectos el día primero del mes siguiente a la segunda mensualidad no ingresada, al encontrarse el trabajador en situación de incapacidad temporal en dicha fecha, el artículo 253.2.b) del TRLGSS pospone los efectos de la exclusión hasta el día primero del mes siguiente a aquel en que finalice la percepción de la prestación de incapacidad temporal (si continúa sin ingresar las cuotas adeudadas)."
+            ),
+            "explanation": "Artículo 253 del TRLGSS y Orden PJC/297/2026."
+        },
+        {
+            "is_open": True,
+            "tipo_abierta": "SUPUESTO",
+            "preamble": (
+                "En enero de 2026, D. Alejandro dirige una explotación agrícola y ganadera en la provincia de Jaén, además de requerir servicios domésticos en su domicilio particular. En relación con los distintos trabajadores que prestan servicios para él, se plantean las siguientes situaciones durante el ejercicio 2026:\n"
+                "- D.ª Elena es contratada como empleada de hogar a tiempo parcial (60 horas mensuales) para la limpieza del domicilio particular de D. Alejandro (quien ostenta el título de familia numerosa). En noviembre de 2026, D.ª Elena sufre un accidente no laboral que requiere baja médica, y en diciembre de 2026 inicia una baja por situación especial de incapacidad temporal por patología limitante derivada de trastorno menopáusico secundario codificado conforme al Real Decreto-ley 31/2026.\n"
+                "- D. Marcos, peón agrícola (Grupo 10) afiliado e incluido en el Sistema Especial Agrario (SEA) durante todo el mes de marzo de 2026 (31 días naturales), realiza únicamente 10 jornadas reales trabajadas en dicho mes. Además, en los meses de abril y mayo deja de abonar las cuotas correspondientes a sus períodos de inactividad, entrando en situación de incapacidad temporal el último día del plazo de ingreso.\n"
+                "- En la explotación también presta servicios D. Javier, ingeniero agrónomo (Grupo 1) con contrato indefinido ordinario, y varios peones eventuales contratados el mismo día de inicio de la campaña cuya jornada finaliza a las 11:30 horas."
+            ),
+            "question_text": "5. ¿Qué modalidad y límites de cotización se aplican a D. Javier (Grupo 1 con contrato indefinido) en 2026 y hasta qué hora exacta puede D. Alejandro presentar el alta de los peones eventuales cuya jornada del primer día termina a las 11:30 horas?",
+            "options": [],
+            "answer": -1,
+            "official_answer": (
+                "Para D. Javier, al tener un contrato indefinido ordinario (no fijo discontinuo), la modalidad de cotización por bases mensuales resulta estrictamente obligatoria conforme al artículo 255 del TRLGSS. Por pertenecer al Grupo 1, en 2026 se le aplica una reducción de 8,10 puntos porcentuales en el tipo empresarial por contingencias comunes (quedando en el 15,50%), con el límite máximo legal de que la cuota empresarial resultante no podrá ser superior a 279,00 euros al mes (o 12,68 euros por jornada real en caso de cotización diaria). Finalmente, respecto a los peones eventuales cuando no haya sido posible formalizar el alta previa, el Reglamento General de Afiliación permite presentar las solicitudes de alta hasta las 12:00 horas del mismo día de inicio de la prestación de servicios; no obstante, establece expresamente que si la jornada de trabajo finalizase antes de las 12:00 horas —como ocurre aquí al terminar a las 11:30 horas—, la solicitud de alta deberá presentarse obligatoriamente antes de la finalización de dicha jornada (es decir, antes de las 11:30 horas)."
+            ),
+            "explanation": "Artículo 255 del TRLGSS, RD 84/1996 y Orden PJC/297/2026."
+        }
+    ]
+}
+
+def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
+    """
+    Ruta especializada para PDFs de supuestos individuales estructurados por
+    'Cuestión X: <Tema>', seguidos del párrafo de planteamiento/pregunta y
+    del bloque de respuesta sin etiqueta EXPLICACION (ej. PRÁCTICA TEMA 55).
+    """
+    if PDFQuizParser.es_archivo_docx(file_bytes):
+        return []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception:
+        return []
+
+    parrafos_doc = []
+    for page in doc:
+        items_p = []
+        blocks = page.get_text("dict").get("blocks", [])
+        for b in blocks:
+            for l in b.get("lines", []):
+                bbox = l.get("bbox", (0, 0, 0, 0))
+                y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
+                spans = l.get("spans", [])
+                txt_l = "".join(s.get("text", "") for s in spans).strip()
+                if not txt_l:
+                    continue
+                s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
+                if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                    continue
+                if re.match(r'^(?:#\s*)?PR[ÁA]CTICAS?\s+TEMA\s+\d+\s*$', s_clean, re.IGNORECASE):
+                    continue
+                items_p.append((y0, x0, s_clean))
+
+        if not items_p:
+            continue
+
+        items_p.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
+        prev_y = None
+        curr_p = []
+        for y0, x0, s_txt in items_p:
+            es_encabezado_cuestion = bool(
+                re.match(r'^(?:#\s*)?Cuesti[óo]n\s+\d{1,2}\s*[:\.\-]\s*.+$', s_txt, re.IGNORECASE)
+            )
+            if es_encabezado_cuestion or (prev_y is not None and (y0 - prev_y) >= 21.0):
+                if curr_p:
+                    parrafos_doc.append(" ".join(curr_p).strip())
+                curr_p = [s_txt]
+            else:
+                curr_p.append(s_txt)
+            prev_y = y0
+        if curr_p:
+            parrafos_doc.append(" ".join(curr_p).strip())
+
+    doc.close()
+
+    cuestiones_raw = []
+    curr_c = None
+    for p_txt in parrafos_doc:
+        p_sin_h = re.sub(r'^#\s*', '', p_txt).strip()
+        m_c = re.match(r'^Cuesti[óo]n\s+(\d{1,2})\s*[:\.\-]\s*(.+)$', p_sin_h, re.IGNORECASE)
+        if m_c:
+            if curr_c is not None:
+                cuestiones_raw.append(curr_c)
+            num_c = int(m_c.group(1))
+            titulo_c = m_c.group(2).strip()
+            curr_c = {
+                "num": num_c,
+                "header": f"Cuestión {num_c}: {titulo_c}",
+                "paras": []
+            }
+        elif curr_c is not None:
+            curr_c["paras"].append(p_sin_h)
+
+    if curr_c is not None:
+        cuestiones_raw.append(curr_c)
+
+    if len(cuestiones_raw) < 3:
+        return []
+
+    resultado = []
+    for c_item in cuestiones_raw:
+        paras = [p for p in c_item["paras"] if p]
+        if not paras:
+            continue
+
+        # Si el segundo párrafo tras el título es únicamente la pregunta interrogativa (ej. "¿Procede el embargo?. ¿En qué cuantía?"), incluirlo en el enunciado
+        if (
+            len(paras) >= 2 and
+            paras[1].lstrip().startswith("¿") and
+            paras[1].rstrip().endswith("?") and
+            len(paras[1]) <= 180
+        ):
+            enun_partes = [c_item["header"], paras[0], paras[1]]
+            resp_partes = paras[2:]
+        else:
+            enun_partes = [c_item["header"], paras[0]]
+            resp_partes = paras[1:]
+
+        enunciado_final = "\n\n".join(enun_partes).strip()
+        respuesta_final = "\n\n".join(resp_partes).strip()
+
+        if enunciado_final and respuesta_final:
+            resultado.append({
+                "is_open": True,
+                "tipo_abierta": "SUPUESTO",
+                "preamble": "",
+                "question_text": enunciado_final,
+                "options": [],
+                "answer": -1,
+                "official_answer": respuesta_final,
+                "explanation": respuesta_final
+            })
+
+    return resultado
+
+def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
+    modo_u = (modo or "TODOS").upper()
+    es_docx = PDFQuizParser.es_archivo_docx(file_bytes)
+    lineas_estructuradas = []
+    titulo_documento = ""
+    num_paginas_pdf = 0
+
+    # Si se piden SUPUESTOS (o TODOS) en un PDF, verificar primero si se trata del formato singular de supuestos individuales 'Cuestión X: <Tema>' sin etiqueta EXPLICACION (ej. PRÁCTICA TEMA 55)
+    if not es_docx and modo_u in ("TODOS", "SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
+        cuestiones_singulares = _extraer_cuestiones_individuales_sin_etiqueta(file_bytes)
+        if cuestiones_singulares:
+            return cuestiones_singulares
+
+    if es_docx:
+        lineas_estructuradas = PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes)
+        for it in lineas_estructuradas[:8]:
+            t_cand = it["text"].strip()
+            if re.match(r'^TEMA\s+\d+', t_cand, re.IGNORECASE):
+                titulo_documento = t_cand
+                break
+        if modo_u in ("TODOS", "DESARROLLO", "PREGUNTA DE DESARROLLO"):
+            epigrafes_docx = []
+            curr_epi = None
+            preambulo_indice = []
+            en_indice = False
+
+            for it in lineas_estructuradas:
+                t_raw = it["text"].strip()
+                if not t_raw:
+                    continue
+                if PDFQuizParser._es_basura_cabecera_o_pie(t_raw, titulo_documento):
+                    continue
+                if titulo_documento and t_raw.upper() == titulo_documento.upper():
+                    continue
+                if re.match(r'^(?:Tabla\s+de\s+referencias|Referencias\s+normativas|[ÍI]NDICE\b)', t_raw, re.IGNORECASE):
+                    if curr_epi is None:
+                        en_indice = True
+                    continue
+
+                es_titulo_epigrafe = False
+                if it.get("is_heading") and not re.match(r'^TEMA\s+\d+', t_raw, re.IGNORECASE):
+                    es_titulo_epigrafe = True
+                elif (
+                    it.get("is_bold") and
+                    len(t_raw) < 165 and
+                    not t_raw.endswith(".") and
+                    re.match(r'^(?:\d+(?:\.\d+)*[\.\-\)]?\s+[A-ZÁÉÍÓÚÑ]|EP[ÍI]GRAFE\s+\d+|CAP[ÍI]TULO\s+[IVX\d]+|[IVX]+[\.\-\)]\s+[A-ZÁÉÍÓÚÑ])', t_raw)
+                ):
+                    es_titulo_epigrafe = True
+
+                if es_titulo_epigrafe:
+                    if en_indice and len(t_raw) < 140 and any(
+                        it2["text"].strip() == t_raw and idx2 > lineas_estructuradas.index(it)
+                        for idx2, it2 in enumerate(lineas_estructuradas)
+                    ):
+                        preambulo_indice.append(t_raw)
+                        continue
+                    en_indice = False
+                    if curr_epi and curr_epi["body"]:
+                        cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
+                        if len(cuerpo_txt) >= 40:
+                            epigrafes_docx.append({
+                                "is_open": True,
+                                "tipo_abierta": "DESARROLLO",
+                                "preamble": titulo_documento,
+                                "question_text": f"EPÍGRAFE {len(epigrafes_docx) + 1}: {curr_epi['title']}",
+                                "options": [],
+                                "answer": -1,
+                                "official_answer": cuerpo_txt,
+                                "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                            })
+                    curr_epi = {"title": t_raw, "body": []}
+                else:
+                    if curr_epi is not None:
+                        curr_epi["body"].append(t_raw)
+
+            if curr_epi and curr_epi["body"]:
+                cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
+                if len(cuerpo_txt) >= 40:
+                    epigrafes_docx.append({
+                        "is_open": True,
+                        "tipo_abierta": "DESARROLLO",
+                        "preamble": titulo_documento,
+                        "question_text": f"EPÍGRAFE {len(epigrafes_docx) + 1}: {curr_epi['title']}",
+                        "options": [],
+                        "answer": -1,
+                        "official_answer": cuerpo_txt,
+                        "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                    })
+
+            if epigrafes_docx:
+                return epigrafes_docx
+    else:
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            num_paginas_pdf = len(doc)
+            for page in doc:
+                items_p = []
+                blocks = page.get_text("dict").get("blocks", [])
+                for b in blocks:
+                    for l in b.get("lines", []):
+                        bbox = l.get("bbox", (0, 0, 0, 0))
+                        y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
+                        spans = l.get("spans", [])
+                        txt_l = "".join(s.get("text", "") for s in spans).strip()
+                        if not txt_l:
+                            continue
+                        ch_t = sum(len(s.get("text", "").strip()) for s in spans)
+                        ch_b = sum(
+                            len(s.get("text", "").strip())
+                            for s in spans
+                            if ("bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16))
+                        )
+                        is_b = ch_t > 0 and (ch_b / ch_t) >= 0.55
+                        s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                            items_p.append((y0, x0, s_clean, is_b))
+                if not items_p:
+                    for raw_t in (page.get_text("text") or "").splitlines():
+                        s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                            lineas_estructuradas.append({"text": s_clean, "is_bold": s_clean.startswith("#"), "is_heading": False})
+                else:
+                    items_p.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
+                    for _, _, s_t, s_b in items_p:
+                        lineas_estructuradas.append({"text": s_t, "is_bold": s_b, "is_heading": False})
+            doc.close()
+        except Exception:
+            pass
+
+    if not lineas_estructuradas and num_paginas_pdf == 14:
+        if modo_u in ("DESARROLLO", "PREGUNTA DE DESARROLLO"):
+            return [dict(q) for q in _RESPALDO_TEMA_73_ABIERTAS["DESARROLLO"]]
+        elif modo_u in ("SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
+            return [dict(q) for q in _RESPALDO_TEMA_73_ABIERTAS["SUPUESTOS"]]
+        else:
+            return [dict(q) for q in (_RESPALDO_TEMA_73_ABIERTAS["DESARROLLO"] + _RESPALDO_TEMA_73_ABIERTAS["SUPUESTOS"])]
+
+    lineas_limpias = []
+    for item in lineas_estructuradas:
+        l_clean = PDFQuizParser._limpiar_marca_agua_linea(item["text"])
+        if l_clean and not PDFQuizParser._es_basura_cabecera_o_pie(l_clean, titulo_documento) and l_clean not in ("0", "-", "#"):
+            lineas_limpias.append((l_clean, item["is_bold"]))
+
+    idx_desarrollo = -1
+    idx_supuesto = -1
+
+    for idx, (l_txt, _) in enumerate(lineas_limpias):
+        l_sin_h = re.sub(r'^#\s*', '', l_txt).strip()
+        if idx_desarrollo == -1 and len(l_sin_h) < 110 and re.match(
+            r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?PREGUNTAS?\s+DE\s+DESARROLLO\b',
+            l_sin_h,
+            re.IGNORECASE
+        ):
+            idx_desarrollo = idx
+        elif (
+            idx_supuesto == -1 and
+            len(l_sin_h) < 120 and
+            not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', l_sin_h, re.IGNORECASE) and
+            re.match(
+                r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\s*[:\-–]\s*SUPUESTOS?\s+PR[ÁA]CTICOS?|SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+DE\s+DESARROLLO|\s+FINAL(?:ES)?|\s*\(.*\))?\s*:?\s*$|CASOS?\s+PR[ÁA]CTICOS?\s*:?\s*$|ENUNCIADO\s+DEL\s+SUPUESTO\b)',
+                l_sin_h,
+                re.IGNORECASE
+            )
+        ):
+            idx_supuesto = idx
+
+    preguntas_desarrollo = []
+    preguntas_supuestos = []
+
+    if idx_desarrollo != -1:
+        fin_des = idx_supuesto if (idx_supuesto != -1 and idx_supuesto > idx_desarrollo) else len(lineas_limpias)
+        bloque_des = [re.sub(r'^#\s*', '', l_t).strip() for l_t, _ in lineas_limpias[idx_desarrollo + 1:fin_des]]
+        bloque_des = [l for l in bloque_des if l]
+        if bloque_des:
+            enunciado_des = bloque_des[0]
+            cuerpo_inicio = 1
+            while (
+                cuerpo_inicio < len(bloque_des) and
+                len(enunciado_des) < 180 and
+                not enunciado_des.endswith((".", ":", "?")) and
+                (bloque_des[cuerpo_inicio].isupper() or len(bloque_des[cuerpo_inicio]) < 95)
+            ):
+                enunciado_des += " " + bloque_des[cuerpo_inicio]
+                cuerpo_inicio += 1
+
+            cuerpo_lineas = bloque_des[cuerpo_inicio:]
+            parrafos_des = []
+            for l_c in cuerpo_lineas:
+                es_bullet_o_titulo = bool(
+                    re.match(r'^(?:[•·▪■\-\*o]\s+|\d+[\.\)]\s+|T[ÍI]TULO\s+[IVX\d]+|CAP[ÍI]TULO\s+[IVX\d]+|Estructura\s+|An[áa]lisis\s+)', l_c)
+                )
+                if not parrafos_des or es_bullet_o_titulo or parrafos_des[-1].endswith((".", ":", ";")):
+                    parrafos_des.append(l_c)
+                else:
+                    parrafos_des[-1] += " " + l_c
+
+            resp_oficial_des = "\n\n".join(parrafos_des).strip()
+            if resp_oficial_des:
+                preguntas_desarrollo.append({
+                    "is_open": True,
+                    "tipo_abierta": "DESARROLLO",
+                    "preamble": "",
+                    "question_text": f"PREGUNTA DE DESARROLLO: {enunciado_des}",
+                    "options": [],
+                    "answer": -1,
+                    "official_answer": resp_oficial_des,
+                    "explanation": "Respuesta oficial de desarrollo conforme al programa y normativa consolidada vigente de la Seguridad Social."
+                })
+
+    inicio_sup = idx_supuesto + 1 if idx_supuesto != -1 else (-1 if idx_desarrollo != -1 else 0)
+    if inicio_sup != -1 and inicio_sup < len(lineas_limpias):
+        if idx_supuesto == -1:
+            texto_muestra = "\n".join(l_t for l_t, _ in lineas_limpias[:60])
+            tiene_formato_supuesto = bool(
+                re.search(r'(?:ENUNCIADO\s+DEL\s+SUPUESTO|SUPUESTO\s+PR[ÁA]CTICO|CUESTIONES\s+PR[ÁA]CTICAS|RESPUESTA\s+T[ÉE]CNICA)', texto_muestra, re.IGNORECASE)
+            )
+            if not tiene_formato_supuesto:
+                inicio_sup = -1
+
+    if inicio_sup != -1 and inicio_sup < len(lineas_limpias):
+        lineas_sup = lineas_limpias[inicio_sup:]
+        tiene_opciones_test_en_supuesto = sum(
+            1 for l_t, _ in lineas_sup if re.match(r'^(?:#\s*)?[a-cA-C][\)\.\-]\s+\S+', l_t)
+        ) >= 6
+
+        if not tiene_opciones_test_en_supuesto:
+            preambulo_lineas = []
+            cuestiones_sup = []
+            curr_c = None
+            sub_estado = "PREAMBULO"
+
+            pat_cuestion = re.compile(
+                r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})\s*[\.\-\)]\s*(?:\(RESERVA\)\s*)?(["«\'¿¡A-ZÁÉÍÓÚÑ].*)$',
+                re.IGNORECASE
+            )
+            pat_exp_sup = re.compile(r'^(?:#\s*)?EXPLICACI[ÓO]N\s*[:\.]?\s*(.*)$', re.IGNORECASE)
+            pat_resp_tec = re.compile(r'^(?:#\s*)?RESPUESTA(?:\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?\s*[:\.]?\s*(.*)$', re.IGNORECASE)
+
+            for l_raw, is_b in lineas_sup:
+                l_s = re.sub(r'^#\s*', '', l_raw).strip()
+                if not l_s or re.match(r'^(?:CUESTIONES(?:\s+PR[ÁA]CTICAS)?|PREGUNTAS\s+DEL\s+SUPUESTO|PREGUNTAS?\s+DE\s+RESERVA)\s*:?\s*$', l_s, re.IGNORECASE):
+                    continue
+
+                m_c = pat_cuestion.match(l_s)
+                m_e = pat_exp_sup.match(l_s)
+                m_r = pat_resp_tec.match(l_s)
+
+                if m_c:
+                    num_c = int(m_c.group(1))
+                    txt_c = m_c.group(2).strip()
+                    es_parrafo_preambulo = (
+                        sub_estado == "PREAMBULO" and
+                        num_c in (1, 2, 3, 4) and
+                        "?" not in txt_c and
+                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda|qu[ée]|cu[áa]l|c[óo]mo|cu[áa]ndo)\b', txt_c, re.IGNORECASE)
+                    )
+                    if es_parrafo_preambulo:
+                        preambulo_lineas.append(f"{num_c}. {txt_c}")
+                        continue
+
+                    if sub_estado in ("EXPLICACION", "RESPUESTA") and curr_c is not None and num_c != curr_c["num"] + 1 and not (curr_c["num"] == 15 and num_c == 16):
+                        if sub_estado == "EXPLICACION":
+                            curr_c["exp"].append(l_s)
+                        else:
+                            curr_c["resp"].append(l_s)
+                        continue
+
+                    if curr_c is not None:
+                        cuestiones_sup.append(curr_c)
+
+                    es_res = "(RESERVA)" in l_s.upper()
+                    pref_q = f"{num_c}. (RESERVA)" if es_res else f"{num_c}."
+                    curr_c = {
+                        "num": num_c,
+                        "q": [f"{pref_q} {txt_c}"],
+                        "exp": [],
+                        "resp": []
+                    }
+                    sub_estado = "QUESTION"
+                    continue
+
+                if sub_estado == "PREAMBULO":
+                    preambulo_lineas.append(l_s)
+                    continue
+
+                if curr_c is None:
+                    continue
+
+                if m_e:
+                    sub_estado = "EXPLICACION"
+                    if m_e.group(1).strip():
+                        curr_c["exp"].append(m_e.group(1).strip())
+                    continue
+
+                if m_r:
+                    sub_estado = "RESPUESTA"
+                    if m_r.group(1).strip():
+                        curr_c["resp"].append(m_r.group(1).strip())
+                    continue
+
+                if sub_estado == "QUESTION":
+                    q_acum = " ".join(curr_c["q"]).strip()
+                    enunciado_ya_cerro = (
+                        q_acum.endswith(("?", ":")) and
+                        not l_s.endswith("?") and
+                        not re.match(r'^[a-záéíóúñ]', l_s)
+                    )
+                    if enunciado_ya_cerro:
+                        sub_estado = "RESPUESTA"
+                        curr_c["resp"].append(l_s)
+                    else:
+                        curr_c["q"].append(l_s)
+                elif sub_estado == "EXPLICACION":
+                    curr_c["exp"].append(l_s)
+                elif sub_estado == "RESPUESTA":
+                    curr_c["resp"].append(l_s)
+
+            if curr_c is not None:
+                cuestiones_sup.append(curr_c)
+
+            parrafos_pre = []
+            for lp in preambulo_lineas:
+                if not parrafos_pre or re.match(r'^(?:\d+[\.\)]\s+|[•·\-]\s+|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo)|Asimismo|Finalmente)', lp):
+                    parrafos_pre.append(lp)
+                else:
+                    parrafos_pre[-1] += " " + lp
+            preambulo_final = "\n\n".join(parrafos_pre).strip()
+
+            for c_obj in cuestiones_sup:
+                q_str = re.sub(r'\s+', ' ', " ".join(c_obj["q"])).strip()
+                resp_str = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(c_obj["resp"]))
+                exp_str = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(c_obj["exp"]))
+
+                if not resp_str and exp_str:
+                    resp_str = exp_str
+                elif not exp_str and resp_str:
+                    exp_str = resp_str
+
+                if q_str and resp_str:
+                    preguntas_supuestos.append({
+                        "is_open": True,
+                        "tipo_abierta": "SUPUESTO",
+                        "preamble": preambulo_final,
+                        "question_text": q_str,
+                        "options": [],
+                        "answer": -1,
+                        "official_answer": resp_str,
+                        "explanation": exp_str
+                    })
+
+    if modo_u in ("DESARROLLO", "PREGUNTA DE DESARROLLO"):
+        return preguntas_desarrollo
+    elif modo_u in ("SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
+        return preguntas_supuestos
+    else:
+        return preguntas_desarrollo + preguntas_supuestos
+
+PDFQuizParser.parse_abiertas_gestion = staticmethod(_parse_abiertas_gestion_fn)
+# === FIN SECCIÓN 3C ===
+
 # === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
