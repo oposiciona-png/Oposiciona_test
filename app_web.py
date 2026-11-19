@@ -606,9 +606,17 @@ if not st.session_state.autenticado:
     st.stop()
 # === FIN SECCIÓN 1 ===
 
-# === SECCIÓN 2: CATÁLOGO DE TESTS DISPONIBLES ===
+# === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
+NUEVOS_HOY = [
+    "TEMA 05b - RECAUDACIÓN VOLUNTARIA",
+    "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
+    "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES",
+    "TEMA 57 INCAPACIDAD TEMPORAL",
+    "TEMA 58 NYCM",
+    "TEMA 61 JUBILACION CONTRIBUTIVA",
+]
 
-TESTS_DISPONIBLES = {
+TESTS_DISPONIBLES_COMPLETO = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
@@ -678,6 +686,7 @@ TESTS_DISPONIBLES = {
         },
         "SUPUESTOS": {
             "Elige un test de supuestos...": None,
+            "TEMA 1 - CONSTITUCION Y TRLGSS": "https://drive.google.com/uc?export=download&id=1Z5mw1Jj1D77VXAghNDVr-UmbcEgP_GV5",
         },
     },
     "GESTION": {
@@ -800,58 +809,50 @@ TESTS_DISPONIBLES = {
     },
 }
 
-TESTS_DISPONIBLES_COMPLETO = TESTS_DISPONIBLES
+TESTS_DISPONIBLES = TESTS_DISPONIBLES_COMPLETO
 
-TESTS_DISPONIBLES_INVITADO = {
-    "ADMINISTRATIVOS": {
-        "ESPECIFICO": {
-            "Elige un test de especifico...": None,
-            "TEMA 01 ESPECIFICO_ACTUALIZADO": "https://drive.google.com/uc?export=download&id=13LzbXP5OknUY9NGZAdVMMN3F1Zl57glS",
-        },
-        "EXAMENES": {
-            "Elige un test de examenes...": None,
-        },
-        "GENERAL": {
-            "Elige un test de general...": None,
-        },
-    },
-    "GESTION": {
-        "ESPECIFICO": {
-            "Elige un test de especifico...": None,
-            "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1NHnqc_FOnsYV1473iGT04VbRCsL5OB0m",
-        },
-        "EXAMENES": {
-            "Elige un test de examenes...": None,
-        },
-        "GENERAL": {
-            "Elige un test de general...": None,
-        },
-        "DESARROLLO": {
-            "Elige un test de desarrollo...": None,
-        },
-    },
-}
+def obtener_tests_segun_rol():
+    rol = st.session_state.get("rol")
+    if rol == "INVITADO":
+        return {
+            "ADMINISTRATIVOS": {
+                "ESPECIFICO": {
+                    "Elige un test de especifico...": None,
+                    "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": TESTS_DISPONIBLES_COMPLETO["ADMINISTRATIVOS"]["ESPECIFICO"].get(
+                        "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO",
+                        "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML"
+                    ),
+                },
+                "EXAMENES": {"Elige un test de examenes...": None},
+                "GENERAL": {"Elige un test de general...": None},
+                "SUPUESTOS": {"Elige un test de supuestos...": None},
+            },
+            "GESTION": {
+                "DESARROLLO": {"Elige un test de desarrollo...": None},
+                "ESPECIFICO": {
+                    "Elige un test de especifico...": None,
+                    "TEMA 53 - AFILIACION ACTUALIZADO": TESTS_DISPONIBLES_COMPLETO["GESTION"]["ESPECIFICO"].get(
+                        "TEMA 53 - AFILIACION ACTUALIZADO",
+                        "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf"
+                    ),
+                },
+                "EXAMENES": {"Elige un test de examenes...": None},
+                "GENERAL": {"Elige un test de general...": None},
+                "SUPUESTOS": {"Elige un test de supuestos...": None},
+            },
+        }
 
-NUEVOS_HOY = [
-    "TEMA 05a - RECAUDACIÓN VOLUNTARIA",
-    "TEMA 05b - RECAUDACIÓN VOLUNTARIA",
-    "TEMA 68 - GESTION RECAUDATORIA",
-    "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO",
-    "TEMA_68_GESTIÓN RECAUDATORIA",
-    "TEMA 51 - CONSTITUCION EN LA SS Y TRLGSS",
-    "TEMA 52 - CAMPO DE APLICACIÓN Y COMPOSICIÓN DEL SISTEMA",
-    "TEMA 54 - ACCIDENTE DE TRABAJO ACTUALIZADO",
-    "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
-    "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES",
-    "TEMA 57 INCAPACIDAD TEMPORAL",
-    "TEMA 58 NYCM",
-    "TEMA 59 y 60 IP",
-    "TEMA 61 JUBILACION CONTRIBUTIVA",
-    "TEMA 62 MUERTE Y SUPERVIVENCIA",
-    "TEMA 67 - COTIZACION",
-    "TEMA 73. LOS REGÍMENES ESPECIALES DE LA SEGURIDAD SOCIAL INTEGRADOS EN EL RÉGIMEN GENERAL",
-    "TEMA 74. RETA SETA Y MAR",
-]
+    orden_categorias = {
+        "ADMINISTRATIVOS": ["ESPECIFICO", "GENERAL", "EXAMENES", "SUPUESTOS"],
+        "GESTION": ["ESPECIFICO", "GENERAL", "EXAMENES", "SUPUESTOS", "DESARROLLO"],
+    }
+    catalogo_filtrado = {}
+    for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
+        catalogo_filtrado[esp] = {}
+        for cat in orden_categorias.get(esp, list(cats.keys())):
+            if cat in cats:
+                catalogo_filtrado[esp][cat] = dict(cats[cat])
+    return catalogo_filtrado
 # === FIN SECCIÓN 2 ===
 
 # === SECCIÓN 3A: MOTOR DE WORD (.DOCX), DESARROLLO Y SUPUESTOS PRÁCTICOS ===
