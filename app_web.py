@@ -6120,79 +6120,118 @@ if not st.session_state.questions:
                 "🧪 Probar desenfoque antirrecortes en mi sesión de Administrador (desmárcalo para trabajar sin desenfoque)",
                 key="admin_test_blur"
             )
-            if st.button("🔍 Auditar extracción real y contar todos los documentos", use_container_width=True, type="primary"):
+
+            modo_auditoria_admin = st.radio(
+                "🎯 Selecciona la categoría de auditoría:",
+                [
+                    "📋 Test (Administrativos y Gestión)",
+                    "🧩 Supuestos (Administrativos y Gestión)",
+                    "📝 Desarrollo (solo Gestión)",
+                    "🌐 TODOS (Auditoría completa)"
+                ],
+                horizontal=True,
+                key="radio_modo_auditoria_admin"
+            )
+
+            incluir_test_adm = modo_auditoria_admin.startswith(("📋", "🌐"))
+            incluir_sup_adm = modo_auditoria_admin.startswith(("🧩", "🌐"))
+            incluir_des_adm = modo_auditoria_admin.startswith(("📝", "🌐"))
+
+            if st.button("🔍 Auditar extracción real de la categoría seleccionada", use_container_width=True, type="primary"):
                 nuevos_hoy = globals().get("NUEVOS_HOY", [])
-                tot_pdfs = sum(1 for ec in TESTS_DISPONIBLES_COMPLETO.values() for ct in ec.values() for u in ct.values() if u is not None)
+
+                tot_pdfs = 0
+                for esp_c, cats_c in TESTS_DISPONIBLES_COMPLETO.items():
+                    es_gest_c = "GESTI" in esp_c.upper()
+                    if incluir_test_adm:
+                        for cat_t in ["ESPECIFICO", "EXAMENES", "GENERAL"]:
+                            tot_pdfs += sum(1 for u in cats_c.get(cat_t, {}).values() if u is not None)
+                    if incluir_sup_adm:
+                        tot_pdfs += sum(1 for u in cats_c.get("SUPUESTOS", {}).values() if u is not None)
+                    if incluir_des_adm and es_gest_c and "DESARROLLO" in cats_c:
+                        tot_pdfs += sum(1 for u in cats_c.get("DESARROLLO", {}).values() if u is not None)
+
                 bp, proc, txt_copiar = st.progress(0, text="Extrayendo y auditando documentos con el motor real..."), 0, ""
                 alertas_globales = []
 
                 for esp, cats in TESTS_DISPONIBLES_COMPLETO.items():
-                    max_op_adm = 3 if "GESTI" in esp.upper() else 4
+                    es_gestion_esp = "GESTI" in esp.upper()
+                    max_op_adm = 3 if es_gestion_esp else 4
 
-                    st.markdown(f"### 📋 Catálogo y Auditoría Real de Tests: {esp}")
-                    t_md = "| Categoría | Nombre del Test | Nº Extraídas | Media Opc. | Auditoría Real de Extracción |\n| :--- | :--- | :---: | :---: | :--- |\n"
-                    for cat in ["ESPECIFICO", "EXAMENES", "GENERAL"]:
-                        tests = cats.get(cat, {})
-                        for nom, url in tests.items():
-                            if url is None:
-                                continue
-                            proc += 1
-                            bp.progress(proc / max(1, tot_pdfs), text=f"Extrayendo y auditando ({proc}/{tot_pdfs}): {nom}...")
-                            try:
-                                r = descargar_pdf_fresco(url)
-                                if r.status_code == 200:
-                                    res_aud = auditar_extraccion_test_real(r.content, max_options=max_op_adm)
-                                    nq = res_aud["nq"]
-                                    media_op = res_aud["media_op"]
-                                    est_aud = res_aud["estado_resumen"]
-                                    if res_aud["incidencias"]:
-                                        alertas_globales.append(f"**[{esp} - {cat}] {nom} ({nq} preg.):** {est_aud}")
+                    # Si se seleccionó únicamente Desarrollo, omitir Administrativos
+                    if modo_auditoria_admin.startswith("📝") and not es_gestion_esp:
+                        continue
+
+                    if incluir_test_adm:
+                        st.markdown(f"### 📋 Catálogo y Auditoría Real de Tests: {esp}")
+                        t_md = "| Categoría | Nombre del Test | Nº Extraídas | Media Opc. | Auditoría Real de Extracción |\n| :--- | :--- | :---: | :---: | :--- |\n"
+                        for cat in ["ESPECIFICO", "EXAMENES", "GENERAL"]:
+                            tests = cats.get(cat, {})
+                            for nom, url in tests.items():
+                                if url is None:
+                                    continue
+                                proc += 1
+                                bp.progress(min(1.0, proc / max(1, tot_pdfs)), text=f"Extrayendo y auditando Test [{esp}] ({proc}/{tot_pdfs}): {nom}...")
+                                try:
+                                    r = descargar_pdf_fresco(url)
+                                    if r.status_code == 200:
+                                        res_aud = auditar_extraccion_test_real(r.content, max_options=max_op_adm)
+                                        nq = res_aud["nq"]
+                                        media_op = res_aud["media_op"]
+                                        est_aud = res_aud["estado_resumen"]
+                                        if res_aud["incidencias"]:
+                                            alertas_globales.append(f"**[{esp} - {cat}] {nom} ({nq} preg.):** {est_aud}")
+                                    else:
+                                        nq, media_op, est_aud = "Error", "-", "❌ Error de descarga en Drive"
+                                        alertas_globales.append(f"**[{esp} - {cat}] {nom}:** Error HTTP {r.status_code}")
+                                except Exception as e_aud:
+                                    nq, media_op, est_aud = "-", "-", f"❌ Excepción: {e_aud}"
+                                    alertas_globales.append(f"**[{esp} - {cat}] {nom}:** {e_aud}")
+
+                                if nom in nuevos_hoy:
+                                    t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** | **{media_op}** | {est_aud} |\n"
                                 else:
-                                    nq, media_op, est_aud = "Error", "-", "❌ Error de descarga en Drive"
-                                    alertas_globales.append(f"**[{esp} - {cat}] {nom}:** Error HTTP {r.status_code}")
-                            except Exception as e_aud:
-                                nq, media_op, est_aud = "-", "-", f"❌ Excepción: {e_aud}"
-                                alertas_globales.append(f"**[{esp} - {cat}] {nom}:** {e_aud}")
+                                    t_md += f"| {cat} | {nom} | {nq} preguntas | {media_op} | {est_aud} |\n"
+                        st.markdown(t_md)
+                        txt_copiar += f"### 📋 Catálogo y Auditoría Real de Tests: {esp}\n\n" + t_md + "\n"
 
-                            if nom in nuevos_hoy:
-                                t_md += f"| **{cat}** | **{nom} (🆕 Nuevo hoy)** | **{nq} preguntas** | **{media_op}** | {est_aud} |\n"
-                            else:
-                                t_md += f"| {cat} | {nom} | {nq} preguntas | {media_op} | {est_aud} |\n"
-                    st.markdown(t_md)
-                    txt_copiar += f"### 📋 Catálogo y Auditoría Real de Tests: {esp}\n\n" + t_md + "\n"
+                    if incluir_sup_adm:
+                        supuestos_dict = {k: v for k, v in cats.get("SUPUESTOS", {}).items() if v is not None}
+                        st.markdown(f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} {'tema incluido' if len(supuestos_dict)==1 else 'temas incluidos'})")
+                        if supuestos_dict:
+                            s_md = "| Categoría | Tema / Supuesto Incluido | Nº de Cuestiones Extraídas | Estado Extracción |\n| :--- | :--- | :---: | :--- |\n"
+                            tot_cuestiones_sup = 0
+                            for nom_s, url_s in supuestos_dict.items():
+                                proc += 1
+                                bp.progress(min(1.0, proc / max(1, tot_pdfs)), text=f"Auditando Supuesto [{esp}] ({proc}/{tot_pdfs}): {nom_s}...")
+                                try:
+                                    r = descargar_pdf_fresco(url_s)
+                                    if r.status_code == 200:
+                                        qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
+                                        qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
+                                        if not qs_sup and not PDFQuizParser.es_archivo_docx(r.content):
+                                            qs_sup = preparar_preguntas_como_en_test(PDFQuizParser.parse(r.content, max_options=max_op_adm), barajar=False)
+                                        n_sup = len(qs_sup)
+                                        tot_cuestiones_sup += n_sup
+                                        n_sup_str = f"{n_sup} cuestiones"
+                                        est_s = "✅ OK" if n_sup > 0 else "⚠️ 0 cuestiones detectadas"
+                                        if n_sup == 0:
+                                            alertas_globales.append(f"**[{esp} - SUPUESTOS] {nom_s}:** 0 cuestiones detectadas")
+                                    else:
+                                        n_sup_str, est_s = "Error", "❌ Error de descarga"
+                                        alertas_globales.append(f"**[{esp} - SUPUESTOS] {nom_s}:** Error HTTP {r.status_code}")
+                                except Exception as e_s:
+                                    n_sup_str, est_s = "-", f"❌ {e_s}"
+                                    alertas_globales.append(f"**[{esp} - SUPUESTOS] {nom_s}:** {e_s}")
+                                et_tema_s = obtener_etiqueta_tema_visible(nom_s)
+                                s_md += f"| **SUPUESTOS** | **{nom_s}** — *{et_tema_s}* | **{n_sup_str}** | {est_s} |\n"
+                            s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} documentos incluidos** | **{tot_cuestiones_sup} cuestiones** | — |\n"
+                        else:
+                            s_md = "*Actualmente no hay ningún documento cargado en la categoría SUPUESTOS de esta especialidad.*\n"
+                        st.markdown(s_md)
+                        txt_copiar += f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} incluidos)\n\n" + s_md + "\n"
 
-                    supuestos_dict = {k: v for k, v in cats.get("SUPUESTOS", {}).items() if v is not None}
-                    st.markdown(f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} {'tema incluido' if len(supuestos_dict)==1 else 'temas incluidos'})")
-                    if supuestos_dict:
-                        s_md = "| Categoría | Tema / Supuesto Incluido | Nº de Cuestiones Extraídas | Estado Extracción |\n| :--- | :--- | :---: | :--- |\n"
-                        tot_cuestiones_sup = 0
-                        for nom_s, url_s in supuestos_dict.items():
-                            proc += 1
-                            bp.progress(proc / max(1, tot_pdfs), text=f"Auditando Supuesto ({proc}/{tot_pdfs}): {nom_s}...")
-                            try:
-                                r = descargar_pdf_fresco(url_s)
-                                if r.status_code == 200:
-                                    qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
-                                    qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
-                                    if not qs_sup and not PDFQuizParser.es_archivo_docx(r.content):
-                                        qs_sup = preparar_preguntas_como_en_test(PDFQuizParser.parse(r.content, max_options=max_op_adm), barajar=False)
-                                    n_sup = len(qs_sup)
-                                    tot_cuestiones_sup += n_sup
-                                    n_sup_str = f"{n_sup} cuestiones"
-                                    est_s = "✅ OK" if n_sup > 0 else "⚠️ 0 cuestiones detectadas"
-                                else:
-                                    n_sup_str, est_s = "Error", "❌ Error de descarga"
-                            except Exception as e_s:
-                                n_sup_str, est_s = "-", f"❌ {e_s}"
-                            et_tema_s = obtener_etiqueta_tema_visible(nom_s)
-                            s_md += f"| **SUPUESTOS** | **{nom_s}** — *{et_tema_s}* | **{n_sup_str}** | {est_s} |\n"
-                        s_md += f"| **TOTAL SUPUESTOS ({esp})** | **{len(supuestos_dict)} documentos incluidos** | **{tot_cuestiones_sup} cuestiones** | — |\n"
-                    else:
-                        s_md = "*Actualmente no hay ningún documento cargado en la categoría SUPUESTOS de esta especialidad.*\n"
-                    st.markdown(s_md)
-                    txt_copiar += f"#### 🧩 Apartado SUPUESTOS — {esp} ({len(supuestos_dict)} incluidos)\n\n" + s_md + "\n"
-
-                    if "DESARROLLO" in cats:
+                    if incluir_des_adm and es_gestion_esp and "DESARROLLO" in cats:
                         desarrollo_dict = {k: v for k, v in cats.get("DESARROLLO", {}).items() if v is not None}
                         st.markdown(f"#### 📝 Apartado DESARROLLO — {esp} ({len(desarrollo_dict)} {'tema incluido' if len(desarrollo_dict)==1 else 'temas incluidos'})")
                         if desarrollo_dict:
@@ -6200,7 +6239,7 @@ if not st.session_state.questions:
                             tot_epigrafes_des = 0
                             for nom_d, url_d in desarrollo_dict.items():
                                 proc += 1
-                                bp.progress(proc / max(1, tot_pdfs), text=f"Auditando Epígrafes de Desarrollo ({proc}/{tot_pdfs}): {nom_d}...")
+                                bp.progress(min(1.0, proc / max(1, tot_pdfs)), text=f"Auditando Epígrafes de Desarrollo [{esp}] ({proc}/{tot_pdfs}): {nom_d}...")
                                 try:
                                     r = descargar_pdf_fresco(url_d)
                                     if r.status_code == 200:
@@ -6212,14 +6251,18 @@ if not st.session_state.questions:
                                         ep_cortos = [f"Ep.{idx_e}" for idx_e, qe in enumerate(qs_des, 1) if len((qe.get("explanation") or "").strip()) < 120]
                                         if n_ep == 0:
                                             est_d = "❌ 0 epígrafes extraídos"
+                                            alertas_globales.append(f"**[{esp} - DESARROLLO] {nom_d}:** 0 epígrafes extraídos")
                                         elif ep_cortos:
                                             est_d = f"⚠️ Texto corto en {', '.join(ep_cortos)}"
+                                            alertas_globales.append(f"**[{esp} - DESARROLLO] {nom_d}:** {est_d}")
                                         else:
                                             est_d = f"✅ OK ({n_ep} epígrafes completos)"
                                     else:
                                         n_ep_str, est_d = "Error", "❌ Error de descarga"
+                                        alertas_globales.append(f"**[{esp} - DESARROLLO] {nom_d}:** Error HTTP {r.status_code}")
                                 except Exception as e_d:
                                     n_ep_str, est_d = "-", f"❌ {e_d}"
+                                    alertas_globales.append(f"**[{esp} - DESARROLLO] {nom_d}:** {e_d}")
                                 d_md += f"| **DESARROLLO** | **{nom_d}** | **{n_ep_str}** | {est_d} |\n"
                             d_md += f"| **TOTAL DESARROLLO ({esp})** | **{len(desarrollo_dict)} documentos incluidos** | **{tot_epigrafes_des} epígrafes en total** | — |\n"
                         else:
@@ -6230,12 +6273,12 @@ if not st.session_state.questions:
                     txt_copiar += "---\n\n"
 
                 bp.empty()
-                st.success("✅ ¡Auditoría real de extracción y recuento completados con éxito!")
+                st.success(f"✅ ¡Auditoría real de «{modo_auditoria_admin}» completada con éxito!")
                 if alertas_globales:
                     st.warning(f"⚠️ **Se han detectado incidencias de extracción en {len(alertas_globales)} documento(s) que conviene revisar:**\n\n" + "\n".join([f"- {a}" for a in alertas_globales]))
                 else:
                     st.balloons()
-                    st.success("🎉 ¡Todos los documentos han superado la auditoría de extracción sin preguntas fusionadas ni explicaciones cortadas!")
+                    st.success("🎉 ¡Todos los documentos auditados han superado la verificación sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
 # === FIN SECCIÓN 5A ===
 
