@@ -3087,11 +3087,72 @@ _RESPALDO_TEMA_73_ABIERTAS = {
     ]
 }
 
+def _es_subepigrafe_o_subapartado_docx(t_raw):
+    """
+    Devuelve True si el texto corresponde a un subepígrafe o subapartado (ej. '1.1.', '1.2.1.',
+    '2.1 ', 'A)', 'a)', 'a.', '1)', 'Primero.', '•', '-') que SIEMPRE debe formar parte del
+    cuerpo del epígrafe principal y NUNCA abrir una pregunta de desarrollo independiente.
+    """
+    t = (t_raw or "").strip()
+    if not t:
+        return True
+    # Numeración decimal multinivel: 1.1, 1.1., 2.3.1, 4.2), etc.
+    if re.match(r'^\d+\.\d+', t):
+        return True
+    # Subapartados con letra o número con cierre de paréntesis: a), b), A), B), a., 1), 2), etc.
+    if re.match(r'^(?:[a-zA-Z][\)\.\-]\s+|\d+\)\s+|[•·▪■\-\*o]\s+)', t):
+        return True
+    # Subtítulos internos frecuentes dentro de un epígrafe (sin numeración de epígrafe principal)
+    if re.match(r'^(?:Subep[íi]grafe|Apartado|Letra|Punto)\s+', t, re.IGNORECASE):
+        return True
+    return False
+
+def _es_titulo_epigrafe_principal_docx(it, titulos_indice_set=None):
+    """
+    Determina si una línea de un documento Word (.docx) es un EPÍGRAFE PRINCIPAL del tema
+    (excluyendo subepígrafes 1.1, 1.2, 2.1, subapartados A), a), etc.).
+    """
+    t_raw = (it.get("text") or "").strip()
+    if not t_raw or len(t_raw) >= 200:
+        return False
+    if re.match(r'^TEMA\s+\d+', t_raw, re.IGNORECASE):
+        return False
+    if _es_subepigrafe_o_subapartado_docx(t_raw):
+        return False
+
+    # Si el documento tenía un índice/tabla de epígrafes al inicio y esta línea coincide con uno de los epígrafes principales del índice
+    t_norm = re.sub(r'\s+', ' ', t_raw).strip().upper()
+    if titulos_indice_set and t_norm in titulos_indice_set:
+        return True
+
+    style_name = (it.get("style") or "").lower()
+    # Si viene marcado con estilo Heading en Word, aceptar solo Heading 1 / Título 1 (y rechazar Heading 2, 3, 4 que son subepígrafes)
+    es_heading_2_o_inferior = bool(re.search(r'(?:heading|t[íi]tulo)\s*[2-9]', style_name))
+    if es_heading_2_o_inferior:
+        return False
+
+    # Patrón estricto de Epígrafe Principal de primer nivel:
+    # - "1. Concepto..." o "2.- Campo de aplicación..." (UN SOLO número entero seguido de punto/guion y espacio, NUNCA "1.1")
+    # - "EPÍGRAFE 1..." / "CAPÍTULO I..." / "I. ..." / "II. ..."
+    pat_epigrafe_nivel_1 = re.compile(
+        r'^(?:EP[ÍI]GRAFE\s+\d+\b|CAP[ÍI]TULO\s+[IVX\d]+\b|\d{1,2}(?!\.\d)[\.\-]\s+[A-ZÁÉÍÓÚÑ"«¡¿]|[IVX]{1,4}[\.\-]\s+[A-ZÁÉÍÓÚÑ"«¡¿])'
+    )
+
+    if pat_epigrafe_nivel_1.match(t_raw) and (it.get("is_bold") or it.get("is_heading")):
+        # Evitar confundir una frase normal larga en negrita que termina en punto con un título, salvo que sea claramente un título corto o en mayúsculas
+        if t_raw.endswith(".") and len(t_raw) > 130 and not t_raw.isupper():
+            return False
+        return True
+
+    # Si es Heading 1 (o is_heading sin subnivel) y no empieza por numeración de subepígrafe
+    if it.get("is_heading") and not es_heading_2_o_inferior:
+        # Si ya sabemos que el documento numera sus epígrafes principales ("1. ...", "2. ..."), exigir que lleve numeración de primer nivel o sea título en mayúsculas
+        if not t_raw.endswith(".") or t_raw.isupper() or pat_epigrafe_nivel_1.match(t_raw):
+            return True
+
+    return False
+
 def _es_linea_cabecera_tema_repetida(s_txt):
-    """
-    Filtra cabeceras repetidas en la parte superior de cada página como:
-    'ESPECÍFICO TEMA 51 - Constitución y TRLGSS' o 'GESTION DE LA SEGURIDAD SOCIAL TEMA 52...'
-    """
     t = re.sub(r'^#\s*', '', (s_txt or "")).strip()
     if not t:
         return True
@@ -3104,10 +3165,6 @@ def _es_linea_cabecera_tema_repetida(s_txt):
     return False
 
 def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
-    """
-    Agrupa fragmentos de texto de una misma página del PDF cuya coordenada vertical y0
-    difiere en menos de `tolerancia_y` puntos y los une de izquierda a derecha según x0.
-    """
     if not items_raw:
         return []
     items_y = sorted(items_raw, key=lambda it: (it[0], it[1]))
@@ -3136,14 +3193,6 @@ def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
     return lineas_unidas
 
 def _es_inicio_nuevo_planteamiento_supuesto(idx_ls, lineas_sup, sub_estado, preambulo_lineas, curr_c, pat_cuestion, pat_nuevo_supuesto_bloque):
-    """
-    Detecta si la línea `idx_ls` inicia un nuevo planteamiento de supuesto práctico dentro
-    de un documento multi-supuesto:
-    - Tanto cuando lleva etiqueta explícita ('B) Doña Carmen...', 'SUPUESTO 2', etc.)
-    - Como cuando empieza directamente tras el cierre de una respuesta (ej. tras la cuestión 10
-      en TEMA 52: 'La mercantil "TechNova S.A.", constituida jurídicamente como sociedad de capital...')
-      introduciendo nuevas empresas/personajes y viñetas para el siguiente bloque de preguntas (11..20).
-    """
     l_s = re.sub(r'^#\s*', '', lineas_sup[idx_ls][0]).strip()
     if pat_nuevo_supuesto_bloque.match(l_s) and (sub_estado != "PREAMBULO" or not preambulo_lineas):
         return True
@@ -3216,13 +3265,6 @@ def _es_inicio_nuevo_planteamiento_supuesto(idx_ls, lineas_sup, sub_estado, prea
     return False
 
 def _extraer_supuestos_con_bloque_solucion(file_bytes):
-    """
-    Ruta especializada para PDFs en los que aparecen uno o varios supuestos ('Supuesto 1:',
-    'Supuesto Práctico 1:', 'A) Supuesto 1:', etc.), seguidos del planteamiento y de la lista
-    de preguntas numeradas (1., 2., 3., 4.), y a continuación:
-    - Variedad 1 (ej. TEMA 61 JUBILACION): un encabezado 'Solución' / 'Solución:' seguido de las respuestas numeradas 1., 2., 3.
-    - Variedad 2 (ej. TEMA 62 MUERTE Y SUPERVIVENCIA): bloques 'Pregunta 1: ... Respuesta y Fundamento Jurídico: ... Pregunta 2: ...'
-    """
     if PDFQuizParser.es_archivo_docx(file_bytes):
         return []
     try:
@@ -3800,12 +3842,20 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 titulo_documento = t_cand
                 break
         if modo_u in ("TODOS", "DESARROLLO", "PREGUNTA DE DESARROLLO"):
+            # Pre-detectar si existe un índice al inicio cuyos títulos principales se repiten luego en el cuerpo
+            conteo_lineas_cortas = {}
+            for it_c in lineas_estructuradas:
+                tc = re.sub(r'\s+', ' ', (it_c.get("text") or "").strip()).upper()
+                if 4 <= len(tc) < 180 and not _es_subepigrafe_o_subapartado_docx(tc):
+                    conteo_lineas_cortas[tc] = conteo_lineas_cortas.get(tc, 0) + 1
+            titulos_repetidos_indice = {k_t for k_t, v_c in conteo_lineas_cortas.items() if v_c >= 2 and re.match(r'^(?:EP[ÍI]GRAFE\s+\d+|CAP[ÍI]TULO\s+[IVX\d]+|\d{1,2}(?!\.\d)[\.\-\s]|[IVX]{1,4}[\.\-\s])', k_t)}
+
             epigrafes_docx = []
             curr_epi = None
             preambulo_indice = []
             en_indice = False
 
-            for it in lineas_estructuradas:
+            for idx_it, it in enumerate(lineas_estructuradas):
                 t_raw = it["text"].strip()
                 if not t_raw:
                     continue
@@ -3818,24 +3868,20 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         en_indice = True
                     continue
 
-                es_titulo_epigrafe = False
-                if it.get("is_heading") and not re.match(r'^TEMA\s+\d+', t_raw, re.IGNORECASE):
-                    es_titulo_epigrafe = True
-                elif (
-                    it.get("is_bold") and
-                    len(t_raw) < 165 and
-                    not t_raw.endswith(".") and
-                    re.match(r'^(?:\d+(?:\.\d+)*[\.\-\)]?\s+[A-ZÁÉÍÓÚÑ]|EP[ÍI]GRAFE\s+\d+|CAP[ÍI]TULO\s+[IVX\d]+|[IVX]+[\.\-\)]\s+[A-ZÁÉÍÓÚÑ])', t_raw)
-                ):
-                    es_titulo_epigrafe = True
+                es_titulo_epigrafe = _es_titulo_epigrafe_principal_docx(it, titulos_repetidos_indice)
 
                 if es_titulo_epigrafe:
-                    if en_indice and len(t_raw) < 140 and any(
-                        it2["text"].strip() == t_raw and idx2 > lineas_estructuradas.index(it)
-                        for idx2, it2 in enumerate(lineas_estructuradas)
-                    ):
+                    # Si aparece al principio (en el índice) y vuelve a aparecer más adelante como encabezado del desarrollo, saltar la ocurrencia del índice
+                    t_norm_it = re.sub(r'\s+', ' ', t_raw).strip().upper()
+                    aparece_mas_adelante = any(
+                        re.sub(r'\s+', ' ', it2["text"].strip()).upper() == t_norm_it
+                        for it2 in lineas_estructuradas[idx_it + 1:]
+                    )
+                    if (en_indice or curr_epi is None or len( curr_epi.get("body", []) ) == 0) and len(t_raw) < 175 and aparece_mas_adelante:
+                        en_indice = True
                         preambulo_indice.append(t_raw)
                         continue
+
                     en_indice = False
                     if curr_epi and curr_epi["body"]:
                         cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
@@ -4202,7 +4248,6 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
 
 PDFQuizParser.parse_abiertas_gestion = staticmethod(_parse_abiertas_gestion_fn)
 # === FIN SECCIÓN 3C ===
-
 
 # === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
