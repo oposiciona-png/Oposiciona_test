@@ -6816,7 +6816,6 @@ if not st.session_state.questions:
                     st.success("🎉 ¡Todos los documentos auditados han superado la verificación sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
 # === FIN SECCIÓN 5A ===
-
 # === SECCIÓN 5B: PANTALLA DE PREGUNTA ACTIVA (TEST, SUPUESTOS Y DESARROLLO) ===
 elif not st.session_state.finished:
     # Estilos del examen activo + transformación visual de los checkboxes de opciones en círculos idénticos a st.radio
@@ -6874,98 +6873,63 @@ elif not st.session_state.finished:
     </style>""", unsafe_allow_html=True)
 
     def _render_tarjeta_tribunal_en_vivo(slot_st, titulo_accion, subtitulo_accion, porcentaje_barra=45):
-        slot_st.markdown(f"""
-        <style>
-        @keyframes opoBalanceSwing5B {{
-            0%, 100% {{ transform: rotate(-8deg); }}
-            50% {{ transform: rotate(8deg); }}
-        }}
-        @keyframes opoPenWrite5B {{
-            0% {{ transform: translate(0px, 0px) rotate(0deg); }}
-            25% {{ transform: translate(20px, -3px) rotate(-8deg); }}
-            50% {{ transform: translate(36px, 2px) rotate(5deg); }}
-            75% {{ transform: translate(14px, 5px) rotate(-5deg); }}
-            100% {{ transform: translate(0px, 0px) rotate(0deg); }}
-        }}
-        @keyframes opoScanBeam5B {{
-            0% {{ top: 12px; opacity: 0.35; }}
-            50% {{ top: 68px; opacity: 0.9; }}
-            100% {{ top: 12px; opacity: 0.35; }}
-        }}
-        @keyframes opoPulseBadge5B {{
-            0%, 100% {{ transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }}
-            50% {{ transform: scale(1.04); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }}
-        }}
-        @keyframes opoStudentNod5B {{
-            0%, 100% {{ transform: translateY(0px); }}
-            50% {{ transform: translateY(-5px); }}
-        }}
-        @keyframes opoBarStripes5B {{
-            0% {{ background-position: 0 0; }}
-            100% {{ background-position: 40px 0; }}
-        }}
-        </style>
-        <div style="background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 55%, #FEFCE8 100%); border: 2.5px solid #1D4ED8; border-radius: 16px; padding: 22px 20px; margin: 14px 0 18px 0; text-align: center; box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.18);">
-            <div style="display: inline-flex; align-items: center; gap: 8px; background: #1E3A8A; color: #FFFFFF !important; font-size: 12.5px; font-weight: 800; padding: 5px 14px; border-radius: 999px; letter-spacing: 0.6px; margin-bottom: 14px; animation: opoPulseBadge5B 1.8s infinite;">
-                <span>⚖️ TRIBUNAL CALIFICADOR EN DELIBERACIÓN — NO CIERRES ESTA VENTANA</span>
-            </div>
-
-            <div style="display: flex; justify-content: center; align-items: center; gap: 26px; flex-wrap: wrap; margin: 4px 0 16px 0;">
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <div style="width: 76px; height: 76px; border-radius: 50%; background: #DBEAFE; border: 2px solid #2563EB; display: flex; align-items: center; justify-content: center;">
-                        <svg width="48" height="48" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <rect x="20" y="54" width="24" height="5" rx="2.5" fill="#1E3A8A"/>
-                            <rect x="30" y="14" width="4" height="40" fill="#1E3A8A"/>
-                            <circle cx="32" cy="12" r="4" fill="#D97706"/>
-                            <g style="transform-origin: 32px 16px; animation: opoBalanceSwing5B 1.9s ease-in-out infinite;">
-                                <rect x="10" y="14" width="44" height="3" rx="1.5" fill="#D97706"/>
-                                <line x1="14" y1="17" x2="8" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <line x1="14" y1="17" x2="20" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <path d="M6 34 H22 C22 39 18.5 42 14 42 C9.5 42 6 39 6 34 Z" fill="#2563EB"/>
-                                <line x1="50" y1="17" x2="44" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <line x1="50" y1="17" x2="56" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <path d="M42 34 H58 C58 39 54.5 42 50 42 C45.5 42 42 39 42 34 Z" fill="#2563EB"/>
-                            </g>
-                        </svg>
-                    </div>
-                    <span style="font-size: 11.5px; font-weight: 700; color: #1E3A8A !important; margin-top: 5px;">Tribunal BOE</span>
-                </div>
-
-                <div style="position: relative; width: 115px; height: 90px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-                    <div style="position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam5B 1.5s ease-in-out infinite;"></div>
-                    <div style="height: 5px; width: 55%; background: #1E3A8A; border-radius: 3px; margin-bottom: 8px;"></div>
-                    <div style="height: 4px; width: 90%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;"></div>
-                    <div style="height: 4px; width: 80%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;"></div>
-                    <div style="height: 4px; width: 92%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;"></div>
-                    <div style="height: 4px; width: 65%; background: #16A34A; border-radius: 2px;"></div>
-                    <div style="position: absolute; top: 20px; left: 16px; font-size: 26px; animation: opoPenWrite5B 1.6s ease-in-out infinite;">
-                        🖋️
-                    </div>
-                    <div style="position: absolute; bottom: -10px; right: -10px; background: #16A34A; color: #FFFFFF !important; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 6px; border: 1.5px solid #FFFFFF;">
-                        ✓ IA ACTIVA
-                    </div>
-                </div>
-
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <div style="width: 76px; height: 76px; border-radius: 50%; background: #FEF3C7; border: 2px solid #D97706; display: flex; align-items: center; justify-content: center; font-size: 35px; animation: opoStudentNod5B 1.5s ease-in-out infinite;">
-                        🧑‍🎓
-                    </div>
-                    <span style="font-size: 11.5px; font-weight: 700; color: #92400E !important; margin-top: 5px;">Esperando nota...</span>
-                </div>
-            </div>
-
-            <div style="font-size: 18.5px; font-weight: 800; color: #0F172A !important; margin-bottom: 4px;">
-                {titulo_accion}
-            </div>
-            <div style="font-size: 13.8px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;">
-                {subtitulo_accion}
-            </div>
-
-            <div style="max-width: 440px; margin: 0 auto; background: #E2E8F0; border-radius: 999px; height: 11px; overflow: hidden; border: 1px solid #CBD5E1;">
-                <div style="width: {max(15, min(100, int(porcentaje_barra)))}%; height: 100%; background-image: linear-gradient(45deg, rgba(255,255,255,0.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.25) 75%, transparent 75%, transparent); background-color: #0284C7; background-size: 40px 40px; animation: opoBarStripes5B 1s linear infinite; border-radius: 999px;"></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        pct_w = max(15, min(100, int(porcentaje_barra)))
+        html_card = (
+            "<style>"
+            "@keyframes opoBalanceSwing5B { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }"
+            "@keyframes opoPenWrite5B { 0% { transform: translate(0px, 0px) rotate(0deg); } 25% { transform: translate(20px, -3px) rotate(-8deg); } 50% { transform: translate(36px, 2px) rotate(5deg); } 75% { transform: translate(14px, 5px) rotate(-5deg); } 100% { transform: translate(0px, 0px) rotate(0deg); } }"
+            "@keyframes opoScanBeam5B { 0% { top: 12px; opacity: 0.35; } 50% { top: 68px; opacity: 0.9; } 100% { top: 12px; opacity: 0.35; } }"
+            "@keyframes opoPulseBadge5B { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); } 50% { transform: scale(1.04); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); } }"
+            "@keyframes opoStudentNod5B { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }"
+            "@keyframes opoBarStripes5B { 0% { background-position: 0 0; } 100% { background-position: 40px 0; } }"
+            "</style>"
+            "<div style='background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 55%, #FEFCE8 100%); border: 2.5px solid #1D4ED8; border-radius: 16px; padding: 22px 20px; margin: 14px 0 18px 0; text-align: center; box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.18);'>"
+            "<div style='display: inline-flex; align-items: center; gap: 8px; background: #1E3A8A; color: #FFFFFF !important; font-size: 12.5px; font-weight: 800; padding: 5px 14px; border-radius: 999px; letter-spacing: 0.6px; margin-bottom: 14px; animation: opoPulseBadge5B 1.8s infinite;'>"
+            "<span>⚖️ TRIBUNAL CALIFICADOR EN DELIBERACIÓN — NO CIERRES ESTA VENTANA</span>"
+            "</div>"
+            "<div style='display: flex; justify-content: center; align-items: center; gap: 26px; flex-wrap: wrap; margin: 4px 0 16px 0;'>"
+            "<div style='display: flex; flex-direction: column; align-items: center;'>"
+            "<div style='width: 76px; height: 76px; border-radius: 50%; background: #DBEAFE; border: 2px solid #2563EB; display: flex; align-items: center; justify-content: center;'>"
+            "<svg width='48' height='48' viewBox='0 0 64 64' fill='none' xmlns='http://www.w3.org/2000/svg'>"
+            "<rect x='20' y='54' width='24' height='5' rx='2.5' fill='#1E3A8A'/>"
+            "<rect x='30' y='14' width='4' height='40' fill='#1E3A8A'/>"
+            "<circle cx='32' cy='12' r='4' fill='#D97706'/>"
+            "<g style='transform-origin: 32px 16px; animation: opoBalanceSwing5B 1.9s ease-in-out infinite;'>"
+            "<rect x='10' y='14' width='44' height='3' rx='1.5' fill='#D97706'/>"
+            "<line x1='14' y1='17' x2='8' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<line x1='14' y1='17' x2='20' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<path d='M6 34 H22 C22 39 18.5 42 14 42 C9.5 42 6 39 6 34 Z' fill='#2563EB'/>"
+            "<line x1='50' y1='17' x2='44' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<line x1='50' y1='17' x2='56' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<path d='M42 34 H58 C58 39 54.5 42 50 42 C45.5 42 42 39 42 34 Z' fill='#2563EB'/>"
+            "</g>"
+            "</svg>"
+            "</div>"
+            "<span style='font-size: 11.5px; font-weight: 700; color: #1E3A8A !important; margin-top: 5px;'>Tribunal BOE</span>"
+            "</div>"
+            "<div style='position: relative; width: 115px; height: 90px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>"
+            "<div style='position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam5B 1.5s ease-in-out infinite;'></div>"
+            "<div style='height: 5px; width: 55%; background: #1E3A8A; border-radius: 3px; margin-bottom: 8px;'></div>"
+            "<div style='height: 4px; width: 90%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;'></div>"
+            "<div style='height: 4px; width: 80%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;'></div>"
+            "<div style='height: 4px; width: 92%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;'></div>"
+            "<div style='height: 4px; width: 65%; background: #16A34A; border-radius: 2px;'></div>"
+            "<div style='position: absolute; top: 20px; left: 16px; font-size: 26px; animation: opoPenWrite5B 1.6s ease-in-out infinite;'>🖋️</div>"
+            "<div style='position: absolute; bottom: -10px; right: -10px; background: #16A34A; color: #FFFFFF !important; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 6px; border: 1.5px solid #FFFFFF;'>✓ IA ACTIVA</div>"
+            "</div>"
+            "<div style='display: flex; flex-direction: column; align-items: center;'>"
+            "<div style='width: 76px; height: 76px; border-radius: 50%; background: #FEF3C7; border: 2px solid #D97706; display: flex; align-items: center; justify-content: center; font-size: 35px; animation: opoStudentNod5B 1.5s ease-in-out infinite;'>🧑‍🎓</div>"
+            "<span style='font-size: 11.5px; font-weight: 700; color: #92400E !important; margin-top: 5px;'>Esperando nota...</span>"
+            "</div>"
+            "</div>"
+            f"<div style='font-size: 18.5px; font-weight: 800; color: #0F172A !important; margin-bottom: 4px;'>{titulo_accion}</div>"
+            f"<div style='font-size: 13.8px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>{subtitulo_accion}</div>"
+            "<div style='max-width: 440px; margin: 0 auto; background: #E2E8F0; border-radius: 999px; height: 11px; overflow: hidden; border: 1px solid #CBD5E1;'>"
+            f"<div style='width: {pct_w}%; height: 100%; background-image: linear-gradient(45deg, rgba(255,255,255,0.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.25) 75%, transparent 75%, transparent); background-color: #0284C7; background-size: 40px 40px; animation: opoBarStripes5B 1s linear infinite; border-radius: 999px;'></div>"
+            "</div>"
+            "</div>"
+        )
+        slot_st.markdown(html_card, unsafe_allow_html=True)
 
     c_r, c_s, c_c, _ = st.columns([1.4, 1.3, 1.3, 2.0])
     with c_r: st.button("🔄 Repetir test", on_click=action_repetir_test, use_container_width=True)
@@ -7344,98 +7308,62 @@ else:
     ]
 
     def _html_animacion_tribunal_corrigiendo(subtitulo_progreso="Analizando tus respuestas y aplicando el baremo oficial de la Seguridad Social...", porcentaje_prog=65):
-        return f"""
-        <style>
-        @keyframes opoBalanceSwing {{
-            0%, 100% {{ transform: rotate(-8deg); }}
-            50% {{ transform: rotate(8deg); }}
-        }}
-        @keyframes opoPenWrite {{
-            0% {{ transform: translate(0px, 0px) rotate(0deg); }}
-            25% {{ transform: translate(18px, -3px) rotate(-6deg); }}
-            50% {{ transform: translate(34px, 2px) rotate(4deg); }}
-            75% {{ transform: translate(14px, 5px) rotate(-4deg); }}
-            100% {{ transform: translate(0px, 0px) rotate(0deg); }}
-        }}
-        @keyframes opoScanBeam {{
-            0% {{ top: 14px; opacity: 0.35; }}
-            50% {{ top: 68px; opacity: 0.9; }}
-            100% {{ top: 14px; opacity: 0.35; }}
-        }}
-        @keyframes opoPulseBadge {{
-            0%, 100% {{ transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }}
-            50% {{ transform: scale(1.04); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }}
-        }}
-        @keyframes opoStudentNod {{
-            0%, 100% {{ transform: translateY(0px); }}
-            50% {{ transform: translateY(-4px); }}
-        }}
-        @keyframes opoBarStripes {{
-            0% {{ background-position: 0 0; }}
-            100% {{ background-position: 40px 0; }}
-        }}
-        </style>
-        <div style="background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 55%, #FEFCE8 100%); border: 2.5px solid #1D4ED8; border-radius: 16px; padding: 26px 22px; margin: 18px 0 24px 0; text-align: center; box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.18);">
-            <div style="display: inline-flex; align-items: center; gap: 8px; background: #1E3A8A; color: #FFFFFF !important; font-size: 12.5px; font-weight: 800; padding: 6px 16px; border-radius: 999px; letter-spacing: 0.6px; margin-bottom: 16px; animation: opoPulseBadge 1.8s infinite;">
-                <span>⚖️ TRIBUNAL CALIFICADOR EN DELIBERACIÓN — PROCESANDO EXAMEN</span>
-            </div>
-
-            <div style="display: flex; justify-content: center; align-items: center; gap: 28px; flex-wrap: wrap; margin: 6px 0 18px 0;">
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <div style="width: 80px; height: 80px; border-radius: 50%; background: #DBEAFE; border: 2px solid #2563EB; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.08);">
-                        <svg width="50" height="50" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <rect x="20" y="54" width="24" height="5" rx="2.5" fill="#1E3A8A"/>
-                            <rect x="30" y="14" width="4" height="40" fill="#1E3A8A"/>
-                            <circle cx="32" cy="12" r="4" fill="#D97706"/>
-                            <g style="transform-origin: 32px 16px; animation: opoBalanceSwing 1.9s ease-in-out infinite;">
-                                <rect x="10" y="14" width="44" height="3" rx="1.5" fill="#D97706"/>
-                                <line x1="14" y1="17" x2="8" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <line x1="14" y1="17" x2="20" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <path d="M6 34 H22 C22 39 18.5 42 14 42 C9.5 42 6 39 6 34 Z" fill="#2563EB"/>
-                                <line x1="50" y1="17" x2="44" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <line x1="50" y1="17" x2="56" y2="34" stroke="#1E3A8A" stroke-width="2"/>
-                                <path d="M42 34 H58 C58 39 54.5 42 50 42 C45.5 42 42 39 42 34 Z" fill="#2563EB"/>
-                            </g>
-                        </svg>
-                    </div>
-                    <span style="font-size: 11.5px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;">Tribunal BOE</span>
-                </div>
-
-                <div style="position: relative; width: 118px; height: 94px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-                    <div style="position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam 1.5s ease-in-out infinite;"></div>
-                    <div style="height: 5px; width: 55%; background: #1E3A8A; border-radius: 3px; margin-bottom: 8px;"></div>
-                    <div style="height: 4px; width: 90%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;"></div>
-                    <div style="height: 4px; width: 80%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;"></div>
-                    <div style="height: 4px; width: 92%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;"></div>
-                    <div style="height: 4px; width: 65%; background: #16A34A; border-radius: 2px;"></div>
-                    <div style="position: absolute; top: 22px; left: 18px; font-size: 26px; animation: opoPenWrite 1.6s ease-in-out infinite; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.2));">
-                        🖋️
-                    </div>
-                    <div style="position: absolute; bottom: -10px; right: -10px; background: #16A34A; color: #FFFFFF !important; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 6px; border: 1.5px solid #FFFFFF; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
-                        ✓ TRLGSS
-                    </div>
-                </div>
-
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <div style="width: 80px; height: 80px; border-radius: 50%; background: #FEF3C7; border: 2px solid #D97706; display: flex; align-items: center; justify-content: center; font-size: 36px; animation: opoStudentNod 1.5s ease-in-out infinite; box-shadow: inset 0 2px 6px rgba(0,0,0,0.06);">
-                        🧑‍🎓
-                    </div>
-                    <span style="font-size: 11.5px; font-weight: 700; color: #92400E !important; margin-top: 6px;">Esperando acta...</span>
-                </div>
-            </div>
-
-            <div style="font-size: 19px; font-weight: 800; color: #0F172A !important; margin-bottom: 6px;">
-                Resolviendo y calificando tus respuestas...
-            </div>
-            <div style="font-size: 14px; font-weight: 600; color: #334155 !important; margin-bottom: 14px;">
-                {subtitulo_progreso}
-            </div>
-
-            <div style="max-width: 460px; margin: 0 auto; background: #E2E8F0; border-radius: 999px; height: 12px; overflow: hidden; border: 1px solid #CBD5E1;">
-                <div style="width: {max(15, min(100, int(porcentaje_prog)))}%; height: 100%; background-image: linear-gradient(45deg, rgba(255,255,255,0.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.25) 75%, transparent 75%, transparent); background-color: #0284C7; background-size: 40px 40px; animation: opoBarStripes 1s linear infinite; border-radius: 999px; transition: width 0.35s ease;"></div>
-            </div>
-        </div>
-        """
+        pct_w = max(15, min(100, int(porcentaje_prog)))
+        return (
+            "<style>"
+            "@keyframes opoBalanceSwing { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }"
+            "@keyframes opoPenWrite { 0% { transform: translate(0px, 0px) rotate(0deg); } 25% { transform: translate(18px, -3px) rotate(-6deg); } 50% { transform: translate(34px, 2px) rotate(4deg); } 75% { transform: translate(14px, 5px) rotate(-4deg); } 100% { transform: translate(0px, 0px) rotate(0deg); } }"
+            "@keyframes opoScanBeam { 0% { top: 14px; opacity: 0.35; } 50% { top: 68px; opacity: 0.9; } 100% { top: 14px; opacity: 0.35; } }"
+            "@keyframes opoPulseBadge { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); } 50% { transform: scale(1.04); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); } }"
+            "@keyframes opoStudentNod { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-4px); } }"
+            "@keyframes opoBarStripes { 0% { background-position: 0 0; } 100% { background-position: 40px 0; } }"
+            "</style>"
+            "<div style='background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 55%, #FEFCE8 100%); border: 2.5px solid #1D4ED8; border-radius: 16px; padding: 26px 22px; margin: 18px 0 24px 0; text-align: center; box-shadow: 0 10px 25px -5px rgba(29, 78, 216, 0.18);'>"
+            "<div style='display: inline-flex; align-items: center; gap: 8px; background: #1E3A8A; color: #FFFFFF !important; font-size: 12.5px; font-weight: 800; padding: 6px 16px; border-radius: 999px; letter-spacing: 0.6px; margin-bottom: 16px; animation: opoPulseBadge 1.8s infinite;'>"
+            "<span>⚖️ TRIBUNAL CALIFICADOR EN DELIBERACIÓN — PROCESANDO EXAMEN</span>"
+            "</div>"
+            "<div style='display: flex; justify-content: center; align-items: center; gap: 28px; flex-wrap: wrap; margin: 6px 0 18px 0;'>"
+            "<div style='display: flex; flex-direction: column; align-items: center;'>"
+            "<div style='width: 80px; height: 80px; border-radius: 50%; background: #DBEAFE; border: 2px solid #2563EB; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.08);'>"
+            "<svg width='50' height='50' viewBox='0 0 64 64' fill='none' xmlns='http://www.w3.org/2000/svg'>"
+            "<rect x='20' y='54' width='24' height='5' rx='2.5' fill='#1E3A8A'/>"
+            "<rect x='30' y='14' width='4' height='40' fill='#1E3A8A'/>"
+            "<circle cx='32' cy='12' r='4' fill='#D97706'/>"
+            "<g style='transform-origin: 32px 16px; animation: opoBalanceSwing 1.9s ease-in-out infinite;'>"
+            "<rect x='10' y='14' width='44' height='3' rx='1.5' fill='#D97706'/>"
+            "<line x1='14' y1='17' x2='8' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<line x1='14' y1='17' x2='20' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<path d='M6 34 H22 C22 39 18.5 42 14 42 C9.5 42 6 39 6 34 Z' fill='#2563EB'/>"
+            "<line x1='50' y1='17' x2='44' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<line x1='50' y1='17' x2='56' y2='34' stroke='#1E3A8A' stroke-width='2'/>"
+            "<path d='M42 34 H58 C58 39 54.5 42 50 42 C45.5 42 42 39 42 34 Z' fill='#2563EB'/>"
+            "</g>"
+            "</svg>"
+            "</div>"
+            "<span style='font-size: 11.5px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;'>Tribunal BOE</span>"
+            "</div>"
+            "<div style='position: relative; width: 118px; height: 94px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>"
+            "<div style='position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam 1.5s ease-in-out infinite;'></div>"
+            "<div style='height: 5px; width: 55%; background: #1E3A8A; border-radius: 3px; margin-bottom: 8px;'></div>"
+            "<div style='height: 4px; width: 90%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;'></div>"
+            "<div style='height: 4px; width: 80%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;'></div>"
+            "<div style='height: 4px; width: 92%; background: #CBD5E1; border-radius: 2px; margin-bottom: 6px;'></div>"
+            "<div style='height: 4px; width: 65%; background: #16A34A; border-radius: 2px;'></div>"
+            "<div style='position: absolute; top: 22px; left: 18px; font-size: 26px; animation: opoPenWrite 1.6s ease-in-out infinite; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.2));'>🖋️</div>"
+            "<div style='position: absolute; bottom: -10px; right: -10px; background: #16A34A; color: #FFFFFF !important; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 6px; border: 1.5px solid #FFFFFF; box-shadow: 0 2px 4px rgba(0,0,0,0.15);'>✓ TRLGSS</div>"
+            "</div>"
+            "<div style='display: flex; flex-direction: column; align-items: center;'>"
+            "<div style='width: 80px; height: 80px; border-radius: 50%; background: #FEF3C7; border: 2px solid #D97706; display: flex; align-items: center; justify-content: center; font-size: 36px; animation: opoStudentNod 1.5s ease-in-out infinite; box-shadow: inset 0 2px 6px rgba(0,0,0,0.06);'>🧑‍🎓</div>"
+            "<span style='font-size: 11.5px; font-weight: 700; color: #92400E !important; margin-top: 6px;'>Esperando acta...</span>"
+            "</div>"
+            "</div>"
+            "<div style='font-size: 19px; font-weight: 800; color: #0F172A !important; margin-bottom: 6px;'>Resolviendo y calificando tus respuestas...</div>"
+            f"<div style='font-size: 14px; font-weight: 600; color: #334155 !important; margin-bottom: 14px;'>{subtitulo_progreso}</div>"
+            "<div style='max-width: 460px; margin: 0 auto; background: #E2E8F0; border-radius: 999px; height: 12px; overflow: hidden; border: 1px solid #CBD5E1;'>"
+            f"<div style='width: {pct_w}%; height: 100%; background-image: linear-gradient(45deg, rgba(255,255,255,0.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.25) 75%, transparent 75%, transparent); background-color: #0284C7; background-size: 40px 40px; animation: opoBarStripes 1s linear infinite; border-radius: 999px; transition: width 0.35s ease;'></div>"
+            "</div>"
+            "</div>"
+        )
 
     slot_animacion_correccion = st.empty()
     if alguna_contestada and (pendientes_ia or st.session_state.get("fase_deliberacion_tribunal", False) or not st.session_state.get("animacion_fin_mostrada", False)):
