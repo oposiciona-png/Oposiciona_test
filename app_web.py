@@ -5460,6 +5460,105 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 # === FIN SECCIÓN 4B ===
 
 # === SECCIÓN 4C: NAVEGACIÓN DEL TEST, SIMULACROS, AUDITORÍA Y REPORTE DE ERRORES ===
+@st.cache_resource
+def _obtener_bandeja_reportes_admin():
+    """Almacena en memoria del servidor los reportes enviados por los alumnos para que el Admin pueda descargarlos en PDF en 1 clic."""
+    return []
+
+def generar_pdf_reporte_error(datos_rep):
+    """
+    Genera en memoria un archivo PDF limpio y estructurado (usando PyMuPDF / fitz)
+    con toda la información de un reporte de error (o varios reportes) para poder subirlo directamente al chat.
+    """
+    lista_rep = datos_rep if isinstance(datos_rep, list) else [datos_rep]
+    doc = fitz.open()
+
+    for idx_r, rep in enumerate(lista_rep, 1):
+        lineas_Bloques = [
+            f"REPORTE DE INCIDENCIA / ERROR EN PREGUNTA #{idx_r} — OPOSICIONA",
+            "=" * 78,
+            f"Fecha y hora: {rep.get('fecha', datetime.now(ZoneInfo('Europe/Madrid')).strftime('%d/%m/%Y %H:%M:%S'))}",
+            f"Alumno que reporta: {rep.get('usuario', 'info@oposiciona.es')}",
+            f"Especialidad / Categoría: {rep.get('especialidad', '')} | {rep.get('categoria', '')}",
+            f"Nombre del Test / Archivo: {rep.get('nombre_test', '')}",
+            f"Tema: {rep.get('tema', '')}",
+            f"Número de Pregunta / Cuestión: {rep.get('num_pregunta', '')}",
+            "-" * 78,
+            "COMENTARIO / INCIDENCIA QUE REPORTA EL ALUMNO:",
+            f"« {rep.get('motivo', '')} »",
+            "-" * 78,
+        ]
+
+        if rep.get("preamble"):
+            lineas_Bloques.extend([
+                "PLANTEAMIENTO / PREÁMBULO:",
+                rep.get("preamble", ""),
+                "-" * 78,
+            ])
+
+        lineas_Bloques.extend([
+            "ENUNCIADO DE LA PREGUNTA / EPÍGRAFE:",
+            rep.get("enunciado", ""),
+            "-" * 78,
+        ])
+
+        opciones = rep.get("opciones", [])
+        if opciones:
+            lineas_Bloques.append("OPCIONES EXTRAÍDAS:")
+            for op_txt in opciones:
+                lineas_Bloques.append(f"  {op_txt}")
+            lineas_Bloques.extend([
+                "-" * 78,
+                "RESPUESTA QUE DA POR BUENA EL SISTEMA:",
+                rep.get("respuesta_sistema", ""),
+                "-" * 78,
+            ])
+        elif rep.get("respuesta_alumno"):
+            lineas_Bloques.extend([
+                "RESPUESTA ESCRITA POR EL ALUMNO:",
+                rep.get("respuesta_alumno", ""),
+                "-" * 78,
+                "VALORACIÓN DE LA IA:",
+                rep.get("valoracion_ia", ""),
+                "-" * 78,
+            ])
+
+        lineas_Bloques.extend([
+            "EXPLICACIÓN / TEXTO OFICIAL EXTRAÍDO DEL PDF:",
+            rep.get("explicacion", ""),
+            "=" * 78,
+        ])
+
+        texto_completo = "\n".join(lineas_Bloques)
+        # Envolver líneas largas a 92 caracteres para que quepan perfectamente en A4
+        lineas_envueltas = []
+        for l_orig in texto_completo.splitlines():
+            if not l_orig.strip():
+                lineas_envueltas.append("")
+                continue
+            palabras = l_orig.split(" ")
+            actual = ""
+            for pal in palabras:
+                if len(actual) + len(pal) + 1 <= 92:
+                    actual = f"{actual} {pal}".strip() if actual else pal
+                else:
+                    if actual:
+                        lineas_envueltas.append(actual)
+                    actual = pal
+            if actual:
+                lineas_envueltas.append(actual)
+
+        lineas_por_pagina = 52
+        for i_pag in range(0, max(1, len(lineas_envueltas)), lineas_por_pagina):
+            page = doc.new_page(width=595, height=842)
+            trozo = "\n".join(lineas_envueltas[i_pag:i_pag + lineas_por_pagina])
+            rect = fitz.Rect(36, 36, 559, 806)
+            page.insert_textbox(rect, trozo, fontsize=9.5, fontname="helv", color=(0.08, 0.12, 0.20))
+
+    pdf_bytes = doc.tobytes()
+    doc.close()
+    return pdf_bytes
+
 def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
     if not usuario_puede_reportar():
         return
@@ -5501,7 +5600,48 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         placeholder=placeholder_txt
     )
 
-    col_env, col_cer = st.columns([3, 1])
+    stat_q = st.session_state.get("stats", {}).get(num_pregunta - 1, {})
+    lista_opciones = q.get('options', [])
+    idx_correcta = q.get('answer', -1)
+    correcta_txt = lista_opciones[idx_correcta] if (0 <= idx_correcta < len(lista_opciones)) else (q.get('answer_text') or "No detectada automaticamente en el PDF")
+    resumen_opciones_txt = []
+    for i_opt, texto_opt in enumerate(lista_opciones):
+        marca_corr = "[MARCADA CORRECTA] " if i_opt == idx_correcta else ""
+        resumen_opciones_txt.append(f"{marca_corr}{texto_opt}")
+
+    datos_ficha_rep = {
+        "fecha": datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S"),
+        "usuario": usuario_rep,
+        "especialidad": st.session_state.get("test_esp") or st.session_state.get("saved_esp") or "",
+        "categoria": st.session_state.get("test_cat") or st.session_state.get("saved_cat") or "",
+        "nombre_test": nombre_pdf,
+        "tema": tema_vis,
+        "num_pregunta": f"{tipo_lbl} {num_pregunta}",
+        "motivo": (motivo or "").strip() or "(Sin comentario adicional)",
+        "preamble": preamble_txt,
+        "enunciado": pregunta_txt,
+        "opciones": resumen_opciones_txt,
+        "respuesta_sistema": correcta_txt,
+        "respuesta_alumno": (stat_q.get("selected") or st.session_state.get(f"open_txt_{num_pregunta - 1}") or "").strip() if es_abierta else "",
+        "valoracion_ia": re.sub(r'<[^>]+>', '', (stat_q.get("ai_feedback") or "")).strip() if es_abierta else "",
+        "explicacion": exp_limpia,
+    }
+
+    if usuario_es_admin():
+        col_env, col_pdf, col_cer = st.columns([2.2, 1.5, 0.8])
+        with col_pdf:
+            pdf_rep_bytes = generar_pdf_reporte_error(datos_ficha_rep)
+            st.download_button(
+                label="📄 Descargar reporte en PDF",
+                data=pdf_rep_bytes,
+                file_name=f"REPORTE_{id_test_limpio}_P{num_pregunta}.pdf",
+                mime="application/pdf",
+                key=f"btn_dl_pdf_{id_test_limpio}_{ubicacion_key}_{num_pregunta}",
+                use_container_width=True
+            )
+    else:
+        col_env, col_cer = st.columns([3, 1])
+
     with col_cer:
         if st.button("✖ Cerrar", key=f"btn_close_{id_test_limpio}_{ubicacion_key}_{num_pregunta}", use_container_width=True):
             limpiar_estados_reportes_error()
@@ -5515,12 +5655,20 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
         if not motivo_limpio:
             st.warning("⚠️ Escribe brevemente en qué consiste el error o incidencia antes de enviarlo.")
         else:
-            stat_q = st.session_state.get("stats", {}).get(num_pregunta - 1, {})
+            datos_ficha_rep["motivo"] = motivo_limpio
+            try:
+                bandeja_adm = _obtener_bandeja_reportes_admin()
+                bandeja_adm.insert(0, dict(datos_ficha_rep))
+                if len(bandeja_adm) > 100:
+                    del bandeja_adm[100:]
+            except Exception:
+                pass
+
             correo_remitente = usuario_rep if "@" in usuario_rep else "info@oposiciona.es"
 
             if es_abierta:
-                resp_alumno_env = (stat_q.get("selected") or st.session_state.get(f"open_txt_{num_pregunta - 1}") or "Sin respuesta escrita por el alumno").strip()
-                dictamen_env = re.sub(r'<[^>]+>', '', (stat_q.get("ai_feedback") or "Aún no se había pulsado Comprobar")).strip()
+                resp_alumno_env = datos_ficha_rep["respuesta_alumno"] or "Sin respuesta escrita por el alumno"
+                dictamen_env = datos_ficha_rep["valoracion_ia"] or "Aún no se había pulsado Comprobar"
                 payload = {
                     "_subject": f"Revisar {tipo_lbl} {num_pregunta} ({tema_vis}) - {nombre_pdf}",
                     "name": f"Alumno Oposiciona ({usuario_rep})",
@@ -5537,9 +5685,6 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                     "_captcha": "false"
                 }
             else:
-                lista_opciones = q.get('options', [])
-                idx_correcta = q.get('answer', -1)
-                correcta_txt = lista_opciones[idx_correcta] if (0 <= idx_correcta < len(lista_opciones)) else (q.get('answer_text') or "No detectada automaticamente en el PDF")
                 payload = {
                     "_subject": f"Revisar Pregunta {num_pregunta} - {nombre_pdf}",
                     "name": f"Alumno Oposiciona ({usuario_rep})",
@@ -5549,12 +5694,10 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                     "ALUMNO_Y_TEST": f"Alumno: {usuario_rep} | Test: {nombre_pdf} (Pregunta N. {num_pregunta})" + (f" | {preamble_txt[:400]}" if preamble_txt else ""),
                     "ENUNCIADO_DE_LA_PREGUNTA": pregunta_txt,
                 }
-                resumen_opciones_txt = []
                 for i_opt, texto_opt in enumerate(lista_opciones):
                     letra_mayus = chr(65 + i_opt)
                     marca_corr = "[MARCADA CORRECTA] " if i_opt == idx_correcta else ""
                     payload[f"OPCION_{letra_mayus}"] = f"{marca_corr}{texto_opt}"
-                    resumen_opciones_txt.append(f"{marca_corr}{texto_opt}")
                 payload["RESPUESTA_QUE_DA_POR_BUENA_EL_SISTEMA"] = correcta_txt
                 payload["EXPLICACION_EXTRAIDA_DEL_PDF"] = exp_limpia[:2500]
                 payload["message"] = (
@@ -5970,11 +6113,6 @@ def save_answer(selected):
             registrar_actividad_sheets("🚀 En curso", nombre_test=nombre_celda, accion="nueva_fila")
 
 def handle_option_toggle(idx_q, opt_idx):
-    """
-    Gestiona el clic sobre una opción en cualquier pregunta de test (Administrativos y Gestión):
-    - Si la opción NO estaba marcada: la marca y desmarca automáticamente las demás.
-    - Si la opción YA estaba marcada y el alumno vuelve a pulsar sobre ella: se desmarca sola (queda en blanco).
-    """
     q = st.session_state.questions[idx_q]
     opts = q.get("options", [])
     if opt_idx < 0 or opt_idx >= len(opts):
@@ -6707,6 +6845,89 @@ if not st.session_state.questions:
                         else: procesar_preguntas(rqs, barajar=True)
 
     if es_admin:
+        with st.expander("📩 Herramienta Admin: Descargar Reportes de Alumnos en PDF (para subir al asistente en 1 clic)"):
+            bandeja_rep = _obtener_bandeja_reportes_admin()
+            st.markdown(
+                "Aquí puedes **descargar en PDF** los reportes enviados por los alumnos (o convertir cualquier reporte que te llegue por correo a un archivo `.pdf`) para arrastrarlo directamente al chat sin tener que copiar y pegar."
+            )
+            if bandeja_rep:
+                st.success(f"📬 Hay **{len(bandeja_rep)} reporte(s)** registrados recientemente en la plataforma:")
+                c_all, c_clr = st.columns([2.5, 1])
+                with c_all:
+                    pdf_todos_bytes = generar_pdf_reporte_error(bandeja_rep)
+                    st.download_button(
+                        label=f"📚 Descargar TODOS los reportes ({len(bandeja_rep)}) en un único PDF",
+                        data=pdf_todos_bytes,
+                        file_name="REPORTES_ALUMNOS_OPOSICIONA.pdf",
+                        mime="application/pdf",
+                        key="btn_dl_all_rep_pdf",
+                        use_container_width=True
+                    )
+                with c_clr:
+                    if st.button("🗑️ Vaciar bandeja", key="btn_clr_bandeja_rep", use_container_width=True):
+                        bandeja_rep.clear()
+                        st.rerun()
+
+                for idx_br, rep_item in enumerate(bandeja_rep[:15]):
+                    col_info_r, col_btn_r = st.columns([3.5, 1.5])
+                    with col_info_r:
+                        st.markdown(
+                            f"**{idx_br + 1}. [{rep_item.get('fecha', '')}] {rep_item.get('nombre_test', '')}** — *{rep_item.get('num_pregunta', '')}*  \n"
+                            f"👤 `{rep_item.get('usuario', '')}` ➔ *«{rep_item.get('motivo', '')[:120]}»*"
+                        )
+                    with col_btn_r:
+                        pdf_ind_bytes = generar_pdf_reporte_error(rep_item)
+                        nom_arch_r = re.sub(r'\W+', '_', f"REPORTE_{rep_item.get('nombre_test', 'TEST')}_{rep_item.get('num_pregunta', 'P')}")
+                        st.download_button(
+                            label="📄 Descargar PDF",
+                            data=pdf_ind_bytes,
+                            file_name=f"{nom_arch_r}.pdf",
+                            mime="application/pdf",
+                            key=f"btn_dl_rep_ind_{idx_br}",
+                            use_container_width=True
+                        )
+                st.markdown("---")
+            else:
+                st.caption("ℹ️ Aún no hay reportes en la memoria activa de esta sesión del servidor. Puedes pegar debajo cualquier reporte de tu correo para descargarlo en PDF al instante:")
+
+            txt_correo_pegado = st.text_area(
+                "📋 Opcional — Pega aquí de una sola vez el texto del correo de reporte que has recibido en info@oposiciona.es y descárgalo en PDF:",
+                height=130,
+                key="txt_pegar_correo_rep_pdf",
+                placeholder="Pega aquí la tabla o el contenido del correo del alumno..."
+            )
+            if (txt_correo_pegado or "").strip():
+                doc_libre = fitz.open()
+                lineas_libres = []
+                for l_orig in txt_correo_pegado.strip().splitlines():
+                    if not l_orig.strip():
+                        lineas_libres.append("")
+                        continue
+                    palabras = l_orig.replace("\t", "  ").split(" ")
+                    act = ""
+                    for pal in palabras:
+                        if len(act) + len(pal) + 1 <= 92:
+                            act = f"{act} {pal}".strip() if act else pal
+                        else:
+                            if act:
+                                lineas_libres.append(act)
+                            act = pal
+                    if act:
+                        lineas_libres.append(act)
+                for i_p in range(0, max(1, len(lineas_libres)), 52):
+                    pg = doc_libre.new_page(width=595, height=842)
+                    pg.insert_textbox(fitz.Rect(36, 36, 559, 806), "\n".join(lineas_libres[i_p:i_p + 52]), fontsize=9.5, fontname="helv")
+                bytes_libre = doc_libre.tobytes()
+                doc_libre.close()
+                st.download_button(
+                    label="📄 Descargar este reporte pegado como archivo PDF",
+                    data=bytes_libre,
+                    file_name="REPORTE_ALUMNO_CORREO.pdf",
+                    mime="application/pdf",
+                    key="btn_dl_correo_pegado_pdf",
+                    use_container_width=True
+                )
+
         with st.expander("📊 Herramienta Admin: Auditoría de Extracción Real y Recuento de Preguntas, Supuestos y Epígrafes"):
             st.info(
                 "Esta herramienta ejecuta exactamente el mismo motor de extracción y procesado que cuando un alumno abre cada test o documento (PDF o Word .docx), "
@@ -6754,7 +6975,6 @@ if not st.session_state.questions:
                     es_gestion_esp = "GESTI" in esp.upper()
                     max_op_adm = 3 if es_gestion_esp else 4
 
-                    # Si se seleccionó únicamente Desarrollo, omitir Administrativos
                     if modo_auditoria_admin.startswith("📝") and not es_gestion_esp:
                         continue
 
@@ -6877,6 +7097,8 @@ if not st.session_state.questions:
                     st.success("🎉 ¡Todos los documentos auditados han superado la verificación sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
 # === FIN SECCIÓN 5A ===
+
+
 
 # === SECCIÓN 5B: PANTALLA DE PREGUNTA ACTIVA (TEST, SUPUESTOS Y DESARROLLO) ===
 elif not st.session_state.finished:
