@@ -3115,7 +3115,7 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
                 if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
                     continue
-                if re.match(r'^(?:#\s*)?PR[ÁA]CTIC[AO]S?\s+TEMA\s+\d+\s*$', s_clean, re.IGNORECASE):
+                if re.match(r'^(?:#\s*)?PR[ÁA]CTIC[AO]S?\s+TEMA\s+\d+.*$', s_clean, re.IGNORECASE):
                     tiene_cabecera_practica = True
                     continue
                 if s_clean in ("Ο", "o", "•"):
@@ -3146,7 +3146,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
 
     doc.close()
 
-    # Si el documento contiene opciones tipo test a), b), c), no es un documento de supuestos abiertos individuales
     if sum(1 for p in parrafos_doc if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+\S+', p)) >= 4:
         return []
 
@@ -3217,8 +3216,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 idx_r += 1
             resp_partes = paras[idx_r:]
         else:
-            # Modalidad SUPUESTO_INDIV (ej. PRÁCTICO TEMA 56):
-            # paras[0] es "1.- Don Alberto...", seguido de uno o más párrafos de preguntas "¿...?" y luego la respuesta
             enun_partes = [paras[0]]
             idx_r = 1
             while idx_r < len(paras) and (
@@ -3263,7 +3260,6 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     titulo_documento = ""
     num_paginas_pdf = 0
 
-    # Si se piden SUPUESTOS (o TODOS) en un PDF, verificar primero si se trata del formato singular de supuestos individuales ('Cuestión X:' como Tema 55 o '1.- <Planteamiento>' como Tema 56)
     if not es_docx and modo_u in ("TODOS", "SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
         cuestiones_singulares = _extraer_cuestiones_individuales_sin_etiqueta(file_bytes)
         if cuestiones_singulares:
@@ -3397,8 +3393,11 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     lineas_limpias = []
     for item in lineas_estructuradas:
         l_clean = PDFQuizParser._limpiar_marca_agua_linea(item["text"])
-        if l_clean and not PDFQuizParser._es_basura_cabecera_o_pie(l_clean, titulo_documento) and l_clean not in ("0", "-", "#"):
-            lineas_limpias.append((l_clean, item["is_bold"]))
+        if not l_clean or PDFQuizParser._es_basura_cabecera_o_pie(l_clean, titulo_documento) or l_clean in ("0", "-", "#"):
+            continue
+        if re.match(r'^(?:#\s*)?PR[ÁA]CTIC[AO]S?\s+TEMA\s+\d+.*$', l_clean, re.IGNORECASE):
+            continue
+        lineas_limpias.append((l_clean, item["is_bold"]))
 
     idx_desarrollo = -1
     idx_supuesto = -1
@@ -3469,9 +3468,13 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     inicio_sup = idx_supuesto + 1 if idx_supuesto != -1 else (-1 if idx_desarrollo != -1 else 0)
     if inicio_sup != -1 and inicio_sup < len(lineas_limpias):
         if idx_supuesto == -1:
-            texto_muestra = "\n".join(l_t for l_t, _ in lineas_limpias[:60])
+            texto_muestra = "\n".join(l_t for l_t, _ in lineas_limpias[:80])
             tiene_formato_supuesto = bool(
-                re.search(r'(?:ENUNCIADO\s+DEL\s+SUPUESTO|SUPUESTO\s+PR[ÁA]CTICO|CUESTIONES\s+PR[ÁA]CTICAS|RESPUESTA\s+T[ÉE]CNICA)', texto_muestra, re.IGNORECASE)
+                re.search(
+                    r'(?:ENUNCIADO\s+DEL\s+SUPUESTO|SUPUESTO\s+PR[ÁA]CTICO|CUESTIONES\s+PR[ÁA]CTICAS|RESPUESTA\s+T[ÉE]CNICA|EXPLICACI[ÓO]N\s+DETALLADA)',
+                    texto_muestra,
+                    re.IGNORECASE
+                )
             )
             if not tiene_formato_supuesto:
                 inicio_sup = -1
@@ -3492,13 +3495,56 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 r'^(?:#\s*)?(?:CUESTI[ÓO]N\s+|PREGUNTA\s+)?(\d{1,2})\s*[\.\-\)]\s*(?:\(RESERVA\)\s*)?(["«\'¿¡A-ZÁÉÍÓÚÑ].*)$',
                 re.IGNORECASE
             )
-            pat_exp_sup = re.compile(r'^(?:#\s*)?EXPLICACI[ÓO]N\s*[:\.]?\s*(.*)$', re.IGNORECASE)
+            pat_exp_sup = re.compile(r'^(?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*[:\.]?\s*(.*)$', re.IGNORECASE)
             pat_resp_tec = re.compile(r'^(?:#\s*)?RESPUESTA(?:\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?\s*[:\.]?\s*(.*)$', re.IGNORECASE)
+            # Detector de nuevo supuesto B), C), D)... o SUPUESTO B / SUPUESTO 2 / CASO PRÁCTICO B dentro del mismo documento
+            pat_nuevo_supuesto_bloque = re.compile(
+                r'^(?:#\s*)?(?:(?:SUPUESTO|CASO)(?:\s+PR[ÁA]CTICO)?\s+(?:[A-Z]|\d+|[IVX]+)\b(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|La\s+empresa|La\s+mercantil|La\s+sociedad|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+\(\d+\s*a[ñn]os\)).*)$'
+            )
+
+            def _construir_preambulo_texto(lista_lineas):
+                parrafos_pre = []
+                for lp in lista_lineas:
+                    if (
+                        not parrafos_pre or
+                        parrafos_pre[-1].rstrip().endswith(".") or
+                        re.match(r'^(?:[A-Z][\)\.\-]\s+|\d+[\.\)]\s+|[•·\-]\s+|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo|otro\s+lado)|Asimismo|Finalmente|Tres\s+a[ñn]os\s+m[áa]s\s+tarde|El\s+\d+\s+de\s+)', lp)
+                    ):
+                        parrafos_pre.append(lp)
+                    else:
+                        parrafos_pre[-1] += " " + lp
+                return "\n\n".join(parrafos_pre).strip()
 
             for l_raw, is_b in lineas_sup:
                 l_s = re.sub(r'^#\s*', '', l_raw).strip()
                 if not l_s or re.match(r'^(?:CUESTIONES(?:\s+PR[ÁA]CTICAS)?|PREGUNTAS\s+DEL\s+SUPUESTO|PREGUNTAS?\s+DE\s+RESERVA)\s*:?\s*$', l_s, re.IGNORECASE):
                     continue
+
+                # Si empieza un nuevo supuesto B), C), D), etc., cerrar la última pregunta del supuesto anterior e iniciar el nuevo preámbulo
+                if pat_nuevo_supuesto_bloque.match(l_s) and (sub_estado != "PREAMBULO" or not preambulo_lineas):
+                    if curr_c is not None:
+                        cuestiones_sup.append(curr_c)
+                        curr_c = None
+                    preambulo_lineas = [l_s]
+                    sub_estado = "PREAMBULO"
+                    continue
+
+                # Separar EXPLICACIÓN DETALLADA: si viene pegada al final del último renglón de una pregunta tras '?'
+                m_inline_exp = re.search(
+                    r'^(.*?\?)\s*(EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*[:\.]?\s*.*)$',
+                    l_s,
+                    flags=re.IGNORECASE
+                )
+                if m_inline_exp and sub_estado in ("PREAMBULO", "QUESTION") and not pat_cuestion.match(l_s):
+                    q_head = m_inline_exp.group(1).strip()
+                    exp_tail = m_inline_exp.group(2).strip()
+                    if curr_c is not None:
+                        curr_c["q"].append(q_head)
+                        sub_estado = "EXPLICACION"
+                        m_e_tail = pat_exp_sup.match(exp_tail)
+                        if m_e_tail and m_e_tail.group(1).strip():
+                            curr_c["exp"].append(m_e_tail.group(1).strip())
+                        continue
 
                 m_c = pat_cuestion.match(l_s)
                 m_e = pat_exp_sup.match(l_s)
@@ -3507,17 +3553,28 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 if m_c:
                     num_c = int(m_c.group(1))
                     txt_c = m_c.group(2).strip()
+
+                    cola_exp_c = ""
+                    m_in_c = re.search(r'^(.*?\?)\s*EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*[:\.]?\s*(.*)$', txt_c, flags=re.IGNORECASE)
+                    if m_in_c:
+                        txt_c = m_in_c.group(1).strip()
+                        cola_exp_c = m_in_c.group(2).strip()
+
                     es_parrafo_preambulo = (
                         sub_estado == "PREAMBULO" and
+                        curr_c is None and
+                        len(cuestiones_sup) == 0 and
                         num_c in (1, 2, 3, 4) and
                         "?" not in txt_c and
-                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda|qu[ée]|cu[áa]l|c[óo]mo|cu[áa]ndo)\b', txt_c, re.IGNORECASE)
+                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda|qu[ée]|cu[áa]l|c[óo]mo|cu[áa]ndo|para\s+acceder)\b', txt_c, re.IGNORECASE)
                     )
                     if es_parrafo_preambulo:
                         preambulo_lineas.append(f"{num_c}. {txt_c}")
                         continue
 
-                    if sub_estado in ("EXPLICACION", "RESPUESTA") and curr_c is not None and num_c != curr_c["num"] + 1 and not (curr_c["num"] == 15 and num_c == 16):
+                    ult_num = curr_c["num"] if curr_c is not None else (cuestiones_sup[-1]["num"] if cuestiones_sup else 0)
+                    # Si estamos dentro de EXPLICACION o RESPUESTA y aparece una lista interna numerada (ej. 1., 2., 3. en la P10 o P32), no abrir pregunta nueva a menos que sea correlativa (ult_num + 1)
+                    if sub_estado in ("EXPLICACION", "RESPUESTA") and curr_c is not None and num_c != ult_num + 1 and not (ult_num == 15 and num_c == 16):
                         if sub_estado == "EXPLICACION":
                             curr_c["exp"].append(l_s)
                         else:
@@ -3531,11 +3588,12 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     pref_q = f"{num_c}. (RESERVA)" if es_res else f"{num_c}."
                     curr_c = {
                         "num": num_c,
+                        "preamble": _construir_preambulo_texto(preambulo_lineas),
                         "q": [f"{pref_q} {txt_c}"],
-                        "exp": [],
+                        "exp": [cola_exp_c] if cola_exp_c else [],
                         "resp": []
                     }
-                    sub_estado = "QUESTION"
+                    sub_estado = "EXPLICACION" if m_in_c else "QUESTION"
                     continue
 
                 if sub_estado == "PREAMBULO":
@@ -3577,13 +3635,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
             if curr_c is not None:
                 cuestiones_sup.append(curr_c)
 
-            parrafos_pre = []
-            for lp in preambulo_lineas:
-                if not parrafos_pre or re.match(r'^(?:\d+[\.\)]\s+|[•·\-]\s+|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo)|Asimismo|Finalmente)', lp):
-                    parrafos_pre.append(lp)
-                else:
-                    parrafos_pre[-1] += " " + lp
-            preambulo_final = "\n\n".join(parrafos_pre).strip()
+            preambulo_por_defecto = _construir_preambulo_texto(preambulo_lineas)
 
             for c_obj in cuestiones_sup:
                 q_str = re.sub(r'\s+', ' ', " ".join(c_obj["q"])).strip()
@@ -3599,7 +3651,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     preguntas_supuestos.append({
                         "is_open": True,
                         "tipo_abierta": "SUPUESTO",
-                        "preamble": preambulo_final,
+                        "preamble": c_obj.get("preamble") or preambulo_por_defecto,
                         "question_text": q_str,
                         "options": [],
                         "answer": -1,
