@@ -2282,18 +2282,15 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
     if not l or l in ("0", "-", "#"):
         return []
 
-    # 0. Si la línea contiene dos o más etiquetas de opción vacías seguidas (ej. "b) c)" o "a) b)"), dividirlas
     if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-](?:\s+[a-dA-D][\)\.\-])+\s*$', l):
         return [(tok.strip(), is_bold) for tok in re.findall(r'[a-dA-D][\)\.\-]', l)]
 
-    # 0b. Si la línea empieza por una etiqueta de opción vacía seguida de otra opción con texto (ej. "b) c) El Real Decreto..."), separar la vacía
     m_empty_then_opt = re.match(r'^((?:#\s*)?[a-dA-D][\)\.\-])\s+((?:#\s*)?[a-dA-D][\)\.\-]\s+.+)$', l)
     if m_empty_then_opt:
         res_eo = [(re.sub(r'^#\s*', '', m_empty_then_opt.group(1)).strip(), is_bold)]
         res_eo.extend(PDFQuizParser._atomizar_linea_test(m_empty_then_opt.group(2), is_bold))
         return res_eo
 
-    # 0c. Si un final corto de línea de explicación (como "149." o "1994." o "sistema.") viene pegado delante de un nuevo enunciado numerado (ej. "149. 3. En el análisis..."), separarlos
     m_cola_corta_y_preg = re.match(
         r'^((?:#\s*)?(?:\d{2,4}|[a-záéíóúñA-ZÁÉÍÓÚÑ]{2,20})\.)\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].{15,})$',
         l
@@ -2304,7 +2301,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         res_cp.extend(PDFQuizParser._atomizar_linea_test(m_cola_corta_y_preg.group(2), is_bold))
         return res_cp
 
-    # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_pag = re.match(
         r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         l,
@@ -2316,7 +2312,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         res_pp.extend(PDFQuizParser._atomizar_linea_test(m_post_pag.group(2), is_bold))
         return res_pp
 
-    # 2. Si después de ">>>" o "»" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_cita = re.match(
         r'^(.+?(?:»|>>+))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         l
@@ -2327,7 +2322,6 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         res_pc.extend(PDFQuizParser._atomizar_linea_test(m_post_cita.group(2), is_bold))
         return res_pc
 
-    # 3. Si una pregunta de reserva R1/R2/R3 viene en la misma línea tras puntuación, dividirla
     partes_r = re.split(
         r'(?<=[.?!»"\)\]>])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
         l
@@ -2401,7 +2395,6 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
     while idx_c < n_c:
         t_c, b_c = lineas_pagina[idx_c]
         t_c_clean = PDFQuizParser._limpiar_marca_agua_linea(t_c).strip()
-        # No unir si el número termina en punto y la siguiente línea empieza ya por otro número de pregunta (ej. "149." seguido de "3. En el análisis...")
         if (
             idx_c + 1 < n_c and
             re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)$', t_c_clean, re.IGNORECASE)
@@ -2853,7 +2846,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                 for o_p in curr_q["options"][:-1]
             )
             ultima_opt_no_termina_en_conector = not bool(
-                re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|entre|hacia|hasta|desde|seg[úu]n|que|y|o|ni|el|la|los|las|un|una|unos|unas|su|sus)\s*$', ultima_opt_txt, re.IGNORECASE)
+                re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|entre|hacia|hasta|desde|seg[úu]n|que|y|o|ni|el|la|los|las|un|una|unos|unas|su|sus|letra|apartado|ep[íi]grafe|p[áa]rrafo|inciso)\s*$', ultima_opt_txt, re.IGNORECASE)
             )
             ultima_opt_cerrada = (
                 ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
@@ -2899,31 +2892,45 @@ def _parse_test_fn(file_bytes, max_options=None):
                 continue
 
         if m_opt and state in ("QUESTION", "OPTIONS"):
-            if pre_opt_text_buf:
-                curr_q["question_text"] += " " + pre_opt_text_buf[0]
-                pre_opt_text_buf = None
-            es_marcada_hash = line.lstrip().startswith("#")
-            es_correcta_opt = is_bold or es_marcada_hash
+            letra_cand_opt = m_opt.group(1).lower()
             cuerpo_op = m_opt.group(2).strip()
-            if pending_empty_opts and len(curr_q["options"]) == pending_empty_opts[0] + 1 and curr_q["options"][-1].strip().endswith(")"):
-                idx_fill = pending_empty_opts.pop(0)
-                letra_f = chr(ord('a') + idx_fill)
-                curr_q["options"][idx_fill] = f"{letra_f}) {cuerpo_op}"
-                curr_q["options_bold"][idx_fill] = curr_q["options_bold"][idx_fill] or es_correcta_opt
-                if es_correcta_opt:
-                    curr_q["answer"] = idx_fill
-                state = "OPTIONS"
-                continue
+            # Blindaje contra referencias legales internas a principio de renglón como "...establecida en la letra \n b) para personas sin grado de consanguinidad."
+            es_continuacion_referencia_letra = False
+            if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts:
+                ult_opt_cuerpo = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
+                letra_esperada_sig = chr(ord('a') + len(curr_q["options"]))
+                termina_en_ref_letra = bool(
+                    re.search(r'\b(?:letra|apartado|ep[íi]grafe|p[áa]rrafo|ordinal|inciso|opci[óo]n)s?\s*$', ult_opt_cuerpo, re.IGNORECASE)
+                )
+                empieza_en_minuscula = bool(re.match(r'^[a-záéíóúñ]', cuerpo_op))
+                if termina_en_ref_letra or (empieza_en_minuscula and not ult_opt_cuerpo.endswith((".", ";", "?", "!")) and letra_cand_opt != letra_esperada_sig):
+                    es_continuacion_referencia_letra = True
 
-            pending_empty_opts = []
-            if len(curr_q["options"]) < 4:
-                letra_secuencial = chr(ord('a') + len(curr_q["options"]))
-                curr_q["options"].append(f"{letra_secuencial}) {cuerpo_op}")
-                curr_q["options_bold"].append(es_correcta_opt)
-                if es_correcta_opt:
-                    curr_q["answer"] = len(curr_q["options"]) - 1
-                state = "OPTIONS"
-                continue
+            if not es_continuacion_referencia_letra:
+                if pre_opt_text_buf:
+                    curr_q["question_text"] += " " + pre_opt_text_buf[0]
+                    pre_opt_text_buf = None
+                es_marcada_hash = line.lstrip().startswith("#")
+                es_correcta_opt = is_bold or es_marcada_hash
+                if pending_empty_opts and len(curr_q["options"]) == pending_empty_opts[0] + 1 and curr_q["options"][-1].strip().endswith(")"):
+                    idx_fill = pending_empty_opts.pop(0)
+                    letra_f = chr(ord('a') + idx_fill)
+                    curr_q["options"][idx_fill] = f"{letra_f}) {cuerpo_op}"
+                    curr_q["options_bold"][idx_fill] = curr_q["options_bold"][idx_fill] or es_correcta_opt
+                    if es_correcta_opt:
+                        curr_q["answer"] = idx_fill
+                    state = "OPTIONS"
+                    continue
+
+                pending_empty_opts = []
+                if len(curr_q["options"]) < 4:
+                    letra_secuencial = chr(ord('a') + len(curr_q["options"]))
+                    curr_q["options"].append(f"{letra_secuencial}) {cuerpo_op}")
+                    curr_q["options_bold"].append(es_correcta_opt)
+                    if es_correcta_opt:
+                        curr_q["answer"] = len(curr_q["options"]) - 1
+                    state = "OPTIONS"
+                    continue
 
         if state == "QUESTION":
             if curr_q["question_text"].rstrip().endswith("?") and line.endswith(".") and not line.endswith("?"):
