@@ -2994,7 +2994,15 @@ _RESPALDO_TEMA_73_ABIERTAS = {
                 "- Sujeto responsable, base y tipo: la cotización es a cargo exclusivo del trabajador. La base aplicable es la base mínima vigente del grupo 7 del Régimen General (1.424,40 €/mes en 2026) y el tipo de cotización es el 11,50%. Si durante la inactividad percibe prestación por desempleo de nivel contributivo, la base será la base reguladora de dicha prestación y el tipo será el 11%."
             ),
             "explanation": (
-                "La regulación de la cotización en el Sistema Especial para Trabajadores por Cuenta Ajena Agrarios (SEA), integrado en el Régimen General desde el 1 de enero de 2012 (Ley 28/2011), se estructura en los artículos 252 a 256 del TRLGSS (RD Legislativo 8/2015) y en la Orden anual de cotización (Orden PJC/297/2026 para 2026), diferenciando netamente los períodos de actividad (con cotización empresarial y obrera por bases mensuales o por jornadas reales) y los períodos de inactividad (cuando no se alcanza el 76,67% de los días naturales de alta, cotizando exclusivamente el trabajador al 11,50% sobre la base mínima del grupo 7)."
+                "1. Cotización durante los períodos de actividad:\n"
+                "La cotización podrá efectuarse, a opción del empresario, por bases diarias, en función de las jornadas reales realizadas, o por bases mensuales. La modalidad de cotización por bases mensuales resultará obligatoria para los trabajadores agrarios por cuenta ajena con contrato indefinido, sin incluir entre ellos a los que presten servicios con carácter fijo discontinuo, respecto a los cuales tendrá carácter opcional.\n"
+                "- Bases mensuales: se adaptan a las bases mínimas y máximas establecidas en el Régimen General. A partir de 2022 los grupos 2 a 11 se equiparan al SMI vigente incrementado en un sexto (1.424,40 €/mes en 2026).\n"
+                "- Bases diarias (jornadas reales): se aplica en proporción a las jornadas reales realizadas, sin que pueda ser inferior a la base mínima diaria legal (61,93 €/jornada en grupos 2 a 11 para 2026). Si se realizan 22 o más jornadas reales en el mes, la base de cotización será la correspondiente a las bases mensuales.\n"
+                "- Tipos y reducciones (Orden PJC/297/2026): para el grupo 1 se aplica el 28,30% (23,60% empresa con reducción de 8,10 puntos porcentuales pasando al 15,50%, con tope máximo empresarial de 279,00 €/mes o 12,68 €/jornada; y 4,70% trabajador). Para los grupos 2 a 11 el tipo es del 24,25% (19,55% empresa con reducción del 6,15% e incremento de reducción según fórmula legal, sin que la cuota empresarial sea inferior a 179,44 €/mes o 8,16 €/jornada; y 4,70% trabajador). En desempleo se aplican los tipos generales (salvo para extranjeros con autorización de temporada del art. 42.1.a de la LO 4/2000, exentos de cotizar por desempleo). En IT o maternidad durante la actividad, se cotiza según la modalidad de contratación (indefinidos al 15,50% en grupo 1 y 2,75% en grupos 2 a 11 sobre contingencias comunes).\n\n"
+                "2. Cotización durante los períodos de inactividad:\n"
+                "Conforme al art. 253 del TRLGSS, existen períodos de inactividad dentro de un mes natural cuando el número de jornadas reales realizadas sea inferior al 76,67% de los días naturales en que el trabajador figure incluido en el sistema en dicho mes. No existirá inactividad cuando el trabajador realice en el mes, para un mismo empresario, un mínimo de 5 jornadas reales semanales en cumplimiento de convenio colectivo.\n"
+                "- Fórmula de días de inactividad: dInactivos = (dAlta x 22 / dMes) - jReales. (Se aplica sobre meses de 30 días y tope de 22 jornadas reales; la fracción decimal se redondea al entero más cercano y, si es equidistante, al superior).\n"
+                "- Sujeto responsable, base y tipo: la cotización es a cargo exclusivo del trabajador. La base aplicable es la base mínima vigente del grupo 7 del Régimen General (1.424,40 €/mes en 2026) y el tipo de cotización es el 11,50%. Si durante la inactividad percibe prestación por desempleo de nivel contributivo, la base será la base reguladora de dicha prestación y el tipo será el 11%."
             )
         }
     ],
@@ -3086,6 +3094,30 @@ _RESPALDO_TEMA_73_ABIERTAS = {
         }
     ]
 }
+
+def _formatear_linea_cuerpo_epigrafe_docx(t_raw, prev_line=""):
+    """
+    Formatea cada párrafo del cuerpo de un Epígrafe de Desarrollo (.docx):
+    - Mantiene los títulos de apartados numerados ('1. Fundamentación...', '2. Competencia...', '3. Objeto...').
+    - Si un párrafo interno es un subapartado con etiqueta inicial seguida de dos puntos
+      (ej. 'Órganos territoriales y Unidades de Recaudación Ejecutiva: Las Direcciones...')
+      y viene tras un párrafo introductorio que acaba en ':' o tras otra viñeta '- ',
+      le antepone '- ' para conservar el formato de lista con guiones.
+    """
+    t = (t_raw or "").strip()
+    if not t:
+        return ""
+    # Si ya empieza por número de apartado ('1. ', '2. ', '3. ') o por guion/viñeta, devolver limpio
+    if re.match(r'^(?:\d+(?:\.\d+)*[\.\)]\s+|[a-zA-Z][\)\.]\s+|[\-•·▪■]\s+)', t):
+        return re.sub(r'^[•·▪■]\s+', '- ', t)
+
+    # Si empieza por un sintagma nominal corto (< 115 caracteres) seguido de ':' y texto explicativo,
+    # y el párrafo previo terminaba en ':' o empezaba por '- ', añadir '- ' al inicio
+    m_sub = re.match(r'^([A-ZÁÉÍÓÚÑ][^:\.]{3,115}):\s+([A-ZÁÉÍÓÚÑ"«\d].+)$', t)
+    if m_sub and (prev_line.rstrip().endswith(":") or prev_line.lstrip().startswith("- ")):
+        return f"- {t}"
+
+    return t
 
 def _es_linea_cabecera_tema_repetida(s_txt):
     t = re.sub(r'^#\s*', '', (s_txt or "")).strip()
@@ -3782,7 +3814,6 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 re.IGNORECASE
             )
 
-            # Comprobar si el documento utiliza encabezados explícitos 'EPÍGRAFE X: <Título>' (estándar en todos los temas .docx de DESARROLLO)
             total_lineas_epigrafe_explicito = sum(
                 1 for it_c in lineas_estructuradas
                 if pat_epigrafe_explicito.match(re.sub(r'\s*↑\s*$', '', (it_c.get("text") or "").strip()).strip())
@@ -3814,7 +3845,6 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     if m_ep:
                         num_ep = int(m_ep.group(1))
                         tit_ep = m_ep.group(2).strip()
-                        # Si esta línea pertenece a la tabla inicial 'DESGLOSE OFICIAL DE EPÍGRAFES PARA LA EXPOSICIÓN:' (y ese mismo Epígrafe X vuelve a aparecer más adelante como título del desarrollo), ignorar la línea del índice
                         reaparece_mas_adelante = any(
                             bool(pat_epigrafe_explicito.match(re.sub(r'\s*↑\s*$', '', (it2.get("text") or "").strip()).strip()))
                             and int(pat_epigrafe_explicito.match(re.sub(r'\s*↑\s*$', '', (it2.get("text") or "").strip()).strip()).group(1)) == num_ep
@@ -3836,7 +3866,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                                     "options": [],
                                     "answer": -1,
                                     "official_answer": cuerpo_txt,
-                                    "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                                    "explanation": cuerpo_txt
                                 })
                         curr_epi = {
                             "num": num_ep,
@@ -3846,9 +3876,11 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     else:
                         if curr_epi is not None:
                             en_desglose_inicial = False
-                            curr_epi["body"].append(t_raw)
+                            prev_l = curr_epi["body"][-1] if curr_epi["body"] else ""
+                            linea_fmt = _formatear_linea_cuerpo_epigrafe_docx(t_raw, prev_l)
+                            if linea_fmt:
+                                curr_epi["body"].append(linea_fmt)
                 else:
-                    # Fallback solo para documentos .docx antiguos que no utilicen la etiqueta 'EPÍGRAFE X:'
                     es_titulo_fallback = (
                         (it.get("is_heading") or it.get("is_bold"))
                         and len(t_raw) < 165
@@ -3868,11 +3900,14 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                                     "options": [],
                                     "answer": -1,
                                     "official_answer": cuerpo_txt,
-                                    "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                                    "explanation": cuerpo_txt
                                 })
                         curr_epi = {"title": t_raw, "body": []}
                     elif curr_epi is not None:
-                        curr_epi["body"].append(t_raw)
+                        prev_l = curr_epi["body"][-1] if curr_epi["body"] else ""
+                        linea_fmt = _formatear_linea_cuerpo_epigrafe_docx(t_raw, prev_l)
+                        if linea_fmt:
+                            curr_epi["body"].append(linea_fmt)
 
             if curr_epi and curr_epi["body"]:
                 cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
@@ -3886,7 +3921,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         "options": [],
                         "answer": -1,
                         "official_answer": cuerpo_txt,
-                        "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                        "explanation": cuerpo_txt
                     })
 
             if epigrafes_docx:
@@ -4008,7 +4043,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     "options": [],
                     "answer": -1,
                     "official_answer": resp_oficial_des,
-                    "explanation": "Respuesta oficial de desarrollo conforme al programa y normativa consolidada vigente de la Seguridad Social."
+                    "explanation": resp_oficial_des
                 })
 
     inicio_sup = idx_supuesto + 1 if idx_supuesto != -1 else (-1 if idx_desarrollo != -1 else 0)
