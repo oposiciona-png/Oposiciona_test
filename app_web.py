@@ -3124,11 +3124,12 @@ def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
 def _extraer_supuestos_con_bloque_solucion(file_bytes):
     """
     Ruta especializada para PDFs en los que aparecen uno o varios supuestos ('Supuesto 1:',
-    'A) Supuesto 1:', 'Supuesto A:', etc.), seguidos del planteamiento, luego todas las
-    preguntas numeradas (1., 2., 3.) agrupadas antes de la palabra 'Solución' / 'Solución:'
-    y finalmente las respuestas numeradas (1., 2., 3.) debajo de 'Solución' (ej. TEMA 61 JUBILACION).
+    'Supuesto Práctico 1:', 'A) Supuesto 1:', etc.), seguidos del planteamiento y de la lista
+    de preguntas numeradas (1., 2., 3., 4.), y a continuación:
+    - Variedad 1 (ej. TEMA 61 JUBILACION): un encabezado 'Solución' / 'Solución:' seguido de las respuestas numeradas 1., 2., 3.
+    - Variedad 2 (ej. TEMA 62 MUERTE Y SUPERVIVENCIA): bloques 'Pregunta 1: ... Respuesta y Fundamento Jurídico: ... Pregunta 2: ...'
     Genera una cuestión independiente por cada pregunta manteniendo el planteamiento del supuesto
-    en `preamble`.
+    en `preamble` y su única explicación correspondiente en `official_answer` / `explanation`.
     """
     if PDFQuizParser.es_archivo_docx(file_bytes):
         return []
@@ -3159,7 +3160,7 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                 s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
                 if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
                     continue
-                if re.match(r'^(?:#\s*)?(?:PR[ÁA]CTIC[AO]S?|CASOS?\s+PR[ÁA]CTICOS?)\s+(?:TEMA\s+\d+|JUBILACI[ÓO]N).*$', s_clean, re.IGNORECASE):
+                if re.match(r'^(?:#\s*)?(?:PR[ÁA]CTIC[AO]S?|CASOS?\s+PR[ÁA]CTICOS?)\s+(?:TEMA\s+\d+|JUBILACI[ÓO]N|GESTI[ÓO]N).*$', s_clean, re.IGNORECASE):
                     continue
                 items_p.append((y0, x0, s_clean, is_b))
 
@@ -3175,12 +3176,16 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
     if sum(1 for l_t in lineas_doc if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+\S+', l_t)) >= 6:
         return []
 
+    # Exige que Supuesto/Caso empiece en mayúscula y vaya seguido de número (1..99), romano (I..IV) o una letra aislada (evita 'supuesto de matrimonio')
     pat_sup_hdr = re.compile(
-        r'^(?:#\s*)?(?:([A-Z])[\)\.\-]\s*)?(?:SUPUESTO|CASO)(?:\s+PR[ÁA]CTICO)?\s+(?:N\.?\s*[º°]?\s*)?([A-Z0-9IVX]+)\s*[:\.\-]?\s*(.*)$',
-        re.IGNORECASE
+        r'^(?:#\s*)?(?:([A-Z])[\)\.\-]\s*)?(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:N\.?\s*[º°]?\s*)?(\d{1,2}|[IVX]{1,4}|[A-Z])(?!\w)\s*[:\.\-]?\s*(.*)$'
     )
     pat_sol_hdr = re.compile(
-        r'^(?:#\s*)?(?:SOLUCI[ÓO]N(?:ES)?|RESPUESTAS?(?:\s+OFICIAL(?:ES)?|\s+T[ÉE]CNICAS?)?)\s*[:\.\-]?\s*(.*)$',
+        r'^(?:#\s*)?(?:SOLUCI[ÓO]N(?:ES)?|RESPUESTAS?(?:\s+Y\s+FUNDAMENTOS?\s+JUR[ÍI]DICOS?|\s+OFICIAL(?:ES)?|\s+T[ÉE]CNICAS?)?)\s*[:\.\-]\s*(.*)$|^(?:#\s*)?SOLUCI[ÓO]N(?:ES)?\s*$',
+        re.IGNORECASE
+    )
+    pat_preg_explicita = re.compile(
+        r'^(?:#\s*)?(?:Pregunta|Cuesti[óo]n)\s+(\d{1,2})(?!\d)\s*[:\.\-\)]\s*(.*)$',
         re.IGNORECASE
     )
     pat_num_item = re.compile(
@@ -3188,13 +3193,16 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
         re.IGNORECASE
     )
 
-    # Verificar que exista al menos un encabezado 'Solución' o 'Respuestas' explícito
-    n_sol_headers = sum(1 for l_t in lineas_doc if pat_sol_hdr.match(re.sub(r'^#\s*', '', l_t).strip()))
+    n_sol_headers = sum(
+        1 for l_t in lineas_doc
+        if pat_sol_hdr.match(re.sub(r'^#\s*', '', l_t).strip()) or pat_preg_explicita.match(re.sub(r'^#\s*', '', l_t).strip())
+    )
     if n_sol_headers < 1:
         return []
 
     supuestos_bloques = []
     curr_sup = None
+    sub_modo_actual = None
 
     for l_raw in lineas_doc:
         l = re.sub(r'^#\s*', '', l_raw).strip()
@@ -3224,23 +3232,93 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                 "respuestas": [],
                 "en_solucion": False
             }
+            sub_modo_actual = "PREAMBULO"
             continue
 
         if curr_sup is None:
             continue
 
-        m_sol = pat_sol_hdr.match(l)
-        if m_sol and len(curr_sup["preguntas"]) >= 1 and not curr_sup["en_solucion"]:
+        # 1) Detectar 'Pregunta X: ¿...?' (formato Tema 62 Muerte y Supervivencia)
+        m_pe = pat_preg_explicita.match(l)
+        if m_pe:
+            num_pe = int(m_pe.group(1))
+            resto_pe = m_pe.group(2).strip()
             curr_sup["en_solucion"] = True
-            resto_sol = m_sol.group(1).strip()
-            if resto_sol:
-                m_n = pat_num_item.match(resto_sol)
-                if m_n:
-                    curr_sup["respuestas"].append([int(m_n.group(1)), [m_n.group(2).strip()]])
+            m_inline_rfj = re.search(
+                r'^(.*?\?)\s*(?:Respuesta(?:\s+y\s+Fundamento\s+Jur[íi]dico)?|Soluci[óo]n)\s*:\s*(.+)$',
+                resto_pe,
+                flags=re.IGNORECASE
+            )
+            if m_inline_rfj:
+                q_pe_txt = m_inline_rfj.group(1).strip()
+                r_pe_txt = m_inline_rfj.group(2).strip()
+                if not any(q_it[0] == num_pe for q_it in curr_sup["preguntas"]):
+                    curr_sup["preguntas"].append([num_pe, [q_pe_txt]])
+                curr_sup["respuestas"].append([num_pe, [r_pe_txt]])
+                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
+            else:
+                if not any(q_it[0] == num_pe for q_it in curr_sup["preguntas"]) and resto_pe:
+                    curr_sup["preguntas"].append([num_pe, [resto_pe]])
+                curr_sup["respuestas"].append([num_pe, []])
+                if resto_pe.endswith("?"):
+                    sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
                 else:
-                    curr_sup["respuestas"].append([1, [resto_sol]])
+                    sub_modo_actual = "PREGUNTA_EXPLICITA_HEADER"
             continue
 
+        if sub_modo_actual == "PREGUNTA_EXPLICITA_HEADER":
+            m_sol_in = pat_sol_hdr.match(l)
+            if m_sol_in:
+                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
+                resto_s = (m_sol_in.group(1) or "").strip()
+                if resto_s and curr_sup["respuestas"]:
+                    curr_sup["respuestas"][-1][1].append(resto_s)
+                continue
+            if l.endswith("?"):
+                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
+                continue
+            m_q_then_r = re.search(
+                r'^(.*?\?)\s*(?:(?:Respuesta(?:\s+y\s+Fundamento\s+Jur[íi]dico)?|Soluci[óo]n)\s*:\s*)?(.+)$',
+                l,
+                flags=re.IGNORECASE
+            )
+            if m_q_then_r:
+                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
+                curr_sup["respuestas"][-1][1].append(m_q_then_r.group(2).strip())
+                continue
+
+        # 2) Detectar encabezado 'Solución:' o 'Respuesta y Fundamento Jurídico:'
+        m_sol = pat_sol_hdr.match(l)
+        if m_sol and len(curr_sup["preguntas"]) >= 1:
+            resto_sol = (m_sol.group(1) or "").strip()
+            if sub_modo_actual in ("PREGUNTA_EXPLICITA_HEADER", "PREGUNTA_EXPLICITA_RESP") and curr_sup["respuestas"]:
+                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
+                if resto_sol:
+                    curr_sup["respuestas"][-1][1].append(resto_sol)
+                continue
+            elif not curr_sup["en_solucion"]:
+                curr_sup["en_solucion"] = True
+                sub_modo_actual = "SOLUCION_NUMERADA"
+                if resto_sol:
+                    m_n = pat_num_item.match(resto_sol)
+                    if m_n:
+                        curr_sup["respuestas"].append([int(m_n.group(1)), [m_n.group(2).strip()]])
+                    else:
+                        curr_sup["respuestas"].append([1, [resto_sol]])
+                continue
+
+        if sub_modo_actual == "PREGUNTA_EXPLICITA_RESP":
+            l_clean_rfj = re.sub(
+                r'^(?:Respuesta(?:\s+y\s+Fundamento\s+Jur[íi]dico)?|Fundamento\s+Jur[íi]dico)\s*:\s*',
+                '',
+                l,
+                flags=re.IGNORECASE
+            ).strip()
+            if l_clean_rfj and curr_sup["respuestas"]:
+                curr_sup["respuestas"][-1][1].append(l_clean_rfj)
+            continue
+
+        # 3) Flujo para preguntas numeradas 1., 2., 3. y soluciones numeradas 1., 2., 3. (ej. Tema 61)
         m_num = pat_num_item.match(l)
         if not curr_sup["en_solucion"]:
             if m_num:
@@ -3251,6 +3329,7 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                     mn_sub = pat_num_item.match(pq.strip())
                     if mn_sub:
                         curr_sup["preguntas"].append([int(mn_sub.group(1)), [mn_sub.group(2).strip()]])
+                sub_modo_actual = "PREGUNTAS_LISTA"
             else:
                 if not curr_sup["preguntas"]:
                     curr_sup["preambulo"].append(l)
@@ -3561,7 +3640,7 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
             resp_partes = []
             for rp_obj in paras_obj[idx_r:]:
                 rp_limpio = re.sub(
-                    r'^(?:RESPUESTA(?:\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?|EXPLICACI[ÓO]N(?:\s+DETALLADA)?)\s*:\s*',
+                    r'^(?:RESPUESTA(?:\s+Y\s+FUNDAMENTO\s+JUR[ÍI]DICO|\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?|EXPLICACI[ÓO]N(?:\s+DETALLADA)?)\s*:\s*',
                     '',
                     rp_obj["text"],
                     flags=re.IGNORECASE
@@ -3596,7 +3675,7 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
             resp_partes = []
             for rp in paras[idx_r:]:
                 rp_limpio = re.sub(
-                    r'^(?:RESPUESTA(?:\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?|EXPLICACI[ÓO]N)\s*:\s*',
+                    r'^(?:RESPUESTA(?:\s+Y\s+FUNDAMENTO\s+JUR[ÍI]DICO|\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?|EXPLICACI[ÓO]N)\s*:\s*',
                     '',
                     rp,
                     flags=re.IGNORECASE
@@ -3629,7 +3708,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     num_paginas_pdf = 0
 
     if not es_docx and modo_u in ("TODOS", "SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
-        # 1. Verificar primero si es un documento de Supuestos con bloque de preguntas -> 'Solución' -> bloque de respuestas (ej. TEMA 61 JUBILACIÓN)
+        # 1. Verificar primero si es un documento de Supuestos con bloque de preguntas -> 'Solución' o 'Pregunta X: ... Respuesta y Fundamento Jurídico:' (ej. TEMA 61 JUBILACIÓN y TEMA 62 MUERTE Y SUPERVIVENCIA)
         supuestos_bloque_sol = _extraer_supuestos_con_bloque_solucion(file_bytes)
         if supuestos_bloque_sol:
             return supuestos_bloque_sol
@@ -3869,9 +3948,12 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 re.IGNORECASE
             )
             pat_exp_sup = re.compile(r'^(?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*[:\.]?\s*(.*)$', re.IGNORECASE)
-            pat_resp_tec = re.compile(r'^(?:#\s*)?RESPUESTA(?:\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?\s*[:\.]?\s*(.*)$', re.IGNORECASE)
+            pat_resp_tec = re.compile(
+                r'^(?:#\s*)?RESPUESTA(?:\s+Y\s+FUNDAMENTO\s+JUR[ÍI]DICO|\s+T[ÉE]CNICA|\s+OFICIAL|\s+MODELO)?\s*[:\.]?\s*(.*)$',
+                re.IGNORECASE
+            )
             pat_nuevo_supuesto_bloque = re.compile(
-                r'^(?:#\s*)?(?:(?:SUPUESTO|CASO)(?:\s+PR[ÁA]CTICO)?\s+(?:[A-Z]|\d+|[IVX]+)\b(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|La\s+empresa|La\s+mercantil|La\s+sociedad|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+\(\d+\s*a[ñn]os\)).*)$'
+                r'^(?:#\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|La\s+empresa|La\s+mercantil|La\s+sociedad|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+\(\d+\s*a[ñn]os\)).*)$'
             )
 
             def _construir_preambulo_texto(lista_lineas):
@@ -4037,6 +4119,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
 
 PDFQuizParser.parse_abiertas_gestion = staticmethod(_parse_abiertas_gestion_fn)
 # === FIN SECCIÓN 3C ===
+
 
 # === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
