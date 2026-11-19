@@ -2292,6 +2292,17 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         res_eo.extend(PDFQuizParser._atomizar_linea_test(m_empty_then_opt.group(2), is_bold))
         return res_eo
 
+    # 0c. Si un final corto de línea de explicación (como "149." o "1994." o "sistema.") viene pegado delante de un nuevo enunciado numerado (ej. "149. 3. En el análisis..."), separarlos
+    m_cola_corta_y_preg = re.match(
+        r'^((?:#\s*)?(?:\d{2,4}|[a-záéíóúñA-ZÁÉÍÓÚÑ]{2,20})\.)\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].{15,})$',
+        l
+    )
+    if m_cola_corta_y_preg:
+        res_cp = []
+        res_cp.extend(PDFQuizParser._atomizar_linea_test(m_cola_corta_y_preg.group(1), False))
+        res_cp.extend(PDFQuizParser._atomizar_linea_test(m_cola_corta_y_preg.group(2), is_bold))
+        return res_cp
+
     # 1. Si después de "(página X, tema Y)" viene pegada una nueva pregunta en la misma línea, dividirla
     m_post_pag = re.match(
         r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
@@ -2389,13 +2400,18 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
     while idx_c < n_c:
         t_c, b_c = lineas_pagina[idx_c]
         t_c_clean = PDFQuizParser._limpiar_marca_agua_linea(t_c).strip()
+        # No unir si el número termina en punto y la siguiente línea empieza ya por otro número de pregunta (ej. "149." seguido de "3. En el análisis...")
         if (
             idx_c + 1 < n_c and
             re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)$', t_c_clean, re.IGNORECASE)
         ):
             t_nx, b_nx = lineas_pagina[idx_c + 1]
             t_nx_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(t_nx)).strip()
-            if t_nx_clean and not re.match(r'^[a-dA-D][\)\.\-]\s', t_nx_clean):
+            if (
+                t_nx_clean and
+                not re.match(r'^[a-dA-D][\)\.\-]\s', t_nx_clean) and
+                not re.match(r'^(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)\s+', t_nx_clean, re.IGNORECASE)
+            ):
                 compactadas.append((f"{t_c_clean} {t_nx_clean}", b_c or b_nx))
                 idx_c += 2
                 continue
@@ -2700,7 +2716,6 @@ def _parse_test_fn(file_bytes, max_options=None):
             continue
 
         line_sin_h = re.sub(r'^#\s*', '', line).strip()
-        # Solo cortar el test si es un título de sección real (sin enunciado detrás de "Supuesto práctico:" en una pregunta numerada como "6. Supuesto práctico: Un trabajador...")
         if (
             len(line_sin_h) < 75 and
             not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', line_sin_h, re.IGNORECASE) and
@@ -2763,7 +2778,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                     (ya_cerro_con_pagina_tema and (num_cand > ultimo_num_pregunta or num_cand == 1)) or
                     (
                         aperturas_cita <= cierres_cita and
-                        not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:?\s*$', exp_actual_txt, re.IGNORECASE)) and
+                        not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:\s*$', exp_actual_txt, re.IGNORECASE)) and
                         (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4)
                     )
                 )
