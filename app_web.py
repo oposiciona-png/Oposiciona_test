@@ -3087,71 +3087,6 @@ _RESPALDO_TEMA_73_ABIERTAS = {
     ]
 }
 
-def _es_subepigrafe_o_subapartado_docx(t_raw):
-    """
-    Devuelve True si el texto corresponde a un subepígrafe o subapartado (ej. '1.1.', '1.2.1.',
-    '2.1 ', 'A)', 'a)', 'a.', '1)', 'Primero.', '•', '-') que SIEMPRE debe formar parte del
-    cuerpo del epígrafe principal y NUNCA abrir una pregunta de desarrollo independiente.
-    """
-    t = (t_raw or "").strip()
-    if not t:
-        return True
-    # Numeración decimal multinivel: 1.1, 1.1., 2.3.1, 4.2), etc.
-    if re.match(r'^\d+\.\d+', t):
-        return True
-    # Subapartados con letra o número con cierre de paréntesis: a), b), A), B), a., 1), 2), etc.
-    if re.match(r'^(?:[a-zA-Z][\)\.\-]\s+|\d+\)\s+|[•·▪■\-\*o]\s+)', t):
-        return True
-    # Subtítulos internos frecuentes dentro de un epígrafe (sin numeración de epígrafe principal)
-    if re.match(r'^(?:Subep[íi]grafe|Apartado|Letra|Punto)\s+', t, re.IGNORECASE):
-        return True
-    return False
-
-def _es_titulo_epigrafe_principal_docx(it, titulos_indice_set=None):
-    """
-    Determina si una línea de un documento Word (.docx) es un EPÍGRAFE PRINCIPAL del tema
-    (excluyendo subepígrafes 1.1, 1.2, 2.1, subapartados A), a), etc.).
-    """
-    t_raw = (it.get("text") or "").strip()
-    if not t_raw or len(t_raw) >= 200:
-        return False
-    if re.match(r'^TEMA\s+\d+', t_raw, re.IGNORECASE):
-        return False
-    if _es_subepigrafe_o_subapartado_docx(t_raw):
-        return False
-
-    # Si el documento tenía un índice/tabla de epígrafes al inicio y esta línea coincide con uno de los epígrafes principales del índice
-    t_norm = re.sub(r'\s+', ' ', t_raw).strip().upper()
-    if titulos_indice_set and t_norm in titulos_indice_set:
-        return True
-
-    style_name = (it.get("style") or "").lower()
-    # Si viene marcado con estilo Heading en Word, aceptar solo Heading 1 / Título 1 (y rechazar Heading 2, 3, 4 que son subepígrafes)
-    es_heading_2_o_inferior = bool(re.search(r'(?:heading|t[íi]tulo)\s*[2-9]', style_name))
-    if es_heading_2_o_inferior:
-        return False
-
-    # Patrón estricto de Epígrafe Principal de primer nivel:
-    # - "1. Concepto..." o "2.- Campo de aplicación..." (UN SOLO número entero seguido de punto/guion y espacio, NUNCA "1.1")
-    # - "EPÍGRAFE 1..." / "CAPÍTULO I..." / "I. ..." / "II. ..."
-    pat_epigrafe_nivel_1 = re.compile(
-        r'^(?:EP[ÍI]GRAFE\s+\d+\b|CAP[ÍI]TULO\s+[IVX\d]+\b|\d{1,2}(?!\.\d)[\.\-]\s+[A-ZÁÉÍÓÚÑ"«¡¿]|[IVX]{1,4}[\.\-]\s+[A-ZÁÉÍÓÚÑ"«¡¿])'
-    )
-
-    if pat_epigrafe_nivel_1.match(t_raw) and (it.get("is_bold") or it.get("is_heading")):
-        # Evitar confundir una frase normal larga en negrita que termina en punto con un título, salvo que sea claramente un título corto o en mayúsculas
-        if t_raw.endswith(".") and len(t_raw) > 130 and not t_raw.isupper():
-            return False
-        return True
-
-    # Si es Heading 1 (o is_heading sin subnivel) y no empieza por numeración de subepígrafe
-    if it.get("is_heading") and not es_heading_2_o_inferior:
-        # Si ya sabemos que el documento numera sus epígrafes principales ("1. ...", "2. ..."), exigir que lleve numeración de primer nivel o sea título en mayúsculas
-        if not t_raw.endswith(".") or t_raw.isupper() or pat_epigrafe_nivel_1.match(t_raw):
-            return True
-
-    return False
-
 def _es_linea_cabecera_tema_repetida(s_txt):
     t = re.sub(r'^#\s*', '', (s_txt or "")).strip()
     if not t:
@@ -3842,73 +3777,112 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 titulo_documento = t_cand
                 break
         if modo_u in ("TODOS", "DESARROLLO", "PREGUNTA DE DESARROLLO"):
-            # Pre-detectar si existe un índice al inicio cuyos títulos principales se repiten luego en el cuerpo
-            conteo_lineas_cortas = {}
-            for it_c in lineas_estructuradas:
-                tc = re.sub(r'\s+', ' ', (it_c.get("text") or "").strip()).upper()
-                if 4 <= len(tc) < 180 and not _es_subepigrafe_o_subapartado_docx(tc):
-                    conteo_lineas_cortas[tc] = conteo_lineas_cortas.get(tc, 0) + 1
-            titulos_repetidos_indice = {k_t for k_t, v_c in conteo_lineas_cortas.items() if v_c >= 2 and re.match(r'^(?:EP[ÍI]GRAFE\s+\d+|CAP[ÍI]TULO\s+[IVX\d]+|\d{1,2}(?!\.\d)[\.\-\s]|[IVX]{1,4}[\.\-\s])', k_t)}
+            pat_epigrafe_explicito = re.compile(
+                r'^(?:EP[ÍI]GRAFE\s+(\d{1,2})\s*[:\.\-–]\s*(.+))$',
+                re.IGNORECASE
+            )
+
+            # Comprobar si el documento utiliza encabezados explícitos 'EPÍGRAFE X: <Título>' (estándar en todos los temas .docx de DESARROLLO)
+            total_lineas_epigrafe_explicito = sum(
+                1 for it_c in lineas_estructuradas
+                if pat_epigrafe_explicito.match(re.sub(r'\s*↑\s*$', '', (it_c.get("text") or "").strip()).strip())
+            )
+            usar_solo_epigrafe_explicito = (total_lineas_epigrafe_explicito >= 2)
 
             epigrafes_docx = []
             curr_epi = None
-            preambulo_indice = []
-            en_indice = False
+            en_desglose_inicial = False
 
             for idx_it, it in enumerate(lineas_estructuradas):
-                t_raw = it["text"].strip()
+                t_orig = (it.get("text") or "").strip()
+                if not t_orig:
+                    continue
+                t_raw = re.sub(r'\s*↑\s*$', '', t_orig).strip()
                 if not t_raw:
                     continue
                 if PDFQuizParser._es_basura_cabecera_o_pie(t_raw, titulo_documento):
                     continue
                 if titulo_documento and t_raw.upper() == titulo_documento.upper():
                     continue
-                if re.match(r'^(?:Tabla\s+de\s+referencias|Referencias\s+normativas|[ÍI]NDICE\b)', t_raw, re.IGNORECASE):
-                    if curr_epi is None:
-                        en_indice = True
+                if re.match(r'^(?:DESGLOSE\s+OFICIAL\s+DE\s+EP[ÍI]GRAFES|Tabla\s+de\s+referencias|Referencias\s+normativas|[ÍI]NDICE\b)', t_raw, re.IGNORECASE):
+                    if curr_epi is None or len(curr_epi.get("body", [])) == 0:
+                        en_desglose_inicial = True
                     continue
 
-                es_titulo_epigrafe = _es_titulo_epigrafe_principal_docx(it, titulos_repetidos_indice)
+                if usar_solo_epigrafe_explicito:
+                    m_ep = pat_epigrafe_explicito.match(t_raw)
+                    if m_ep:
+                        num_ep = int(m_ep.group(1))
+                        tit_ep = m_ep.group(2).strip()
+                        # Si esta línea pertenece a la tabla inicial 'DESGLOSE OFICIAL DE EPÍGRAFES PARA LA EXPOSICIÓN:' (y ese mismo Epígrafe X vuelve a aparecer más adelante como título del desarrollo), ignorar la línea del índice
+                        reaparece_mas_adelante = any(
+                            bool(pat_epigrafe_explicito.match(re.sub(r'\s*↑\s*$', '', (it2.get("text") or "").strip()).strip()))
+                            and int(pat_epigrafe_explicito.match(re.sub(r'\s*↑\s*$', '', (it2.get("text") or "").strip()).strip()).group(1)) == num_ep
+                            for it2 in lineas_estructuradas[idx_it + 1:]
+                        )
+                        if (en_desglose_inicial or curr_epi is None or len(curr_epi.get("body", [])) == 0) and "↑" not in t_orig and reaparece_mas_adelante:
+                            en_desglose_inicial = True
+                            continue
 
-                if es_titulo_epigrafe:
-                    # Si aparece al principio (en el índice) y vuelve a aparecer más adelante como encabezado del desarrollo, saltar la ocurrencia del índice
-                    t_norm_it = re.sub(r'\s+', ' ', t_raw).strip().upper()
-                    aparece_mas_adelante = any(
-                        re.sub(r'\s+', ' ', it2["text"].strip()).upper() == t_norm_it
-                        for it2 in lineas_estructuradas[idx_it + 1:]
-                    )
-                    if (en_indice or curr_epi is None or len( curr_epi.get("body", []) ) == 0) and len(t_raw) < 175 and aparece_mas_adelante:
-                        en_indice = True
-                        preambulo_indice.append(t_raw)
-                        continue
-
-                    en_indice = False
-                    if curr_epi and curr_epi["body"]:
-                        cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
-                        if len(cuerpo_txt) >= 40:
-                            epigrafes_docx.append({
-                                "is_open": True,
-                                "tipo_abierta": "DESARROLLO",
-                                "preamble": titulo_documento,
-                                "question_text": f"EPÍGRAFE {len(epigrafes_docx) + 1}: {curr_epi['title']}",
-                                "options": [],
-                                "answer": -1,
-                                "official_answer": cuerpo_txt,
-                                "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
-                            })
-                    curr_epi = {"title": t_raw, "body": []}
+                        en_desglose_inicial = False
+                        if curr_epi and curr_epi["body"]:
+                            cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
+                            if len(cuerpo_txt) >= 40:
+                                epigrafes_docx.append({
+                                    "is_open": True,
+                                    "tipo_abierta": "DESARROLLO",
+                                    "preamble": titulo_documento,
+                                    "question_text": curr_epi["title"],
+                                    "options": [],
+                                    "answer": -1,
+                                    "official_answer": cuerpo_txt,
+                                    "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                                })
+                        curr_epi = {
+                            "num": num_ep,
+                            "title": f"EPÍGRAFE {num_ep}: {tit_ep}",
+                            "body": []
+                        }
+                    else:
+                        if curr_epi is not None:
+                            en_desglose_inicial = False
+                            curr_epi["body"].append(t_raw)
                 else:
-                    if curr_epi is not None:
+                    # Fallback solo para documentos .docx antiguos que no utilicen la etiqueta 'EPÍGRAFE X:'
+                    es_titulo_fallback = (
+                        (it.get("is_heading") or it.get("is_bold"))
+                        and len(t_raw) < 165
+                        and not t_raw.endswith(".")
+                        and not re.match(r'^\d+\.\d+', t_raw)
+                        and re.match(r'^(?:CAP[ÍI]TULO\s+[IVX\d]+|[IVX]{1,4}[\.\-\)]\s+[A-ZÁÉÍÓÚÑ])', t_raw)
+                    )
+                    if es_titulo_fallback:
+                        if curr_epi and curr_epi["body"]:
+                            cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
+                            if len(cuerpo_txt) >= 40:
+                                epigrafes_docx.append({
+                                    "is_open": True,
+                                    "tipo_abierta": "DESARROLLO",
+                                    "preamble": titulo_documento,
+                                    "question_text": f"EPÍGRAFE {len(epigrafes_docx) + 1}: {curr_epi['title']}",
+                                    "options": [],
+                                    "answer": -1,
+                                    "official_answer": cuerpo_txt,
+                                    "explanation": f"Desarrollo oficial conforme a la normativa consolidada vigente ({titulo_documento or 'Temario Oficial de Gestión de la Seguridad Social'})."
+                                })
+                        curr_epi = {"title": t_raw, "body": []}
+                    elif curr_epi is not None:
                         curr_epi["body"].append(t_raw)
 
             if curr_epi and curr_epi["body"]:
                 cuerpo_txt = "\n\n".join(curr_epi["body"]).strip()
                 if len(cuerpo_txt) >= 40:
+                    tit_final_ep = curr_epi["title"] if re.match(r'^EP[ÍI]GRAFE\s+\d+', curr_epi["title"], re.IGNORECASE) else f"EPÍGRAFE {len(epigrafes_docx) + 1}: {curr_epi['title']}"
                     epigrafes_docx.append({
                         "is_open": True,
                         "tipo_abierta": "DESARROLLO",
                         "preamble": titulo_documento,
-                        "question_text": f"EPÍGRAFE {len(epigrafes_docx) + 1}: {curr_epi['title']}",
+                        "question_text": tit_final_ep,
                         "options": [],
                         "answer": -1,
                         "official_answer": cuerpo_txt,
