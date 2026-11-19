@@ -3090,13 +3090,13 @@ _RESPALDO_TEMA_73_ABIERTAS = {
 def _es_linea_cabecera_tema_repetida(s_txt):
     """
     Filtra cabeceras repetidas en la parte superior de cada página como:
-    'ESPECÍFICO TEMA 51 - Constitución y TRLGSS' o 'GESTION DE LA SEGURIDAD SOCIAL ESPECÍFICO TEMA 51...'
+    'ESPECÍFICO TEMA 51 - Constitución y TRLGSS' o 'GESTION DE LA SEGURIDAD SOCIAL TEMA 52...'
     """
     t = re.sub(r'^#\s*', '', (s_txt or "")).strip()
     if not t:
         return True
     if re.match(
-        r'^(?:GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s+)?(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+\s*[\-–:]\s*[^\.\?:]{3,65}$',
+        r'^(?:GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s+)?(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+\s*[\-–:]\s*[^\.\?:]{3,85}$',
         t,
         re.IGNORECASE
     ):
@@ -3106,9 +3106,7 @@ def _es_linea_cabecera_tema_repetida(s_txt):
 def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
     """
     Agrupa fragmentos de texto de una misma página del PDF cuya coordenada vertical y0
-    difiere en menos de `tolerancia_y` puntos (evitando que palabras sueltas de líneas
-    justificadas como 'carrera de cotización?' o 'cuál es la más beneficiosa.' queden
-    desordenadas), y los une de izquierda a derecha según su coordenada horizontal x0.
+    difiere en menos de `tolerancia_y` puntos y los une de izquierda a derecha según x0.
     """
     if not items_raw:
         return []
@@ -3137,6 +3135,86 @@ def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
             lineas_unidas.append((y_min, x_min, txt_unido, is_b))
     return lineas_unidas
 
+def _es_inicio_nuevo_planteamiento_supuesto(idx_ls, lineas_sup, sub_estado, preambulo_lineas, curr_c, pat_cuestion, pat_nuevo_supuesto_bloque):
+    """
+    Detecta si la línea `idx_ls` inicia un nuevo planteamiento de supuesto práctico dentro
+    de un documento multi-supuesto:
+    - Tanto cuando lleva etiqueta explícita ('B) Doña Carmen...', 'SUPUESTO 2', etc.)
+    - Como cuando empieza directamente tras el cierre de una respuesta (ej. tras la cuestión 10
+      en TEMA 52: 'La mercantil "TechNova S.A.", constituida jurídicamente como sociedad de capital...')
+      introduciendo nuevas empresas/personajes y viñetas para el siguiente bloque de preguntas (11..20).
+    """
+    l_s = re.sub(r'^#\s*', '', lineas_sup[idx_ls][0]).strip()
+    if pat_nuevo_supuesto_bloque.match(l_s) and (sub_estado != "PREAMBULO" or not preambulo_lineas):
+        return True
+
+    if sub_estado not in ("EXPLICACION", "RESPUESTA") or curr_c is None:
+        return False
+
+    lineas_resp_act = curr_c["exp"] if sub_estado == "EXPLICACION" else curr_c["resp"]
+    if not lineas_resp_act:
+        return False
+
+    ult_linea_resp = lineas_resp_act[-1].rstrip()
+    if not ult_linea_resp.endswith((".", '."', '".', "»", ")")):
+        return False
+
+    if not re.match(
+        r'^(?:[A-Z][\)\.\-]\s+)?(?:La\s+(?:mercantil|empresa|sociedad|entidad|cooperativa|asesor[íi]a|mutua|compa[ñn][íi]a|unidad\s+familiar)|El\s+(?:empresario|trabajador|bufete|ciudadano)|(?:Don|Do[ñn]a|D\.|D\.ª|Dª)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+\(\d+\s*a[ñn]os\))\b',
+        l_s
+    ):
+        return False
+
+    ult_num = curr_c["num"]
+    bloque_cand = []
+    prox_q_lineas = []
+    encontrada_prox_q = False
+    for j in range(idx_ls, min(len(lineas_sup), idx_ls + 45)):
+        lj = re.sub(r'^#\s*', '', lineas_sup[j][0]).strip()
+        mc = pat_cuestion.match(lj)
+        if mc and int(mc.group(1)) in (ult_num + 1, 1):
+            encontrada_prox_q = True
+            prox_q_lineas.append(lj)
+            for k_q in range(j + 1, min(len(lineas_sup), j + 4)):
+                lk = re.sub(r'^#\s*', '', lineas_sup[k_q][0]).strip()
+                prox_q_lineas.append(lk)
+                if lk.endswith(("?", ":")):
+                    break
+            break
+        bloque_cand.append(lj)
+
+    if not encontrada_prox_q or len(bloque_cand) < 4:
+        return False
+
+    txt_bloque = " ".join(bloque_cand)
+    if re.search(
+        r'\b(?:art[íi]culos?\s+\d|TRLGSS|LGSS|Real\s+Decreto|Orden\s+(?:de\s+\d|PJC|TAS|TIN)|Ley\s+\d+/\d{4}|jurisprudencia|sentencia|presunci[óo]n\s+iuris)\b',
+        txt_bloque,
+        re.IGNORECASE
+    ):
+        return False
+
+    tiene_estructura_planteamiento = bool(
+        any(b_l.startswith(("•", "-")) for b_l in bloque_cand) or
+        re.search(
+            r'(?:estructura\s+org[áa]nica|accionarial|prestan\s+servicios|cuenta\s+con\s+una\s+plantilla|son\s+c[óo]nyuges|posee\s+el\s+\d+\s*%\s+del\s+capital)',
+            txt_bloque,
+            re.IGNORECASE
+        )
+    )
+    if tiene_estructura_planteamiento:
+        return True
+
+    txt_prox_q = " ".join(prox_q_lineas)
+    pre_anterior = curr_c.get("preamble") or ""
+    entidades_nuevas = re.findall(r'(?:"([^"]{3,40})"|\b((?:Don|Do[ñn]a)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+))', txt_bloque)
+    for emp_q, pers_q in entidades_nuevas:
+        nom_ent = (emp_q or pers_q).strip()
+        if nom_ent and nom_ent not in pre_anterior and nom_ent in txt_prox_q:
+            return True
+
+    return False
+
 def _extraer_supuestos_con_bloque_solucion(file_bytes):
     """
     Ruta especializada para PDFs en los que aparecen uno o varios supuestos ('Supuesto 1:',
@@ -3144,8 +3222,6 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
     de preguntas numeradas (1., 2., 3., 4.), y a continuación:
     - Variedad 1 (ej. TEMA 61 JUBILACION): un encabezado 'Solución' / 'Solución:' seguido de las respuestas numeradas 1., 2., 3.
     - Variedad 2 (ej. TEMA 62 MUERTE Y SUPERVIVENCIA): bloques 'Pregunta 1: ... Respuesta y Fundamento Jurídico: ... Pregunta 2: ...'
-    Genera una cuestión independiente por cada pregunta manteniendo el planteamiento del supuesto
-    en `preamble` y su única explicación correspondiente en `official_answer` / `explanation`.
     """
     if PDFQuizParser.es_archivo_docx(file_bytes):
         return []
@@ -3414,11 +3490,6 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
     return resultado
 
 def _es_inicio_respuesta_supuesto_indiv(p_txt):
-    """
-    Determina si un párrafo dentro de un supuesto individual ('SUPUESTO PRÁCTICO N.º X')
-    es todavía parte del planteamiento/pregunta (devuelve False) o es ya el inicio de la
-    respuesta oficial (devuelve True).
-    """
     t = re.sub(r'^#\s*', '', (p_txt or "")).strip()
     if not t:
         return False
@@ -3448,12 +3519,6 @@ def _es_inicio_respuesta_supuesto_indiv(p_txt):
     return False
 
 def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
-    """
-    Ruta especializada para PDFs de supuestos individuales independientes (un planteamiento por pregunta):
-    - Modalidad A (ej. PRÁCTICA TEMA 55): 'Cuestión X: <Tema>', seguido del párrafo de planteamiento/pregunta y respuesta sin etiqueta EXPLICACION.
-    - Modalidad B (ej. PRÁCTICO TEMA 56): '1.- <Planteamiento>', seguido del párrafo de pregunta '¿...?' y la respuesta (con o sin etiqueta 'RESPUESTA:').
-    - Modalidad C (ej. CASO PRÁCTICO TEMA 57 IT): 'SUPUESTO PRÁCTICO N.º X:', seguido del planteamiento, la pregunta (en negrita o texto) y la respuesta hasta el siguiente 'SUPUESTO PRÁCTICO N.º Y'.
-    """
     if PDFQuizParser.es_archivo_docx(file_bytes):
         return []
     try:
@@ -3971,7 +4036,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     if (
                         not parrafos_pre or
                         parrafos_pre[-1].rstrip().endswith((".", ":")) or
-                        re.match(r'^(?:[A-Z][\)\.\-]\s+|\d+[\.\)]\s+|[•·\-]\s+|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo|otro\s+lado)|Asimismo|Finalmente|Tres\s+a[ñn]os\s+m[áa]s\s+tarde|El\s+\d+\s+de\s+)', lp)
+                        re.match(r'^(?:[A-Z][\)\.\-]\s+|\d+[\.\)]\s+|[•·\-]\s+|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo|otro\s+lado)|Asimismo|Finalmente|Tres\s+a[ñn]os\s+m[áa]s\s+tarde|El\s+\d+\s+de\s+|Paralelamente\b|Además\s+de\b|En\s+el\s+[áa]mbito\b)', lp)
                     ):
                         parrafos_pre.append(lp)
                     else:
@@ -3983,7 +4048,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 if not l_s or re.match(r'^(?:CUESTIONES(?:\s+PR[ÁA]CTICAS)?|PREGUNTAS\s+DEL\s+SUPUESTO|PREGUNTAS?\s+DE\s+RESERVA)\s*:?\s*$', l_s, re.IGNORECASE):
                     continue
 
-                if pat_nuevo_supuesto_bloque.match(l_s) and (sub_estado != "PREAMBULO" or not preambulo_lineas):
+                if _es_inicio_nuevo_planteamiento_supuesto(idx_ls, lineas_sup, sub_estado, preambulo_lineas, curr_c, pat_cuestion, pat_nuevo_supuesto_bloque):
                     if curr_c is not None:
                         cuestiones_sup.append(curr_c)
                         curr_c = None
@@ -4021,7 +4086,6 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         txt_c = m_in_c.group(1).strip()
                         cola_exp_c = m_in_c.group(2).strip()
 
-                    # Inspeccionar el bloque completo de este ítem numerado hasta el siguiente ítem numerado para distinguir apartados del planteamiento (1. En primer lugar..., 2. En segundo lugar..., 3. En el plano institucional...) de la primera pregunta real
                     lineas_bloque_item = [txt_c]
                     for j_look in range(idx_ls + 1, min(len(lineas_sup), idx_ls + 22)):
                         l_next_look = re.sub(r'^#\s*', '', lineas_sup[j_look][0]).strip()
@@ -7441,7 +7505,16 @@ else:
         "text-align: justify !important;"
     )
 
+    # Contar cuántos planteamientos distintos de supuesto existen en el documento para numerarlos si hay varios
+    preambulos_distintos_sup = []
+    for q_item_p in st.session_state.questions:
+        pr_it = (q_item_p.get("preamble") or "").strip()
+        if pr_it and q_item_p.get("tipo_abierta") == "SUPUESTO" and pr_it not in preambulos_distintos_sup:
+            preambulos_distintos_sup.append(pr_it)
+    total_bloques_supuestos = len(preambulos_distintos_sup)
+
     ultimo_preambulo_mostrado = None
+    contador_bloque_supuesto = 0
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if q.get("is_open") else "Pregunta")
@@ -7467,11 +7540,22 @@ else:
             ph = f"<div style='{estilo_tipografia_supuesto_res} margin-bottom: 6px;'>{re.sub(r'\n+', '<br><br>', pre_actual)}</div>"
         elif pre_actual and q.get("tipo_abierta") == "SUPUESTO" and pre_actual != ultimo_preambulo_mostrado:
             ultimo_preambulo_mostrado = pre_actual
+            contador_bloque_supuesto += 1
             pre_html_res = re.sub(r'\n+', '<br><br>', pre_actual)
+            titulo_bloque_sup = (
+                f"SUPUESTO PRÁCTICO {contador_bloque_supuesto} DE {total_bloques_supuestos}"
+                if total_bloques_supuestos > 1 else
+                "SUPUESTO PRÁCTICO"
+            )
+            separador_sup_previo = (
+                "<hr style='margin: 22px 0px 16px 0px; border: 0; border-top: 3px solid #1E3A8A;'>"
+                if contador_bloque_supuesto > 1 else ""
+            )
             ph = (
-                f"<div style='margin-bottom:10px;'>"
-                f"<div style='{estilo_tipografia_supuesto_res} text-align:center !important; margin-bottom:5px; text-transform:uppercase;'>SUPUESTO PRÁCTICO</div>"
-                f"<div style='background-color:#E6E6E6; border:1px solid #D4D4D8; border-radius:6px; padding:14px 18px; {estilo_tipografia_supuesto_res}'>{pre_html_res}</div>"
+                f"{separador_sup_previo}"
+                f"<div style='margin-bottom:14px;'>"
+                f"<div style='{estilo_tipografia_supuesto_res} text-align:center !important; margin-bottom:6px; text-transform:uppercase; color:#1E3A8A !important;'>📋 {titulo_bloque_sup}</div>"
+                f"<div style='background-color:#E6E6E6; border:1.5px solid #94A3B8; border-radius:6px; padding:14px 18px; {estilo_tipografia_supuesto_res}'>{pre_html_res}</div>"
                 f"</div>"
             )
 
