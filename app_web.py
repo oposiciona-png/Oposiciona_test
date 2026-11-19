@@ -3086,6 +3086,242 @@ _RESPALDO_TEMA_73_ABIERTAS = {
     ]
 }
 
+def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
+    """
+    Agrupa fragmentos de texto de una misma página del PDF cuya coordenada vertical y0
+    difiere en menos de `tolerancia_y` puntos (evitando que palabras sueltas de líneas
+    justificadas como 'carrera de cotización?' o 'cuál es la más beneficiosa.' queden
+    desordenadas), y los une de izquierda a derecha según su coordenada horizontal x0.
+    """
+    if not items_raw:
+        return []
+    items_y = sorted(items_raw, key=lambda it: (it[0], it[1]))
+    bandas = []
+    curr_band = [items_y[0]]
+    for it in items_y[1:]:
+        y_ref = curr_band[0][0]
+        if abs(it[0] - y_ref) <= tolerancia_y:
+            curr_band.append(it)
+        else:
+            bandas.append(curr_band)
+            curr_band = [it]
+    if curr_band:
+        bandas.append(curr_band)
+
+    lineas_unidas = []
+    for b in bandas:
+        b.sort(key=lambda it: it[1])
+        y_min = min(it[0] for it in b)
+        x_min = b[0][1]
+        txt_unido = " ".join(it[2].strip() for it in b if it[2].strip())
+        txt_unido = re.sub(r'\s+', ' ', txt_unido).strip()
+        is_b = any(it[3] for it in b)
+        if txt_unido:
+            lineas_unidas.append((y_min, x_min, txt_unido, is_b))
+    return lineas_unidas
+
+def _extraer_supuestos_con_bloque_solucion(file_bytes):
+    """
+    Ruta especializada para PDFs en los que aparecen uno o varios supuestos ('Supuesto 1:',
+    'A) Supuesto 1:', 'Supuesto A:', etc.), seguidos del planteamiento, luego todas las
+    preguntas numeradas (1., 2., 3.) agrupadas antes de la palabra 'Solución' / 'Solución:'
+    y finalmente las respuestas numeradas (1., 2., 3.) debajo de 'Solución' (ej. TEMA 61 JUBILACION).
+    Genera una cuestión independiente por cada pregunta manteniendo el planteamiento del supuesto
+    en `preamble`.
+    """
+    if PDFQuizParser.es_archivo_docx(file_bytes):
+        return []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception:
+        return []
+
+    lineas_doc = []
+    for page in doc:
+        items_p = []
+        blocks = page.get_text("dict").get("blocks", [])
+        for b in blocks:
+            for l in b.get("lines", []):
+                bbox = l.get("bbox", (0, 0, 0, 0))
+                y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
+                spans = l.get("spans", [])
+                txt_l = "".join(s.get("text", "") for s in spans).strip()
+                if not txt_l:
+                    continue
+                ch_t = sum(len(s.get("text", "").strip()) for s in spans)
+                ch_b = sum(
+                    len(s.get("text", "").strip())
+                    for s in spans
+                    if ("bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16))
+                )
+                is_b = ch_t > 0 and (ch_b / ch_t) >= 0.55
+                s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
+                if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                    continue
+                if re.match(r'^(?:#\s*)?(?:PR[ÁA]CTIC[AO]S?|CASOS?\s+PR[ÁA]CTICOS?)\s+(?:TEMA\s+\d+|JUBILACI[ÓO]N).*$', s_clean, re.IGNORECASE):
+                    continue
+                items_p.append((y0, x0, s_clean, is_b))
+
+        for _, _, s_unida, _ in _agrupar_lineas_por_banda_horizontal_pdf(items_p, tolerancia_y=5.2):
+            lineas_doc.append(s_unida)
+
+    doc.close()
+
+    if not lineas_doc:
+        return []
+
+    # Si el documento contiene opciones tipo test a), b), c), descartar esta ruta
+    if sum(1 for l_t in lineas_doc if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+\S+', l_t)) >= 6:
+        return []
+
+    pat_sup_hdr = re.compile(
+        r'^(?:#\s*)?(?:([A-Z])[\)\.\-]\s*)?(?:SUPUESTO|CASO)(?:\s+PR[ÁA]CTICO)?\s+(?:N\.?\s*[º°]?\s*)?([A-Z0-9IVX]+)\s*[:\.\-]?\s*(.*)$',
+        re.IGNORECASE
+    )
+    pat_sol_hdr = re.compile(
+        r'^(?:#\s*)?(?:SOLUCI[ÓO]N(?:ES)?|RESPUESTAS?(?:\s+OFICIAL(?:ES)?|\s+T[ÉE]CNICAS?)?)\s*[:\.\-]?\s*(.*)$',
+        re.IGNORECASE
+    )
+    pat_num_item = re.compile(
+        r'^(?:#\s*)?(?:Pregunta\s+|Cuesti[óo]n\s+)?(\d{1,2})(?!\d)\s*[\.\-\)]\s+(["«\'¿¡A-ZÁÉÍÓÚÑ].*)$',
+        re.IGNORECASE
+    )
+
+    # Verificar que exista al menos un encabezado 'Solución' o 'Respuestas' explícito
+    n_sol_headers = sum(1 for l_t in lineas_doc if pat_sol_hdr.match(re.sub(r'^#\s*', '', l_t).strip()))
+    if n_sol_headers < 1:
+        return []
+
+    supuestos_bloques = []
+    curr_sup = None
+
+    for l_raw in lineas_doc:
+        l = re.sub(r'^#\s*', '', l_raw).strip()
+        if not l:
+            continue
+
+        m_sub_preg = re.match(r'^(?:[A-Z][\.\)]\s*)?Preguntas(?:\s+de\s+Examen)?\s*:\s*(.*)$', l, re.IGNORECASE)
+        if m_sub_preg:
+            if m_sub_preg.group(1).strip():
+                l = m_sub_preg.group(1).strip()
+            else:
+                continue
+
+        m_sup = pat_sup_hdr.match(l)
+        if m_sup and (curr_sup is None or curr_sup["en_solucion"] or len(curr_sup["preguntas"]) > 0):
+            if curr_sup is not None:
+                supuestos_bloques.append(curr_sup)
+            letra_pref = (m_sup.group(1) or "").strip()
+            etiqueta_sup = m_sup.group(2).strip()
+            resto_sup = m_sup.group(3).strip()
+            pref_titulo = f"{letra_pref}) Supuesto {etiqueta_sup}:" if letra_pref else f"Supuesto {etiqueta_sup}:"
+            curr_sup = {
+                "id": etiqueta_sup,
+                "header": pref_titulo,
+                "preambulo": [resto_sup] if resto_sup else [],
+                "preguntas": [],
+                "respuestas": [],
+                "en_solucion": False
+            }
+            continue
+
+        if curr_sup is None:
+            continue
+
+        m_sol = pat_sol_hdr.match(l)
+        if m_sol and len(curr_sup["preguntas"]) >= 1 and not curr_sup["en_solucion"]:
+            curr_sup["en_solucion"] = True
+            resto_sol = m_sol.group(1).strip()
+            if resto_sol:
+                m_n = pat_num_item.match(resto_sol)
+                if m_n:
+                    curr_sup["respuestas"].append([int(m_n.group(1)), [m_n.group(2).strip()]])
+                else:
+                    curr_sup["respuestas"].append([1, [resto_sol]])
+            continue
+
+        m_num = pat_num_item.match(l)
+        if not curr_sup["en_solucion"]:
+            if m_num:
+                num_q = int(m_num.group(1))
+                txt_q = m_num.group(2).strip()
+                partes_q = re.split(r'(?<=[.?!])\s+(?=\d{1,2}\s*[\.\-\)]\s+[¿¡A-ZÁÉÍÓÚÑ])', f"{num_q}. {txt_q}")
+                for pq in partes_q:
+                    mn_sub = pat_num_item.match(pq.strip())
+                    if mn_sub:
+                        curr_sup["preguntas"].append([int(mn_sub.group(1)), [mn_sub.group(2).strip()]])
+            else:
+                if not curr_sup["preguntas"]:
+                    curr_sup["preambulo"].append(l)
+                else:
+                    ult_num_q = curr_sup["preguntas"][-1][0]
+                    m_peg_q = re.search(rf'^(.*)\s+({ult_num_q + 1}\s*[\.\-\)]\s+[¿¡A-ZÁÉÍÓÚÑ].*)$', l)
+                    if m_peg_q:
+                        curr_sup["preguntas"][-1][1].append(m_peg_q.group(1).strip())
+                        mn2 = pat_num_item.match(m_peg_q.group(2).strip())
+                        if mn2:
+                            curr_sup["preguntas"].append([int(mn2.group(1)), [mn2.group(2).strip()]])
+                    else:
+                        curr_sup["preguntas"][-1][1].append(l)
+        else:
+            if m_num:
+                num_r = int(m_num.group(1))
+                txt_r = m_num.group(2).strip()
+                ult_num_r = curr_sup["respuestas"][-1][0] if curr_sup["respuestas"] else 0
+                if num_r == ult_num_r + 1 or not curr_sup["respuestas"]:
+                    curr_sup["respuestas"].append([num_r, [txt_r]])
+                else:
+                    curr_sup["respuestas"][-1][1].append(l)
+            else:
+                if not curr_sup["respuestas"]:
+                    curr_sup["respuestas"].append([1, [l]])
+                else:
+                    ult_num_r = curr_sup["respuestas"][-1][0]
+                    m_peg_r = re.search(rf'^(.*)\s+({ult_num_r + 1}\s*[\.\-\)]\s+[A-ZÁÉÍÓÚÑ].*)$', l)
+                    if m_peg_r:
+                        curr_sup["respuestas"][-1][1].append(m_peg_r.group(1).strip())
+                        mr2 = pat_num_item.match(m_peg_r.group(2).strip())
+                        if mr2:
+                            curr_sup["respuestas"].append([int(mr2.group(1)), [mr2.group(2).strip()]])
+                    else:
+                        curr_sup["respuestas"][-1][1].append(l)
+
+    if curr_sup is not None:
+        supuestos_bloques.append(curr_sup)
+
+    if not supuestos_bloques or sum(1 for sb in supuestos_bloques if sb["en_solucion"]) < max(1, len(supuestos_bloques) // 2):
+        return []
+
+    resultado = []
+    for sb in supuestos_bloques:
+        cuerpo_pre = re.sub(r'\s+', ' ', " ".join(sb["preambulo"])).strip()
+        pre_txt = f"{sb['header']}\n{cuerpo_pre}".strip() if cuerpo_pre else sb["header"]
+        mapa_resp = {
+            num_r: PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(lineas_r))
+            for num_r, lineas_r in sb["respuestas"]
+        }
+        for idx_q, (num_q, lineas_q) in enumerate(sb["preguntas"]):
+            q_txt = re.sub(r'\s+', ' ', " ".join(lineas_q)).strip()
+            r_txt = mapa_resp.get(num_q, "")
+            if not r_txt and idx_q < len(sb["respuestas"]):
+                r_txt = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(sb["respuestas"][idx_q][1]))
+            if not r_txt and len(sb["respuestas"]) == 1:
+                r_txt = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(sb["respuestas"][0][1]))
+
+            if q_txt and r_txt:
+                resultado.append({
+                    "is_open": True,
+                    "tipo_abierta": "SUPUESTO",
+                    "preamble": pre_txt,
+                    "question_text": f"{num_q}. {q_txt}",
+                    "options": [],
+                    "answer": -1,
+                    "official_answer": r_txt,
+                    "explanation": r_txt
+                })
+
+    return resultado
+
 def _es_inicio_respuesta_supuesto_indiv(p_txt):
     """
     Determina si un párrafo dentro de un supuesto individual ('SUPUESTO PRÁCTICO N.º X')
@@ -3096,15 +3332,12 @@ def _es_inicio_respuesta_supuesto_indiv(p_txt):
     if not t:
         return False
 
-    # Datos numerados del planteamiento (ej. "1) La Base de Cotización...", "2) A lo largo del año...", "A efectos de proceder a la liquidación...")
     if re.match(r'^(?:\d+\)\s+|A\s+efectos\s+de\s+proceder\s+a\s+la\s+liquidaci[óo]n)', t, re.IGNORECASE):
         return False
 
-    # Cualquier párrafo que empiece por '¿' o termine en '?' es una pregunta del enunciado
     if t.startswith("¿") or t.endswith("?"):
         return False
 
-    # Párrafos que empiezan por verbos imperativos propios de las preguntas de examen
     if re.match(
         r'^(?:Desglose|Realice\s+el\s+c[áa]lculo|Defina|Una\s+vez\s+emitido|Tras\s+extinguirse|Especifique|Calcule|Determine|Indique|Califique|Fundamente|Explique|Detalle|Se[ñn]ale|Razone|Analice|Justifique)\b',
         t,
@@ -3112,11 +3345,9 @@ def _es_inicio_respuesta_supuesto_indiv(p_txt):
     ):
         return False
 
-    # Si contiene una interrogación '¿...?' dentro del párrafo y no empieza por etiqueta de respuesta
     if "¿" in t and "?" in t and not re.match(r'^(?:RESPUESTA|EXPLICACI[ÓO]N|S[íi]\s*,|No\s*,|Conforme\s+a|De\s+acuerdo\s+con)\b', t, re.IGNORECASE):
         return False
 
-    # Marcadores inequívocos de inicio de respuesta jurídica
     if re.match(
         r'^(?:RESPUESTA|EXPLICACI[ÓO]N|S[íi]\s*,|No\s*,|No\s+debe|No\s+perder[áa]|No\s+ha\s+perdido|Conforme\s+a|De\s+acuerdo\s+con|De\s+conformidad\s+con|Seg[úu]n\s+(?:el|la|los|las|dispone)|En\s+(?:el\s+caso\s+de|los\s+supuestos\s+de|los\s+procesos)|Frente\s+a\s+las\s+altas|El\s+(?:derecho|embargo|proceder|art[íi]culo)|La\s+(?:alegaci[óo]n|exigencia|denegaci[óo]n|solicitud|empresa)|Ambas\s+pensiones|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[a-záéíóúñA-ZÁÉÍÓÚÑ,\.\(\)0-9º°]+){0,6}\s*:\s+\S+)',
         t
@@ -3175,7 +3406,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                     continue
                 s_clean = re.sub(r'^Ο\s+', '• ', s_clean)
 
-                # Si al final de una línea de respuesta viene pegado "SUPUESTO PRÁCTICO N.º X" (ej. Supuestos 6 y 19 de Tema 57), separarlo en dos líneas
                 m_pegado = re.match(
                     r'^(.+?)\s+((?:#\s*)?(?:SUPUESTO|CASO)\s+PR[ÁA]CTICO\s+(?:N\.?\s*[º°]?\s*)?\d{1,2}\s*[:\.\-]?\s*)$',
                     s_clean,
@@ -3220,7 +3450,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
 
     doc.close()
 
-    # Si el documento contiene opciones tipo test a), b), c), no es un documento de supuestos abiertos individuales
     if sum(1 for p in parrafos_doc if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+\S+', p["text"])) >= 4:
         return []
 
@@ -3240,7 +3469,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
     bloques_raw = []
     curr_b = None
 
-    # Modalidad C: SUPUESTO PRÁCTICO N.º X (ej. TEMA 57 INCAPACIDAD TEMPORAL)
     if n_supuesto_practico_num >= 2:
         for p_obj in parrafos_doc:
             p_sin_h = re.sub(r'^#\s*', '', p_obj["text"]).strip()
@@ -3261,7 +3489,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
         if curr_b is not None:
             bloques_raw.append(curr_b)
 
-    # Modalidad A: Cuestión X: <Tema> (ej. PRÁCTICA TEMA 55)
     elif n_cuestion_titulo >= 3:
         for p_obj in parrafos_doc:
             p_sin_h = re.sub(r'^#\s*', '', p_obj["text"]).strip()
@@ -3281,7 +3508,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
         if curr_b is not None:
             bloques_raw.append(curr_b)
 
-    # Modalidad B: 1.- <Planteamiento> (ej. PRÁCTICO TEMA 56)
     elif n_supuesto_indiv_guion >= 3 and (tiene_cabecera_practica or re.match(r'^(?:#\s*)?1\s*(?:\.\-|\-\.)\s+', parrafos_doc[0]["text"] if parrafos_doc else "")):
         for p_obj in parrafos_doc:
             p_sin_h = re.sub(r'^#\s*', '', p_obj["text"]).strip()
@@ -3317,7 +3543,6 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 p_curr_txt = paras_obj[idx_r]["text"]
                 p_curr_bold = paras_obj[idx_r]["is_bold"]
 
-                # Si el párrafo anterior quedó cortado por salto de página sin terminar en '.', '?' o ':', unirlo al párrafo anterior
                 if not enun_partes[-1].rstrip().endswith((".", "?", ":")):
                     enun_partes[-1] = enun_partes[-1].rstrip() + " " + p_curr_txt.lstrip()
                     idx_r += 1
@@ -3403,6 +3628,12 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     num_paginas_pdf = 0
 
     if not es_docx and modo_u in ("TODOS", "SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
+        # 1. Verificar primero si es un documento de Supuestos con bloque de preguntas -> 'Solución' -> bloque de respuestas (ej. TEMA 61 JUBILACIÓN)
+        supuestos_bloque_sol = _extraer_supuestos_con_bloque_solucion(file_bytes)
+        if supuestos_bloque_sol:
+            return supuestos_bloque_sol
+
+        # 2. Verificar si se trata de supuestos individuales (un planteamiento por pregunta: Tema 55, Tema 56, Tema 57 IT)
         cuestiones_singulares = _extraer_cuestiones_individuales_sin_etiqueta(file_bytes)
         if cuestiones_singulares:
             return cuestiones_singulares
@@ -3517,8 +3748,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
                             lineas_estructuradas.append({"text": s_clean, "is_bold": s_clean.startswith("#"), "is_heading": False})
                 else:
-                    items_p.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
-                    for _, _, s_t, s_b in items_p:
+                    for _, _, s_t, s_b in _agrupar_lineas_por_banda_horizontal_pdf(items_p, tolerancia_y=4.5):
                         lineas_estructuradas.append({"text": s_t, "is_bold": s_b, "is_heading": False})
             doc.close()
         except Exception:
