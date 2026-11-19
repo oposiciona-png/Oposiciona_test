@@ -6752,7 +6752,6 @@ if not st.session_state.questions:
                     st.success("🎉 ¡Todos los documentos auditados han superado la verificación sin preguntas fusionadas ni explicaciones cortadas!")
                 st.code(txt_copiar, language="markdown")
 # === FIN SECCIÓN 5A ===
-
 # === SECCIÓN 5B: PANTALLA DE PREGUNTA ACTIVA (TEST, SUPUESTOS Y DESARROLLO) ===
 elif not st.session_state.finished:
     # Estilos del examen activo + transformación visual de los checkboxes de opciones en círculos idénticos a st.radio
@@ -6860,20 +6859,31 @@ elif not st.session_state.finished:
         unsafe_allow_html=True
     )
 
+    # Tipografía unificada en negrita (mismo tipo y tamaño de letra) para planteamientos y preguntas de supuestos
+    estilo_tipografia_supuesto = (
+        "font-family: Arial, Helvetica, sans-serif !important; "
+        "font-size: 16px !important; "
+        "font-weight: 700 !important; "
+        "line-height: 1.45 !important; "
+        "color: #000000 !important; "
+        "text-align: justify !important;"
+    )
+
     if q.get('preamble'):
+        preamble_html = re.sub(r'\n+', '<br><br>', q['preamble'].strip())
         if es_supuesto_q:
             st.markdown(
                 f"<div style='margin-bottom:12px;'>"
-                f"<div style='text-align:center; font-size:10.5pt !important; font-weight:800; color:#000000 !important; letter-spacing:0.4px; margin-bottom:5px; text-transform:uppercase;'>SUPUESTO PRÁCTICO</div>"
-                f"<div style='background-color:#E6E6E6; border:1px solid #D4D4D8; border-radius:4px; padding:12px 16px; font-size:9pt !important; line-height:1.34; text-align:justify; color:#000000 !important; font-weight:700;'>"
-                f"{q['preamble']}"
+                f"<div style='{estilo_tipografia_supuesto} text-align:center !important; letter-spacing:0.4px; margin-bottom:6px; text-transform:uppercase;'>SUPUESTO PRÁCTICO</div>"
+                f"<div style='background-color:#E6E6E6; border:1px solid #D4D4D8; border-radius:6px; padding:14px 18px; {estilo_tipografia_supuesto}'>"
+                f"{preamble_html}"
                 f"</div>"
                 f"</div>",
                 unsafe_allow_html=True
             )
         else:
             st.markdown(
-                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; font-size:15px; line-height:1.45; text-align:justify; color:#1E293B !important;'>{q['preamble']}</div>",
+                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; {estilo_tipografia_supuesto}'>{preamble_html}</div>",
                 unsafe_allow_html=True
             )
 
@@ -6886,6 +6896,12 @@ elif not st.session_state.finished:
             f"<div style='font-size:12px; font-weight:800; color:#1D4ED8 !important; letter-spacing:0.4px; margin-bottom:3px;'>📝 EPÍGRAFE QUE SE PREGUNTA (DESARROLLO):</div>"
             f"<div style='font-size:18px; font-weight:800; color:#0F172A !important; line-height:1.35; text-align:justify;'>{txt_ep_mostrar}</div>"
             f"</div>",
+            unsafe_allow_html=True
+        )
+    elif es_supuesto_q:
+        q_sup_html = re.sub(r'\n+', '<br><br>', (q.get('question_text') or '').strip())
+        st.markdown(
+            f"<div style='{estilo_tipografia_supuesto} margin-bottom: 14px;'>{q_sup_html}</div>",
             unsafe_allow_html=True
         )
     else:
@@ -7416,6 +7432,16 @@ else:
     c3_t.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
     st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
+    estilo_tipografia_supuesto_res = (
+        "font-family: Arial, Helvetica, sans-serif !important; "
+        "font-size: 16px !important; "
+        "font-weight: 700 !important; "
+        "line-height: 1.45 !important; "
+        "color: #000000 !important; "
+        "text-align: justify !important;"
+    )
+
+    ultimo_preambulo_mostrado = None
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
         tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if q.get("is_open") else "Pregunta")
@@ -7436,21 +7462,27 @@ else:
             cabecera_res_html = "<div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>📖 Explicación:</div>"
 
         ph = ""
-        if q.get('preamble') and q.get("tipo_abierta") != "SUPUESTO":
-            ph = f"<div style='text-align: justify; line-height: 1.3; margin-bottom: 4px; font-size: 14px; color: #334155 !important;'>{q['preamble']}</div>"
-        elif q.get('preamble') and q.get("tipo_abierta") == "SUPUESTO" and i == 0:
+        pre_actual = (q.get('preamble') or "").strip()
+        if pre_actual and q.get("tipo_abierta") != "SUPUESTO":
+            ph = f"<div style='{estilo_tipografia_supuesto_res} margin-bottom: 6px;'>{re.sub(r'\n+', '<br><br>', pre_actual)}</div>"
+        elif pre_actual and q.get("tipo_abierta") == "SUPUESTO" and pre_actual != ultimo_preambulo_mostrado:
+            ultimo_preambulo_mostrado = pre_actual
+            pre_html_res = re.sub(r'\n+', '<br><br>', pre_actual)
             ph = (
                 f"<div style='margin-bottom:10px;'>"
-                f"<div style='text-align:center; font-size:10.5pt !important; font-weight:800; color:#000000 !important; margin-bottom:4px; text-transform:uppercase;'>SUPUESTO PRÁCTICO</div>"
-                f"<div style='background-color:#E6E6E6; border:1px solid #D4D4D8; border-radius:4px; padding:12px 16px; font-size:9pt !important; line-height:1.34; text-align:justify; color:#000000 !important; font-weight:700;'>{q['preamble']}</div>"
+                f"<div style='{estilo_tipografia_supuesto_res} text-align:center !important; margin-bottom:5px; text-transform:uppercase;'>SUPUESTO PRÁCTICO</div>"
+                f"<div style='background-color:#E6E6E6; border:1px solid #D4D4D8; border-radius:6px; padding:14px 18px; {estilo_tipografia_supuesto_res}'>{pre_html_res}</div>"
                 f"</div>"
             )
+
+        q_txt_res_html = re.sub(r'\n+', '<br><br>', (q.get('question_text') or '').strip())
+        estilo_q_res = estilo_tipografia_supuesto_res if q.get("tipo_abierta") == "SUPUESTO" else "font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3;"
 
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
             f"{ph}"
             f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
-            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q['question_text']}</div>"
+            f"<div style='{estilo_q_res} margin-bottom: 6px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q_txt_res_html}</div>"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px 16px; border-radius: 6px; margin-bottom: 6px;'>{cabecera_res_html}<div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
@@ -7479,3 +7511,4 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5C ===
+
