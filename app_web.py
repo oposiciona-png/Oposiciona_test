@@ -7226,7 +7226,6 @@ else:
     es_test_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
     es_test_supuestos = any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions)
 
-    # Comprobar si el alumno ha contestado al menos una pregunta y si hay correcciones pendientes
     alguna_contestada = any(
         bool((st.session_state.stats.get(i_chk, {}).get("selected") or "").strip())
         if isinstance(st.session_state.stats.get(i_chk, {}).get("selected"), str)
@@ -7284,7 +7283,6 @@ else:
             </div>
 
             <div style="display: flex; justify-content: center; align-items: center; gap: 26px; flex-wrap: wrap; margin: 6px 0 18px 0;">
-                <!-- Tribunal / Balanza de la Justicia animada -->
                 <div style="display: flex; flex-direction: column; align-items: center;">
                     <div style="width: 78px; height: 78px; border-radius: 50%; background: #DBEAFE; border: 2px solid #2563EB; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 6px rgba(0,0,0,0.08);">
                         <svg width="50" height="50" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -7305,7 +7303,6 @@ else:
                     <span style="font-size: 11.5px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;">Tribunal BOE</span>
                 </div>
 
-                <!-- Expediente del examen escaneándose + Pluma corrigiendo -->
                 <div style="position: relative; width: 115px; height: 92px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
                     <div style="position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam 1.8s ease-in-out infinite;"></div>
                     <div style="height: 5px; width: 55%; background: #1E3A8A; border-radius: 3px; margin-bottom: 8px;"></div>
@@ -7321,7 +7318,6 @@ else:
                     </div>
                 </div>
 
-                <!-- Opositor esperando su calificación -->
                 <div style="display: flex; flex-direction: column; align-items: center;">
                     <div style="width: 78px; height: 78px; border-radius: 50%; background: #FEF3C7; border: 2px solid #D97706; display: flex; align-items: center; justify-content: center; font-size: 36px; animation: opoStudentNod 1.6s ease-in-out infinite; box-shadow: inset 0 2px 6px rgba(0,0,0,0.06);">
                         🧑‍🎓
@@ -7358,7 +7354,7 @@ else:
         if not pendientes_ia:
             time.sleep(0.85)
 
-     Realizadas_ia = 0
+    realizadas_ia = 0
     total_pendientes_ia = max(1, len(pendientes_ia))
 
     for i, q in enumerate(st.session_state.questions):
@@ -7384,12 +7380,12 @@ else:
                 if stat.get("last_evaluated_text") == txt_al and stat.get("ai_eval"):
                     ev = stat["ai_eval"]
                 else:
-                    Realizadas_ia += 1
-                    pct_actual = int((Realizadas_ia / total_pendientes_ia) * 95)
+                    realizadas_ia += 1
+                    pct_actual = int((realizadas_ia / total_pendientes_ia) * 95)
                     lbl_tipo_corr = "Cuestión práctica" if es_sup_i else "Epígrafe de desarrollo"
                     slot_animacion_correccion.markdown(
                         _html_animacion_tribunal_corrigiendo(
-                            f"Deliberando y corrigiendo tu {lbl_tipo_corr} {i + 1} de {len(st.session_state.questions)} ({Realizadas_ia}/{len(pendientes_ia)} pendientes)...",
+                            f"Deliberando y corrigiendo tu {lbl_tipo_corr} {i + 1} de {len(st.session_state.questions)} ({realizadas_ia}/{len(pendientes_ia)} pendientes)...",
                             pct_actual
                         ),
                         unsafe_allow_html=True
