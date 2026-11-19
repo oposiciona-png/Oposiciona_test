@@ -3087,6 +3087,22 @@ _RESPALDO_TEMA_73_ABIERTAS = {
     ]
 }
 
+def _es_linea_cabecera_tema_repetida(s_txt):
+    """
+    Filtra cabeceras repetidas en la parte superior de cada página como:
+    'ESPECÍFICO TEMA 51 - Constitución y TRLGSS' o 'GESTION DE LA SEGURIDAD SOCIAL ESPECÍFICO TEMA 51...'
+    """
+    t = re.sub(r'^#\s*', '', (s_txt or "")).strip()
+    if not t:
+        return True
+    if re.match(
+        r'^(?:GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s+)?(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+\s*[\-–:]\s*[^\.\?:]{3,65}$',
+        t,
+        re.IGNORECASE
+    ):
+        return True
+    return False
+
 def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
     """
     Agrupa fragmentos de texto de una misma página del PDF cuya coordenada vertical y0
@@ -3158,7 +3174,7 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                 )
                 is_b = ch_t > 0 and (ch_b / ch_t) >= 0.55
                 s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
-                if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean) or _es_linea_cabecera_tema_repetida(s_clean):
                     continue
                 if re.match(r'^(?:#\s*)?(?:PR[ÁA]CTIC[AO]S?|CASOS?\s+PR[ÁA]CTICOS?)\s+(?:TEMA\s+\d+|JUBILACI[ÓO]N|GESTI[ÓO]N).*$', s_clean, re.IGNORECASE):
                     continue
@@ -3172,11 +3188,9 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
     if not lineas_doc:
         return []
 
-    # Si el documento contiene opciones tipo test a), b), c), descartar esta ruta
     if sum(1 for l_t in lineas_doc if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+\S+', l_t)) >= 6:
         return []
 
-    # Exige que Supuesto/Caso empiece en mayúscula y vaya seguido de número (1..99), romano (I..IV) o una letra aislada (evita 'supuesto de matrimonio')
     pat_sup_hdr = re.compile(
         r'^(?:#\s*)?(?:([A-Z])[\)\.\-]\s*)?(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:N\.?\s*[º°]?\s*)?(\d{1,2}|[IVX]{1,4}|[A-Z])(?!\w)\s*[:\.\-]?\s*(.*)$'
     )
@@ -3238,7 +3252,6 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
         if curr_sup is None:
             continue
 
-        # 1) Detectar 'Pregunta X: ¿...?' (formato Tema 62 Muerte y Supervivencia)
         m_pe = pat_preg_explicita.match(l)
         if m_pe:
             num_pe = int(m_pe.group(1))
@@ -3287,7 +3300,6 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                 curr_sup["respuestas"][-1][1].append(m_q_then_r.group(2).strip())
                 continue
 
-        # 2) Detectar encabezado 'Solución:' o 'Respuesta y Fundamento Jurídico:'
         m_sol = pat_sol_hdr.match(l)
         if m_sol and len(curr_sup["preguntas"]) >= 1:
             resto_sol = (m_sol.group(1) or "").strip()
@@ -3318,7 +3330,6 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                 curr_sup["respuestas"][-1][1].append(l_clean_rfj)
             continue
 
-        # 3) Flujo para preguntas numeradas 1., 2., 3. y soluciones numeradas 1., 2., 3. (ej. Tema 61)
         m_num = pat_num_item.match(l)
         if not curr_sup["en_solucion"]:
             if m_num:
@@ -3477,7 +3488,7 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 is_b = ch_t > 0 and (ch_b / ch_t) >= 0.55
 
                 s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
-                if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                if not s_clean or PDFQuizParser._es_basura_cabecera_o_pie(s_clean) or _es_linea_cabecera_tema_repetida(s_clean):
                     continue
                 if re.match(r'^(?:#\s*)?(?:PR[ÁA]CTIC[AO]S?|CASOS?\s+PR[ÁA]CTICOS?)\s+TEMA\s+\d+.*$', s_clean, re.IGNORECASE):
                     tiene_cabecera_practica = True
@@ -3708,12 +3719,10 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     num_paginas_pdf = 0
 
     if not es_docx and modo_u in ("TODOS", "SUPUESTO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"):
-        # 1. Verificar primero si es un documento de Supuestos con bloque de preguntas -> 'Solución' o 'Pregunta X: ... Respuesta y Fundamento Jurídico:' (ej. TEMA 61 JUBILACIÓN y TEMA 62 MUERTE Y SUPERVIVENCIA)
         supuestos_bloque_sol = _extraer_supuestos_con_bloque_solucion(file_bytes)
         if supuestos_bloque_sol:
             return supuestos_bloque_sol
 
-        # 2. Verificar si se trata de supuestos individuales (un planteamiento por pregunta: Tema 55, Tema 56, Tema 57 IT)
         cuestiones_singulares = _extraer_cuestiones_individuales_sin_etiqueta(file_bytes)
         if cuestiones_singulares:
             return cuestiones_singulares
@@ -3820,12 +3829,12 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         )
                         is_b = ch_t > 0 and (ch_b / ch_t) >= 0.55
                         s_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_l)
-                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean) and not _es_linea_cabecera_tema_repetida(s_clean):
                             items_p.append((y0, x0, s_clean, is_b))
                 if not items_p:
                     for raw_t in (page.get_text("text") or "").splitlines():
                         s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
-                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean) and not _es_linea_cabecera_tema_repetida(s_clean):
                             lineas_estructuradas.append({"text": s_clean, "is_bold": s_clean.startswith("#"), "is_heading": False})
                 else:
                     for _, _, s_t, s_b in _agrupar_lineas_por_banda_horizontal_pdf(items_p, tolerancia_y=4.5):
@@ -3845,7 +3854,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
     lineas_limpias = []
     for item in lineas_estructuradas:
         l_clean = PDFQuizParser._limpiar_marca_agua_linea(item["text"])
-        if not l_clean or PDFQuizParser._es_basura_cabecera_o_pie(l_clean, titulo_documento) or l_clean in ("0", "-", "#"):
+        if not l_clean or PDFQuizParser._es_basura_cabecera_o_pie(l_clean, titulo_documento) or _es_linea_cabecera_tema_repetida(l_clean) or l_clean in ("0", "-", "#"):
             continue
         if re.match(r'^(?:#\s*)?(?:PR[ÁA]CTIC[AO]S?|CASOS?\s+PR[ÁA]CTICOS?)\s+TEMA\s+\d+.*$', l_clean, re.IGNORECASE):
             continue
@@ -3961,7 +3970,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 for lp in lista_lineas:
                     if (
                         not parrafos_pre or
-                        parrafos_pre[-1].rstrip().endswith(".") or
+                        parrafos_pre[-1].rstrip().endswith((".", ":")) or
                         re.match(r'^(?:[A-Z][\)\.\-]\s+|\d+[\.\)]\s+|[•·\-]\s+|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo|otro\s+lado)|Asimismo|Finalmente|Tres\s+a[ñn]os\s+m[áa]s\s+tarde|El\s+\d+\s+de\s+)', lp)
                     ):
                         parrafos_pre.append(lp)
@@ -3969,7 +3978,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         parrafos_pre[-1] += " " + lp
                 return "\n\n".join(parrafos_pre).strip()
 
-            for l_raw, is_b in lineas_sup:
+            for idx_ls, (l_raw, is_b) in enumerate(lineas_sup):
                 l_s = re.sub(r'^#\s*', '', l_raw).strip()
                 if not l_s or re.match(r'^(?:CUESTIONES(?:\s+PR[ÁA]CTICAS)?|PREGUNTAS\s+DEL\s+SUPUESTO|PREGUNTAS?\s+DE\s+RESERVA)\s*:?\s*$', l_s, re.IGNORECASE):
                     continue
@@ -4012,13 +4021,23 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         txt_c = m_in_c.group(1).strip()
                         cola_exp_c = m_in_c.group(2).strip()
 
+                    # Inspeccionar el bloque completo de este ítem numerado hasta el siguiente ítem numerado para distinguir apartados del planteamiento (1. En primer lugar..., 2. En segundo lugar..., 3. En el plano institucional...) de la primera pregunta real
+                    lineas_bloque_item = [txt_c]
+                    for j_look in range(idx_ls + 1, min(len(lineas_sup), idx_ls + 22)):
+                        l_next_look = re.sub(r'^#\s*', '', lineas_sup[j_look][0]).strip()
+                        if pat_cuestion.match(l_next_look):
+                            break
+                        lineas_bloque_item.append(l_next_look)
+                    texto_bloque_item = " ".join(lineas_bloque_item)
+
                     es_parrafo_preambulo = (
                         sub_estado == "PREAMBULO" and
                         curr_c is None and
                         len(cuestiones_sup) == 0 and
-                        num_c in (1, 2, 3, 4) and
-                        "?" not in txt_c and
-                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda|qu[ée]|cu[áa]l|c[óo]mo|cu[áa]ndo|para\s+acceder)\b', txt_c, re.IGNORECASE)
+                        num_c in (1, 2, 3, 4, 5) and
+                        "?" not in texto_bloque_item and
+                        "¿" not in texto_bloque_item and
+                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda)\b', texto_bloque_item, re.IGNORECASE)
                     )
                     if es_parrafo_preambulo:
                         preambulo_lineas.append(f"{num_c}. {txt_c}")
