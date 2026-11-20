@@ -5017,6 +5017,29 @@ PDFQuizParser.parse_supuestos_test_administrativos = staticmethod(_parse_supuest
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
     TESTS_DISPONIBLES_COMPLETO = globals().get("TESTS_DISPONIBLES", globals().get("ESTS_DISPONIBLES", {}))
 
+# Puente automático para evitar NameError con TESTS_DISPONIBLES_INVITADO
+if "TESTS_DISPONIBLES_INVITADO" not in globals():
+    def _generar_catalogo_invitado_por_defecto():
+        cat_full = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or {}
+        inv_auto = {"ADMINISTRATIVOS": {}, "GESTION": {}}
+        for esp_k in ["ADMINISTRATIVOS", "GESTION"]:
+            esp_dict = cat_full.get(esp_k, {})
+            esp_especifico = esp_dict.get("ESPECIFICO", {})
+            demo_especifico = {"Elige un test de demostración...": None}
+            for nom_t, url_t in esp_especifico.items():
+                if url_t is not None:
+                    demo_especifico[nom_t] = url_t
+                    break
+            inv_auto[esp_k]["ESPECIFICO"] = demo_especifico
+            inv_auto[esp_k]["EXAMENES"] = {}
+            inv_auto[esp_k]["GENERAL"] = {}
+            inv_auto[esp_k]["SUPUESTOS"] = {}
+            if esp_k == "GESTION":
+                inv_auto[esp_k]["DESARROLLO"] = {}
+        return inv_auto
+
+    TESTS_DISPONIBLES_INVITADO = _generar_catalogo_invitado_por_defecto()
+
 # Baja efectiva e inmediata de correos revocados (bloqueo en memoria y cierre de sesión activa)
 USUARIOS_DADOS_DE_BAJA = {
     "andreitalopeamor1@gmail.com",
@@ -5205,17 +5228,30 @@ def activar_proteccion_antirecortes_alumno():
 def obtener_tests_segun_rol():
     catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
     if st.session_state.get('rol') == 'INVITADO':
+        cat_inv_global = globals().get("TESTS_DISPONIBLES_INVITADO") or {}
         inv_res = {
             "ADMINISTRATIVOS": {},
             "GESTION": {},
         }
-        base_adm_inv = dict(TESTS_DISPONIBLES_INVITADO.get("ADMINISTRATIVOS", {}))
-        for cat_adm in ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]:
-            inv_res["ADMINISTRATIVOS"][cat_adm] = dict(base_adm_inv.get(cat_adm, {}))
-
-        base_ges_inv = dict(TESTS_DISPONIBLES_INVITADO.get("GESTION", {}))
-        for cat_ges in ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]:
-            inv_res["GESTION"][cat_ges] = dict(base_ges_inv.get(cat_ges, {}))
+        for esp_inv, cats_lista in [
+            ("ADMINISTRATIVOS", ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]),
+            ("GESTION", ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]),
+        ]:
+            base_esp_inv = dict(cat_inv_global.get(esp_inv, {}))
+            for c_inv in cats_lista:
+                if c_inv in base_esp_inv and base_esp_inv[c_inv]:
+                    inv_res[esp_inv][c_inv] = dict(base_esp_inv[c_inv])
+                elif c_inv == "ESPECIFICO":
+                    # Si el diccionario de invitado estaba vacío, tomar automáticamente 1 solo test de muestra de ESPECIFICO
+                    orig_esp = catalogo_base.get(esp_inv, {}).get("ESPECIFICO", {})
+                    muestra = {"Elige un test de demostración...": None}
+                    for k_m, v_m in orig_esp.items():
+                        if v_m is not None:
+                            muestra[k_m] = v_m
+                            break
+                    inv_res[esp_inv]["ESPECIFICO"] = muestra
+                else:
+                    inv_res[esp_inv][c_inv] = {}
         return inv_res
 
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
