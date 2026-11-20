@@ -2006,7 +2006,7 @@ def _es_linea_cabecera_tema_repetida(s_txt):
     if re.search(r'(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|ENUNCIADO\s+DEL\s+SUPUESTO|PREGUNTAS?\s+DE\s+DESARROLLO)', t_ascii, re.IGNORECASE):
         return False
     if re.match(
-        r'^(?:OPOSICIONA|www\.oposiciona\.es|P[áa]gina\s+\d+\s+de\s+\d+|RESPUESTAS?\s+PR[ÁA]CTICAS?\s+TEMA\s+.*|PR[ÁA]CTIC[AO]S?\s+TEMA\s+\d+.*|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL.*|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL.*|(?:ADMINISTRATIVO|GESTI[ÓO]N)(?:\s+\d{4})?\s+TEMA\s+[\w\-]+.*|(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+[A-Z]?\s*[\-–:]\s*[^\.\?:]{3,85})$',
+        r'^(?:OPOSICIONA|www\.oposiciona\.es|P[áa]gina\s+\d+(?:\s+de(?:\s+\d+)?)?|(?:RESPUESTAS?\s+)?PR[ÁA]CTIC[AO]S?\s+.*TEMA\s+\d+.*|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL.*|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL.*|(?:ADMINISTRATIVO|GESTI[ÓO]N)(?:\s+\d{4})?\s+TEMA\s+[\w\-]+.*|(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+[A-Z]?\s*[\-–:]\s*[^\.\?:]{3,85})$',
         t_ascii,
         re.IGNORECASE
     ):
@@ -2014,11 +2014,6 @@ def _es_linea_cabecera_tema_repetida(s_txt):
     return False
 
 def _atomizar_linea_supuesto_test_seguro(raw_line, is_bold):
-    """
-    Atomizador exclusivo para Supuestos Tipo Test (Administrativos):
-    - Separa opciones a), b), c), d) que vengan en el mismo renglón y separa etiquetas 'EXPLICACIÓN:' inline.
-    - JAMÁS parte siglas societarias o abreviaturas con punto como 'INNOVA S.A. Se encuentran...', 'S.L.', 'D. Carlos', etc.
-    """
     l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
     if not l or l in ("0", "-", "#"):
         return []
@@ -2034,13 +2029,13 @@ def _atomizar_linea_supuesto_test_seguro(raw_line, is_bold):
 
     segmentos = []
     es_inicio_enunciado = bool(
-        re.match(r'^(?:#+\s*)?(?:(?:Pregunta|Cuesti[óo]n)\s+[Rr]?\d{1,3}\s*[:\.\-\)]|[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-|\))\s+)', l, re.IGNORECASE)
+        re.match(r'^(?:#+\s*)?(?:(?:SUPUESTO|CASO|PR[ÁA]CTICA|Pregunta|Cuesti[óo]n)\s+[Rr]?\d{1,3}\b|[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-|\))\s+)', l, re.IGNORECASE)
     )
 
     cola_exp = None
     if not es_inicio_enunciado:
         m_exp_inline = re.search(
-            r'(?<=[.?!»"\)\]])\s*((?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]\s*.*)$',
+            r'(?<=[.?!»"\)\]])\s*((?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Justificaci[óo]n\s+legal(?:\s+y\s+resoluci[óo]n\s+del\s+caso)?)\s*[:\.]\s*.*)$',
             l,
             flags=re.IGNORECASE
         )
@@ -2051,7 +2046,7 @@ def _atomizar_linea_supuesto_test_seguro(raw_line, is_bold):
                 l = pref
 
     m_q_with_a = re.match(
-        r'^((?:#+\s*)?(?:(?:Pregunta|Cuesti[óo]n)\s+[Rr]?\d{1,3}\s*[:\.\-\)]|[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([a][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+        r'^((?:#+\s*)?(?:(?:SUPUESTO|CASO|PR[ÁA]CTICA|Pregunta|Cuesti[óo]n)\s+[Rr]?\d{1,3}\s*[:\.\-\)]?|[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑa-záéíóúñ].*?(?:[:\?\.]))\s+([a][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
         l,
         flags=re.IGNORECASE
     )
@@ -2059,7 +2054,6 @@ def _atomizar_linea_supuesto_test_seguro(raw_line, is_bold):
         segmentos.append((m_q_with_a.group(1).strip(), False))
         l = m_q_with_a.group(2).strip()
 
-    # Solo partir en opciones en minúscula a), b), c), d) (o A), B), C), D) con paréntesis) y NUNCA tras inicial mayúscula como 'S.A.'
     partes_opt = re.split(
         r'(?:(?<=[.?!»"\)\];:])(?<!\b[A-Z]\.)\s+|\s{2,})(?=(?:#\s*)?(?:[a-d][\)\.\-]|[A-D]\))\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
         l
@@ -2073,12 +2067,42 @@ def _atomizar_linea_supuesto_test_seguro(raw_line, is_bold):
         segmentos.append((cola_exp, False))
     return segmentos
 
+def _separar_hechos_y_pregunta_supuesto_indiv_test(etiqueta_hdr, num_s, texto_completo):
+    """
+    Separa el relato fáctico (`preamble`) y la pregunta final (`question_text`) en supuestos
+    individuales tipo test como 'SUPUESTO 1: don Santiago... ¿Cuál es su edad ordinaria...?' (ej. TEMA 10).
+    """
+    tc = re.sub(r'\s+', ' ', (texto_completo or "")).strip()
+    if not tc:
+        return etiqueta_hdr, f"{num_s}."
+
+    m_interrog = re.match(r'^(.+?[\.\:])\s*(¿.+)$', tc)
+    if m_interrog:
+        return f"{etiqueta_hdr} {m_interrog.group(1).strip()}".strip(), f"{num_s}. {m_interrog.group(2).strip()}"
+
+    m_imp = re.match(
+        r'^(.+?[\.,;:])\s*((?:determine|indique|se[ñn]ale|calcule|analice|especifique|desea\s+conocer|se\s+plantea\s+conocer)\b.+)$',
+        tc,
+        flags=re.IGNORECASE
+    )
+    if m_imp:
+        hechos = m_imp.group(1).rstrip(",") + ("." if m_imp.group(1).endswith(",") else "")
+        preg = m_imp.group(2).strip()
+        preg = (preg[0].upper() + preg[1:]) if preg else preg
+        return f"{etiqueta_hdr} {hechos.strip()}".strip(), f"{num_s}. {preg}"
+
+    partes_frases = re.split(r'(?<=\.)\s+', tc)
+    if len(partes_frases) >= 2:
+        return f"{etiqueta_hdr} {' '.join(partes_frases[:-1]).strip()}".strip(), f"{num_s}. {partes_frases[-1].strip()}"
+
+    return etiqueta_hdr, f"{num_s}. {tc}"
+
 def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
     """
-    Motor especializado para la categoría SUPUESTOS de ADMINISTRATIVOS:
-    - Soporta encabezados 'SUPUESTO PRÁCTICO', 'SUPUESTOS PRÁCTICOS TEMA 2A', o PDFs que empiezan directamente con 'A) La empresa...' (ej. TEMA 09 NYCM).
-    - Reconoce preguntas numeradas como '1.', '1.-', 'PREGUNTA 1.-', 'Pregunta 1:', 'Cuestión 1:'.
-    - No corta siglas como 'S.A.' o 'S.L.' dentro de los planteamientos y detecta cambios de supuesto ('B) La consultoría...', 'Supuesto 2:', o bloques sin etiqueta).
+    Motor unificado para todos los formatos de SUPUESTOS de ADMINISTRATIVOS:
+    1) Supuestos compartidos multi-pregunta con o sin test previo (ej. TEMA 02A, TEMA 02B, TEMA 09 NYCM).
+    2) Supuestos individuales por pregunta 'SUPUESTO 1: ... a) ... b) ... c) ... d) ...' (ej. TEMA 10 JUBILACIÓN),
+       con o sin etiqueta 'EXPLICACIÓN:' / 'Justificación legal y resolución del caso:'.
     """
     lineas_con_geom = []
     if PDFQuizParser.es_archivo_docx(file_bytes):
@@ -2113,7 +2137,7 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
                             sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
                             if (
                                 curr_s_txt and
-                                re.match(r'^\s*(?:[a-d][\)\.\-](?:\s+|$)|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL)?\s*:)', st_s, re.IGNORECASE) and
+                                re.match(r'^\s*(?:[a-d][\)\.\-](?:\s+|$)|(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL)?|Justificaci[óo]n\s+legal)\s*:)', st_s, re.IGNORECASE) and
                                 re.search(r'(?:[.?!»"\)\];:]|^[a-d][\)\.\-])\s*$', curr_s_txt.strip()) and
                                 not re.search(r'\b[A-Z]\.\s*$', curr_s_txt.strip())
                             ):
@@ -2131,7 +2155,7 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
                                     not st_s.startswith((" ", "\t", "\n", ".", ",", ";", ":", ")", "?")) and
                                     (
                                         re.match(r'^(?:#\s*)?(?:[a-d][\)\.\-]|[Rr]?\d{1,3}[\.\-])$', curr_s_txt.strip()) or
-                                        re.match(r'^(?:[a-d][\)\.\-]\s+|EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL)?\s*:)', st_s.strip(), re.IGNORECASE)
+                                        re.match(r'^(?:[a-d][\)\.\-]\s+|(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL)?|Justificaci[óo]n\s+legal)\s*:)', st_s.strip(), re.IGNORECASE)
                                     )
                                 ):
                                     curr_s_txt += " " + st_s
@@ -2195,12 +2219,18 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
     if not lineas_con_geom:
         return []
 
+    pat_sup_item_num = re.compile(
+        r'^(?:#+\s*)?(?:SUPUESTO|CASO|PR[ÁA]CTICA)(?:\s+PR[ÁA]CTIC[OA])?\s+(?:N\.?\s*[º°]?\s*)?(\d{1,3})(?!\d)\s*[:\.\-\)]?\s*(.*)$',
+        re.IGNORECASE
+    )
+
     idx_inicio_sup = -1
     for idx_l, (s_l, _, _, _) in enumerate(lineas_con_geom):
         s_sin_h = re.sub(r'^#+\s*', '', s_l).strip()
         if (
             len(s_sin_h) < 140 and
             not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', s_sin_h, re.IGNORECASE) and
+            not pat_sup_item_num.match(s_sin_h) and
             (
                 re.match(
                     r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\s*[:\-–]\s*SUPUESTOS?\s+PR[ÁA]CTICOS?.*|SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+TEMA\s+[\w\-]+|\s+DE\s+APLICACI[ÓO]N|\s+FINAL(?:ES)?|\s*\(.*\))?\s*:?\s*$|CASOS?\s+PR[ÁA]CTICOS?(?:\s+TEMA\s+[\w\-]+)?\s*:?\s*$|ENUNCIADO\s+DEL\s+SUPUESTO\b)',
@@ -2217,7 +2247,6 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
     if not lineas_sup:
         return []
 
-    # Soporta tanto 'Pregunta 1: ...' / 'PREGUNTA 1.- ...' / 'Cuestión 1: ...' como '1. ...' / '1.- ...'
     pat_q_sup_test = re.compile(
         r'^(?:#+\s*)?(?:(?:Pregunta|Cuesti[óo]n)\s+([Rr]?\d{1,3})(?!\d)\s*(?:\.\-|\-\.|:|\.|\-|\))\s*|([Rr]?\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*)(?:\(RESERVA\)\s*)?(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
         re.IGNORECASE
@@ -2225,19 +2254,23 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
     pat_opt_test = re.compile(r'^(?:#+\s*)?([a-d][\)\.\-]|[A-D]\))\s+(.+)$')
     pat_opt_empty = re.compile(r'^(?:#+\s*)?([a-d][\)\.\-]|[A-D]\))\s*$')
     pat_exp_test = re.compile(
-        r'^(?:#+\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]?\s*|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
+        r'^(?:#+\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]?\s*|Justificaci[óo]n\s+legal(?:\s+y\s+resoluci[óo]n\s+del\s+caso)?\s*[:\.]?\s*|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
+        re.IGNORECASE
+    )
+    pat_exp_directa_sin_etiqueta = re.compile(
+        r'^(?:De\s+(?:conformidad|acuerdo)\s+con|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:dispuesto|establecido|previsto)|establece)|Conforme\s+(?:al|a\s+la|a\s+lo)|El\s+(?:art[íi]culo|Real\s+Decreto)|La\s+(?:Disposici[óo]n\s+(?:Transitoria|Adicional|Final)|regla\s+general|reforma)|En\s+virtud\s+de)\b',
         re.IGNORECASE
     )
     pat_nuevo_sup_explicito = re.compile(
-        r'^(?:#+\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:N\.?\s*[º°]?\s*)?(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|Dña\.|La\s+(?:empresa|mercantil|sociedad|consultor[íi]a|asesor[íi]a|entidad|cooperativa|mutua|unidad\s+familiar|administraci[óo]n)|El\s+(?:trabajador|empresario|bufete|ciudadano|causante)|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+trabaja|\s+presta|\s+ostenta|\s+solicita|\s+\(\d+\s*a[ñn]os\))).*)$'
+        r'^(?:#+\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso|PR[ÁA]CTICA|Pr[áa]ctica)(?:\s+(?:PR[ÁA]CTIC[OA]|Pr[áa]ctic[oa]))?\s+(?:N\.?\s*[º°]?\s*)?(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|Dña\.|La\s+(?:empresa|mercantil|sociedad|consultor[íi]a|asesor[íi]a|entidad|cooperativa|mutua|unidad\s+familiar|administraci[óo]n)|El\s+(?:trabajador|empresario|bufete|ciudadano|causante)|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+trabaja|\s+presta|\s+ostenta|\s+solicita|\s+\(\d+\s*a[ñn]os\))).*)$'
     )
 
     def _tiene_opciones_test_antes_de_otro_item(idx_item, lista_ln):
-        for j_look in range(idx_item + 1, min(len(lista_ln), idx_item + 22)):
+        for j_look in range(idx_item + 1, min(len(lista_ln), idx_item + 24)):
             sl_look = re.sub(r'^#+\s*', '', lista_ln[j_look][0]).strip()
             if pat_opt_test.match(sl_look) or pat_opt_empty.match(sl_look):
                 return True
-            if pat_q_sup_test.match(sl_look):
+            if pat_q_sup_test.match(sl_look) or pat_sup_item_num.match(sl_look):
                 return False
         return False
 
@@ -2266,6 +2299,9 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
         s_cur = re.sub(r'^#+\s*', '', lista_ln[idx_cur][0]).strip()
         if pat_nuevo_sup_explicito.match(s_cur) and (estado_act != "PREAMBULO" or not pre_actual_lineas):
             if estado_act in ("QUESTION", "OPTIONS") and re.match(r'^[A-D]\)\s+', s_cur):
+                return False
+            # Si este 'SUPUESTO X:' va seguido directamente de opciones a), b), NO es un planteamiento multi-pregunta sino una cuestión-supuesto individual
+            if pat_sup_item_num.match(s_cur) and _tiene_opciones_test_antes_de_otro_item(idx_cur, lista_ln):
                 return False
             return True
 
@@ -2341,6 +2377,16 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
     def _finalizar_q_sup_test(q_obj):
         if not q_obj or len(q_obj.get("options", [])) < 2:
             return
+
+        if q_obj.get("es_sup_indiv_directo"):
+            pre_ind, qt_ind = _separar_hechos_y_pregunta_supuesto_indiv_test(
+                q_obj.get("sup_hdr", f"SUPUESTO {q_obj.get('num', 1)}:"),
+                q_obj.get("num", 1),
+                q_obj.get("question_text", "")
+            )
+            q_obj["preamble"] = pre_ind
+            q_obj["question_text"] = qt_ind
+
         opts_norm = []
         ans_fin = q_obj.get("answer", -1)
         for idx_o, o_raw in enumerate(q_obj["options"]):
@@ -2388,6 +2434,8 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
         q_obj["is_open"] = False
         q_obj["es_supuesto_test"] = True
         q_obj.pop("num", None)
+        q_obj.pop("es_sup_indiv_directo", None)
+        q_obj.pop("sup_hdr", None)
         preguntas_extraidas.append(q_obj)
 
     for i_ln, (s_raw, is_b, pag_i, y_i) in enumerate(lineas_sup):
@@ -2397,6 +2445,28 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
         if _es_linea_cabecera_tema_repetida(s_l):
             continue
 
+        # 1) ¿Es un 'SUPUESTO X:' / 'PRÁCTICA X:' individual seguido directamente de opciones a), b), c), d) (como en TEMA 10 JUBILACIÓN)?
+        m_sup_ind = pat_sup_item_num.match(s_l)
+        if m_sup_ind and _tiene_opciones_test_antes_de_otro_item(i_ln, lineas_sup):
+            if curr_q is not None:
+                _finalizar_q_sup_test(curr_q)
+            pending_empty_opts = []
+            num_si = int(m_sup_ind.group(1))
+            resto_si = m_sup_ind.group(2).strip()
+            curr_q = {
+                "num": num_si,
+                "es_sup_indiv_directo": True,
+                "sup_hdr": f"SUPUESTO {num_si}:",
+                "preamble": "",
+                "question_text": resto_si,
+                "options": [],
+                "answer": -1,
+                "explanation": ""
+            }
+            estado = "QUESTION"
+            continue
+
+        # 2) ¿Es un nuevo planteamiento compartido para varias preguntas?
         if _es_nuevo_planteamiento_sup_test(i_ln, lineas_sup, estado, preambulo_actual, curr_q):
             if curr_q is not None:
                 _finalizar_q_sup_test(curr_q)
@@ -2409,7 +2479,7 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
         m_q = pat_q_sup_test.match(s_l)
         m_opt_e = pat_opt_empty.match(s_l)
         m_opt = pat_opt_test.match(s_l)
-        es_cab_exp = bool(re.match(r'^(?:#+\s*)?(?:EXPLICACI[ÓO]N|Respuesta(?:\s+correcta)?\s*:|Soluci[óo]n\s*:)', s_raw, re.IGNORECASE))
+        es_cab_exp = bool(re.match(r'^(?:#+\s*)?(?:EXPLICACI[ÓO]N|Justificaci[óo]n\s+legal|Respuesta(?:\s+correcta)?\s*:|Soluci[óo]n\s*:)', s_raw, re.IGNORECASE))
         m_exp = pat_exp_test.match(s_l) if es_cab_exp else None
 
         if m_q and not m_opt and not m_opt_e:
@@ -2434,6 +2504,7 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
                 etiqueta_n = f"R{num_q}." if tok_q.startswith("R") else (f"{num_q}. (RESERVA)" if es_res else f"{num_q}.")
                 curr_q = {
                     "num": num_q,
+                    "es_sup_indiv_directo": False,
                     "preamble": _unir_parrafos_pre(preambulo_actual),
                     "question_text": f"{etiqueta_n} {txt_q}",
                     "options": [],
@@ -2457,6 +2528,17 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
             if resto_e:
                 curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_e).strip()
             continue
+
+        # Explicación directa sin etiqueta tras completar las 4 opciones (ej. 'De conformidad con el artículo...', 'El Real Decreto...', 'La Disposición Transitoria...')
+        if estado == "OPTIONS" and len(curr_q["options"]) >= 4 and not pending_empty_opts and not m_opt and not m_opt_e:
+            ult_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).rstrip()
+            no_acaba_en_conector = not bool(
+                re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|que|y|o|el|la|los|las|un|una|su|sus)\s*$', ult_opt_txt, re.IGNORECASE)
+            )
+            if pat_exp_directa_sin_etiqueta.match(s_l) or (ult_opt_txt.endswith((".", "?", "!", "»", '"', ")")) and no_acaba_en_conector and re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ]', s_l)):
+                estado = "EXPLANATION"
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + s_l).strip()
+                continue
 
         if m_opt_e and estado in ("QUESTION", "OPTIONS") and len(curr_q["options"]) < 4:
             letra_asig = chr(ord('a') + len(curr_q["options"]))
@@ -2500,7 +2582,7 @@ def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
                     continue
 
         if estado == "QUESTION":
-            curr_q["question_text"] += " " + s_l
+            curr_q["question_text"] = (curr_q["question_text"] + " " + s_l).strip()
         elif estado == "OPTIONS" and curr_q["options"]:
             if pending_empty_opts:
                 idx_t = pending_empty_opts[0]
@@ -3423,7 +3505,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
         es_div_sup = bool(re.search(r'(?:SUPUESTOS?\s+PR[ÁA]CTICOS?|CASOS?\s+PR[ÁA]CTICOS?|PREGUNTAS?\s+DE\s+DESARROLLO)', l_clean or "", re.IGNORECASE))
         if not l_clean or (not es_div_sup and (PDFQuizParser._es_basura_cabecera_o_pie(l_clean, titulo_documento) or _es_linea_cabecera_tema_repetida(l_clean))) or l_clean in ("0", "-", "#"):
             continue
-        if re.match(r'^(?:#\s*)?(?:RESPUESTAS?\s+)?PR[ÁA]CTIC[AO]S?\s+TEMA\s+\d+.*$', l_clean, re.IGNORECASE):
+        if re.match(r'^(?:#\s*)?(?:RESPUESTAS?\s+)?PR[ÁA]CTIC[AO]S?\s+.*TEMA\s+\d+.*$', l_clean, re.IGNORECASE):
             continue
         lineas_limpias.append((l_clean, item["is_bold"]))
 
