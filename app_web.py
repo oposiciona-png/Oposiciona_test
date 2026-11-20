@@ -2993,7 +2993,7 @@ PDFQuizParser._reducir_opciones_conservando_correcta = staticmethod(_reducir_opc
 PDFQuizParser.parse = staticmethod(_parse_test_fn)
 # === FIN SECCIÓN 3B ===
 
-# === SECCIÓN 3C: MOTOR DE EXTRACCIÓN DE DESARROLLO Y SUPUESTOS ===
+# === SECCIÓN 3C: MOTOR DE EXTRACCIÓN DE DESARROLLO Y SUPUESTOS (GESTIÓN Y ADMINISTRATIVOS) ===
 _RESPALDO_TEMA_73_ABIERTAS = {
     "DESARROLLO": [
         {
@@ -3206,16 +3206,460 @@ def _formatear_linea_cuerpo_epigrafe_docx(t_raw, prev_line=""):
     return t
 
 def _es_linea_cabecera_tema_repetida(s_txt):
-    t = re.sub(r'^#\s*', '', (s_txt or "")).strip()
+    t = re.sub(r'^#+\s*', '', (s_txt or "")).strip()
     if not t:
         return True
+    # Normalizar letras griegas homógrafas frecuentes en cabeceras PDF (ej. 'ADMINISTRATIVO 2027 ΤΕΜΑ 2B')
+    mapa_griegos = str.maketrans("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", "ABEZHIKMNOPTYX")
+    t_ascii = t.translate(mapa_griegos)
     if re.match(
-        r'^(?:GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL\s+)?(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+\s*[\-–:]\s*[^\.\?:]{3,85}$',
-        t,
+        r'^(?:OPOSICIONA|www\.oposiciona\.es|P[áa]gina\s+\d+\s+de\s+\d+|ADMINISTRATIVO\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL.*|GESTI[ÓO]N\s+DE\s+LA\s+SEGURIDAD\s+SOCIAL.*|(?:ADMINISTRATIVO|GESTI[ÓO]N)(?:\s+\d{4})?\s+TEMA\s+[\w\-]+.*|(?:ESPEC[ÍI]FICO\s+|GENERAL\s+)?TEMA\s+\d+\s*[\-–:]\s*[^\.\?:]{3,85})$',
+        t_ascii,
         re.IGNORECASE
     ):
         return True
     return False
+
+def _parse_supuestos_test_administrativos_fn(file_bytes, max_options=4):
+    """
+    Motor especializado para la categoría SUPUESTOS de ADMINISTRATIVOS:
+    - Si el PDF contiene sección 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS' (ej. pág. 7 de TEMA 02B),
+      descarta todas las preguntas previas y extrae exclusivamente los supuestos prácticos.
+    - Soporta uno o varios supuestos dentro del mismo PDF (con o sin encabezado 'SUPUESTO 2' / 'B)'),
+      así como supuestos de enunciado único o enunciado individual por pregunta.
+    - Devuelve preguntas tipo test (`is_open = False`, `es_supuesto_test = True`) con:
+      `preamble` (planteamiento del supuesto), `question_text` (pregunta), `options` (a, b, c, d),
+      `answer` (índice de la opción correcta por negrita o explicación) y `explanation`.
+    """
+    lineas_con_geom = []
+    if PDFQuizParser.es_archivo_docx(file_bytes):
+        for idx_d, it_d in enumerate(PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes)):
+            s_clean = PDFQuizParser._limpiar_marca_agua_linea(it_d["text"])
+            if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean) and not _es_linea_cabecera_tema_repetida(s_clean):
+                for seg_t, seg_b in PDFQuizParser._atomizar_linea_test(s_clean, it_d["is_bold"]):
+                    lineas_con_geom.append((seg_t, seg_b, 0, idx_d * 14.0))
+    else:
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            for p_idx, page in enumerate(doc):
+                items_pagina = []
+                blocks = page.get_text("dict").get("blocks", [])
+                for b in blocks:
+                    for l in b.get("lines", []):
+                        bbox = l.get("bbox", (0, 0, 0, 0))
+                        y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
+                        spans = l.get("spans", [])
+                        txt_l = "".join(s.get("text", "") for s in spans).strip()
+                        if not txt_l:
+                            continue
+
+                        sub_spans = []
+                        curr_s_txt = ""
+                        curr_ch_tot = 0
+                        curr_ch_bold = 0
+                        for s in spans:
+                            st_s = s.get("text", "")
+                            if not st_s:
+                                continue
+                            sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
+                            if (
+                                curr_s_txt and
+                                re.match(r'^\s*(?:[a-dA-D][\)\.\-](?:\s+|$)|EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*:)', st_s, re.IGNORECASE) and
+                                re.search(r'(?:[.?!»"\)\];:]|^[a-dA-D][\)\.\-])\s*$', curr_s_txt.strip())
+                            ):
+                                cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                                umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                                is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
+                                sub_spans.append((curr_s_txt.strip(), is_b_seg))
+                                curr_s_txt = st_s
+                                curr_ch_tot = len(st_s.strip())
+                                curr_ch_bold = len(st_s.strip()) if sb else 0
+                            else:
+                                if (
+                                    curr_s_txt and
+                                    not curr_s_txt.endswith((" ", "\t", "\n")) and
+                                    not st_s.startswith((" ", "\t", "\n", ".", ",", ";", ":", ")", "?")) and
+                                    (
+                                        re.match(r'^(?:#\s*)?(?:[a-dA-D][\)\.\-]|[Rr]?\d{1,3}[\.\-])$', curr_s_txt.strip()) or
+                                        re.match(r'^(?:[a-dA-D][\)\.\-]\s+|EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*:)', st_s.strip(), re.IGNORECASE)
+                                    )
+                                ):
+                                    curr_s_txt += " " + st_s
+                                else:
+                                    curr_s_txt += st_s
+                                n_c = len(st_s.strip())
+                                curr_ch_tot += n_c
+                                if sb:
+                                    curr_ch_bold += n_c
+                        if curr_s_txt.strip():
+                            cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                            umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                            is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
+                            sub_spans.append((curr_s_txt.strip(), is_b_seg))
+
+                        for idx_sp, (s_txt, s_bold) in enumerate(sub_spans):
+                            s_clean = PDFQuizParser._limpiar_marca_agua_linea(s_txt)
+                            if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean) and not _es_linea_cabecera_tema_repetida(s_clean):
+                                items_pagina.append((y0, x0 + idx_sp * 0.1, s_clean, s_bold))
+
+                if not items_pagina:
+                    for idx_r, raw_t in enumerate((page.get_text("text") or "").splitlines()):
+                        s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean) and not _es_linea_cabecera_tema_repetida(s_clean):
+                            for seg_t, seg_b in PDFQuizParser._atomizar_linea_test(s_clean, s_clean.startswith("#")):
+                                lineas_con_geom.append((seg_t, seg_b, p_idx, idx_r * 13.0))
+                else:
+                    usados = [False] * len(items_pagina)
+                    items_emparejados = []
+                    for i_it, (y_i, x_i, t_i, b_i) in enumerate(items_pagina):
+                        if usados[i_it]:
+                            continue
+                        if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_i):
+                            mejor_j = -1
+                            menor_dy = 999.0
+                            for j_it, (y_j, x_j, t_j, b_j) in enumerate(items_pagina):
+                                if i_it != j_it and not usados[j_it] and x_j > x_i - 5.0:
+                                    dy = abs(y_j - y_i)
+                                    if dy <= 4.5 and dy < menor_dy and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_j):
+                                        menor_dy = dy
+                                        mejor_j = j_it
+                            if mejor_j != -1:
+                                y_j, x_j, t_j, b_j = items_pagina[mejor_j]
+                                usados[i_it] = True
+                                usados[mejor_j] = True
+                                items_emparejados.append((min(y_i, y_j), x_i, f"{t_i.strip()} {t_j.strip()}", b_i or b_j))
+                                continue
+                        usados[i_it] = True
+                        items_emparejados.append((y_i, x_i, t_i, b_i))
+
+                    items_emparejados.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
+                    for y_e, _, t_e, b_e in items_emparejados:
+                        for seg_t, seg_b in PDFQuizParser._atomizar_linea_test(t_e, b_e):
+                            lineas_con_geom.append((seg_t, seg_b, p_idx, y_e))
+            doc.close()
+        except Exception:
+            return []
+
+    if not lineas_con_geom:
+        return []
+
+    # 1. Localizar si el PDF tiene encabezado divisorio 'SUPUESTO PRÁCTICO' / 'SUPUESTOS PRÁCTICOS'
+    idx_inicio_sup = -1
+    for idx_l, (s_l, _, _, _) in enumerate(lineas_con_geom):
+        s_sin_h = re.sub(r'^#+\s*', '', s_l).strip()
+        if (
+            len(s_sin_h) < 120 and
+            not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', s_sin_h, re.IGNORECASE) and
+            re.match(
+                r'^(?:(?:\d+|I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\s*[:\-–]\s*SUPUESTOS?\s+PR[ÁA]CTICOS?|SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+DE\s+APLICACI[ÓO]N|\s+FINAL(?:ES)?|\s*\(.*\))?\s*:?\s*$|CASOS?\s+PR[ÁA]CTICOS?\s*:?\s*$|ENUNCIADO\s+DEL\s+SUPUESTO\b)',
+                s_sin_h,
+                re.IGNORECASE
+            )
+        ):
+            idx_inicio_sup = idx_l + 1
+            break
+
+    lineas_sup = lineas_con_geom[idx_inicio_sup:] if idx_inicio_sup != -1 else lineas_con_geom[:]
+    if not lineas_sup:
+        return []
+
+    pat_q_sup_test = re.compile(
+        r'^(?:#+\s*)?(?:Pregunta\s+|Cuesti[óo]n\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*(?:\(RESERVA\)\s*)?(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
+        re.IGNORECASE
+    )
+    pat_opt_test = re.compile(r'^(?:#+\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
+    pat_opt_empty = re.compile(r'^(?:#+\s*)?([a-dA-D])[\)\.\-]\s*$')
+    pat_exp_test = re.compile(
+        r'^(?:#+\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
+        re.IGNORECASE
+    )
+    pat_nuevo_sup_explicito = re.compile(
+        r'^(?:#+\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:N\.?\s*[º°]?\s*)?(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|La\s+empresa|La\s+mercantil|La\s+sociedad|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+trabaja|\s+presta|\s+ostenta|\s+solicita|\s+\(\d+\s*a[ñn]os\))).*)$'
+    )
+
+    def _unir_parrafos_pre(lineas_con_pos):
+        if not lineas_con_pos:
+            return ""
+        pars = []
+        prev_pag, prev_y = None, None
+        for txt_l, pag_l, y_l in lineas_con_pos:
+            salto_parrafo = (prev_pag == pag_l and prev_y is not None and (y_l - prev_y) >= 16.5)
+            es_inicio_bloque = bool(
+                re.match(
+                    r'^(?:(?:SUPUESTO|CASO)\b|[A-Z][\)\.\-]\s+|\d+[\.\)]\s+|[•·\-]\s+|Adicionalmente\b|En\s+(?:primer|segundo|tercer)\s+lugar|Por\s+(?:su\s+parte|[úu]ltimo|otro\s+lado)|Asimismo\b|Finalmente\b|Paralelamente\b)',
+                    txt_l,
+                    re.IGNORECASE
+                )
+            )
+            if not pars or salto_parrafo or (pars[-1].rstrip().endswith((".", ":")) and es_inicio_bloque):
+                pars.append(txt_l)
+            else:
+                pars[-1] += " " + txt_l
+            prev_pag, prev_y = pag_l, y_l
+        return "\n\n".join(pars).strip()
+
+    def _es_nuevo_planteamiento_sup_test(idx_cur, lista_ln, estado_act, pre_actual_lineas, curr_q_obj):
+        s_cur = re.sub(r'^#+\s*', '', lista_ln[idx_cur][0]).strip()
+        if pat_nuevo_sup_explicito.match(s_cur) and (estado_act != "PREAMBULO" or not pre_actual_lineas):
+            if estado_act in ("QUESTION", "OPTIONS") and re.match(r'^[A-D][\)\.\-]\s+', s_cur):
+                return False
+            return True
+
+        if estado_act != "EXPLANATION" or curr_q_obj is None:
+            return False
+
+        exp_acum = (curr_q_obj.get("explanation") or "").rstrip()
+        if not exp_acum.endswith((".", '."', '".', "»", ")")):
+            return False
+
+        if not re.match(
+            r'^(?:La\s+(?:mercantil|empresa|sociedad|entidad|cooperativa|asesor[íi]a|mutua|compa[ñn][íi]a|unidad\s+familiar|administraci[óo]n)|El\s+(?:empresario|trabajador|bufete|ciudadano|causante)|(?:Don|Do[ñn]a|D\.|D\.ª|Dª)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+(?:es\s+un[oa]?|trabaja|presta\s+servicios|convive|fallece|solicita|\(\d+\s*a[ñn]os\)))\b',
+            s_cur
+        ):
+            return False
+
+        ult_n = curr_q_obj.get("num", 0)
+        bloque_pre_cand = []
+        prox_q_lineas = []
+        hallada_q = False
+        for j in range(idx_cur, min(len(lista_ln), idx_cur + 45)):
+            sj = re.sub(r'^#+\s*', '', lista_ln[j][0]).strip()
+            mq = pat_q_sup_test.match(sj)
+            if mq:
+                tok = mq.group(1).upper().lstrip("R")
+                if tok.isdigit() and int(tok) in (ult_n + 1, 1):
+                    hallada_q = True
+                    prox_q_lineas.append(sj)
+                    for kq in range(j + 1, min(len(lista_ln), j + 6)):
+                        prox_q_lineas.append(re.sub(r'^#+\s*', '', lista_ln[kq][0]).strip())
+                    break
+            bloque_pre_cand.append(sj)
+
+        if not hallada_q or len(bloque_pre_cand) < 4:
+            return False
+
+        txt_cand = " ".join(bloque_pre_cand)
+        if re.search(
+            r'(?:respuesta\s+correcta\s+es|Seg[úu]n\s+el\s+art[íi]culo|Conforme\s+al\s+art[íi]culo|De\s+acuerdo\s+con\s+el\s+art[íi]culo)',
+            txt_cand,
+            re.IGNORECASE
+        ):
+            return False
+
+        _, _, pag_cur, y_cur = lista_ln[idx_cur]
+        _, _, pag_prev, y_prev = lista_ln[idx_cur - 1]
+        salto_y_grande = (pag_cur == pag_prev and (y_cur - y_prev) >= 20.0) or (pag_cur > pag_prev)
+
+        txt_prox_q = " ".join(prox_q_lineas)
+        pre_ant = curr_q_obj.get("preamble") or ""
+        protagonistas = re.findall(
+            r'(?:"([^"]{3,40})"|\b(?:Don|Do[ñn]a)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)|\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{3,})\s+es\s+un)',
+            txt_cand
+        )
+        menciona_nuevo_protagonista = False
+        for g1, g2, g3 in protagonistas:
+            nom = (g1 or g2 or g3).strip()
+            if nom and nom not in pre_ant and nom in txt_prox_q:
+                menciona_nuevo_protagonista = True
+                break
+
+        return menciona_nuevo_protagonista or (salto_y_grande and len(bloque_pre_cand) >= 5)
+
+    preambulo_actual = []
+    preguntas_extraidas = []
+    curr_q = None
+    estado = "PREAMBULO"
+    pending_empty_opts = []
+
+    def _finalizar_q_sup_test(q_obj):
+        if not q_obj or len(q_obj.get("options", [])) < 2:
+            return
+        opts_norm = []
+        ans_fin = q_obj.get("answer", -1)
+        for idx_o, o_raw in enumerate(q_obj["options"]):
+            cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_raw).strip()
+            if cuerpo_o:
+                let_n = chr(ord('a') + len(opts_norm))
+                if idx_o == q_obj.get("answer", -1):
+                    ans_fin = len(opts_norm)
+                opts_norm.append(f"{let_n}) {cuerpo_o}")
+        q_obj["options"] = opts_norm
+        q_obj["answer"] = ans_fin if 0 <= ans_fin < len(opts_norm) else -1
+
+        if q_obj.get("explanation"):
+            q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
+
+        if q_obj["answer"] == -1 and q_obj.get("explanation"):
+            exp_t = q_obj["explanation"]
+            m_ans = re.search(
+                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta(?:\s+es\s+la)?|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"«]?([a-dA-D])[\)\'"»]?\b',
+                exp_t,
+                re.IGNORECASE
+            )
+            if not m_ans:
+                m_ans = re.search(r'\bopci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+(?:la\s+)?correcta\b', exp_t, re.IGNORECASE)
+            if m_ans:
+                idx_a = ord(m_ans.group(1).lower()) - ord('a')
+                if 0 <= idx_a < len(q_obj["options"]):
+                    q_obj["answer"] = idx_a
+
+        # Si el PDF no tenía un planteamiento común (`preamble` vacío) y cada pregunta trae su propio mini-planteamiento fáctico seguido de '¿...?', separarlo para mostrar el planteamiento en gris y la pregunta en marco
+        if not (q_obj.get("preamble") or "").strip():
+            qt_full = (q_obj.get("question_text") or "").strip()
+            m_num_pref = re.match(r'^([Rr]?\d{1,3}\.\s*(?:\(RESERVA\)\s*)?)(.+)$', qt_full, flags=re.DOTALL)
+            if m_num_pref:
+                pref_n = m_num_pref.group(1).strip()
+                cuerpo_qt = m_num_pref.group(2).strip()
+                if len(cuerpo_qt) > 190 and "." in cuerpo_qt:
+                    m_sp_ind = re.match(r'^(.+?[\.\:])\s+(¿.+\?)$', cuerpo_qt, flags=re.DOTALL)
+                    if m_sp_ind and len(m_sp_ind.group(1).strip()) >= 85:
+                        q_obj["preamble"] = f"{pref_n} {m_sp_ind.group(1).strip()}"
+                        q_obj["question_text"] = m_sp_ind.group(2).strip()
+
+        if max_options is not None and len(q_obj["options"]) > max_options:
+            PDFQuizParser._reducir_opciones_conservando_correcta(q_obj, max_options)
+
+        q_obj["is_open"] = False
+        q_obj["es_supuesto_test"] = True
+        q_obj.pop("num", None)
+        preguntas_extraidas.append(q_obj)
+
+    for i_ln, (s_raw, is_b, pag_i, y_i) in enumerate(lineas_sup):
+        s_l = re.sub(r'^#+\s*', '', s_raw).strip()
+        if not s_l or re.match(r'^(?:PREGUNTAS?\s+DE\s+RESERVA|CUESTIONES(?:\s+PR[ÁA]CTICAS)?|PREGUNTAS\s+DEL\s+SUPUESTO)\s*:?\s*$', s_l, re.IGNORECASE):
+            continue
+
+        if _es_nuevo_planteamiento_sup_test(i_ln, lineas_sup, estado, preambulo_actual, curr_q):
+            if curr_q is not None:
+                _finalizar_q_sup_test(curr_q)
+                curr_q = None
+            pending_empty_opts = []
+            preambulo_actual = [(s_l, pag_i, y_i)]
+            estado = "PREAMBULO"
+            continue
+
+        m_q = pat_q_sup_test.match(s_l)
+        m_opt_e = pat_opt_empty.match(s_l)
+        m_opt = pat_opt_test.match(s_l)
+        m_exp = pat_exp_test.match(s_l)
+
+        if m_q and not m_opt and not m_opt_e:
+            tok_q = m_q.group(1).upper()
+            es_res = tok_q.startswith("R") or "(RESERVA)" in s_l.upper()
+            num_q = int(tok_q.lstrip("R"))
+            txt_q = m_q.group(2).strip()
+
+            tiene_opciones_debajo = False
+            for j_look in range(i_ln + 1, min(len(lineas_sup), i_ln + 20)):
+                sl_look = re.sub(r'^#+\s*', '', lineas_sup[j_look][0]).strip()
+                if pat_opt_test.match(sl_look) or pat_opt_empty.match(sl_look):
+                    tiene_opciones_debajo = True
+                    break
+                if pat_q_sup_test.match(sl_look):
+                    break
+
+            if estado == "PREAMBULO" and curr_q is None and not tiene_opciones_debajo:
+                preambulo_actual.append((s_l, pag_i, y_i))
+                continue
+
+            en_mitad_enunciado_u_opciones = (
+                curr_q is not None and estado in ("QUESTION", "OPTIONS") and len(curr_q.get("options", [])) < 2
+            )
+            if not en_mitad_enunciado_u_opciones and (tiene_opciones_debajo or estado in ("PREAMBULO", "EXPLANATION")):
+                if curr_q is not None:
+                    _finalizar_q_sup_test(curr_q)
+                pending_empty_opts = []
+                etiqueta_n = f"R{num_q}." if tok_q.startswith("R") else (f"{num_q}. (RESERVA)" if es_res else f"{num_q}.")
+                curr_q = {
+                    "num": num_q,
+                    "preamble": _unir_parrafos_pre(preambulo_actual),
+                    "question_text": f"{etiqueta_n} {txt_q}",
+                    "options": [],
+                    "answer": -1,
+                    "explanation": ""
+                }
+                estado = "QUESTION"
+                continue
+
+        if estado == "PREAMBULO":
+            preambulo_actual.append((s_l, pag_i, y_i))
+            continue
+
+        if curr_q is None:
+            continue
+
+        if m_exp and len(curr_q["options"]) >= 2:
+            estado = "EXPLANATION"
+            pending_empty_opts = []
+            resto_e = m_exp.group(1).strip()
+            if resto_e:
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_e).strip()
+            continue
+
+        if m_opt_e and estado in ("QUESTION", "OPTIONS") and len(curr_q["options"]) < 4:
+            letra_asig = chr(ord('a') + len(curr_q["options"]))
+            curr_q["options"].append(f"{letra_asig}) ")
+            if is_b:
+                curr_q["answer"] = len(curr_q["options"]) - 1
+            pending_empty_opts.append(len(curr_q["options"]) - 1)
+            estado = "OPTIONS"
+            continue
+
+        if m_opt and estado in ("QUESTION", "OPTIONS"):
+            let_c = m_opt.group(1).lower()
+            cuerpo_o = m_opt.group(2).strip()
+            es_correcta_o = is_b or s_raw.lstrip().startswith("#")
+
+            if pending_empty_opts and len(curr_q["options"]) == pending_empty_opts[0] + 1 and curr_q["options"][-1].strip().endswith(")"):
+                idx_f = pending_empty_opts.pop(0)
+                letra_f = chr(ord('a') + idx_f)
+                curr_q["options"][idx_f] = f"{letra_f}) {cuerpo_o}"
+                if es_correcta_o:
+                    curr_q["answer"] = idx_f
+                estado = "OPTIONS"
+                continue
+
+            if len(curr_q["options"]) < 4:
+                letra_esp = chr(ord('a') + len(curr_q["options"]))
+                ult_cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip() if curr_q["options"] else ""
+                es_ref_interna = (
+                    estado == "OPTIONS" and bool(curr_q["options"]) and
+                    (
+                        bool(re.search(r'\b(?:letra|apartado|ep[íi]grafe|p[áa]rrafo|ordinal|inciso|opci[óo]n)s?\s*$', ult_cuerpo_o, re.IGNORECASE)) or
+                        (bool(re.match(r'^[a-záéíóúñ]', cuerpo_o)) and not ult_cuerpo_o.endswith((".", ";", "?", "!")) and let_c != letra_esp)
+                    )
+                )
+                if not es_ref_interna:
+                    pending_empty_opts = []
+                    curr_q["options"].append(f"{letra_esp}) {cuerpo_o}")
+                    if es_correcta_o:
+                        curr_q["answer"] = len(curr_q["options"]) - 1
+                    estado = "OPTIONS"
+                    continue
+
+        if estado == "QUESTION":
+            curr_q["question_text"] += " " + s_l
+        elif estado == "OPTIONS" and curr_q["options"]:
+            if pending_empty_opts:
+                idx_t = pending_empty_opts[0]
+                txt_act = re.sub(r'^[a-d]\)\s*', '', curr_q["options"][idx_t]).strip()
+                letra_t = chr(ord('a') + idx_t)
+                curr_q["options"][idx_t] = f"{letra_t}) {s_l}" if not txt_act else f"{curr_q['options'][idx_t]} {s_l}"
+                if is_b and curr_q["answer"] == -1:
+                    curr_q["answer"] = idx_t
+                if s_l.endswith((".", ";", "!", "?")):
+                    pending_empty_opts.pop(0)
+            else:
+                curr_q["options"][-1] += " " + s_l
+                if is_b and curr_q["answer"] == -1:
+                    curr_q["answer"] = len(curr_q["options"]) - 1
+        elif estado == "EXPLANATION":
+            curr_q["explanation"] = (curr_q["explanation"] + "\n" + s_l).strip()
+
+    if curr_q is not None:
+        _finalizar_q_sup_test(curr_q)
+
+    return preguntas_extraidas
 
 def _agrupar_lineas_por_banda_horizontal_pdf(items_raw, tolerancia_y=5.2):
     if not items_raw:
@@ -4403,6 +4847,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
         return preguntas_desarrollo + preguntas_supuestos
 
 PDFQuizParser.parse_abiertas_gestion = staticmethod(_parse_abiertas_gestion_fn)
+PDFQuizParser.parse_supuestos_test_administrativos = staticmethod(_parse_supuestos_test_administrativos_fn)
 # === FIN SECCIÓN 3C ===
 
 # === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
@@ -5670,7 +6115,6 @@ def generar_pdf_reporte_error(datos_rep):
         ])
 
         texto_completo = "\n".join(lineas_Bloques)
-        # Envolver líneas largas a 92 caracteres para que quepan perfectamente en A4
         lineas_envueltas = []
         for l_orig in texto_completo.splitlines():
             if not l_orig.strip():
@@ -5705,7 +6149,8 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
 
     es_desarrollo = bool(q.get("tipo_abierta") == "DESARROLLO")
     es_abierta = bool(q.get("is_open", False))
-    tipo_lbl = "Epígrafe" if es_desarrollo else ("Cuestión" if es_abierta else "Pregunta")
+    es_sup_test = bool(q.get("es_supuesto_test", False))
+    tipo_lbl = "Epígrafe" if es_desarrollo else ("Cuestión" if (es_abierta or es_sup_test) else "Pregunta")
     nombre_pdf = st.session_state.get('test_name') or "Test sin nombre"
     id_test_limpio = re.sub(r'\W+', '_', nombre_pdf)
     tema_vis = obtener_etiqueta_tema_visible(nombre_pdf, q)
@@ -5826,12 +6271,12 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                 }
             else:
                 payload = {
-                    "_subject": f"Revisar Pregunta {num_pregunta} - {nombre_pdf}",
+                    "_subject": f"Revisar {tipo_lbl} {num_pregunta} - {nombre_pdf}",
                     "name": f"Alumno Oposiciona ({usuario_rep})",
                     "email": correo_remitente,
                     "_replyto": correo_remitente,
                     "COMENTARIO_DEL_ALUMNO": motivo_limpio,
-                    "ALUMNO_Y_TEST": f"Alumno: {usuario_rep} | Test: {nombre_pdf} (Pregunta N. {num_pregunta})" + (f" | {preamble_txt[:400]}" if preamble_txt else ""),
+                    "ALUMNO_Y_TEST": f"Alumno: {usuario_rep} | Test: {nombre_pdf} ({tipo_lbl} N. {num_pregunta})" + (f" | {preamble_txt[:400]}" if preamble_txt else ""),
                     "ENUNCIADO_DE_LA_PREGUNTA": pregunta_txt,
                 }
                 for i_opt, texto_opt in enumerate(lista_opciones):
@@ -5842,7 +6287,8 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                 payload["EXPLICACION_EXTRAIDA_DEL_PDF"] = exp_limpia[:2500]
                 payload["message"] = (
                     f"QUE REPORTA EL ALUMNO ({usuario_rep}):\n« {motivo_limpio} »\n\n"
-                    f"TEST: {nombre_pdf} (Pregunta {num_pregunta})\n"
+                    f"TEST: {nombre_pdf} ({tipo_lbl} {num_pregunta})\n"
+                    f"PLANTEAMIENTO: {preamble_txt[:800]}\n\n"
                     f"ENUNCIADO: {pregunta_txt}\n\n"
                     f"OPCIONES:\n" + "\n".join(resumen_opciones_txt) + "\n\n"
                     f"RESPUESTA DADA POR BUENA: {correcta_txt}\n\n"
@@ -5973,7 +6419,9 @@ def coincide_busqueda(nombre_test, consulta):
 def obtener_grupo_tema(nombre_test, categoria):
     if categoria == "EXAMENES": return "🏆 Exámenes y Simulacros Oficiales"
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]: return "📝 2.º Ejercicio (1.ª Parte) — Preguntas de Desarrollo"
-    if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]: return "📋 2.º Ejercicio (2.ª Parte) — Supuestos Prácticos"
+    if categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
+        esp_act = (st.session_state.get("saved_esp") or "").upper()
+        return "📋 2.º Ejercicio (2.ª Parte) — Supuestos Prácticos" if "GESTI" in esp_act else "📋 Supuestos Prácticos (Tipo Test)"
     m = re.match(r'^TEMAS?\s*[_\.\-]?\s*(\d+(?:\s*(?:a|y)\s*\d+)?)', nombre_test, re.IGNORECASE)
     if m:
         b = m.group(1).upper().strip()
@@ -5993,7 +6441,8 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
     st.session_state.test_cat = cat_limpia
     st.session_state.mostrar_opciones_simulacro = False
     cat_actual = st.session_state.test_cat
-    max_op = 3 if "GESTI" in (st.session_state.test_esp or "").upper() else 4
+    es_gest = "GESTI" in (st.session_state.test_esp or "").upper()
+    max_op = 3 if es_gest else 4
     with st.spinner(f"Extrayendo '{nombre_test}' de forma segura..."):
         try:
             r = descargar_pdf_fresco(url_descarga)
@@ -6005,11 +6454,21 @@ def cargar_test_desde_url(nombre_test, url_descarga, especialidad_sel="", catego
                     else:
                         procesar_preguntas(raw_qs, barajar=False)
                 elif cat_actual == "SUPUESTOS":
-                    raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
-                    if not raw_qs:
-                        st.error("No se encontraron supuestos prácticos en este documento.")
+                    if not es_gest:
+                        raw_qs = PDFQuizParser.parse_supuestos_test_administrativos(r.content, max_options=max_op)
+                        if not raw_qs:
+                            st.error("No se encontraron supuestos prácticos tipo test en este documento.")
+                        else:
+                            procesar_preguntas(raw_qs, barajar=True)
                     else:
-                        procesar_preguntas(raw_qs, barajar=False)
+                        raw_qs = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
+                        if not raw_qs:
+                            raw_qs = PDFQuizParser.parse_supuestos_test_administrativos(r.content, max_options=max_op)
+                        if not raw_qs:
+                            st.error("No se encontraron supuestos prácticos en este documento.")
+                        else:
+                            es_sup_abierto = any(q.get("is_open", False) for q in raw_qs)
+                            procesar_preguntas(raw_qs, barajar=(not es_sup_abierto))
                 else:
                     raw_qs = PDFQuizParser.parse(r.content, max_options=max_op)
                     if not raw_qs: st.error("No se encontraron preguntas válidas en este PDF.")
@@ -6274,7 +6733,7 @@ def handle_option_toggle(idx_q, opt_idx):
                 st.session_state.checked = False
                 st.session_state.do_scroll = True
             else:
-                st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
+                st.session_state.update(finished=True, fase_deliberacion_tribunal=True, animacion_fin_mostrada=False, celebracion_mostrada=False, do_scroll=True)
     else:
         for j in range(len(opts)):
             st.session_state[f"opt_chk_{idx_q}_{j}"] = False
@@ -6296,7 +6755,7 @@ def handle_radio_change():
             st.session_state.checked = False
             st.session_state.do_scroll = True
         else:
-            st.session_state.update(finished=True, celebracion_mostrada=False, do_scroll=True)
+            st.session_state.update(finished=True, fase_deliberacion_tribunal=True, animacion_fin_mostrada=False, celebracion_mostrada=False, do_scroll=True)
 
 def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_correcta_final=None):
     if not texto_exp:
@@ -6346,6 +6805,8 @@ def _actualizar_letras_explicacion_tras_barajar(texto_exp, mapa_letras, letra_co
 def preparar_preguntas_como_en_test(raw_qs, barajar=True):
     if any(q.get("is_open", False) or q.get("tipo_abierta") in ("SUPUESTO", "DESARROLLO") for q in (raw_qs or [])):
         barajar = False
+
+    es_supuesto_test_lote = any(q.get("es_supuesto_test", False) for q in (raw_qs or []))
 
     patrones_fijos = [
         r'todas\s+son\s+(correctas|incorrectas|falsas|verdaderas)',
@@ -6401,18 +6862,22 @@ def preparar_preguntas_como_en_test(raw_qs, barajar=True):
         q["options"] = [f"{chr(97+i)}) {o}" for i, o in enumerate(cleaned_options)]
         qs_preparadas.append(q)
 
-    if barajar:
+    # En supuestos tipo test (Administrativos), mantener agrupado el orden de las preguntas de cada supuesto
+    if barajar and not es_supuesto_test_lote:
         random.shuffle(qs_preparadas)
 
     for idx_final, q_item in enumerate(qs_preparadas, 1):
         if not q_item.get("is_open", False):
+            es_res_txt = bool(re.match(r'^(?:#\s*)?(?:[Rr]\d+|\d+\.\s*\(RESERVA\))', (q_item.get("question_text") or "").strip(), re.IGNORECASE))
             txt_sin_num = re.sub(
-                r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*[\.\-\)]\s*[\.\-\)]*\s*',
+                r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*[\.\-\)]\s*(?:\(RESERVA\)\s*)?[\.\-\)]*\s*',
                 '',
                 (q_item.get("question_text") or "").strip(),
                 flags=re.IGNORECASE
             ).strip()
-            q_item["question_text"] = f"{idx_final}. {txt_sin_num}"
+            pref_f = f"{idx_final}. (RESERVA)" if (es_supuesto_test_lote and es_res_txt) else f"{idx_final}."
+            if txt_sin_num:
+                q_item["question_text"] = f"{pref_f} {txt_sin_num}"
 
     return qs_preparadas
 
@@ -6495,6 +6960,9 @@ def procesar_preguntas(raw_qs, barajar=True):
     limpiar_estados_reportes_error()
     _limpiar_estados_checkbox_opciones()
     qs_listas = preparar_preguntas_como_en_test(raw_qs, barajar=barajar)
+    for q_it in qs_listas:
+        if q_it.get("is_open") and "answer_text" not in q_it:
+            q_it["answer_text"] = q_it.get("official_answer", "")
     st.session_state.update(
         questions=qs_listas,
         current_index=0,
@@ -6536,7 +7004,6 @@ def action_finalizar_sesion():
     st.session_state.borrar_backup_ls = True
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4C ===
-
 
 # === SECCIÓN 5A: PANTALLA DE INICIO, MENÚ DE SELECCIÓN Y AUDITORÍA ADMIN ===
 sincronizar_progreso_navegador()
@@ -6831,7 +7298,11 @@ if not st.session_state.questions:
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
         titulo_paso_4 = "4. Seleccionar Pregunta de desarrollo (2.º Ejercicio - 1.ª Parte)"
     elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
-        titulo_paso_4 = "4. Seleccionar Supuestos prácticos (2.º Ejercicio - 2.ª Parte)"
+        titulo_paso_4 = (
+            "4. Seleccionar Supuestos prácticos (2.º Ejercicio - 2.ª Parte)"
+            if "GESTI" in especialidad.upper() else
+            "4. Seleccionar Supuestos prácticos (Modalidad Tipo Test)"
+        )
     else:
         titulo_paso_4 = "4. Selección de Test"
 
@@ -6839,7 +7310,10 @@ if not st.session_state.questions:
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] and es_admin:
         st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Incluye dictado por voz en tiempo real y valoración por IA según los Criterios Oficiales del Tribunal.")
     elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
-        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en recuadro gris con sangría francesa), permite dictar por voz y valora cada cuestión de 0 a 10 comparándola con la solución oficial.")
+        if "GESTI" in especialidad.upper():
+            st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos Gestión):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en recuadro gris en negrita), permite dictar por voz y valora cada cuestión de 0 a 10 comparándola con la solución oficial.")
+        else:
+            st.info("🔒 **Modo Administrador — Supuestos Prácticos Tipo Test (Administrativos):** Extrae los supuestos prácticos (uno o varios por tema), muestra el planteamiento en recuadro gris en negrita, la pregunta en marco y las 4 opciones tipo test seleccionables con corrección oficial.")
 
     tests_reales = {k: v for k, v in TESTS_DISPONIBLES[especialidad][categoria].items() if v is not None}
 
@@ -6973,9 +7447,14 @@ if not st.session_state.questions:
                 with st.spinner("Procesando documento local..."):
                     file_bytes_local = uf.read()
                     if cat_local == "SUPUESTOS":
-                        rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="SUPUESTOS")
-                        if not rqs: st.error("No se encontraron supuestos prácticos en este documento.")
-                        else: procesar_preguntas(rqs, barajar=False)
+                        if "GESTI" not in especialidad.upper():
+                            rqs = PDFQuizParser.parse_supuestos_test_administrativos(file_bytes_local, max_options=max_op_local)
+                            if not rqs: st.error("No se encontraron supuestos prácticos tipo test en este documento.")
+                            else: procesar_preguntas(rqs, barajar=True)
+                        else:
+                            rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="SUPUESTOS")
+                            if not rqs: st.error("No se encontraron supuestos prácticos en este documento.")
+                            else: procesar_preguntas(rqs, barajar=False)
                     elif cat_local == "DESARROLLO" or PDFQuizParser.es_archivo_docx(file_bytes_local):
                         rqs = PDFQuizParser.parse_abiertas_gestion(file_bytes_local, modo="DESARROLLO")
                         if not rqs: st.error("No se encontraron preguntas o epígrafes de desarrollo en este documento.")
@@ -7164,14 +7643,23 @@ if not st.session_state.questions:
                                 try:
                                     r = descargar_pdf_fresco(url_s)
                                     if r.status_code == 200:
-                                        qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
-                                        qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
-                                        if not qs_sup and not PDFQuizParser.es_archivo_docx(r.content):
-                                            qs_sup = preparar_preguntas_como_en_test(PDFQuizParser.parse(r.content, max_options=max_op_adm), barajar=False)
-                                        n_sup = len(qs_sup)
-                                        tot_cuestiones_sup += n_sup
-                                        n_sup_str = f"{n_sup} cuestiones"
-                                        est_s = "✅ OK" if n_sup > 0 else "⚠️ 0 cuestiones detectadas"
+                                        if not es_gestion_esp:
+                                            qs_sup = PDFQuizParser.parse_supuestos_test_administrativos(r.content, max_options=max_op_adm)
+                                            qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
+                                            sin_ans_s = [f"P{k_s+1}" for k_s, q_s in enumerate(qs_sup) if q_s.get("answer", -1) == -1]
+                                            n_sup = len(qs_sup)
+                                            tot_cuestiones_sup += n_sup
+                                            n_sup_str = f"{n_sup} preg. test"
+                                            est_s = "✅ OK (Tipo Test)" if (n_sup > 0 and not sin_ans_s) else (f"⚠️ Sin resp. marcada: {', '.join(sin_ans_s)}" if sin_ans_s else "⚠️ 0 cuestiones detectadas")
+                                            if sin_ans_s:
+                                                alertas_globales.append(f"**[{esp} - SUPUESTOS] {nom_s}:** {est_s}")
+                                        else:
+                                            qs_sup = PDFQuizParser.parse_abiertas_gestion(r.content, modo="SUPUESTOS")
+                                            qs_sup = preparar_preguntas_como_en_test(qs_sup, barajar=False)
+                                            n_sup = len(qs_sup)
+                                            tot_cuestiones_sup += n_sup
+                                            n_sup_str = f"{n_sup} cuestiones"
+                                            est_s = "✅ OK (Desarrollo)" if n_sup > 0 else "⚠️ 0 cuestiones detectadas"
                                         if n_sup == 0:
                                             alertas_globales.append(f"**[{esp} - SUPUESTOS] {nom_s}:** 0 cuestiones detectadas")
                                     else:
@@ -7242,13 +7730,11 @@ if not st.session_state.questions:
 # === SECCIÓN 5B: PANTALLA DE PREGUNTA ACTIVA (TEST, SUPUESTOS Y DESARROLLO) ===
 elif not st.session_state.finished:
     import html
-    # Estilos del examen activo + transformación visual de los checkboxes de opciones en círculos idénticos a st.radio
     st.markdown("""<style>
     :root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; --text-color: #1E293B !important; }
     html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFDE7 !important; background-image: none !important; color: #1E293B !important; }
     .block-container, [data-testid='stMainBlockContainer'], div[data-testid='stVerticalBlock'] { background-color: transparent !important; background: transparent !important; }
 
-    /* Opciones del test con aspecto idéntico a botones de radio redondos pero desmarcables al volver a pulsar sobre ellas */
     div[data-testid="stVerticalBlock"]:has(.marcador-opciones-test) [data-testid="stCheckbox"] {
         margin-bottom: 6px !important;
     }
@@ -7295,7 +7781,6 @@ elif not st.session_state.finished:
         white-space: normal !important;
     }
 
-    /* Estilos dedicados para SUPUESTOS PRÁCTICOS: planteamiento en gris claro + negrita, pregunta en marco fino sin fondo + negrita, justificados y con fuente original */
     .opo-supuesto-planteamiento, .opo-supuesto-planteamiento * {
         font-family: inherit !important;
         font-size: 16px !important;
@@ -7402,26 +7887,29 @@ elif not st.session_state.finished:
         )
         slot_st.markdown(html_card, unsafe_allow_html=True)
 
-    c_r, c_s, c_c, _ = st.columns([1.4, 1.3, 1.3, 2.0])
-    with c_r: st.button("🔄 Repetir test", on_click=action_repetir_test, use_container_width=True)
-    with c_s: st.button("📂 Subir otro", on_click=action_subir_otro, use_container_width=True)
-    with c_c: st.button("🚪 Cerrar sesión", on_click=action_finalizar_sesion, use_container_width=True)
-    st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
-
     idx = st.session_state.current_index
     q, stat = st.session_state.questions[idx], st.session_state.stats[idx]
     tot = len(st.session_state.questions)
     puede_rep = usuario_puede_reportar()
     es_abierta = bool(q.get("is_open", False))
-    es_supuesto_q = bool(q.get("tipo_abierta") == "SUPUESTO")
+    es_supuesto_abierto_q = bool(q.get("tipo_abierta") == "SUPUESTO")
+    es_supuesto_test_q = bool(q.get("es_supuesto_test", False))
+    es_supuesto_visual = es_supuesto_abierto_q or es_supuesto_test_q
     es_desarrollo_epigrafe = bool(q.get("tipo_abierta") == "DESARROLLO")
     nombre_test_act = st.session_state.get("test_name") or "Test"
     id_test_act = re.sub(r'\W+', '_', nombre_test_act)
 
-    etiqueta_tema = obtener_etiqueta_tema_visible(nombre_test_act, q)
-    tipo_item_lbl = "Epígrafe" if es_desarrollo_epigrafe else ("Cuestión" if es_abierta else "Pregunta")
+    lbl_btn_rep_arriba = "🔄 Repetir supuesto" if es_supuesto_visual else "🔄 Repetir test"
+    c_r, c_s, c_c, _ = st.columns([1.4, 1.3, 1.3, 2.0])
+    with c_r: st.button(lbl_btn_rep_arriba, on_click=action_repetir_test, use_container_width=True)
+    with c_s: st.button("📂 Subir otro", on_click=action_subir_otro, use_container_width=True)
+    with c_c: st.button("🚪 Cerrar sesión", on_click=action_finalizar_sesion, use_container_width=True)
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 10px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
-    if es_abierta and tot > 1:
+    etiqueta_tema = obtener_etiqueta_tema_visible(nombre_test_act, q)
+    tipo_item_lbl = "Epígrafe" if es_desarrollo_epigrafe else ("Cuestión" if es_supuesto_visual else "Pregunta")
+
+    if (es_abierta or es_supuesto_test_q) and tot > 1:
         etiquetas_nav = []
         for i_q, q_nav in enumerate(st.session_state.questions):
             t_nav = re.sub(r'\s+', ' ', q_nav.get("question_text", f"{tipo_item_lbl} {i_q+1}")).strip()
@@ -7437,7 +7925,7 @@ elif not st.session_state.finished:
                 st.session_state.do_scroll = True
 
         st.selectbox(
-            f"📌 Navegación directa ({tot} {tipo_item_lbl.lower()}s disponibles en este documento):",
+            f"📌 Navegación directa ({tot} {'epígrafes' if es_desarrollo_epigrafe else 'cuestiones'} disponibles en este documento):",
             options=etiquetas_nav,
             index=idx,
             key="sel_nav_abierta",
@@ -7453,7 +7941,7 @@ elif not st.session_state.finished:
         unsafe_allow_html=True
     )
 
-    if es_supuesto_q:
+    if es_supuesto_visual:
         pre_sup_txt = (q.get('preamble') or "").strip()
         q_sup_txt = (q.get('question_text') or "").strip()
 
@@ -7504,12 +7992,12 @@ elif not st.session_state.finished:
         altura_caja = 260 if es_desarrollo_epigrafe else 170
         lbl_textarea = (
             "✍️ Escribe o dicta por voz tu respuesta razonada a la cuestión planteada (o pulsa «Comprobar» en blanco si deseas consultar directamente la solución oficial):"
-            if es_supuesto_q else
+            if es_supuesto_abierto_q else
             "✍️ Escribe o dicta por voz tu desarrollo o respuesta jurídica (recuerda definir las siglas la primera vez que las uses, ej. «Texto Refundido de la Ley General de la Seguridad Social, en adelante TRLGSS»):"
         )
         placeholder_textarea = (
             "Redacta o dicta con el botón superior tu solución razonada al supuesto práctico, detallando los cálculos y artículos aplicables..."
-            if es_supuesto_q else
+            if es_supuesto_abierto_q else
             "Redacta o dicta con el botón superior tu contestación desarrollando los apartados del epígrafe, requisitos, plazos y normativa aplicable..."
         )
         sel_opt = st.text_area(
@@ -7562,7 +8050,8 @@ elif not st.session_state.finished:
                 save_answer(sel_opt)
             limpiar_estados_reportes_error()
             st.session_state.update(finished=True, fase_deliberacion_tribunal=True, animacion_fin_mostrada=False, celebracion_mostrada=False, do_scroll=True); st.rerun()
-    if c4.button("⏹ Finalizar Test", use_container_width=True):
+    lbl_fin_btn = "⏹ Finalizar Supuesto" if es_supuesto_visual else "⏹ Finalizar Test"
+    if c4.button(lbl_fin_btn, use_container_width=True):
         if es_abierta:
             save_answer(sel_opt)
         limpiar_estados_reportes_error()
@@ -7588,7 +8077,7 @@ elif not st.session_state.finished:
             resp_of = (q.get("answer_text") or "").strip()
             exp_of = (q.get("explanation") or "").strip()
             ctx_pregunta = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
-            modo_corr = "SUPUESTO" if es_supuesto_q else "DESARROLLO"
+            modo_corr = "SUPUESTO" if es_supuesto_abierto_q else "DESARROLLO"
 
             if not txt_alumno:
                 stat["open_score"] = 0.0
@@ -7601,7 +8090,7 @@ elif not st.session_state.finished:
                     slot_tribunal_5b = st.empty()
                     titulo_5b = (
                         f"El Tribunal Calificador está valorando tu Cuestión Práctica {idx + 1} de {tot}..."
-                        if es_supuesto_q else
+                        if es_supuesto_abierto_q else
                         f"El Tribunal Calificador está valorando tu Epígrafe {idx + 1} de {tot}..."
                     )
                     subtitulo_5b = "Contrastando tus argumentos, cálculos y citas del TRLGSS con la solución oficial. Por favor, espera unos segundos..."
@@ -7620,7 +8109,7 @@ elif not st.session_state.finished:
 
                     if es_desarrollo_epigrafe:
                         registrar_epigrafe_desarrollo_en_sheets(idx)
-                    elif es_supuesto_q:
+                    elif es_supuesto_abierto_q:
                         nota_celda_sup = calcular_nota_final_supuestos_sheets(indice_actual=idx)
                         accion_sh = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
                         st.session_state.inicio_registrado_sheets = True
@@ -7643,7 +8132,7 @@ elif not st.session_state.finished:
                 c2_q = ev.get("pts_criterio_2", 0.0)
                 c3_q = ev.get("pts_criterio_3", 0.0)
 
-                if es_supuesto_q:
+                if es_supuesto_abierto_q:
                     aprobado_s = n10_q >= 5.0
                     bg_card = "#ecfdf5" if aprobado_s else "#fff7ed"
                     border_card = "#16a34a" if aprobado_s else "#ea580c"
@@ -7807,7 +8296,6 @@ else:
     }
     </style>""", unsafe_allow_html=True)
 
-    # Ancla superior invisible y manejador JS delegado para que todos los botones 'VOLVER ARRIBA' lleven al top de la ventana activa de Streamlit
     st.markdown("<div id='opo_top_resultados_anchor' style='position:relative; top:-80px; height:0; width:0;'></div>", unsafe_allow_html=True)
     components.html("""<script>
     (function() {
@@ -7864,7 +8352,9 @@ else:
     notas_individuales_10 = []
     notas_individuales_50 = []
     es_test_abierto = any(q.get("is_open", False) for q in st.session_state.questions)
-    es_test_supuestos = any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions)
+    es_test_supuestos_abiertos = any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions)
+    es_test_supuestos_test = any(q.get("es_supuesto_test", False) for q in st.session_state.questions)
+    es_cualquier_supuesto = es_test_supuestos_abiertos or es_test_supuestos_test
 
     alguna_contestada = any(
         bool((st.session_state.stats.get(i_chk, {}).get("selected") or "").strip())
@@ -8079,7 +8569,7 @@ else:
             puntos_restados = fallos / 3.0
         else:
             es_gestion = False
-            nombre_cuerpo = "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL"
+            nombre_cuerpo = "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL" + (" — SUPUESTO PRÁCTICO" if es_test_supuestos_test else "")
             divisor_penalizacion = 4
             penalizacion_texto = "0,25 puntos (cada 4 errores restan 1 acierto)"
             puntos_restados = fallos / 4.0
@@ -8117,7 +8607,7 @@ else:
 
             nota_sheets_str = (
                 calcular_nota_final_supuestos_sheets()
-                if es_test_supuestos else
+                if es_test_supuestos_abiertos else
                 f"{nota_referencia:.2f} (Opos: {nota_oposicion_10:.2f})".replace(".", ",")
             )
             accion_sheets = "actualizar_fin" if st.session_state.get("inicio_registrado_sheets", False) else "nueva_fila"
@@ -8155,7 +8645,7 @@ else:
             </script>""", height=0)
         msg_enhorabuena = (
             "🎉 ¡ENHORABUENA, HAS SUPERADO EL SUPUESTO PRÁCTICO! 🎉"
-            if es_test_supuestos else (
+            if es_cualquier_supuesto else (
                 "🎉 ¡ENHORABUENA, HAS SUPERADO EL CORTE DE 25 / 50 PUNTOS! 🎉"
                 if es_test_abierto else
                 "🎉 ¡ENHORABUENA, HAS APROBADO EL TEST! 🎉"
@@ -8178,7 +8668,7 @@ else:
     st.markdown("<div style='text-align: center; font-size: 22px; font-weight: 700; color: #2C3E50 !important; margin-top: -10px; margin-bottom: 6px;'>📊 RESULTADOS FINALES</div>", unsafe_allow_html=True)
     st.markdown(f"<div style='text-align: center; font-size: 16px; font-weight: 700; color: #1f77b4 !important; margin-bottom: 15px;'>📘 {etiqueta_tema_fin}</div>", unsafe_allow_html=True)
 
-    if es_test_supuestos:
+    if es_test_supuestos_abiertos:
         desglose_indiv_sup = " &nbsp;•&nbsp; ".join([f"<b>P{num_i}:</b> {val_i:.2f}/10" for num_i, val_i in notas_individuales_10])
         st.markdown(
             f"<div style='text-align: center; font-size: 16px; font-weight: 600; color: #334155 !important; margin-bottom: 12px;'>"
@@ -8243,7 +8733,7 @@ else:
     if "DESARROLLO" in cat_actual_fin or any(q.get("tipo_abierta") == "DESARROLLO" for q in st.session_state.questions):
         lbl_repetir = "🔄 Repetir Preguntas"
         lbl_cambiar = "📁 Cambiar de Preguntas"
-    elif "SUPUESTO" in cat_actual_fin or any(q.get("tipo_abierta") == "SUPUESTO" for q in st.session_state.questions):
+    elif "SUPUESTO" in cat_actual_fin or es_cualquier_supuesto:
         lbl_repetir = "🔄 Repetir Supuestos"
         lbl_cambiar = "📁 Cambiar de Supuestos"
     else:
@@ -8259,7 +8749,7 @@ else:
     preambulos_distintos_sup = []
     for q_item_p in st.session_state.questions:
         pr_it = (q_item_p.get("preamble") or "").strip()
-        if pr_it and q_item_p.get("tipo_abierta") == "SUPUESTO" and pr_it not in preambulos_distintos_sup:
+        if pr_it and (q_item_p.get("tipo_abierta") == "SUPUESTO" or q_item_p.get("es_supuesto_test", False)) and pr_it not in preambulos_distintos_sup:
             preambulos_distintos_sup.append(pr_it)
     total_bloques_supuestos = len(preambulos_distintos_sup)
 
@@ -8267,8 +8757,10 @@ else:
     contador_bloque_supuesto = 0
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
-        es_sup_res_i = bool(q.get("tipo_abierta") == "SUPUESTO")
-        tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if q.get("is_open") else "Pregunta")
+        es_sup_ab_i = bool(q.get("tipo_abierta") == "SUPUESTO")
+        es_sup_test_i = bool(q.get("es_supuesto_test", False))
+        es_sup_res_i = es_sup_ab_i or es_sup_test_i
+        tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if es_sup_res_i else "Pregunta")
         co = (q.get('answer_text') or "Ver solución y explicación debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
         et = re.sub(r'^(explicaci[óo]n(?:\s+detallada|\s+y\s+justificaci[óo]n\s+legal|\s+y\s+base\s+legal|\s+para\s+estudio|\s*\([^)]*\))?:|respuesta:|resp:|respuestas:)\s*', '', q.get('explanation', '').strip(), flags=re.IGNORECASE).strip() or "No hay explicación disponible."
@@ -8303,7 +8795,11 @@ else:
             pre_html_res = html.escape(pre_actual).replace("\n\n", "<br><br>").replace("\n", "<br>")
             if contador_bloque_supuesto > 1 and total_bloques_supuestos < len(st.session_state.questions):
                 separador_sup_previo = "<hr style='margin: 22px 0px 14px 0px; border: 0; border-top: 3px solid #1E3A8A;'>"
-            ph = f"<div class='opo-supuesto-planteamiento-res'>{pre_html_res}</div>"
+            tit_sup_res = (
+                f"<div style='font-size:14.5px; font-weight:800; color:#1E3A8A !important; margin-bottom:5px; text-transform:uppercase;'>📋 SUPUESTO PRÁCTICO {contador_bloque_supuesto} DE {total_bloques_supuestos}</div>"
+                if total_bloques_supuestos > 1 and total_bloques_supuestos < len(st.session_state.questions) else ""
+            )
+            ph = f"{tit_sup_res}<div class='opo-supuesto-planteamiento-res'>{pre_html_res}</div>"
 
         q_txt_res_esc = html.escape(q_txt_actual).replace("\n\n", "<br><br>").replace("\n", "<br>")
         bloque_q_res_html = (
@@ -8322,8 +8818,8 @@ else:
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
             f"{separador_sup_previo}"
-            f"{fila_cabecera_item_html}"
             f"{ph}"
+            f"{fila_cabecera_item_html}"
             f"{bloque_q_res_html}"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
@@ -8353,3 +8849,8 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5C ===
+
+
+
+
+
