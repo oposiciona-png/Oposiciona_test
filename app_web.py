@@ -616,7 +616,7 @@ NUEVOS_HOY = [
     "TEMA 61 JUBILACION CONTRIBUTIVA",
 ]
 
-TESTS_DISPONIBLES_COMPLETO = {
+TESTS_DISPONIBLES = {
     "ADMINISTRATIVOS": {
         "ESPECIFICO": {
             "Elige un test de especifico...": None,
@@ -686,7 +686,21 @@ TESTS_DISPONIBLES_COMPLETO = {
         },
         "SUPUESTOS": {
             "Elige un test de supuestos...": None,
-            "TEMA 1 - CONSTITUCION Y TRLGSS": "https://drive.google.com/uc?export=download&id=1Z5mw1Jj1D77VXAghNDVr-UmbcEgP_GV5",
+            "TEMA 01 - CONSTITUCION Y TRLGSS": "https://drive.google.com/uc?export=download&id=1Z5mw1Jj1D77VXAghNDVr-UmbcEgP_GV5",
+            "TEMA 02A": "https://drive.google.com/uc?export=download&id=17lK9Q1xQunt-4lJeYU7QqhINRLLM2HEw",
+            "TEMA 02B": "https://drive.google.com/uc?export=download&id=1Z0rLu9eSrjSXiR0nTy6nTMMLV-bSOmQ6",
+            "TEMA 02C": "https://drive.google.com/uc?export=download&id=1ikbOUgK2ESpu_O3xH8Xvn-hc95gH5WrC",
+            "TEMA 02D": "https://drive.google.com/uc?export=download&id=1CbsWH7VTkzrz1Cz-f2ghPABs7_WNVb6z",
+            "TEMA 03 - AFILIACION": "https://drive.google.com/uc?export=download&id=1S5FWCMwLYTI9HiJY4kVSoThNp7XK4cCM",
+            "TEMA 04 -COTIZACION": "https://drive.google.com/uc?export=download&id=1CobeZShnSVnriCyQ29R6Ruf6flXJFc8K",
+            "TEMA 05a - RECAUDACIÓN VOLUNTARIA": "https://drive.google.com/uc?export=download&id=1Dg0mSgZ3lAO0sALJqZxvvLEZNrsOjflt",
+            "TEMA 05b - RECAUDACIÓN VOLUNTARIA": "https://drive.google.com/uc?export=download&id=1Jb33e80VQcWQbMiOJ-aIqsgv7o9Mwkr-",
+            "TEMA 08A INCAPACIDAD TEMPORAL": "https://drive.google.com/uc?export=download&id=10ziheihr-60JoLiEvTi17QkXQS3DWGrV",
+            "TEMA 08B INCAPACIDAD PERMANENTE": "https://drive.google.com/uc?export=download&id=1cnrn-ZkaRGPfstuoZ9RA1ofp-YO1NFbi",
+            "TEMA 09 NYCM": "https://drive.google.com/uc?export=download&id=1i0P4bsfLb6jN0GeqSlwe72YZi-bqVwuk",
+            "TEMA 10 JUBILACIÓN": "https://drive.google.com/uc?export=download&id=16eRs-xpizfmyqhch-M6gCjqxd31L2I1c",
+            "TEMA 11 MUERTE Y SUPERVIVENCIA": "https://drive.google.com/uc?export=download&id=11HjAg0JvDOYyQ2OOWhtv0cSxwBBeFIbL",
+            "TEMA 12 - IMV": "https://drive.google.com/uc?export=download&id=1Fg0ZvHbLoRWRR_6WOCz2k0E8xiDsnNyd",
         },
     },
     "GESTION": {
@@ -809,7 +823,7 @@ TESTS_DISPONIBLES_COMPLETO = {
     },
 }
 
-TESTS_DISPONIBLES = TESTS_DISPONIBLES_COMPLETO
+TESTS_DISPONIBLES_COMPLETO = TESTS_DISPONIBLES
 
 def obtener_tests_segun_rol():
     rol = st.session_state.get("rol")
