@@ -5017,28 +5017,49 @@ PDFQuizParser.parse_supuestos_test_administrativos = staticmethod(_parse_supuest
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
     TESTS_DISPONIBLES_COMPLETO = globals().get("TESTS_DISPONIBLES", globals().get("ESTS_DISPONIBLES", {}))
 
-# Puente automático para evitar NameError con TESTS_DISPONIBLES_INVITADO
-if "TESTS_DISPONIBLES_INVITADO" not in globals():
-    def _generar_catalogo_invitado_por_defecto():
-        cat_full = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or {}
-        inv_auto = {"ADMINISTRATIVOS": {}, "GESTION": {}}
-        for esp_k in ["ADMINISTRATIVOS", "GESTION"]:
-            esp_dict = cat_full.get(esp_k, {})
-            esp_especifico = esp_dict.get("ESPECIFICO", {})
-            demo_especifico = {"Elige un test de demostración...": None}
-            for nom_t, url_t in esp_especifico.items():
-                if url_t is not None:
-                    demo_especifico[nom_t] = url_t
-                    break
-            inv_auto[esp_k]["ESPECIFICO"] = demo_especifico
-            inv_auto[esp_k]["EXAMENES"] = {}
-            inv_auto[esp_k]["GENERAL"] = {}
-            inv_auto[esp_k]["SUPUESTOS"] = {}
-            if esp_k == "GESTION":
-                inv_auto[esp_k]["DESARROLLO"] = {}
-        return inv_auto
-
-    TESTS_DISPONIBLES_INVITADO = _generar_catalogo_invitado_por_defecto()
+# Catálogo oficial de demostración para el rol INVITADO (1 documento específico por cada categoría de Administrativos y Gestión)
+TESTS_DISPONIBLES_INVITADO = {
+    "ADMINISTRATIVOS": {
+        "ESPECIFICO": {
+            "Elige un test de demostración...": None,
+            "TEMA 04 - TEST Y SUPUESTOS COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Tpw0hJ1Vpc8d9KGe6TffL-FRqGoWPTML",
+        },
+        "EXAMENES": {
+            "Elige un examen de demostración...": None,
+            "EXAMEN SABADO 31 OCTUBRE 2026": "https://drive.google.com/uc?export=download&id=1Yh_1mNSQNgQ6m-L-V2r6gaahKoWar0Oi",
+        },
+        "GENERAL": {
+            "Elige un test de demostración...": None,
+            "TEMA 20 - ATENCION AL PÚBLICO": "https://drive.google.com/uc?export=download&id=1v7I4oL03hQF8Q66MoG9ZiRnj_tHxjN2f",
+        },
+        "SUPUESTOS": {
+            "Elige un supuesto de demostración...": None,
+            "TEMA 03 - AFILIACION": "https://drive.google.com/uc?export=download&id=1S5FWCMwLYTI9HiJY4kVSoThNp7XK4cCM",
+        },
+    },
+    "GESTION": {
+        "ESPECIFICO": {
+            "Elige un test de demostración...": None,
+            "TEMA 53 - AFILIACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Kv-Bm_Eig1SMcXB-xBjzbQwQqjlAQ8Bf",
+        },
+        "EXAMENES": {
+            "Elige un examen de demostración...": None,
+            "DOMINGO 6 SEP 2026 ACTUALIZADO": "https://drive.google.com/uc?export=download&id=17Sn2tH9MnBKs4waafXN5NvLEJW8Dieq4",
+        },
+        "GENERAL": {
+            "Elige un test de demostración...": None,
+            "TEMA 25 EL DERECHO PRESUPUESTARIO": "https://drive.google.com/uc?export=download&id=1laSQ9V_KWQsADQ3ltO9TheF3kHOrlJnF",
+        },
+        "SUPUESTOS": {
+            "Elige un supuesto de demostración...": None,
+            "TEMA 58 NYCM": "https://drive.google.com/uc?export=download&id=1208HwEFZ3jKuwNNUBinhOH5ANWoebJky",
+        },
+        "DESARROLLO": {
+            "Elige un tema de demostración...": None,
+            "Tema_53_Afiliacion_Altas_Bajas_Convenio_Especial_Inscripcion": "https://drive.google.com/uc?export=download&id=1yEed2dlJZay1YHCbcpcC5VcADMGMrAQY",
+        },
+    },
+}
 
 # Baja efectiva e inmediata de correos revocados (bloqueo en memoria y cierre de sesión activa)
 USUARIOS_DADOS_DE_BAJA = {
@@ -5228,7 +5249,6 @@ def activar_proteccion_antirecortes_alumno():
 def obtener_tests_segun_rol():
     catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
     if st.session_state.get('rol') == 'INVITADO':
-        cat_inv_global = globals().get("TESTS_DISPONIBLES_INVITADO") or {}
         inv_res = {
             "ADMINISTRATIVOS": {},
             "GESTION": {},
@@ -5237,21 +5257,9 @@ def obtener_tests_segun_rol():
             ("ADMINISTRATIVOS", ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]),
             ("GESTION", ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]),
         ]:
-            base_esp_inv = dict(cat_inv_global.get(esp_inv, {}))
+            base_esp_inv = TESTS_DISPONIBLES_INVITADO.get(esp_inv, {})
             for c_inv in cats_lista:
-                if c_inv in base_esp_inv and base_esp_inv[c_inv]:
-                    inv_res[esp_inv][c_inv] = dict(base_esp_inv[c_inv])
-                elif c_inv == "ESPECIFICO":
-                    # Si el diccionario de invitado estaba vacío, tomar automáticamente 1 solo test de muestra de ESPECIFICO
-                    orig_esp = catalogo_base.get(esp_inv, {}).get("ESPECIFICO", {})
-                    muestra = {"Elige un test de demostración...": None}
-                    for k_m, v_m in orig_esp.items():
-                        if v_m is not None:
-                            muestra[k_m] = v_m
-                            break
-                    inv_res[esp_inv]["ESPECIFICO"] = muestra
-                else:
-                    inv_res[esp_inv][c_inv] = {}
+                inv_res[esp_inv][c_inv] = dict(base_esp_inv.get(c_inv, {}))
         return inv_res
 
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
@@ -7634,40 +7642,30 @@ if not st.session_state.questions:
     if rol == "INVITADO":
         if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"]:
             st.markdown(
-                "<div style='background-color:#EFF6FF; border:2px solid #2563EB; border-radius:10px; padding:16px 18px; margin-top:8px; margin-bottom:14px; line-height:1.5; color:#1E293B !important;'>"
-                "<div style='font-size:16px; font-weight:800; color:#1E3A8A !important; margin-bottom:8px;'>📝 ¿En qué consiste la categoría DESARROLLO de Oposiciona 5.0?</div>"
-                "<p style='font-size:14px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
-                "Este módulo interactivo está diseñado específicamente para preparar la <b>1.ª Parte del Segundo Ejercicio del Cuerpo de Gestión de la Administración de la Seguridad Social</b> (desarrollo escrito de epígrafes oficiales del temario). "
-                "El alumno redacta o dicta por voz su contestación directamente en la plataforma y nuestro sistema de <b>Inteligencia Artificial entrenado con los Criterios Oficiales del Tribunal Calificador</b> analiza su respuesta en tiempo real comparándola con el texto mínimo oficial elaborado por los preparadores."
+                "<div style='background-color:#EFF6FF; border:2px solid #2563EB; border-radius:10px; padding:14px 18px; margin-top:4px; margin-bottom:12px; line-height:1.5; color:#1E293B !important;'>"
+                "<div style='font-size:15.5px; font-weight:800; color:#1E3A8A !important; margin-bottom:6px;'>📝 Demostración para Invitado — Categoría DESARROLLO (Oposiciona 5.0)</div>"
+                "<p style='font-size:13.5px; color:#1E293B !important; text-align:justify; margin-bottom:8px;'>"
+                "Prueba a continuación el tema de demostración habilitado: puedes redactar o dictar por voz tu respuesta a cualquiera de sus epígrafes y recibirás en tiempo real la <b>calificación de 0 a 50 puntos según los Criterios Oficiales del Tribunal Calificador</b> junto con el texto mínimo oficial. "
+                "Para acceder al catálogo completo de temas de Oposiciona 5.0 escribe a <a href='mailto:info@oposiciona.es' style='color:#1D4ED8 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</p>"
-                "<ul style='font-size:13.5px; color:#1E293B !important; margin-bottom:12px; padding-left:20px;'>"
-                "<li><b>Calificación oficial de 0 a 50 puntos</b> desglosada en <b>Criterio 1 (0 a 45 ptos)</b> de conocimiento y rigor normativo, <b>Criterio 2 (0 a 3 ptos)</b> de estructura y orden expositivo, y <b>Criterio 3 (0 a 2 ptos)</b> de expresión escrita y presentación formal de siglas.</li>"
-                "<li><b>Informe analítico personalizado:</b> Detalla qué apartados has desarrollado correctamente, qué conceptos o artículos adicionales han enriquecido tu respuesta, qué puntos te han faltado por completar y la relación de artículos omitidos, junto con el texto mínimo oficial completo para tu estudio.</li>"
-                "</ul>"
-                "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:13.5px; color:#92400E !important;'>"
-                "🔒 <b>Acceso exclusivo para alumnos de Oposiciona 5.0:</b> Esta funcionalidad no está disponible para usuarios invitados. "
-                "Puedes solicitar más información y matricularte escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
-                "</div>"
                 "</div>",
                 unsafe_allow_html=True
             )
-        elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and not tests_reales:
+        elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"]:
             st.markdown(
-                "<div style='background-color:#FEFCE8; border:2px solid #D97706; border-radius:10px; padding:15px 18px; margin-top:8px; margin-bottom:14px; line-height:1.5; color:#1E293B !important;'>"
-                "<div style='font-size:16px; font-weight:800; color:#92400E !important; margin-bottom:6px;'>📋 ¿En qué consiste la categoría SUPUESTOS de Oposiciona 5.0?</div>"
-                "<p style='font-size:14px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
-                "Entrena casos prácticos reales actualizados a la normativa vigente: en <b>Administrativos</b> mediante supuestos prácticos tipo test con corrección comentada, y en <b>Gestión</b> mediante casos prácticos de desarrollo evaluados en tiempo real por Inteligencia Artificial."
+                "<div style='background-color:#FEFCE8; border:2px solid #D97706; border-radius:10px; padding:14px 18px; margin-top:4px; margin-bottom:12px; line-height:1.5; color:#1E293B !important;'>"
+                "<div style='font-size:15.5px; font-weight:800; color:#92400E !important; margin-bottom:6px;'>📋 Demostración para Invitado — Categoría SUPUESTOS (Oposiciona 5.0)</div>"
+                "<p style='font-size:13.5px; color:#1E293B !important; text-align:justify; margin-bottom:0px;'>"
+                "Tienes habilitado un supuesto práctico completo de demostración en esta especialidad (tipo test comentado en <b>Administrativos</b> y de desarrollo evaluado por IA en <b>Gestión</b>). "
+                "Solicita acceso al catálogo completo escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</p>"
-                "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:13.5px; color:#92400E !important;'>"
-                "🔒 <b>Acceso exclusivo para alumnos de Oposiciona 5.0:</b> Solicita más información y matricúlate escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
-                "</div>"
                 "</div>",
                 unsafe_allow_html=True
             )
         elif not tests_reales:
             st.warning("⚠️ CATEGORÍA NO DISPONIBLE PARA USUARIOS INVITADOS")
         else:
-            st.info("ℹ️ ÚNICO TEST DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO")
+            st.info("ℹ️ DOCUMENTO DE DEMOSTRACIÓN DISPONIBLE PARA USUARIO INVITADO (Solicita el catálogo completo en info@oposiciona.es)")
 
     if tests_reales:
         mostrar_filtro = (categoria not in ["EXAMENES", "DESARROLLO", "PREGUNTA DE DESARROLLO", "SUPUESTOS", "SUPUESTOS PRÁCTICOS"]) and any("repaso" in n.lower() for n in tests_reales)
