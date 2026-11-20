@@ -3103,12 +3103,6 @@ _RESPALDO_TEMA_73_ABIERTAS = {
 }
 
 def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""):
-    """
-    Recibe los párrafos del bloque de enunciado de un supuesto individual (sin `header_opcional`
-    o con él en `enun_partes[0]`) y separa limpiamente:
-    - `preamble_str`: el planteamiento fáctico del supuesto (para mostrar en caja gris claro y negrita).
-    - `question_str`: la(s) pregunta(s) formuladas sobre ese supuesto (para mostrar en marco fino sin fondo y negrita).
-    """
     partes = [p.strip() for p in enun_partes if p and p.strip()]
     if not partes:
         return "", ""
@@ -3124,10 +3118,8 @@ def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""
     if not cuerpo:
         return "", partes[0]
 
-    # Caso 1: Hay un solo párrafo de cuerpo donde vienen seguidos los hechos y al final la pregunta (ej. Supuestos 15 a 20 de Tema 57 o Cuestiones de Tema 55)
     if len(cuerpo) == 1:
         unico = cuerpo[0]
-        # Buscar dónde empieza la primera pregunta '¿...?' o imperativa 'Calcule su Base Reguladora...' tras un punto
         m_split_q = re.match(
             r'^(.+?[\.\:])\s+((?:¿.+|(?:Calcule|Determine|Indique|Explique|Desglose|Señale|Justifique|Razone|Analice)\b.+))$',
             unico,
@@ -3143,8 +3135,6 @@ def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""
                 return header_opcional.strip(), unico
             return "", unico
 
-    # Caso 2: Hay varios párrafos en `cuerpo` (ej. Supuestos 1 a 14 de Tema 57, o Tema 56 con "1.- Don Alberto..." + "¿Impide...?")
-    # Encontrar el primer párrafo a partir del índice 1 que sea propiamente pregunta
     idx_corte_q = len(cuerpo)
     for idx_c in range(1, len(cuerpo)):
         p_c = cuerpo[idx_c]
@@ -3157,7 +3147,6 @@ def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""
         pregs_lista = cuerpo[idx_corte_q:]
         return "\n\n".join(hechos_lista).strip(), "\n\n".join(pregs_lista).strip()
 
-    # Si el último párrafo contiene al final una pregunta pegada tras punto, separarla
     m_ult = re.match(
         r'^(.+?[\.\:])\s+((?:¿.+|(?:Calcule|Determine|Indique|Explique|Desglose|Señale|Justifique|Razone|Analice)\b.+))$',
         cuerpo[-1],
@@ -3169,6 +3158,30 @@ def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""
 
     hechos_lista = ([header_opcional.strip()] if tiene_hdr else []) + cuerpo[:-1]
     return "\n\n".join(hechos_lista).strip(), cuerpo[-1].strip()
+
+def _reconstruir_respuesta_supuesto_integrada(lineas_r):
+    """
+    Une las líneas de la respuesta de un supuesto respetando párrafos y viñetas ('- ...', '1) ...')
+    sin cortar jamás líneas de continuación que empiezan en minúscula, números o paréntesis
+    (ej. 'de pago único, distribuida a partes iguales...' / '(10.800,00 € para cada uno).').
+    """
+    parrafos = []
+    for lr in lineas_r:
+        s = (lr or "").strip()
+        if not s:
+            continue
+        es_nueva_vineta_o_apartado = bool(
+            re.match(r'^(?:[\-•·▪■]\s+|\d+[\)\.]\s+[A-ZÁÉÍÓÚÑ]|[A-Z][\)\.]\s+[A-ZÁÉÍÓÚÑ])', s)
+        )
+        if not parrafos:
+            parrafos.append(s)
+        elif es_nueva_vineta_o_apartado:
+            parrafos.append(s)
+        elif parrafos[-1].rstrip().endswith((".", ":", ";")) and re.match(r'^[A-ZÁÉÍÓÚÑ"«¿¡]', s):
+            parrafos.append(s)
+        else:
+            parrafos[-1] = parrafos[-1].rstrip() + " " + s
+    return "\n\n".join(parrafos).strip()
 
 def _formatear_linea_cuerpo_epigrafe_docx(t_raw, prev_line=""):
     t = (t_raw or "").strip()
@@ -3344,7 +3357,7 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
         r'^(?:#\s*)?(?:([A-Z])[\)\.\-]\s*)?(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:N\.?\s*[º°]?\s*)?(\d{1,2}|[IVX]{1,4}|[A-Z])(?!\w)\s*[:\.\-]?\s*(.*)$'
     )
     pat_sol_hdr = re.compile(
-        r'^(?:#\s*)?(?:SOLUCI[ÓO]N(?:ES)?|RESPUESTAS?(?:\s+Y\s+FUNDAMENTOS?\s+JUR[ÍI]DICOS?|\s+OFICIAL(?:ES)?|\s+T[ÉE]CNICAS?)?)\s*[:\.\-]\s*(.*)$|^(?:#\s*)?SOLUCI[ÓO]N(?:ES)?\s*$',
+        r'^(?:#\s*)?(?:SOLUCI[ÓO]N(?:ES)?|RESPUESTAS?(?:\s+Y\s+FUNDAMENTOS?\s+JUR[ÍI]DICOS?|\s+OFICIAL(?:ES)?|\s+T[ÉE]CNICAS?)?)\s*[:\.\-]\s*(.*)$|^(?:#\s*)?(?:SOLUCI[ÓO]N(?:ES)?|RESPUESTAS?(?:\s+Y\s+FUNDAMENTOS?\s+JUR[ÍI]DICOS?)?)\s*$',
         re.IGNORECASE
     )
     pat_preg_explicita = re.compile(
@@ -3366,6 +3379,22 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
     supuestos_bloques = []
     curr_sup = None
     sub_modo_actual = None
+    q_explicita_actual_num = None
+    q_explicita_actual_lineas = []
+
+    def _sincronizar_pregunta_explicita(sup_obj, num_p, lineas_p):
+        txt_pe = re.sub(r'\s+', ' ', " ".join(lineas_p)).strip()
+        if not txt_pe:
+            return
+        for q_item in sup_obj["preguntas"]:
+            if q_item[0] == num_p:
+                txt_lista = re.sub(r'\s+', ' ', " ".join(q_item[1])).strip()
+                if len(txt_pe) > len(txt_lista) + 3:
+                    q_item[1] = [txt_pe]
+                    if sup_obj["preambulo"] and sup_obj["preambulo"][-1].strip() in txt_pe and not sup_obj["preambulo"][-1].rstrip().endswith("."):
+                        sup_obj["preambulo"].pop()
+                return
+        sup_obj["preguntas"].append([num_p, [txt_pe]])
 
     for l_raw in lineas_doc:
         l = re.sub(r'^#\s*', '', l_raw).strip()
@@ -3381,6 +3410,11 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
 
         m_sup = pat_sup_hdr.match(l)
         if m_sup and (curr_sup is None or curr_sup["en_solucion"] or len(curr_sup["preguntas"]) > 0):
+            if curr_sup is not None and q_explicita_actual_num is not None and q_explicita_actual_lineas:
+                _sincronizar_pregunta_explicita(curr_sup, q_explicita_actual_num, q_explicita_actual_lineas)
+            q_explicita_actual_num = None
+            q_explicita_actual_lineas = []
+
             if curr_sup is not None:
                 supuestos_bloques.append(curr_sup)
             letra_pref = (m_sup.group(1) or "").strip()
@@ -3403,26 +3437,36 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
 
         m_pe = pat_preg_explicita.match(l)
         if m_pe:
+            if q_explicita_actual_num is not None and q_explicita_actual_lineas:
+                _sincronizar_pregunta_explicita(curr_sup, q_explicita_actual_num, q_explicita_actual_lineas)
+
             num_pe = int(m_pe.group(1))
             resto_pe = m_pe.group(2).strip()
             curr_sup["en_solucion"] = True
+            q_explicita_actual_num = num_pe
+            q_explicita_actual_lineas = []
+
             m_inline_rfj = re.search(
-                r'^(.*?\?)\s*(?:Respuesta(?:\s+y\s+Fundamento\s+Jur[íi]dico)?|Soluci[óo]n)\s*:\s*(.+)$',
+                r'^(.+?[\?\.])\s*(?:Respuesta(?:\s+y\s+Fundamento(?:\s+Jur[íi]dico)?)?|Soluci[óo]n)\s*:?\s*(.*)$',
                 resto_pe,
                 flags=re.IGNORECASE
             )
             if m_inline_rfj:
                 q_pe_txt = m_inline_rfj.group(1).strip()
-                r_pe_txt = m_inline_rfj.group(2).strip()
-                if not any(q_it[0] == num_pe for q_it in curr_sup["preguntas"]):
-                    curr_sup["preguntas"].append([num_pe, [q_pe_txt]])
-                curr_sup["respuestas"].append([num_pe, [r_pe_txt]])
+                r_pe_txt = re.sub(r'^(?:Jur[íi]dico\s*:\s*)', '', m_inline_rfj.group(2).strip(), flags=re.IGNORECASE).strip()
+                q_explicita_actual_lineas.append(q_pe_txt)
+                _sincronizar_pregunta_explicita(curr_sup, num_pe, q_explicita_actual_lineas)
+                q_explicita_actual_lineas = []
+                curr_sup["respuestas"].append([num_pe, [r_pe_txt] if r_pe_txt else []])
                 sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
             else:
-                if not any(q_it[0] == num_pe for q_it in curr_sup["preguntas"]) and resto_pe:
-                    curr_sup["preguntas"].append([num_pe, [resto_pe]])
+                if resto_pe:
+                    q_explicita_actual_lineas.append(resto_pe)
                 curr_sup["respuestas"].append([num_pe, []])
-                if resto_pe.endswith("?"):
+                cerro_en_misma_linea = resto_pe.endswith("?") or (resto_pe.endswith(".") and len(resto_pe) > 25)
+                if cerro_en_misma_linea:
+                    _sincronizar_pregunta_explicita(curr_sup, num_pe, q_explicita_actual_lineas)
+                    q_explicita_actual_lineas = []
                     sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
                 else:
                     sub_modo_actual = "PREGUNTA_EXPLICITA_HEADER"
@@ -3431,23 +3475,38 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
         if sub_modo_actual == "PREGUNTA_EXPLICITA_HEADER":
             m_sol_in = pat_sol_hdr.match(l)
             if m_sol_in:
+                if q_explicita_actual_num is not None and q_explicita_actual_lineas:
+                    _sincronizar_pregunta_explicita(curr_sup, q_explicita_actual_num, q_explicita_actual_lineas)
+                    q_explicita_actual_lineas = []
                 sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
                 resto_s = (m_sol_in.group(1) or "").strip()
                 if resto_s and curr_sup["respuestas"]:
                     curr_sup["respuestas"][-1][1].append(resto_s)
                 continue
-            if l.endswith("?"):
-                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
-                continue
-            m_q_then_r = re.search(
-                r'^(.*?\?)\s*(?:(?:Respuesta(?:\s+y\s+Fundamento\s+Jur[íi]dico)?|Soluci[óo]n)\s*:\s*)?(.+)$',
+
+            m_q_then_rfj = re.search(
+                r'^(.+?[\?\.])\s*(?:Respuesta(?:\s+y\s+Fundamento(?:\s+Jur[íi]dico)?)?|Soluci[óo]n)\s*:?\s*(.*)$',
                 l,
                 flags=re.IGNORECASE
             )
-            if m_q_then_r:
+            if m_q_then_rfj:
+                q_explicita_actual_lineas.append(m_q_then_rfj.group(1).strip())
+                if q_explicita_actual_num is not None:
+                    _sincronizar_pregunta_explicita(curr_sup, q_explicita_actual_num, q_explicita_actual_lineas)
+                q_explicita_actual_lineas = []
                 sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
-                curr_sup["respuestas"][-1][1].append(m_q_then_r.group(2).strip())
+                cola_r = re.sub(r'^(?:Jur[íi]dico\s*:\s*)', '', m_q_then_rfj.group(2).strip(), flags=re.IGNORECASE).strip()
+                if cola_r and curr_sup["respuestas"]:
+                    curr_sup["respuestas"][-1][1].append(cola_r)
                 continue
+
+            q_explicita_actual_lineas.append(l)
+            if l.endswith(("?", ".")):
+                if q_explicita_actual_num is not None:
+                    _sincronizar_pregunta_explicita(curr_sup, q_explicita_actual_num, q_explicita_actual_lineas)
+                q_explicita_actual_lineas = []
+                sub_modo_actual = "PREGUNTA_EXPLICITA_RESP"
+            continue
 
         m_sol = pat_sol_hdr.match(l)
         if m_sol and len(curr_sup["preguntas"]) >= 1:
@@ -3470,7 +3529,7 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
 
         if sub_modo_actual == "PREGUNTA_EXPLICITA_RESP":
             l_clean_rfj = re.sub(
-                r'^(?:Respuesta(?:\s+y\s+Fundamento\s+Jur[íi]dico)?|Fundamento\s+Jur[íi]dico)\s*:\s*',
+                r'^(?:Respuesta(?:\s+y\s+Fundamento(?:\s+Jur[íi]dico)?)?\s*:?\s*|Fundamento\s+Jur[íi]dico\s*:\s*|Jur[íi]dico\s*:\s*)',
                 '',
                 l,
                 flags=re.IGNORECASE
@@ -3527,6 +3586,8 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
                         curr_sup["respuestas"][-1][1].append(l)
 
     if curr_sup is not None:
+        if q_explicita_actual_num is not None and q_explicita_actual_lineas:
+            _sincronizar_pregunta_explicita(curr_sup, q_explicita_actual_num, q_explicita_actual_lineas)
         supuestos_bloques.append(curr_sup)
 
     if not supuestos_bloques or sum(1 for sb in supuestos_bloques if sb["en_solucion"]) < max(1, len(supuestos_bloques) // 2):
@@ -3537,16 +3598,16 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
         cuerpo_pre = re.sub(r'\s+', ' ', " ".join(sb["preambulo"])).strip()
         pre_txt = f"{sb['header']}\n\n{cuerpo_pre}".strip() if cuerpo_pre else sb["header"]
         mapa_resp = {
-            num_r: PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(lineas_r))
+            num_r: _reconstruir_respuesta_supuesto_integrada(lineas_r)
             for num_r, lineas_r in sb["respuestas"]
         }
         for idx_q, (num_q, lineas_q) in enumerate(sb["preguntas"]):
             q_txt = re.sub(r'\s+', ' ', " ".join(lineas_q)).strip()
             r_txt = mapa_resp.get(num_q, "")
             if not r_txt and idx_q < len(sb["respuestas"]):
-                r_txt = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(sb["respuestas"][idx_q][1]))
+                r_txt = _reconstruir_respuesta_supuesto_integrada(sb["respuestas"][idx_q][1])
             if not r_txt and len(sb["respuestas"]) == 1:
-                r_txt = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(sb["respuestas"][0][1]))
+                r_txt = _reconstruir_respuesta_supuesto_integrada(sb["respuestas"][0][1])
 
             if q_txt and r_txt:
                 resultado.append({
@@ -4295,8 +4356,8 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
 
             for c_obj in cuestiones_sup:
                 q_str = re.sub(r'\s+', ' ', " ".join(c_obj["q"])).strip()
-                resp_str = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(c_obj["resp"]))
-                exp_str = PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(c_obj["exp"]))
+                resp_str = _reconstruir_respuesta_supuesto_integrada(c_obj["resp"])
+                exp_str = _reconstruir_respuesta_supuesto_integrada(c_obj["exp"])
 
                 if not resp_str and exp_str:
                     resp_str = exp_str
