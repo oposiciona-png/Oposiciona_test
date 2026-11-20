@@ -3102,24 +3102,81 @@ _RESPALDO_TEMA_73_ABIERTAS = {
     ]
 }
 
+def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""):
+    """
+    Recibe los párrafos del bloque de enunciado de un supuesto individual (sin `header_opcional`
+    o con él en `enun_partes[0]`) y separa limpiamente:
+    - `preamble_str`: el planteamiento fáctico del supuesto (para mostrar en caja gris claro y negrita).
+    - `question_str`: la(s) pregunta(s) formuladas sobre ese supuesto (para mostrar en marco fino sin fondo y negrita).
+    """
+    partes = [p.strip() for p in enun_partes if p and p.strip()]
+    if not partes:
+        return "", ""
+
+    pat_imperativo_q = re.compile(
+        r'^(?:¿|Desglose|Realice\s+el\s+c[áa]lculo|Defina|Una\s+vez\s+emitido|Tras\s+extinguirse|Especifique|Calcule|Determine|Indique|Califique|Fundamente|Explique|Detalle|Se[ñn]ale|Razone|Analice|Justifique)\b',
+        re.IGNORECASE
+    )
+
+    tiene_hdr = bool(header_opcional and partes[0] == header_opcional.strip())
+    cuerpo = partes[1:] if tiene_hdr else partes[:]
+
+    if not cuerpo:
+        return "", partes[0]
+
+    # Caso 1: Hay un solo párrafo de cuerpo donde vienen seguidos los hechos y al final la pregunta (ej. Supuestos 15 a 20 de Tema 57 o Cuestiones de Tema 55)
+    if len(cuerpo) == 1:
+        unico = cuerpo[0]
+        # Buscar dónde empieza la primera pregunta '¿...?' o imperativa 'Calcule su Base Reguladora...' tras un punto
+        m_split_q = re.match(
+            r'^(.+?[\.\:])\s+((?:¿.+|(?:Calcule|Determine|Indique|Explique|Desglose|Señale|Justifique|Razone|Analice)\b.+))$',
+            unico,
+            flags=re.DOTALL
+        )
+        if m_split_q:
+            hechos_txt = m_split_q.group(1).strip()
+            preg_txt = m_split_q.group(2).strip()
+            pre_out = f"{header_opcional.strip()}\n\n{hechos_txt}" if tiene_hdr else hechos_txt
+            return pre_out.strip(), preg_txt
+        else:
+            if tiene_hdr:
+                return header_opcional.strip(), unico
+            return "", unico
+
+    # Caso 2: Hay varios párrafos en `cuerpo` (ej. Supuestos 1 a 14 de Tema 57, o Tema 56 con "1.- Don Alberto..." + "¿Impide...?")
+    # Encontrar el primer párrafo a partir del índice 1 que sea propiamente pregunta
+    idx_corte_q = len(cuerpo)
+    for idx_c in range(1, len(cuerpo)):
+        p_c = cuerpo[idx_c]
+        if p_c.startswith("¿") or p_c.endswith("?") or pat_imperativo_q.match(p_c):
+            idx_corte_q = idx_c
+            break
+
+    if idx_corte_q < len(cuerpo):
+        hechos_lista = ([header_opcional.strip()] if tiene_hdr else []) + cuerpo[:idx_corte_q]
+        pregs_lista = cuerpo[idx_corte_q:]
+        return "\n\n".join(hechos_lista).strip(), "\n\n".join(pregs_lista).strip()
+
+    # Si el último párrafo contiene al final una pregunta pegada tras punto, separarla
+    m_ult = re.match(
+        r'^(.+?[\.\:])\s+((?:¿.+|(?:Calcule|Determine|Indique|Explique|Desglose|Señale|Justifique|Razone|Analice)\b.+))$',
+        cuerpo[-1],
+        flags=re.DOTALL
+    )
+    if m_ult:
+        hechos_lista = ([header_opcional.strip()] if tiene_hdr else []) + cuerpo[:-1] + [m_ult.group(1).strip()]
+        return "\n\n".join(hechos_lista).strip(), m_ult.group(2).strip()
+
+    hechos_lista = ([header_opcional.strip()] if tiene_hdr else []) + cuerpo[:-1]
+    return "\n\n".join(hechos_lista).strip(), cuerpo[-1].strip()
+
 def _formatear_linea_cuerpo_epigrafe_docx(t_raw, prev_line=""):
-    """
-    Formatea cada párrafo del cuerpo de un Epígrafe de Desarrollo (.docx):
-    - Mantiene los títulos de apartados numerados ('1. Fundamentación...', '2. Competencia...', '3. Objeto...').
-    - Si un párrafo interno es un subapartado con etiqueta inicial seguida de dos puntos
-      (ej. 'Órganos territoriales y Unidades de Recaudación Ejecutiva: Las Direcciones...')
-      y viene tras un párrafo introductorio que acaba en ':' o tras otra viñeta '- ',
-      le antepone '- ' para conservar el formato de lista con guiones.
-    """
     t = (t_raw or "").strip()
     if not t:
         return ""
-    # Si ya empieza por número de apartado ('1. ', '2. ', '3. ') o por guion/viñeta, devolver limpio
     if re.match(r'^(?:\d+(?:\.\d+)*[\.\)]\s+|[a-zA-Z][\)\.]\s+|[\-•·▪■]\s+)', t):
         return re.sub(r'^[•·▪■]\s+', '- ', t)
 
-    # Si empieza por un sintagma nominal corto (< 115 caracteres) seguido de ':' y texto explicativo,
-    # y el párrafo previo terminaba en ':' o empezaba por '- ', añadir '- ' al inicio
     m_sub = re.match(r'^([A-ZÁÉÍÓÚÑ][^:\.]{3,115}):\s+([A-ZÁÉÍÓÚÑ"«\d].+)$', t)
     if m_sub and (prev_line.rstrip().endswith(":") or prev_line.lstrip().startswith("- ")):
         return f"- {t}"
@@ -3478,7 +3535,7 @@ def _extraer_supuestos_con_bloque_solucion(file_bytes):
     resultado = []
     for sb in supuestos_bloques:
         cuerpo_pre = re.sub(r'\s+', ' ', " ".join(sb["preambulo"])).strip()
-        pre_txt = f"{sb['header']}\n{cuerpo_pre}".strip() if cuerpo_pre else sb["header"]
+        pre_txt = f"{sb['header']}\n\n{cuerpo_pre}".strip() if cuerpo_pre else sb["header"]
         mapa_resp = {
             num_r: PDFQuizParser._reconstruir_parrafos_explicacion_test("\n".join(lineas_r))
             for num_r, lineas_r in sb["respuestas"]
@@ -3673,6 +3730,7 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 curr_b = {
                     "num": num_c,
                     "modo": "CUESTION_TITULO",
+                    "header": f"Cuestión {num_c}: {titulo_c}",
                     "paras": [f"Cuestión {num_c}: {titulo_c}"]
                 }
             elif curr_b is not None:
@@ -3692,6 +3750,7 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 curr_b = {
                     "num": num_s,
                     "modo": "SUPUESTO_INDIV",
+                    "header": "",
                     "paras": [f"{num_s}.- {planteamiento_s}"]
                 }
             elif curr_b is not None:
@@ -3704,12 +3763,13 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
 
     resultado = []
     for b_item in bloques_raw:
+        hdr_item = b_item.get("header", "")
         if b_item["modo"] == "SUPUESTO_PRACTICO_NUM":
             paras_obj = [p for p in b_item["paras"] if p["text"]]
             if not paras_obj:
                 continue
 
-            enun_partes = [b_item["header"], paras_obj[0]["text"]]
+            enun_partes = [hdr_item, paras_obj[0]["text"]]
             idx_r = 1
             while idx_r < len(paras_obj):
                 p_curr_txt = paras_obj[idx_r]["text"]
@@ -3775,15 +3835,15 @@ def _extraer_cuestiones_individuales_sin_etiqueta(file_bytes):
                 if rp_limpio:
                     resp_partes.append(rp_limpio)
 
-        enunciado_final = "\n\n".join(enun_partes).strip()
+        pre_separado, preg_separada = _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=hdr_item)
         respuesta_final = "\n\n".join(resp_partes).strip()
 
-        if enunciado_final and respuesta_final:
+        if (pre_separado or preg_separada) and respuesta_final:
             resultado.append({
                 "is_open": True,
                 "tipo_abierta": "SUPUESTO",
-                "preamble": "",
-                "question_text": enunciado_final,
+                "preamble": pre_separado,
+                "question_text": preg_separada or pre_separado,
                 "options": [],
                 "answer": -1,
                 "official_answer": respuesta_final,
@@ -6397,6 +6457,7 @@ def action_finalizar_sesion():
     st.session_state.do_scroll = True
 # === FIN SECCIÓN 4C ===
 
+
 # === SECCIÓN 5A: PANTALLA DE INICIO, MENÚ DE SELECCIÓN Y AUDITORÍA ADMIN ===
 sincronizar_progreso_navegador()
 activar_proteccion_antirecortes_alumno()
@@ -7152,6 +7213,40 @@ elif not st.session_state.finished:
         -webkit-text-fill-color: #000000 !important;
         white-space: normal !important;
     }
+
+    /* Estilos dedicados para SUPUESTOS PRÁCTICOS: planteamiento en gris claro + negrita, pregunta en marco fino sin fondo + negrita, justificados y con fuente original */
+    .opo-supuesto-planteamiento, .opo-supuesto-planteamiento * {
+        font-family: inherit !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        line-height: 1.5 !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        text-align: justify !important;
+    }
+    .opo-supuesto-planteamiento {
+        background-color: #EAECEF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 6px !important;
+        padding: 14px 18px !important;
+        margin-bottom: 12px !important;
+    }
+    .opo-supuesto-pregunta, .opo-supuesto-pregunta * {
+        font-family: inherit !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        line-height: 1.5 !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        text-align: justify !important;
+    }
+    .opo-supuesto-pregunta {
+        background-color: transparent !important;
+        border: 1.5px solid #64748B !important;
+        border-radius: 6px !important;
+        padding: 11px 16px !important;
+        margin-bottom: 14px !important;
+    }
     </style>""", unsafe_allow_html=True)
 
     def _render_tarjeta_tribunal_en_vivo(slot_st, titulo_accion, subtitulo_accion, porcentaje_barra=45):
@@ -7277,52 +7372,51 @@ elif not st.session_state.finished:
         unsafe_allow_html=True
     )
 
-    estilo_tipografia_supuesto = (
-        "font-family: Arial, Helvetica, sans-serif !important; "
-        "font-size: 16px !important; "
-        "font-weight: 700 !important; "
-        "line-height: 1.45 !important; "
-        "color: #000000 !important; "
-        "text-align: justify !important;"
-    )
+    if es_supuesto_q:
+        pre_sup_txt = (q.get('preamble') or "").strip()
+        q_sup_txt = (q.get('question_text') or "").strip()
 
-    if q.get('preamble'):
-        preamble_html = re.sub(r'\n+', '<br><br>', q['preamble'].strip())
-        if es_supuesto_q:
+        # Respaldo en caliente por si una sesión en caché tenía aún el planteamiento unido dentro de question_text
+        if not pre_sup_txt and "\n" in q_sup_txt:
+            bloques_q_cache = [b.strip() for b in re.split(r'\n\s*\n', q_sup_txt) if b.strip()]
+            if len(bloques_q_cache) >= 2:
+                hdr_c = bloques_q_cache[0] if re.match(r'^(?:SUPUESTO|CASO|Cuesti[óo]n)\b', bloques_q_cache[0], re.IGNORECASE) else ""
+                pre_sup_txt, q_sup_txt = _separar_planteamiento_y_pregunta_individual(bloques_q_cache, header_opcional=hdr_c)
+
+        if pre_sup_txt:
+            pre_sup_esc = html.escape(pre_sup_txt).replace("\n\n", "<br><br>").replace("\n", "<br>")
             st.markdown(
-                f"<div style='margin-bottom:12px;'>"
-                f"<div style='{estilo_tipografia_supuesto} text-align:center !important; letter-spacing:0.4px; margin-bottom:6px; text-transform:uppercase;'>SUPUESTO PRÁCTICO</div>"
-                f"<div style='background-color:#E6E6E6; border:1px solid #D4D4D8; border-radius:6px; padding:14px 18px; {estilo_tipografia_supuesto}'>"
-                f"{preamble_html}"
-                f"</div>"
+                f"<div class='opo-supuesto-planteamiento'>{pre_sup_esc}</div>",
+                unsafe_allow_html=True
+            )
+
+        if q_sup_txt:
+            q_sup_esc = html.escape(q_sup_txt).replace("\n\n", "<br><br>").replace("\n", "<br>")
+            st.markdown(
+                f"<div class='opo-supuesto-pregunta'>{q_sup_esc}</div>",
+                unsafe_allow_html=True
+            )
+    else:
+        if q.get('preamble'):
+            preamble_html = html.escape(q['preamble'].strip()).replace("\n\n", "<br><br>").replace("\n", "<br>")
+            st.markdown(
+                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; font-size:16px; font-weight:700; line-height:1.45; text-align:justify; color:#0F172A !important;'>{preamble_html}</div>",
+                unsafe_allow_html=True
+            )
+
+        if es_desarrollo_epigrafe:
+            txt_ep_mostrar = (q.get("question_text") or "").strip()
+            if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', txt_ep_mostrar, re.IGNORECASE):
+                txt_ep_mostrar = f"EPÍGRAFE {idx + 1}: {txt_ep_mostrar}"
+            st.markdown(
+                f"<div style='background-color:#FFFFFF; border:2px solid #1E3A8A; border-left:6px solid #1E3A8A; border-radius:8px; padding:10px 14px; margin-bottom:10px;'>"
+                f"<div style='font-size:12px; font-weight:800; color:#1D4ED8 !important; letter-spacing:0.4px; margin-bottom:3px;'>📝 EPÍGRAFE QUE SE PREGUNTA (DESARROLLO):</div>"
+                f"<div style='font-size:18px; font-weight:800; color:#0F172A !important; line-height:1.35; text-align:justify;'>{html.escape(txt_ep_mostrar)}</div>"
                 f"</div>",
                 unsafe_allow_html=True
             )
         else:
-            st.markdown(
-                f"<div style='background-color:#FFFFFF; border:1px solid #CBD5E1; border-left:4px solid #1F77B4; border-radius:6px; padding:12px; margin-bottom:12px; {estilo_tipografia_supuesto}'>{preamble_html}</div>",
-                unsafe_allow_html=True
-            )
-
-    if es_desarrollo_epigrafe:
-        txt_ep_mostrar = (q.get("question_text") or "").strip()
-        if not re.match(r'^(?:EP[ÍI]GRAFE|PREGUNTA)\b', txt_ep_mostrar, re.IGNORECASE):
-            txt_ep_mostrar = f"EPÍGRAFE {idx + 1}: {txt_ep_mostrar}"
-        st.markdown(
-            f"<div style='background-color:#FFFFFF; border:2px solid #1E3A8A; border-left:6px solid #1E3A8A; border-radius:8px; padding:10px 14px; margin-bottom:10px;'>"
-            f"<div style='font-size:12px; font-weight:800; color:#1D4ED8 !important; letter-spacing:0.4px; margin-bottom:3px;'>📝 EPÍGRAFE QUE SE PREGUNTA (DESARROLLO):</div>"
-            f"<div style='font-size:18px; font-weight:800; color:#0F172A !important; line-height:1.35; text-align:justify;'>{txt_ep_mostrar}</div>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-    elif es_supuesto_q:
-        q_sup_html = re.sub(r'\n+', '<br><br>', (q.get('question_text') or '').strip())
-        st.markdown(
-            f"<div style='{estilo_tipografia_supuesto} margin-bottom: 14px;'>{q_sup_html}</div>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 18px; font-weight: 700; color: #2C3E50 !important; margin-bottom: 12px; line-height: 1.35; text-align: justify;'>{q['question_text']}</p>", unsafe_allow_html=True)
 
     if es_abierta:
         render_dictado_voz_tiempo_real(idx)
@@ -7571,7 +7665,42 @@ elif not st.session_state.finished:
 
 # === SECCIÓN 5C: PANTALLA DE RESULTADOS FINALES Y REVISIÓN DETALLADA ===
 else:
-    st.markdown("<style>:root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; } html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }</style>", unsafe_allow_html=True)
+    st.markdown("""<style>
+    :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
+    html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
+    .opo-supuesto-planteamiento-res, .opo-supuesto-planteamiento-res * {
+        font-family: inherit !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        line-height: 1.5 !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        text-align: justify !important;
+    }
+    .opo-supuesto-planteamiento-res {
+        background-color: #EAECEF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 6px !important;
+        padding: 14px 18px !important;
+        margin-bottom: 10px !important;
+    }
+    .opo-supuesto-pregunta-res, .opo-supuesto-pregunta-res * {
+        font-family: inherit !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        line-height: 1.5 !important;
+        color: #0F172A !important;
+        -webkit-text-fill-color: #0F172A !important;
+        text-align: justify !important;
+    }
+    .opo-supuesto-pregunta-res {
+        background-color: transparent !important;
+        border: 1.5px solid #64748B !important;
+        border-radius: 6px !important;
+        padding: 11px 16px !important;
+        margin-bottom: 8px !important;
+    }
+    </style>""", unsafe_allow_html=True)
     components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 300);</script>", height=0)
 
     puede_rep = usuario_puede_reportar()
@@ -7974,15 +8103,6 @@ else:
     c3_t.button("🚪 Finalizar Sesión", key="btn_out_top", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
     st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
-    estilo_tipografia_supuesto_res = (
-        "font-family: Arial, Helvetica, sans-serif !important; "
-        "font-size: 16px !important; "
-        "font-weight: 700 !important; "
-        "line-height: 1.45 !important; "
-        "color: #000000 !important; "
-        "text-align: justify !important;"
-    )
-
     preambulos_distintos_sup = []
     for q_item_p in st.session_state.questions:
         pr_it = (q_item_p.get("preamble") or "").strip()
@@ -7994,6 +8114,7 @@ else:
     contador_bloque_supuesto = 0
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
+        es_sup_res_i = bool(q.get("tipo_abierta") == "SUPUESTO")
         tipo_lbl_res = "Epígrafe" if q.get("tipo_abierta") == "DESARROLLO" else ("Cuestión" if q.get("is_open") else "Pregunta")
         co = (q.get('answer_text') or "Ver solución y explicación debajo") if q.get("is_open") else (q['options'][q['answer']] if q['answer'] != -1 else "No detectada (revisa la explicación)")
         col = "#15803d" if "✅" in stat.get('final_status', '') else "#dc2626" if "❌" in stat.get('final_status', '') else "#d97706"
@@ -8004,46 +8125,49 @@ else:
                 f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important;'>📖 Texto mínimo de {q['question_text']}</div>"
                 f"<div style='font-size: 12.5px; font-weight: 600; color: #0E5A6A !important; margin-top: 2px; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>{etiqueta_tema_fin}</div>"
             )
-        elif q.get("tipo_abierta") == "SUPUESTO":
+        elif es_sup_res_i:
             cabecera_res_html = (
                 f"<div style='font-size: 15px; font-weight: 800; color: #083B46 !important; margin-bottom: 6px; border-bottom: 1px solid #b6e0ea; padding-bottom: 5px;'>📖 Solución y Explicación Oficial de la Cuestión {i+1}:</div>"
             )
         else:
             cabecera_res_html = "<div style='font-size: 14.5px; font-weight: 800; margin-bottom: 6px; color: #083B46 !important;'>📖 Explicación:</div>"
 
-        ph = ""
         pre_actual = (q.get('preamble') or "").strip()
-        if pre_actual and q.get("tipo_abierta") != "SUPUESTO":
-            ph = f"<div style='{estilo_tipografia_supuesto_res} margin-bottom: 6px;'>{re.sub(r'\n+', '<br><br>', pre_actual)}</div>"
-        elif pre_actual and q.get("tipo_abierta") == "SUPUESTO" and pre_actual != ultimo_preambulo_mostrado:
+        q_txt_actual = (q.get('question_text') or "").strip()
+        if es_sup_res_i and not pre_actual and "\n" in q_txt_actual:
+            bloques_q_c = [b.strip() for b in re.split(r'\n\s*\n', q_txt_actual) if b.strip()]
+            if len(bloques_q_c) >= 2:
+                hdr_c = bloques_q_c[0] if re.match(r'^(?:SUPUESTO|CASO|Cuesti[óo]n)\b', bloques_q_c[0], re.IGNORECASE) else ""
+                pre_actual, q_txt_actual = _separar_planteamiento_y_pregunta_individual(bloques_q_c, header_opcional=hdr_c)
+
+        ph = ""
+        if pre_actual and not es_sup_res_i:
+            ph = f"<div style='font-size:15.5px; font-weight:700; line-height:1.45; text-align:justify; color:#0F172A !important; margin-bottom: 6px;'>{html.escape(pre_actual).replace(chr(10)+chr(10), '<br><br>').replace(chr(10), '<br>')}</div>"
+        elif pre_actual and es_sup_res_i and pre_actual != ultimo_preambulo_mostrado:
             ultimo_preambulo_mostrado = pre_actual
             contador_bloque_supuesto += 1
-            pre_html_res = re.sub(r'\n+', '<br><br>', pre_actual)
-            titulo_bloque_sup = (
-                f"SUPUESTO PRÁCTICO {contador_bloque_supuesto} DE {total_bloques_supuestos}"
-                if total_bloques_supuestos > 1 else
-                "SUPUESTO PRÁCTICO"
-            )
+            pre_html_res = html.escape(pre_actual).replace("\n\n", "<br><br>").replace("\n", "<br>")
             separador_sup_previo = (
-                "<hr style='margin: 22px 0px 16px 0px; border: 0; border-top: 3px solid #1E3A8A;'>"
-                if contador_bloque_supuesto > 1 else ""
+                "<hr style='margin: 22px 0px 14px 0px; border: 0; border-top: 3px solid #1E3A8A;'>"
+                if contador_bloque_supuesto > 1 and total_bloques_supuestos < len(st.session_state.questions) else ""
             )
             ph = (
                 f"{separador_sup_previo}"
-                f"<div style='margin-bottom:14px;'>"
-                f"<div style='{estilo_tipografia_supuesto_res} text-align:center !important; margin-bottom:6px; text-transform:uppercase; color:#1E3A8A !important;'>📋 {titulo_bloque_sup}</div>"
-                f"<div style='background-color:#E6E6E6; border:1.5px solid #94A3B8; border-radius:6px; padding:14px 18px; {estilo_tipografia_supuesto_res}'>{pre_html_res}</div>"
-                f"</div>"
+                f"<div class='opo-supuesto-planteamiento-res'>{pre_html_res}</div>"
             )
 
-        q_txt_res_html = re.sub(r'\n+', '<br><br>', (q.get('question_text') or '').strip())
-        estilo_q_res = estilo_tipografia_supuesto_res if q.get("tipo_abierta") == "SUPUESTO" else "font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3;"
+        q_txt_res_esc = html.escape(q_txt_actual).replace("\n\n", "<br><br>").replace("\n", "<br>")
+        bloque_q_res_html = (
+            f"<div class='opo-supuesto-pregunta-res'>{q_txt_res_esc}</div>"
+            if es_sup_res_i else
+            f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q_txt_res_esc}</div>"
+        )
 
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
+            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 6px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
             f"{ph}"
-            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 4px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
-            f"<div style='{estilo_q_res} margin-bottom: 6px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q_txt_res_html}</div>"
+            f"{bloque_q_res_html}"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
             f"<div style='font-size:15px; color:#1b5e20 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#1b5e20 !important;'>Respuesta oficial:</b> {co}</div>"
             f"<div style='background-color: #e8f4f8; border-left: 4px solid #17a2b8; padding: 14px 16px; border-radius: 6px; margin-bottom: 6px;'>{cabecera_res_html}<div style='font-size: 14px; color: #0c5460 !important; text-align: justify;'>{eh}</div></div>"
