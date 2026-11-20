@@ -3160,11 +3160,6 @@ def _separar_planteamiento_y_pregunta_individual(enun_partes, header_opcional=""
     return "\n\n".join(hechos_lista).strip(), cuerpo[-1].strip()
 
 def _reconstruir_respuesta_supuesto_integrada(lineas_r):
-    """
-    Une las líneas de la respuesta de un supuesto respetando párrafos y viñetas ('- ...', '1) ...')
-    sin cortar jamás líneas de continuación que empiezan en minúscula, números o paréntesis
-    (ej. 'de pago único, distribuida a partes iguales...' / '(10.800,00 € para cada uno).').
-    """
     parrafos = []
     for lr in lineas_r:
         s = (lr or "").strip()
@@ -3253,7 +3248,7 @@ def _es_inicio_nuevo_planteamiento_supuesto(idx_ls, lineas_sup, sub_estado, prea
         return False
 
     if not re.match(
-        r'^(?:[A-Z][\)\.\-]\s+)?(?:La\s+(?:mercantil|empresa|sociedad|entidad|cooperativa|asesor[íi]a|mutua|compa[ñn][íi]a|unidad\s+familiar)|El\s+(?:empresario|trabajador|bufete|ciudadano)|(?:Don|Do[ñn]a|D\.|D\.ª|Dª)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+\(\d+\s*a[ñn]os\))\b',
+        r'^(?:[A-Z][\)\.\-]\s+)?(?:La\s+(?:mercantil|empresa|sociedad|entidad|cooperativa|asesor[íi]a|mutua|compa[ñn][íi]a|unidad\s+familiar)|El\s+(?:empresario|trabajador|bufete|ciudadano)|(?:Don|Do[ñn]a|D\.|D\.ª|Dª)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+\(\d+\s*a[ñn]os\)))\b',
         l_s
     ):
         return False
@@ -3290,7 +3285,7 @@ def _es_inicio_nuevo_planteamiento_supuesto(idx_ls, lineas_sup, sub_estado, prea
     tiene_estructura_planteamiento = bool(
         any(b_l.startswith(("•", "-")) for b_l in bloque_cand) or
         re.search(
-            r'(?:estructura\s+org[áa]nica|accionarial|prestan\s+servicios|cuenta\s+con\s+una\s+plantilla|son\s+c[óo]nyuges|posee\s+el\s+\d+\s*%\s+del\s+capital)',
+            r'(?:estructura\s+org[áa]nica|accionarial|prestan\s+servicios|cuenta\s+con\s+una\s+plantilla|son\s+c[óo]nyuges|posee\s+el\s+\d+\s*%\s+del\s+capital|conceptos\s+retributivos)',
             txt_bloque,
             re.IGNORECASE
         )
@@ -4210,7 +4205,7 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 re.IGNORECASE
             )
             pat_nuevo_supuesto_bloque = re.compile(
-                r'^(?:#\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|La\s+empresa|La\s+mercantil|La\s+sociedad|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+\(\d+\s*a[ñn]os\)).*)$'
+                r'^(?:#\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|La\s+empresa|La\s+mercantil|La\s+sociedad|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+trabaja|\s+presta|\s+ostenta|\s+solicita|\s+\(\d+\s*a[ñn]os\))).*)$'
             )
 
             def _construir_preambulo_texto(lista_lineas):
@@ -4264,27 +4259,37 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                     txt_c = m_c.group(2).strip()
 
                     cola_exp_c = ""
-                    m_in_c = re.search(r'^(.*?\?)\s*EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*[:\.]?\s*(.*)$', txt_c, flags=re.IGNORECASE)
+                    m_in_c = re.search(r'^(.*?[\?:])\s*EXPLICACI[ÓO]N(?:\s+DETALLADA)?\s*[:\.]?\s*(.*)$', txt_c, flags=re.IGNORECASE)
                     if m_in_c:
                         txt_c = m_in_c.group(1).strip()
                         cola_exp_c = m_in_c.group(2).strip()
 
                     lineas_bloque_item = [txt_c]
+                    tiene_etiqueta_explicacion_en_bloque = bool(m_in_c)
                     for j_look in range(idx_ls + 1, min(len(lineas_sup), idx_ls + 22)):
                         l_next_look = re.sub(r'^#\s*', '', lineas_sup[j_look][0]).strip()
                         if pat_cuestion.match(l_next_look):
                             break
+                        if pat_exp_sup.match(l_next_look) or pat_resp_tec.match(l_next_look):
+                            tiene_etiqueta_explicacion_en_bloque = True
                         lineas_bloque_item.append(l_next_look)
                     texto_bloque_item = " ".join(lineas_bloque_item)
+                    texto_pre_previo = " ".join(preambulo_lineas)
+
+                    preambulo_ya_pidio_responder = bool(
+                        re.search(r'(?:responda\s+a\s+las\s+siguientes\s+cuestiones|conteste\s+a\s+las\s+siguientes\s+preguntas|resuelva\s+las\s+siguientes\s+cuestiones)', texto_pre_previo, re.IGNORECASE)
+                    )
 
                     es_parrafo_preambulo = (
                         sub_estado == "PREAMBULO" and
                         curr_c is None and
                         len(cuestiones_sup) == 0 and
                         num_c in (1, 2, 3, 4, 5) and
+                        not tiene_etiqueta_explicacion_en_bloque and
+                        not preambulo_ya_pidio_responder and
                         "?" not in texto_bloque_item and
                         "¿" not in texto_bloque_item and
-                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda)\b', texto_bloque_item, re.IGNORECASE)
+                        not re.search(r'\b(?:indique|se[ñn]ale|determine|calcule|explique|analice|razone|justifique|responda|consideraci[óo]n\s+legal\s+de\s*:)\b', texto_bloque_item, re.IGNORECASE)
                     )
                     if es_parrafo_preambulo:
                         preambulo_lineas.append(f"{num_c}. {txt_c}")
