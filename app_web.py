@@ -7161,6 +7161,7 @@ if not st.session_state.questions:
 
 # === SECCIÓN 5B: PANTALLA DE PREGUNTA ACTIVA (TEST, SUPUESTOS Y DESARROLLO) ===
 elif not st.session_state.finished:
+    import html
     # Estilos del examen activo + transformación visual de los checkboxes de opciones en círculos idénticos a st.radio
     st.markdown("""<style>
     :root { --background-color: #FFFDE7 !important; --secondary-background-color: #FFFDE7 !important; --text-color: #1E293B !important; }
@@ -7376,7 +7377,6 @@ elif not st.session_state.finished:
         pre_sup_txt = (q.get('preamble') or "").strip()
         q_sup_txt = (q.get('question_text') or "").strip()
 
-        # Respaldo en caliente por si una sesión en caché tenía aún el planteamiento unido dentro de question_text
         if not pre_sup_txt and "\n" in q_sup_txt:
             bloques_q_cache = [b.strip() for b in re.split(r'\n\s*\n', q_sup_txt) if b.strip()]
             if len(bloques_q_cache) >= 2:
@@ -7665,6 +7665,7 @@ elif not st.session_state.finished:
 
 # === SECCIÓN 5C: PANTALLA DE RESULTADOS FINALES Y REVISIÓN DETALLADA ===
 else:
+    import html
     st.markdown("""<style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
     html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
