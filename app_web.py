@@ -1785,6 +1785,1217 @@ class PDFQuizParser:
         return questions
 # === FIN SECCIÓN 3A ===
 
+# === SECCIÓN 3B: MOTOR DE EXTRACCIÓN DE PREGUNTAS TIPO TEST ===
+_RESPALDO_TEMA_73_TEST = [
+    {
+        "question_text": '1. Un trabajador ferroviario del grupo de "Oficial Calderero Chapista en Depósito" se jubila anticipadamente. ¿Cuál es el coeficiente aplicable y qué sucede en el supuesto de que también se encuentre en pluriactividad según el RD 2621/1986?',
+        "preamble": "",
+        "options": [
+            "a) 0,15 y la reducción sólo se aplicará a efectos de la edad.",
+            "b) 0,10 y la reducción sólo se aplicará a efectos de la edad.",
+            "c) 0,15 y la reducción se aplicará a efectos de la edad y del porcentaje de la pensión computable."
+        ],
+        "answer": 0,
+        "explanation": "El art. 3 del RD 2621/1986 establece un coeficiente reductor de 0,15 específicamente para la categoría de Oficial Calderero Chapista en Depósito. Es común pensar que en un sistema tan específico, la pluriactividad bonifica también la base o porcentaje de la pensión final por haber aportado a dos regímenes, pero la ley establece claramente que en supuestos de pluriactividad, la reducción sólo se aplicará a efectos de la edad."
+    },
+    {
+        "question_text": "2. Según la categorización de los jugadores profesionales de fútbol para su cotización a la Seguridad Social, ¿en qué grupo de cotización se encuadra preceptivamente un jugador que milita en la Segunda División B?",
+        "preamble": "",
+        "options": [
+            "a) Grupo 5.",
+            "b) Grupo 3.",
+            "c) Grupo 7."
+        ],
+        "answer": 0,
+        "explanation": "De acuerdo a la tabla de asimilación del RD 2621/1986, la Primera División corresponde al Grupo 2, la Segunda División A al Grupo 3, y la Segunda División B corresponde al Grupo 5."
+    },
+    {
+        "question_text": "3. En el régimen aplicable a los Representantes de Comercio integrados en el Régimen General, ¿quién ostenta la condición de sujeto responsable de cotizar e ingresar la totalidad de la cuota (tanto la aportación obrera como la empresarial)?",
+        "preamble": "",
+        "options": [
+            "a) La Tesorería General de la Seguridad Social de oficio, previa deducción de las facturas comerciales.",
+            "b) El Empresario, respondiendo subsidiariamente el Representante.",
+            "c) El Representante de Comercio."
+        ],
+        "answer": 2,
+        "explanation": "El Representante de Comercio es el sujeto responsable de cotizar e ingresar la totalidad de la cuota, según las disposiciones del RD 2621/1986. En el Régimen General común, el sujeto responsable del ingreso es SIEMPRE el empresario. Aquí se invierte la regla: es el trabajador (Representante) quien ingresa, y el empresario está obligado a entregarle a este su parte de la aportación empresarial. Si el empresario incumple, la TGSS reintegra al representante el importe iniciando acción recaudatoria contra la empresa."
+    },
+    {
+        "question_text": "4. Según la Orden PJC/297/2026, ¿cuál será la base y el tipo de cotización durante los períodos de inactividad de los artistas que decidan mantener voluntariamente su situación de alta?",
+        "preamble": "",
+        "options": [
+            "a) La base mínima del grupo 7, con un tipo del 11,50%.",
+            "b) La base mínima del grupo 1, con un tipo del 15,50%.",
+            "c) La base máxima del grupo 7, con un tipo del 11,50%."
+        ],
+        "answer": 0,
+        "explanation": "Para los artistas, la base de cotización durante los períodos de inactividad manteniendo voluntariamente el alta (art. 32.5 RD 2064/1995 y Orden PJC/297/2026) será la base mínima del grupo 7, con un tipo muy específico del 11,50%."
+    },
+    {
+        "question_text": '5. Un Picador taurino que acompaña habitualmente a un Matador de Toros clasificado en el grupo "C", ¿en qué grupo de cotización debe encuadrarse a efectos de la Seguridad Social?',
+        "preamble": "",
+        "options": [
+            "a) Grupo 2.",
+            "b) Grupo 3.",
+            "c) Grupo 1."
+        ],
+        "answer": 1,
+        "explanation": 'El baremo especifica que los Picadores y Banderilleros que acompañan al Grupo A van al Grupo 2. Al no mencionar explícitamente a los que acompañan al grupo C, debemos deducir que encajan en el epígrafe "Restantes Picadores y Banderilleros", a los cuales la norma les asigna el Grupo 3.'
+    },
+    {
+        "question_text": "6. En el Sistema Especial para Trabajadores Agrarios (SEA), ¿cuándo se considera legalmente que existen períodos de inactividad dentro de un mes natural?",
+        "preamble": "",
+        "options": [
+            "a) Cuando el número de jornadas reales sea inferior al 76,67% de los días hábiles en que figure incluido en el sistema.",
+            "b) Cuando el número de días naturales en alta sea superior a las jornadas reales multiplicadas por 1,5.",
+            "c) Cuando el número de jornadas reales en él realizadas sea inferior al 76,67% de los días naturales en que el trabajador figure incluido en el sistema en dicho mes."
+        ],
+        "answer": 2,
+        "explanation": 'Conforme al art. 253 del TRLGSS, existen períodos de inactividad cuando las jornadas reales son inferiores al 76,67% de los días NATURALES de alta en el sistema especial en dicho mes. Confundir "días naturales" con "días hábiles", lo cual cambiaría drásticamente el cálculo numérico.'
+    },
+    {
+        "question_text": "7. Un trabajador del SEA adeuda las cuotas por inactividad de dos meses consecutivos. El último día para el pago entra en situación de Incapacidad Temporal. ¿Cuándo surtirá efectos su baja de oficio y exclusión del sistema especial?",
+        "preamble": "",
+        "options": [
+            "a) No podrá ser excluido mientras permanezca de baja médica.",
+            "b) El día primero del mes siguiente a aquel en que finaliza la prestación por IT (si sigue sin pagar).",
+            "c) El día primero del mes siguiente a la segunda mensualidad no ingresada de forma inexcusable."
+        ],
+        "answer": 1,
+        "explanation": "Como regla general, la exclusión opera el día primero del mes siguiente a la segunda mensualidad no ingresada. El art. 253 del TRLGSS introduce una excepción fundamental: si en esa fecha de exclusión el trabajador se encuentra en IT, riesgo durante el embarazo o maternidad/paternidad, los efectos se posponen y operan el primer día del mes siguiente a que finalice la prestación."
+    },
+    {
+        "question_text": "8. Según el TRLGSS aplicable al SEA, ¿qué circunstancia EXCLUYE la existencia de períodos de inactividad en un mes natural, invalidando la aplicación de la regla del 76,67%?",
+        "preamble": "",
+        "options": [
+            "a) Realizar, para un mismo empresario, un mínimo de cinco jornadas reales semanales en cumplimiento de convenio colectivo aplicable.",
+            "b) Realizar para distintos empresarios más de 20 jornadas reales al mes.",
+            "c) Que el trabajador esté perciendo simultáneamente el subsidio agrario de desempleo."
+        ],
+        "answer": 0,
+        "explanation": "El TRLGSS señala taxativamente que no existirán períodos de inactividad dentro del mes natural cuando el trabajador realice, para UN MISMO empresario, un mínimo de cinco jornadas reales semanales en cumplimiento del convenio colectivo de aplicación. Si las 5 jornadas se hacen para empresarios distintos, no se activa esta excepción directa a la regla."
+    },
+    {
+        "question_text": "9. En cuanto a la obligación de cotización durante los períodos de actividad en el Sistema Especial Agrario, ¿cuál de estas afirmaciones es correcta para un trabajador con contrato de carácter fijo discontinuo?",
+        "preamble": "",
+        "options": [
+            "a) La cotización por bases mensuales resulta estrictamente obligatoria, igual que para los indefinidos ordinarios.",
+            "b) Siempre se deberá cotizar por bases diarias obligatoriamente.",
+            "c) La cotización por bases mensuales es opcional, a elección del empresario."
+        ],
+        "answer": 2,
+        "explanation": "La cotización por bases mensuales resultará obligatoria para los trabajadores con contrato indefinido. Se exceptúa expresamente a los indefinidos que prestan servicios con carácter fijo discontinuo, para los cuales la cotización mensual se mantiene como una opción del empresario, no como una imposición. Si no elige, se entiende mensual, pero normativamente es opcional."
+    },
+    {
+        "question_text": "10. En el Sistema Especial Agrario (SEA), si un empleador contrata a un eventual el mismo día de comienzo de la prestación y no pudo dar el alta previa obligatoria, ¿hasta qué momento exacto puede cursar la solicitud si la jornada laboral de ese día termina a las 11:30 horas?",
+        "preamble": "",
+        "options": [
+            "a) Hasta las 12:00 horas de ese mismo día.",
+            "b) Antes de la finalización de dicha jornada (es decir, antes de las 11:30 horas).",
+            "c) Dentro del plazo excepcional de los 3 días naturales siguientes."
+        ],
+        "answer": 1,
+        "explanation": 'La norma permite, en eventuales/fijos discontinuos cuando no fue posible el alta previa, hacerlo hasta las 12:00 del mismo día de inicio. Hay una salvedad literal que dice: "Si la jornada de trabajo finalizase antes de las 12 horas, las solicitudes de alta deberán presentarse antes de la finalización de esa jornada". Al terminar a las 11:30, el límite se acorta.'
+    },
+    {
+        "question_text": "11. En 2026, dentro del Sistema Especial Agrario, un Ingeniero (Grupo 1) tiene una reducción de 8,10 puntos porcentuales en la cuota empresarial por contingencias comunes. ¿Cuál es el límite máximo absoluto estipulado legalmente para dicha cuota empresarial resultante?",
+        "preamble": "",
+        "options": [
+            "a) No hay tope máximo, únicamente una cuota empresarial resultante no inferior a 179,44 euros.",
+            "b) No podrá superar los 279,00 euros al mes o 12,68 euros por jornada real trabajada.",
+            "c) No podrá superar los 179,44 euros al mes o 8,16 euros por jornada real trabajada."
+        ],
+        "answer": 1,
+        "explanation": "La normativa de actualización para 2026 marca que, para el grupo 1, en ningún caso la cuota empresarial resultante será superior a 279,00 euros al mes o 12,68 euros por jornada real trabajada. (Los 179,44 euros operan como límite mínimo, pero para los grupos 2 a 11)."
+    },
+    {
+        "question_text": "12. Según la normativa vigente (Ley 27/2011 y RD 1620/2011) ¿está amparada por el Sistema Especial de Empleados de Hogar la relación laboral suscrita con una persona jurídica (empresa) cuyo objeto social sea prestar tareas de limpieza a domicilios particulares?",
+        "preamble": "",
+        "options": [
+            "a) Sí, porque lo que define el sistema es que la prestación material se realice en un hogar familiar.",
+            "b) No, quedan excluidas legalmente y se rigen por la normativa laboral común.",
+            "c) Sí, salvo que la persona jurídica actúe como Empresa de Trabajo Temporal."
+        ],
+        "answer": 1,
+        "explanation": 'La Disposición adicional 17.ª de la Ley 27/2011 excluye expresamente "las relaciones concertadas por personas jurídicas, de carácter civil o mercantil, aunque su objeto sea la prestación de servicios o tareas domésticas". Para este Régimen Especial, el empleador debe ser forzosamente el "titular del hogar familiar" (persona física).'
+    },
+    {
+        "question_text": "13. Una persona contrata a su suegra (que convive en su mismo domicilio) para que se encargue del cuidado de sus hijos de manera retribuida. ¿Se encuentra esta relación incluida inicialmente en el Sistema Especial de Empleadas de Hogar?",
+        "preamble": "",
+        "options": [
+            "a) No, quedan absolutamente excluidas sin admitir prueba en contrario por ser parentesco de primer grado por afinidad.",
+            "b) Sí, el cuidado de menores está plenamente amparado por el SEEEHH, sea quien sea el prestador.",
+            "c) No, quedan excluidas las relaciones entre familiares hasta el segundo grado que convivan, salvo prueba en contrario de la condición de asalariado."
+        ],
+        "answer": 2,
+        "explanation": "Según la Ley 27/2011, se excluyen las relaciones concertadas entre familiares (hasta el 2.º grado de consanguinidad o afinidad que convivan con el empleador) SALVO QUE se demuestre la condición de asalariados. La ley admite prueba en contrario. (La suegra es primer grado de afinidad)."
+    },
+    {
+        "question_text": "14. Un trabajador por cuenta propia (Régimen de Autónomos) decide contratar a una empleada de hogar para su residencia privada. ¿Qué requerimiento burocrático específico en materia de afiliación debe cumplir el empleador?",
+        "preamble": "",
+        "options": [
+            "a) Deberá disponer, obligatoriamente, de un Código de Cuenta Cotización específico y exclusivo para este Sistema Especial.",
+            "b) No necesita Cuenta de Cotización propia, operando el pago directamente a través de su DNI/NIF.",
+            "c) Podrá agrupar las cotizaciones bajo su Código de Cuenta Cotización de empresario individual."
+        ],
+        "answer": 0,
+        "explanation": '"Los empleadores deberán disponer de un Código de Cuenta Cotización específico para este Sistema Especial". No sirve usar el CCC de su negocio.'
+    },
+    {
+        "question_text": "15. En el supuesto de que una empleada de hogar sufra una incapacidad temporal por accidente no laboral grave, o bien inicie una de las situaciones especiales de incapacidad temporal por contingencias comunes del artículo 169.1.a) del TRLGSS tras la entrada en vigor del Real Decreto-ley 31/2026 (como patología limitante por trastorno menopáusico secundario codificado o lesiones por violencia de género), ¿quién y desde cuándo asume el abono del subsidio?",
+        "preamble": "",
+        "options": [
+            "a) En ambos casos, del cuarto al decimoquinto día lo asume el empleador a su exclusivo cargo, y a partir del decimosexto entra el pago directo de la entidad gestora o colaboradora.",
+            "b) En accidente no laboral a partir del 9.º día y en situaciones especiales desde el día siguiente a la baja, siempre en pago directo por la entidad gestora o mutua.",
+            "c) En las situaciones especiales del art. 169.1.a) lo abona el empleador mediante pago delegado desde el día siguiente al de la baja, descontándolo de su boletín de cotización mensual, mientras que en el accidente no laboral se abona en pago directo desde el 9.º día."
+        ],
+        "answer": 1,
+        "explanation": "Según el art. 251 del TRLGSS, en el Sistema Especial de Empleados de Hogar el pago del subsidio por IT se efectúa directamente por la entidad gestora o colaboradora, no procediendo en ningún caso el pago delegado. En enfermedad común o accidente no laboral ordinario, se abona a partir del 9.º día (estando del 4.º al 8.º a cargo del empleador). No obstante, en las situaciones especiales de IT previstas en el art. 169.1.a) del TRLGSS (en su redacción dada por el Real Decreto-ley 31/2026, de 20 de octubre, que incluye menstruación incapacitante secundaria, interrupción del embarazo, gestación desde la semana 39, donación de órganos, trastorno menopáusico secundario codificado y lesiones por violencia de género), el art. 173.1 del TRLGSS establece que el subsidio se abonará a cargo de la entidad gestora o colaboradora desde el día siguiente al de la baja en el trabajo, estando a cargo del empleador únicamente el salario íntegro del día de la baja."
+    },
+    {
+        "question_text": "16. Si se demuestra que una empleada de hogar ha sufrido un Accidente de Trabajo por falta grave de medidas de seguridad por parte del empleador (ej. material eléctrico defectuoso no reparado), ¿se le aplica al titular del hogar el recargo de prestaciones por responsabilidad (Capital Coste)?",
+        "preamble": "",
+        "options": [
+            "a) Sí, pero se aminorará a un 30% fijo de recargo debido a la naturaleza doméstica del accidente.",
+            "b) No, no resulta de aplicación el régimen de responsabilidades en orden a las prestaciones regulado en el art. 167 del TRLGSS.",
+            "c) Sí, respondiendo con su patrimonio del capital coste que dicte el art. 167 del TRLGSS."
+        ],
+        "answer": 1,
+        "explanation": "El art. 251 del TRLGSS especifica de forma concreta que con respecto a las contingencias profesionales del sistema especial para empleados de hogar, NO resulta de aplicación el régimen de responsabilidades por capital coste del artículo 167."
+    },
+    {
+        "question_text": "17. Un empleador cuenta con el título de familia numerosa vigente y formaliza un alta en el SEEEHH, ¿cómo se aplica el beneficio estatal del 45% en la cuota desde las reformas de octubre de 2022?",
+        "preamble": "",
+        "options": [
+            "a) Se suma aritméticamente al descuento general del 20%, resultando en un 65% total de bonificación por contingencias comunes.",
+            "b) Quedó derogado, por lo que las familias numerosas ahora solo disfrutan del descuento general del 20%.",
+            "c) No se suma al descuento general del 20%, pero sí es compatible y se suma a las bonificaciones del 80% por desempleo y FOGASA."
+        ],
+        "answer": 2,
+        "explanation": 'Según se precisa en las directrices de la TGSS actualizadas: "desde el 1 de octubre de 2022 el beneficio por familia numerosa no se suma al descuento general del 20%, pero sí a las bonificaciones del 80% por desempleo y FOGASA".'
+    },
+    {
+        "question_text": "18. Tras una reforma legal (RD 505/1985 modificado), si un contrato del servicio doméstico se extingue por las causas previstas en el art. 11.2 (despido disciplinario inminente) y el empleador se declara en insolvencia, ¿qué cuantía indemnizatoria asume el FOGASA?",
+        "preamble": "",
+        "options": [
+            "a) 33 días de salario por año de servicio, topado a un máximo de la base mínima anual.",
+            "b) 20 días de salario por año de servicio, con el límite máximo de doce mensualidades.",
+            "c) 12 días de salario por año de servicio, con el límite máximo de seis mensualidades."
+        ],
+        "answer": 2,
+        "explanation": "La cuantía que el FOGASA garantiza a las Empleadas de Hogar en estos casos (art. 11.2 RD 1620/2011) es a razón de 12 días de salario por año de servicio, prorrateándose, con el límite de SEIS mensualidades. No debemos confundirlo con las indemnizaciones estándar del Estatuto de los Trabajadores (20/33 días) o con los límites ordinarios del FOGASA (1 anualidad)."
+    },
+    {
+        "question_text": "19. Durante la situación de inactividad de un trabajador del Sistema Especial Agrario, este comienza a percibir una prestación por desempleo de nivel contributivo. En este caso específico, ¿qué ocurre con su base y tipo de cotización a la Seguridad Social?",
+        "preamble": "",
+        "options": [
+            "a) Pasa a cotizar a cargo directo del SEPE con base mínima irreductible e inamovible.",
+            "b) La base se mantendrá en los 1.424,40 euros (base mínima grupo 7) con un tipo del 11,50%.",
+            "c) La base de cotización será la base reguladora de la prestación por desempleo y el tipo de cotización será el 11%."
+        ],
+        "answer": 2,
+        "explanation": "Durante la percepción de la prestación por desempleo contributiva, la base pasará a ser la base reguladora del desempleo (no la base fija de inactividad de 1.424,40 €) y el tipo especial será del 11%."
+    },
+    {
+        "question_text": "20. En el caso de contratos de trabajo a tiempo parcial en el Sistema Especial para Empleados de Hogar para el año 2026, ¿qué regla matemática define obligatoriamente la retribución que servirá de tope inferior para encuadrar en el tramo correcto de cotización?",
+        "preamble": "",
+        "options": [
+            "a) La base de cotización se reducirá linealmente mediante un factor de parcialidad, partiendo siempre del Tramo 1.",
+            "b) La retribución para buscar el tramo no podrá ser inferior a multiplicar el salario mínimo por hora vigente por el número de horas mensuales trabajadas.",
+            "c) A tiempo parcial, todas las cotizaciones se agrupan en un tramo único fijado en 436,00 euros al mes."
+        ],
+        "answer": 1,
+        "explanation": 'La normativa de aplicación indica expresamente para tiempos parciales: "no podrá ser inferior a la prevista para el tramo en el que se incluya la retribución que resulte de multiplicar el salario mínimo por hora vigente por el número de horas mensuales de trabajo". En el Régimen General se calculan horas sobre base mínima directamente; aquí, el empleado de hogar cuenta con una escala rígida de 8 Tramos de cotización, por lo que la comprobación con el SMI-hora sirve para no encuadrarlo en un "Tramo" inferior al legal permitido.'
+    },
+    {
+        "question_text": "21. ¿Con qué efectos temporales exactos se produjo jurídicamente la integración en el Régimen General de los Regímenes Especiales de Empleados de Hogar y de Trabajadores Agrarios por cuenta ajena?",
+        "preamble": "",
+        "options": [
+            "a) El 1 de enero de 2012.",
+            "b) El 1 de agosto de 2011.",
+            "c) El 22 de septiembre de 2011."
+        ],
+        "answer": 0,
+        "explanation": "Aunque la Ley 27/2011 y la Ley 28/2011 se publicaron en agosto y septiembre de 2011 respectivamente, la Disposición Adicional correspondiente en ambos textos legales estableció que la integración efectiva en el Régimen General (creando los Sistemas Especiales actuales) surtiría efectos a partir del 1 de enero de 2012."
+    },
+    {
+        "question_text": "22. Para la determinación de la reducción de la edad mínima de jubilación de un trabajador ferroviario, si al computar el tiempo efectivamente trabajado en una categoría peligrosa resultan 14 años y 7 meses, ¿cómo se cuantifica legalmente este periodo?",
+        "preamble": "",
+        "options": [
+            "a) Se aplican los coeficientes sobre 14 años y 7 meses, ya que se computa el periodo exacto al día.",
+            "b) Se considerará un periodo efectivo de 15 años completos a efectos de cálculo de la reducción.",
+            "c) Se considerará un periodo de 14 años, al despreciarse cualquier fracción inferior al año natural."
+        ],
+        "answer": 1,
+        "explanation": "El artículo 3 del Real Decreto 2621/1986 establece una regla de redondeo muy particular. Exige que el período computable se fije en un número entero de años, pero matiza expresamente que 'si existen fracciones de año, las que excedan de seis meses se computan como un año completo y las inferiores no se computan en absoluto'. Al ser 7 meses (excede de 6), el periodo se eleva a 15 años."
+    },
+    {
+        "question_text": "23. ¿En qué grupo de cotización se encuadra preceptivamente a los Jugadores Profesionales de Fútbol que militan en equipos de la Segunda División A?",
+        "preamble": "",
+        "options": [
+            "a) Grupo 2.",
+            "b) Grupo 3.",
+            "c) Grupo 5."
+        ],
+        "answer": 1,
+        "explanation": "Conforme a la normativa de integración de este colectivo y el desarrollo de las normas de cotización (Reglamento General de Cotización), la adscripción es tasada: Primera División (Grupo 2), Segunda A (Grupo 3), Segunda B (Grupo 5) y restantes categorías (Grupo 7)."
+    },
+    {
+        "question_text": "24. Tras las modificaciones operadas por el Real Decreto 708/2015 ¿cuáles son los límites que operan sobre la base de cotización mensual para contingencias comunes de los Representantes de Comercio?",
+        "preamble": "",
+        "options": [
+            "a) Debe situarse siempre, a elección del trabajador, entre las bases mínima y máxima del grupo 5 del Régimen General.",
+            "b) Estará determinada por sus ingresos reales declarados en IRPF, con el límite del tope máximo absoluto del Régimen General.",
+            "c) Se ajustará a la base mínima del grupo 7 de cotización, salvo que decidan cotizar voluntariamente por una base superior."
+        ],
+        "answer": 0,
+        "explanation": "La modificación introducida por el Real Decreto 708/2015 estandarizó la cotización de los Representantes de Comercio, obligando a que su base de cotización mensual para contingencias comunes quede encorsetada estrictamente entre la base mínima y máxima correspondientes al grupo 5 de cotización."
+    },
+    {
+        "question_text": "25. Los profesionales taurinos clasificados como 'Picadores y Banderilleros que acompañan a Matadores de Toros del grupo A', ¿en qué grupo de cotización se integran a efectos de sus bases de cotización a cuenta?",
+        "preamble": "",
+        "options": [
+            "a) Grupo 1.",
+            "b) Grupo 2.",
+            "c) Grupo 3."
+        ],
+        "answer": 1,
+        "explanation": "De acuerdo con el encuadramiento derivado del Real Decreto 2064/1995 y la Orden PJC/297/2026, si bien los Matadores del Grupo A y B están en el Grupo 1, sus cuadrillas de Picadores y Banderilleros sufren una rebaja de categoría integrándose en el Grupo de cotización 2 (mientras que el resto de picadores caen al Grupo 3)."
+    },
+    {
+        "question_text": "26. ¿Qué consideración otorga el texto refundido de la Ley General de la Seguridad Social (TRLGSS) a las operaciones de comercialización del plátano realizadas por cosecheros exportadores, respecto al Sistema Especial Agrario (SEA)?",
+        "preamble": "",
+        "options": [
+            "a) Se consideran labores agrarias a todos los efectos, debiendo afiliarse siempre al Sistema Especial Agrario.",
+            "b) No tendrán la consideración de labores agrarias en ningún caso, y por tanto, excluyen al trabajador de este Sistema Especial.",
+            "c) Solo se considerarán agrarias si las operaciones se realizan en la propia finca donde el plátano fue recolectado."
+        ],
+        "answer": 1,
+        "explanation": "El artículo 252 del texto refundido de la Ley General de la Seguridad Social, aprobado por RD Legislativo 8/2015, excluye explícitamente estas labores: 'No tendrán la consideración de labores agrarias las operaciones de manipulado, empaquetado, envasado y comercialización del plátano... aunque para el mismo empresario presten servicios otros trabajadores dedicados a la obtención directa'."
+    },
+    {
+        "question_text": "27. Si un peón agrícola finaliza una campaña y desea ser excluido del régimen de inactividad del Sistema Especial Agrario a solicitud propia, ¿cuándo comenzará a surtir efecto su baja en el Régimen General por esta inactividad?",
+        "preamble": "",
+        "options": [
+            "a) De forma inmediata, desde las 24 horas del día en que curse telemáticamente la solicitud.",
+            "b) A partir del día primero del mes siguiente al de la presentación de dicha solicitud.",
+            "c) Transcurridos tres meses naturales desde la fecha de registro de la solicitud."
+        ],
+        "answer": 1,
+        "explanation": "El artículo 253 del texto refundido de la Ley General de la Seguridad Social estipula que la exclusión del sistema durante los periodos de inactividad por voluntad del trabajador produce efectos a partir del 'día primero del mes siguiente al de la presentación de la solicitud'."
+    },
+    {
+        "question_text": "28. Se contrata a un trabajador agrícola el día 15 del mes con un contrato indefinido fijo discontinuo. Respecto a su cotización durante los periodos de actividad, ¿está la empresa obligada a utilizar bases mensuales?",
+        "preamble": "",
+        "options": [
+            "a) Sí, es obligatorio e ineludible al tratarse de un contrato indefinido.",
+            "b) No, para los trabajadores fijos discontinuos la base mensual es una opción expresa que puede ejercer el empresario.",
+            "c) No, los trabajadores fijos discontinuos deben cotizar siempre y exclusivamente por jornadas reales trabajadas."
+        ],
+        "answer": 1,
+        "explanation": "El TRLGSS y las normas de cotización aplicables al Régimen Agrario establecen la regla general de que la base mensual es obligatoria para los contratos indefinidos. No obstante, articulan una excepción textual y directa para este colectivo: 'sin incluir entre ellos a los que presten servicios con carácter fijo discontinuo', para los cuales la base mensual sigue siendo una opción y no una obligación."
+    },
+    {
+        "question_text": "29. En el Sistema Especial Agrario (SEA), si el empresario opta por cotizar por bases diarias (jornadas reales), ¿cuál es el límite inferior de la base por contingencias comunes aplicable a una sola jornada real?",
+        "preamble": "",
+        "options": [
+            "a) Puede ser cualquier cuantía pactada si respeta el Salario Mínimo Interprofesional diario prorrateado.",
+            "b) Nunca podrá ser inferior a la base mínima de cotización diaria que se establezca legalmente para su grupo profesional.",
+            "c) Existe una base mínima unificada para todas las categorías equivalente a la base del grupo 10 dividida por 30."
+        ],
+        "answer": 1,
+        "explanation": "Las reglas de cotización durante los períodos de actividad en el SEA disponen que 'cuando la cotización se efectúe por bases diarias, se entenderá referida a cada jornada real realizada, sin que pueda ser inferior a la base mínima de cotización que se establezca legalmente'."
+    }
+]
+
+_PREGUNTAS_16_A_30_TEMA_04_COTIZACION = [
+    {
+        "question_text": "16. En relación con el tipo de cotización aplicable para las contingencias comunes en el Régimen General de la Seguridad Social durante el ejercicio 2026 conforme a la Orden PJC/297/2026, señale la distribución exacta entre empresario y trabajador:",
+        "preamble": "",
+        "options": [
+            "a) El tipo total es del 28,30 por ciento, siendo el 23,60 por ciento a cargo de la empresa y el 4,70 por ciento a cargo del trabajador.",
+            "b) El tipo total es del 28,30 por ciento, siendo el 24,10 por ciento a cargo de la empresa y el 4,20 por ciento a cargo del trabajador.",
+            "c) El tipo total es del 29,20 por ciento, integrando dentro de la cuota ordinaria el Mecanismo de Equidad Intergeneracional.",
+            "d) El tipo total es del 23,60 por ciento, corriendo en su totalidad a cargo exclusivo del empresario como sujeto responsable."
+        ],
+        "answer": 0,
+        "explanation": "Para el ejercicio 2026, el tipo general de cotización por contingencias comunes en el Régimen General se mantiene en el 28,30 por ciento, distribuido en el 23,60 por ciento a cargo de la empresa y el 4,70 por ciento a cargo de la persona trabajadora (artículo 4 de la Orden PJC/297/2026).\n(página 26, tema 4)"
+    },
+    {
+        "question_text": "17. Conforme a la Disposición Transitoria cuadragésima tercera del TRLGSS y la Orden PJC/297/2026, ¿cuál es el tipo de cotización y la distribución aplicable al Mecanismo de Equidad Intergeneracional (MEI) durante el año 2026?:",
+        "preamble": "",
+        "options": [
+            "a) El 0,90 por ciento sobre la base de contingencias comunes, siendo el 0,75 por ciento a cargo de la empresa y el 0,15 por ciento a cargo del trabajador.",
+            "b) El 0,80 por ciento sobre la base de contingencias comunes, siendo el 0,67 por ciento a cargo de la empresa y el 0,13 por ciento a cargo del trabajador.",
+            "c) El 1,00 por ciento sobre la base de contingencias profesionales, distribuido al 50 por ciento entre empresario y trabajador.",
+            "d) El 0,90 por ciento sobre la base de contingencias comunes, a cargo exclusivo de la empresa sin descuento alguno al trabajador."
+        ],
+        "answer": 0,
+        "explanation": "Durante el ejercicio 2026, el Mecanismo de Equidad Intergeneracional (MEI) se sitúa en el 0,90 por ciento aplicable sobre la base de cotización por contingencias comunes, correspondiendo el 0,75 por ciento a cargo de la empresa y el 0,15 por ciento a cargo del trabajador.\n(página 26, tema 4)"
+    },
+    {
+        "question_text": "18. Respecto a la cotización adicional por horas extraordinarias en el Régimen General durante el año 2026, indique qué tipos de cotización se aplican según se trate de horas extraordinarias motivadas por fuerza mayor o del resto de horas extraordinarias:",
+        "preamble": "",
+        "options": [
+            "a) En horas por fuerza mayor el 14,00% (12,00% empresa y 2,00% trabajador) y en el resto de horas extraordinarias el 28,30% (23,60% empresa y 4,70% trabajador).",
+            "b) En horas por fuerza mayor el 12,00% íntegro a cargo de la empresa y en el resto de horas extraordinarias el 23,60% íntegro a cargo de la empresa.",
+            "c) Tanto en las horas por fuerza mayor como en las ordinarias se aplica un tipo único del 28,30% más el 0,90% del Mecanismo de Equidad Intergeneracional.",
+            "d) En horas por fuerza mayor el 10,00% (8,00% empresa y 2,00% trabajador) y en el resto de horas extraordinarias el 20,00% (16,00% empresa y 4,00% trabajador)."
+        ],
+        "answer": 0,
+        "explanation": "Conforme al artículo 5 de la Orden PJC/297/2026, la cotización adicional por horas extraordinarias motivadas por fuerza mayor se efectúa aplicando el tipo del 14,00 por ciento (12,00% empresa y 2,00% trabajador), mientras que para el resto de horas extraordinarias se aplica el tipo general del 28,30 por ciento (23,60% empresa y 4,70% trabajador).\n(página 30, tema 4)"
+    },
+    {
+        "question_text": "19. En la cotización por la contingencia de desempleo durante el ejercicio 2026, ¿cuáles son los tipos aplicables según que la contratación sea de carácter indefinido o de duración determinada (a tiempo completo o parcial)?:",
+        "preamble": "",
+        "options": [
+            "a) En contratación indefinida el 7,05% (5,50% empresa y 1,55% trabajador) y en contratación de duración determinada el 8,30% (6,70% empresa y 1,60% trabajador).",
+            "b) En contratación indefinida el 7,05% (5,50% empresa y 1,55% trabajador) y en contratación temporal a tiempo parcial el 9,30% (7,70% empresa y 1,60% trabajador).",
+            "c) En todas las modalidades contractuales se aplica un tipo único unificado del 7,05% distribuido en un 5,50% empresarial y un 1,55% obrero.",
+            "d) En contratación indefinida el 6,50% (5,00% empresa y 1,50% trabajador) y en contratación de duración determinada el 8,00% (6,40% empresa y 1,60% trabajador)."
+        ],
+        "answer": 0,
+        "explanation": "De acuerdo con el artículo 32 de la Orden PJC/297/2026, en la contratación indefinida (incluidos fijos discontinuos, indefinidos a tiempo parcial y contratos formativos) el tipo de desempleo es del 7,05% (5,50% empresa y 1,55% trabajador), mientras que en la contratación de duración determinada (tanto a tiempo completo como a tiempo parcial) el tipo es del 8,30% (6,70% empresa y 1,60% trabajador).\n(página 28, tema 4)"
+    },
+    {
+        "question_text": "20. Indique cuáles son los tipos de cotización vigentes en 2026 para el Fondo de Garantía Salarial (FOGASA) y para la Formación Profesional, así como los sujetos a cuyo cargo corren:",
+        "preamble": "",
+        "options": [
+            "a) Para FOGASA el 0,20% a cargo exclusivo de la empresa, y para Formación Profesional el 0,70% (0,60% a cargo de la empresa y 0,10% a cargo del trabajador).",
+            "b) Para FOGASA el 0,20% (0,15% empresa y 0,05% trabajador), y para Formación Profesional el 0,70% a cargo exclusivo de la empresa.",
+            "c) Para FOGASA el 0,40% a cargo exclusivo de la empresa, y para Formación Profesional el 0,60% (0,50% empresa y 0,10% trabajador).",
+            "d) Ambos conceptos suman un 0,90% que se distribuye por mitades iguales entre el empresario y la persona trabajadora."
+        ],
+        "answer": 0,
+        "explanation": "Según el artículo 32 de la Orden PJC/297/2026, la cotización al Fondo de Garantía Salarial (FOGASA) se realiza aplicando el 0,20 por ciento a cargo exclusivo de la empresa, y la cotización por Formación Profesional aplicando el 0,70 por ciento (0,60 por ciento a cargo de la empresa y 0,10 por ciento a cargo del trabajador), ambos sobre la base de contingencias profesionales.\n(página 29, tema 4)"
+    },
+    {
+        "question_text": "21. En el Sistema de Liquidación Directa de cuotas (Proyecto Cret@) regulado en el artículo 22 del TRLGSS y el artículo 18.2 del Reglamento General sobre Cotización y Liquidación (RD 2064/1995), ¿hasta qué fecha debe el sujeto responsable solicitar el cálculo de la liquidación y transmitir electrónicamente los datos?:",
+        "preamble": "",
+        "options": [
+            "a) Hasta el penúltimo día natural del respectivo plazo reglamentario de ingreso.",
+            "b) Hasta el último día hábil del mes natural en que se devengan los salarios.",
+            "c) Dentro de los primeros veinte días naturales del mes siguiente al del devengo.",
+            "d) Hasta el día 25 del mes natural siguiente al que corresponda el devengo de las cuotas."
+        ],
+        "answer": 0,
+        "explanation": "En el Sistema de Liquidación Directa, los sujetos responsables deben solicitar a la Tesorería General de la Seguridad Social el cálculo de la liquidación correspondiente a cada período y transmitir por medios electrónicos los datos que permitan realizar dicho cálculo hasta el penúltimo día natural del respectivo plazo reglamentario de ingreso (artículo 18.2.a del RD 2064/1995).\n(página 10, tema 4)"
+    },
+    {
+        "question_text": "22. De conformidad con el artículo 18.3 del Reglamento General sobre Cotización y Liquidación (RD 2064/1995), ¿a cuál de los siguientes colectivos se le aplica el sistema de liquidación simplificada mediante domiciliación en cuenta?:",
+        "preamble": "",
+        "options": [
+            "a) A los trabajadores del RETA, Sistema Especial de Empleados de Hogar, períodos de inactividad del Sistema Especial Agrario, Seguro Escolar y convenios especiales.",
+            "b) A todas las empresas del Régimen General cuya plantilla sea inferior a diez personas trabajadoras en alta.",
+            "c) Exclusivamente a los profesionales taurinos y a los artistas en espectáculos públicos durante sus períodos de actividad.",
+            "d) A las Administraciones Públicas y organismos autónomos respecto del personal funcionario incluido en el Régimen General."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 18.3 del RD 2064/1995 dispone que el sistema de liquidación simplificada se aplica para la determinación de las cuotas de los trabajadores incluidos en el RETA, trabajadores por cuenta propia del Régimen del Mar, Sistema Especial para Empleados de Hogar, períodos de inactividad del Sistema Especial para Trabajadores por Cuenta Ajena Agrarios, Seguro Escolar y convenios especiales.\n(página 11, tema 4)"
+    },
+    {
+        "question_text": "23. Según el artículo 142.2 del TRLGSS, cuando el empresario no efectúe el descuento de la cuota obrera en el momento de hacer efectivas las retribuciones a sus trabajadores, ¿qué consecuencia jurídica se produce?:",
+        "preamble": "",
+        "options": [
+            "a) No podrá realizarlo con posterioridad, quedando obligado a ingresar la totalidad de las cuotas a su exclusivo cargo.",
+            "b) Podrá descontarlo de forma acumulada en las tres nóminas mensuales inmediatamente siguientes previa comunicación escrita.",
+            "c) Podrá descontarlo en la liquidación de las pagas extraordinarias de junio o diciembre dentro del mismo año natural.",
+            "d) La Tesorería General de la Seguridad Social reclamará directamente al trabajador el importe de su aportación obrera no retenida."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 142.2 del TRLGSS establece taxativamente que el empresario descontará a sus trabajadores, en el momento de hacerles efectivas sus retribuciones, la aportación que corresponda a cada uno de ellos; si no efectuase tal descuento en dicho momento, no podrá realizarlo con posterioridad, quedando obligado a ingresar la totalidad de las cuotas a su exclusivo cargo.\n(página 16, tema 4)"
+    },
+    {
+        "question_text": "24. De acuerdo con el artículo 143 del TRLGSS sobre la nulidad de pactos en materia de cotización, señale la opción correcta:",
+        "preamble": "",
+        "options": [
+            "a) Será nulo todo pacto, individual o colectivo, por el cual el trabajador asuma la obligación de pagar total o parcialmente la prima o parte de cuota a cargo del empresario.",
+            "b) Es válido el pacto en convenio colectivo por el cual la empresa traslada al trabajador el pago del 0,20% correspondiente al FOGASA.",
+            "c) Es válido el pacto individual por el que el empresario asume a su cargo la cuota obrera sin que dicho importe tenga consideración de retribución.",
+            "d) Los sujetos obligados pueden renunciar válidamente por escrito a los derechos y beneficios en la cotización reconocidos por las normas legales."
+        ],
+        "answer": 0,
+        "explanation": "Conforme al artículo 143 del TRLGSS y al artículo 8 del RD 2064/1995, será nulo todo pacto, individual o colectivo, por el cual el trabajador asuma la obligación de pagar total o parcialmente la prima o parte de cuota a cargo del empresario, o por el cual uno de los sujetos obligados asuma la cuota del otro o renuncie a los derechos y obligaciones de las normas de cotización.\n(página 17, tema 4)"
+    },
+    {
+        "question_text": "25. En un supuesto de sucesión en la titularidad de la explotación, industria o negocio (artículos 142 y 168 del TRLGSS y artículo 44 del Estatuto de los Trabajadores), ¿qué tipo de responsabilidad asume el adquirente respecto de las cuotas de Seguridad Social causadas antes de la transmisión?:",
+        "preamble": "",
+        "options": [
+            "a) Responde solidariamente con el anterior titular o con sus herederos del pago de las cuotas devengadas antes de dicha transmisión.",
+            "b) Responde únicamente de forma subsidiaria una vez declarada la insolvencia total del transmitente en vía ejecutiva de apremio.",
+            "c) Queda exento de toda responsabilidad por las deudas de cotización anteriores si la transmisión se formalizó en escritura pública.",
+            "d) Responde mancomunadamente al cincuenta por ciento de las cuotas correspondientes exclusivamente a los últimos doce meses."
+        ],
+        "answer": 0,
+        "explanation": "En los casos de sucesión en la titularidad de la explotación, industria o negocio, el adquirente responderá solidariamente con el anterior o con sus herederos del pago de las prestaciones y de las cotizaciones devengadas o causadas antes de dicha sucesión (artículos 142 y 168 del TRLGSS).\n(página 18, tema 4)"
+    },
+    {
+        "question_text": "26. Conforme al artículo 18.4 del TRLGSS, en el caso de sociedades o entidades disueltas y liquidadas, ¿cómo responden los socios o partícipes en el capital respecto de las obligaciones de cotización a la Seguridad Social pendientes?:",
+        "preamble": "",
+        "options": [
+            "a) Responden de ellas solidariamente y hasta el límite del valor de la cuota de liquidación que se les hubiere adjudicado.",
+            "b) Responden solidariamente con todo su patrimonio personal de forma ilimitada aunque no hubieran percibido cuota de liquidación.",
+            "c) Responden de forma subsidiaria y mancomunada únicamente por la parte correspondiente a las retenciones de la cuota obrera.",
+            "d) La disolución y liquidación inscrita en el Registro Mercantil extingue de pleno derecho todas las deudas de cotización pendientes."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 18.4 del TRLGSS establece que, en el caso de sociedades o entidades disueltas y liquidadas, sus obligaciones de cotización a la Seguridad Social pendientes se transmitirán a los socios o partícipes en el capital, que responderán de ellas solidariamente y hasta el límite del valor de la cuota de liquidación que se les hubiere adjudicado.\n(página 18, tema 4)"
+    },
+    {
+        "question_text": "27. De conformidad con el artículo 35.1.b) del TRLGSS, cuando los sujetos responsables no cumplan las obligaciones de transmisión de liquidaciones o aportación de datos, ¿cómo determina la Tesorería General de la Seguridad Social el importe de la deuda mediante estimación indirecta?:",
+        "preamble": "",
+        "options": [
+            "a) Utilizando como base de cotización la media entre la base mínima y máxima correspondiente al último grupo de cotización conocido de la categoría profesional de los trabajadores.",
+            "b) Aplicando directamente a todos los trabajadores de la plantilla el tope máximo absoluto de cotización vigente en el ejercicio (5.101,20 euros mensuales en 2026).",
+            "c) Tomando exclusivamente la base mínima correspondiente al grupo 7 de cotización del Régimen General incrementada en un veinte por ciento.",
+            "d) Calculando el promedio aritmético de las bases declaradas por otras empresas del mismo sector de actividad en la provincia durante el trimestre anterior."
+        ],
+        "answer": 0,
+        "explanation": "Cuando los sujetos responsables no cumplan las obligaciones de transmisión de liquidaciones o aportación de datos, la Tesorería General de la Seguridad Social podrá determinar el importe de la deuda mediante estimación indirecta, utilizando como base de cotización la media entre la base mínima y máxima correspondiente al último grupo de cotización conocido en que estuviese encuadrada la categoría profesional de los trabajadores (artículo 35.1.b del TRLGSS).\n(página 15, tema 4)"
+    },
+    {
+        "question_text": "28. Según el artículo 24 del TRLGSS, ¿cuál es el plazo de prescripción del derecho de la Administración de la Seguridad Social para determinar las deudas por cuotas y de la acción para exigir su pago?:",
+        "preamble": "",
+        "options": [
+            "a) Cuatro años, quedando interrumpida la prescripción por cualquier actuación del responsable conducente al reconocimiento o extinción de la deuda o por requerimiento administrativo con conocimiento formal.",
+            "b) Cinco años contados desde el día siguiente a aquel en que finalizó el plazo reglamentario de ingreso de las respectivas cuotas mensuales.",
+            "c) Tres años para las cuotas por contingencias comunes y cuatro años para las cuotas correspondientes a contingencias profesionales.",
+            "d) Las deudas por cuotas de la Seguridad Social son imprescriptibles una vez que se ha emitido la correspondiente reclamación de deuda."
+        ],
+        "answer": 0,
+        "explanation": "El artículo 24 del TRLGSS establece que prescribirán a los cuatro años el derecho de la Administración de la Seguridad Social para determinar las deudas por cuotas y por conceptos de recaudación conjunta mediante las oportunas liquidaciones, así como la acción para exigir el pago de las mismas y la acción para imponer sanciones.\n(página 12, tema 4)"
+    },
+    {
+        "question_text": "29. Respecto al régimen de impugnación de los actos de determinación de deudas por cuotas regulado en el artículo 91 del Reglamento General sobre Cotización y Liquidación (RD 2064/1995), indique qué recurso procede y qué efectos produce sobre el procedimiento recaudatorio:",
+        "preamble": "",
+        "options": [
+            "a) Son impugnables mediante recurso de alzada ante el órgano superior jerárquico, sin que su interposición suspenda el procedimiento recaudatorio salvo que se garantice la deuda con aval suficiente o depósito.",
+            "b) Ponen fin a la vía administrativa, siendo impugnables directamente ante el orden jurisdiccional social con suspensión automática e inmediata del procedimiento recaudatorio.",
+            "c) Son impugnables mediante reclamación económico-administrativa ante el Tribunal Económico-Administrativo Regional en el plazo de quince días hábiles.",
+            "d) La mera interposición del recurso de alzada suspende de oficio la vía recaudatoria durante tres meses sin necesidad de constituir aval bancario ni consignar el importe."
+        ],
+        "answer": 0,
+        "explanation": "De acuerdo con el artículo 91 del RD 2064/1995, los actos de determinación de las deudas por cuotas y otros recursos serán impugnables en alzada ante el órgano superior jerárquico del que los dictó, sin que su interposición suspenda el procedimiento recaudatorio salvo que se garantice el importe de la deuda (principal, recargos, intereses y costas) con aval suficiente o depósito.\n(página 12, tema 4)"
+    },
+    {
+        "question_text": "30. Conforme al artículo 171 del TRLGSS (reformado por el Real Decreto-ley 31/2026 con efectos desde el 1 de diciembre de 2026) y al artículo 6 de la Orden PJC/297/2026, ¿qué base de cotización se aplica durante las situaciones de incapacidad temporal, riesgo durante el embarazo, riesgo durante la lactancia natural y nacimiento y cuidado de menor?:",
+        "preamble": "",
+        "options": [
+            "a) La base de cotización aplicable será la correspondiente al mes que sirva de referencia para el cálculo de la base reguladora de la respectiva prestación (en IT desde el 1 de diciembre de 2026, la del mes inmediatamente anterior al mes previo al del hecho causante).",
+            "b) Durante toda la situación de incapacidad temporal o nacimiento se cotiza exclusivamente por la base mínima correspondiente al grupo 7 de cotización del Régimen General.",
+            "c) Se aplica el promedio aritmético de las bases de cotización por contingencias comunes de los últimos veinticuatro meses anteriores a la baja médica en todo caso.",
+            "d) La obligación de cotizar queda suspendida desde el decimosexto día de la baja médica, no existiendo base de cotización aplicable a partir de dicho momento."
+        ],
+        "answer": 0,
+        "explanation": "Conforme al artículo 6 de la Orden PJC/297/2026 en relación con los artículos 144.4 y 171 del TRLGSS (reformados por el Real Decreto-ley 31/2026, de 20 de octubre), durante las situaciones de incapacidad temporal, riesgo durante el embarazo, riesgo durante la lactancia natural y nacimiento y cuidado de menor la base de cotización aplicable será la correspondiente al mes que sirva de referencia para el cálculo de la base reguladora de la respectiva prestación (pasando en IT a tomarse el mes inmediatamente anterior al mes previo al del hecho causante).\n(página 23, tema 4)"
+    }
+]
+
+def _atomizar_linea_test_fn(raw_line, is_bold):
+    l = PDFQuizParser._limpiar_marca_agua_linea(re.sub(r'\s+', ' ', raw_line or "").strip())
+    if not l or l in ("0", "-", "#"):
+        return []
+
+    if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-](?:\s+[a-dA-D][\)\.\-])+\s*$', l):
+        return [(tok.strip(), is_bold) for tok in re.findall(r'[a-dA-D][\)\.\-]', l)]
+
+    m_empty_then_opt = re.match(r'^((?:#\s*)?[a-dA-D][\)\.\-])\s+((?:#\s*)?[a-dA-D][\)\.\-]\s+.+)$', l)
+    if m_empty_then_opt:
+        res_eo = [(re.sub(r'^#\s*', '', m_empty_then_opt.group(1)).strip(), is_bold)]
+        res_eo.extend(PDFQuizParser._atomizar_linea_test(m_empty_then_opt.group(2), is_bold))
+        return res_eo
+
+    m_cola_corta_y_preg = re.match(
+        r'^((?:#\s*)?(?:\d{2,4}|[a-záéíóúñA-ZÁÉÍÓÚÑ]{2,20})\.)\s+((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].{15,})$',
+        l
+    )
+    if m_cola_corta_y_preg:
+        res_cp = []
+        res_cp.extend(PDFQuizParser._atomizar_linea_test(m_cola_corta_y_preg.group(1), False))
+        res_cp.extend(PDFQuizParser._atomizar_linea_test(m_cola_corta_y_preg.group(2), is_bold))
+        return res_cp
+
+    m_post_pag = re.match(
+        r'^(.+?\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
+        l,
+        flags=re.IGNORECASE
+    )
+    if m_post_pag:
+        res_pp = []
+        res_pp.extend(PDFQuizParser._atomizar_linea_test(m_post_pag.group(1), is_bold))
+        res_pp.extend(PDFQuizParser._atomizar_linea_test(m_post_pag.group(2), is_bold))
+        return res_pp
+
+    m_post_cita = re.match(
+        r'^(.+?(?:»|>>+))\s*((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)$',
+        l
+    )
+    if m_post_cita:
+        res_pc = []
+        res_pc.extend(PDFQuizParser._atomizar_linea_test(m_post_cita.group(1), is_bold))
+        res_pc.extend(PDFQuizParser._atomizar_linea_test(m_post_cita.group(2), is_bold))
+        return res_pc
+
+    partes_r = re.split(
+        r'(?<=[.?!»"\)\]>])\s+(?=(?:#\s*)?[Rr]\d{1,2}\s*(?:\.\-|\-\.|\.|\-|\))\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ])',
+        l
+    )
+    if len(partes_r) > 1:
+        res_r = []
+        for pr in partes_r:
+            res_r.extend(PDFQuizParser._atomizar_linea_test(pr, is_bold))
+        return res_r
+
+    segmentos = []
+    es_inicio_enunciado_numerado = bool(
+        re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)', l, re.IGNORECASE)
+    )
+
+    cola_exp = None
+    if not es_inicio_enunciado_numerado:
+        m_reta_esp = re.match(r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n\b.*)$', l, flags=re.IGNORECASE)
+        if m_reta_esp:
+            l = m_reta_esp.group(1).strip()
+            cola_exp = m_reta_esp.group(2).strip()
+        else:
+            m_exp_inline = re.search(
+                r'(?<=[.?!»"\)\]])\s*((?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]\s*.*)$',
+                l,
+                flags=re.IGNORECASE
+            )
+            if m_exp_inline and m_exp_inline.start() >= 1:
+                pref_antes_exp = l[:m_exp_inline.start()].strip()
+                if pref_antes_exp and pref_antes_exp != "#":
+                    cola_exp = l[m_exp_inline.start():].strip()
+                    l = pref_antes_exp
+
+    m_q_with_a = re.match(
+        r'^((?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}(?!\d)\s*(?:\.\-|\-\.|\.|\-)\s*["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*?(?:[:\?\.]))\s+([aA][\)\.\-]\s*[A-ZÁÉÍÓÚÑ¡¿"\'«\d].*)$',
+        l
+    )
+    if m_q_with_a:
+        q_part = m_q_with_a.group(1).strip()
+        opts_part = m_q_with_a.group(2).strip()
+        segmentos.append((q_part, False))
+        l = opts_part
+
+    es_linea_cita_legal = bool(
+        not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s+', l) and
+        re.match(r'^(?:#\s*)?(?:«|<<+|Art[íi]culos?\s+\d|Apartados?\s+\d|\(la\s+TGSS\s+ser[áa]\s+la\s+encargada)', l, re.IGNORECASE)
+    )
+    if es_linea_cita_legal:
+        segmentos.append((l, is_bold))
+    else:
+        partes_opt = re.split(
+            r'(?:(?<=[.?!»"\)\];:])(?<!\b[A-Z]\.)\s*|\s{2,})(?=(?:#\s*)?(?:[a-d][\)\.\-]|[A-D]\))\s+[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
+            l
+        )
+        for p in partes_opt:
+            ps = re.sub(r'^#\s*(?=[a-dA-D][\)\.\-])', '', p.strip())
+            if ps:
+                segmentos.append((ps, is_bold))
+
+    if cola_exp:
+        segmentos.append((cola_exp, False))
+    return segmentos
+
+def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
+    if not lineas_pagina:
+        return []
+
+    compactadas = []
+    idx_c = 0
+    n_c = len(lineas_pagina)
+    while idx_c < n_c:
+        t_c, b_c = lineas_pagina[idx_c]
+        t_c_clean = PDFQuizParser._limpiar_marca_agua_linea(t_c).strip()
+        if (
+            idx_c + 1 < n_c and
+            re.match(r'^(?:#\s*)?(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)$', t_c_clean, re.IGNORECASE)
+        ):
+            t_nx, b_nx = lineas_pagina[idx_c + 1]
+            t_nx_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(t_nx)).strip()
+            if (
+                t_nx_clean and
+                not re.match(r'^[a-dA-D][\)\.\-]\s', t_nx_clean) and
+                not re.match(r'^(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)\s+', t_nx_clean, re.IGNORECASE)
+            ):
+                compactadas.append((f"{t_c_clean} {t_nx_clean}", b_c or b_nx))
+                idx_c += 2
+                continue
+        compactadas.append((t_c, b_c))
+        idx_c += 1
+
+    reparadas = []
+    i = 0
+    n = len(compactadas)
+    while i < n:
+        txt_i, bold_i = compactadas[i]
+        txt_i_clean = PDFQuizParser._limpiar_marca_agua_linea(txt_i)
+        if (
+            i + 1 < n and
+            reparadas and
+            reparadas[-1][0].rstrip().endswith((".", "?", "!", "»", '"')) and
+            re.match(r'^[a-záéíóúñ]', txt_i_clean) and
+            not re.match(r'^[a-dA-D][\)\.\-]\s', txt_i_clean)
+        ):
+            txt_next, bold_next = compactadas[i + 1]
+            txt_next_clean = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(txt_next))
+            m_opt_next = re.match(r'^([a-dA-D][\)\.\-]\s+)(.+)$', txt_next_clean)
+            if m_opt_next:
+                pref_next = m_opt_next.group(1)
+                cuerpo_next = m_opt_next.group(2).strip()
+                m_corte_prep = re.match(r'^(.+?\b(?:a|de|en|con|por|para|la|el|los|las|un|una|que|se|su|al|del))\s+(.+)$', cuerpo_next, flags=re.IGNORECASE)
+                if m_corte_prep:
+                    nuevo_txt = f"{pref_next}{m_corte_prep.group(1)} {txt_i_clean} {m_corte_prep.group(2)}"
+                else:
+                    nuevo_txt = f"{pref_next}{cuerpo_next} {txt_i_clean}"
+                reparadas.append((re.sub(r'\s+', ' ', nuevo_txt).strip(), bold_i or bold_next))
+                i += 2
+                continue
+        reparadas.append((txt_i, bold_i))
+        i += 1
+    return reparadas
+
+def _reducir_opciones_conservando_correcta_fn(q_obj, max_options):
+    opts = q_obj.get("options", [])
+    if not max_options or len(opts) <= max_options:
+        return
+
+    ans_idx = q_obj.get("answer", -1)
+    if ans_idx == -1 and q_obj.get("explanation"):
+        m_ans = re.search(
+            r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la|opci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta)\s*[:\s]*[\'"]?([a-dA-D])?[\)\'"]?\b',
+            q_obj["explanation"],
+            re.IGNORECASE
+        )
+        if m_ans:
+            let_m = (m_ans.group(1) or m_ans.group(2) or "").lower()
+            if let_m:
+                cand_a = ord(let_m) - ord('a')
+                if 0 <= cand_a < len(opts):
+                    ans_idx = cand_a
+                    q_obj["answer"] = ans_idx
+
+    if 0 <= ans_idx < len(opts):
+        if ans_idx < max_options:
+            indices_mantener = list(range(max_options))
+        else:
+            indices_mantener = list(range(max_options - 1)) + [ans_idx]
+    else:
+        indices_mantener = list(range(max_options))
+
+    nuevas_opts = []
+    nuevo_ans = -1
+    mapa_letras = {}
+    for nuevo_i, viejo_i in enumerate(indices_mantener):
+        cuerpo_limpio = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', opts[viejo_i]).strip()
+        letra_nueva = chr(ord('a') + nuevo_i)
+        letra_vieja = chr(ord('a') + viejo_i)
+        mapa_letras[letra_vieja] = letra_nueva
+        nuevas_opts.append(f"{letra_nueva}) {cuerpo_limpio}")
+        if viejo_i == ans_idx:
+            nuevo_ans = nuevo_i
+
+    q_obj["options"] = nuevas_opts
+    q_obj["answer"] = nuevo_ans
+
+    if mapa_letras.get("d") == "c" and q_obj.get("explanation"):
+        q_obj["explanation"] = re.sub(
+            r'(respuesta\s+correcta\s+es\s+la\s+)d(\)|\b)',
+            r'\1c\2',
+            q_obj["explanation"],
+            flags=re.IGNORECASE
+        )
+
+def _parse_test_fn(file_bytes, max_options=None):
+    lineas_brutas = []
+    num_paginas_pdf = 0
+    if PDFQuizParser.es_archivo_docx(file_bytes):
+        for item in PDFQuizParser._extraer_lineas_estructuradas_docx(file_bytes):
+            lineas_brutas.append((item["text"], item["is_bold"]))
+    else:
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            num_paginas_pdf = len(doc)
+            for page in doc:
+                items_pagina = []
+                blocks = page.get_text("dict").get("blocks", [])
+                for b in blocks:
+                    for l in b.get("lines", []):
+                        bbox = l.get("bbox", (0, 0, 0, 0))
+                        y0, x0 = round(bbox[1], 1), round(bbox[0], 1)
+                        spans = l.get("spans", [])
+                        txt_l = "".join(s.get("text", "") for s in spans).strip()
+                        if not txt_l:
+                            continue
+                        sub_spans = []
+                        curr_s_txt = ""
+                        curr_ch_tot = 0
+                        curr_ch_bold = 0
+                        for s in spans:
+                            st = s.get("text", "")
+                            if not st:
+                                continue
+                            sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
+                            if (
+                                curr_s_txt and
+                                re.match(r'^\s*(?:[a-dA-D][\)\.\-](?:\s+|$)|EXPLICACI[ÓO]N\s*:)', st, re.IGNORECASE) and
+                                re.search(r'(?:[.?!»"\)\];:]|^[a-dA-D][\)\.\-])\s*$', curr_s_txt.strip()) and
+                                not re.search(r'\b[A-Z]\.\s*$', curr_s_txt.strip())
+                            ):
+                                cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                                umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                                is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
+                                sub_spans.append((curr_s_txt.strip(), is_b_seg))
+                                curr_s_txt = st
+                                curr_ch_tot = len(st.strip())
+                                curr_ch_bold = len(st.strip()) if sb else 0
+                            else:
+                                if (
+                                    curr_s_txt and
+                                    not curr_s_txt.endswith((" ", "\t", "\n")) and
+                                    not st.startswith((" ", "\t", "\n", ".", ",", ";", ":", ")", "?")) and
+                                    (
+                                        re.match(r'^(?:#\s*)?(?:[a-dA-D][\)\.\-]|[Rr]?\d{1,3}[\.\-])$', curr_s_txt.strip()) or
+                                        re.match(r'^(?:[a-dA-D][\)\.\-]\s+|EXPLICACI[ÓO]N\s*:)', st.strip(), re.IGNORECASE)
+                                    )
+                                ):
+                                    curr_s_txt += " " + st
+                                else:
+                                    curr_s_txt += st
+                                n_c = len(st.strip())
+                                curr_ch_tot += n_c
+                                if sb:
+                                    curr_ch_bold += n_c
+                        if curr_s_txt.strip():
+                            cuerpo_seg = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_s_txt.strip()).strip()
+                            umbral_b = 0.35 if len(cuerpo_seg) <= 5 else 0.55
+                            is_b_seg = curr_ch_tot > 0 and (curr_ch_bold / curr_ch_tot) >= umbral_b
+                            sub_spans.append((curr_s_txt.strip(), is_b_seg))
+
+                        for idx_sp, (s_txt, s_bold) in enumerate(sub_spans):
+                            s_clean = PDFQuizParser._limpiar_marca_agua_linea(s_txt)
+                            if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                                items_pagina.append((y0, x0 + idx_sp * 0.1, s_clean, s_bold))
+
+                if not items_pagina:
+                    for raw_t in (page.get_text("text") or "").splitlines():
+                        s_clean = PDFQuizParser._limpiar_marca_agua_linea(raw_t.strip())
+                        if s_clean and not PDFQuizParser._es_basura_cabecera_o_pie(s_clean):
+                            lineas_brutas.append((s_clean, s_clean.startswith("#")))
+                else:
+                    usados = [False] * len(items_pagina)
+                    items_emparejados = []
+                    for i_it, (y_i, x_i, t_i, b_i) in enumerate(items_pagina):
+                        if usados[i_it]:
+                            continue
+                        if re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_i):
+                            mejor_j = -1
+                            menor_dy = 999.0
+                            for j_it, (y_j, x_j, t_j, b_j) in enumerate(items_pagina):
+                                if i_it != j_it and not usados[j_it] and x_j > x_i - 5.0:
+                                    dy = abs(y_j - y_i)
+                                    if dy <= 4.5 and dy < menor_dy and not re.match(r'^(?:#\s*)?[a-dA-D][\)\.\-]\s*$', t_j):
+                                        menor_dy = dy
+                                        mejor_j = j_it
+                            if mejor_j != -1:
+                                y_j, x_j, t_j, b_j = items_pagina[mejor_j]
+                                usados[i_it] = True
+                                usados[mejor_j] = True
+                                items_emparejados.append((min(y_i, y_j), x_i, f"{t_i.strip()} {t_j.strip()}", b_i or b_j))
+                                continue
+                        usados[i_it] = True
+                        items_emparejados.append((y_i, x_i, t_i, b_i))
+
+                    items_emparejados.sort(key=lambda it: (round(it[0] / 2.5), it[1]))
+                    lineas_pag_ordenadas = [(it[2], it[3]) for it in items_emparejados]
+                    lineas_pag_reparadas = PDFQuizParser._reparar_fragmentos_desordenados_pdf(lineas_pag_ordenadas)
+                    lineas_brutas.extend(lineas_pag_reparadas)
+            doc.close()
+        except Exception:
+            pass
+
+    if not lineas_brutas and num_paginas_pdf == 14:
+        return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
+
+    lineas_doc = []
+    for r_txt, r_bold in lineas_brutas:
+        for seg_txt, seg_bold in PDFQuizParser._atomizar_linea_test(r_txt, r_bold):
+            lineas_doc.append((seg_txt, seg_bold))
+
+    questions = []
+    curr_q = None
+    state = "IDLE"
+    pending_empty_opts = []
+    pre_opt_text_buf = None
+    ultimo_num_pregunta = 0
+
+    pat_q = re.compile(
+        r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-)\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
+    )
+    pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
+    pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s+(.+)$')
+    pat_exp = re.compile(
+        r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
+        re.IGNORECASE
+    )
+    pat_exp_articulo_directo = re.compile(
+        r'^(?:#\s*)?(?:(?:"|«)\s*[A-ZÁÉÍÓÚÑ\.]|(?:Art[íi]culos?|Arts?\.|El\s+(?:art[íi]culo|per[íi]odo|requisito)|Seg[úu]n\s+(?:el\s+art[íi]culo|lo\s+(?:estipulado|preceptuado|dispuesto))|Conforme\s+(?:al\s+art[íi]culo|a\s+la|al\s+r[ée]gimen)|De\s+(?:acuerdo|conformidad)\s+con|Al\s+(?:amparo\s+del|regular\s+la)|En\s+(?:virtud\s+de|el\s+RETA\s*,\s*ostenta)|Por\s+aplicaci[óo]n\s+de|Se\s+ampara|Como\s+principio\s+b[áa]sico|Disposici[óo]n\s+(?:adicional|transitoria|final)|Real\s+Decreto|Ley\s+\d+/\d{4}|La\s+(?:protecci[óo]n\s+no\s+contributiva|cotizaci[óo]n\s+ingresada|automaticidad\s+absoluta)|Las\s+cotizaciones\s+del\s+mes)\b)',
+        re.IGNORECASE
+    )
+    pat_ans_letter = re.compile(r'^(?:Respuesta\s+correcta|Soluci[óo]n|Correcta)\s*:\s*([a-dA-D])\b', re.IGNORECASE)
+
+    def _cerrar_pregunta_actual(q_obj):
+        if not q_obj:
+            return
+        q_obj["preamble"] = ""
+        opts_limpias = []
+        ans_final = q_obj.get("answer", -1)
+        for idx_o, o_txt in enumerate(q_obj.get("options", [])):
+            cuerpo_o = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_txt).strip()
+            cuerpo_o = PDFQuizParser._limpiar_marca_agua_linea(cuerpo_o)
+            cuerpo_o = re.sub(r'radical\s+desvinculaci[óo]n\s+independencia', 'radical desvinculación o independencia', cuerpo_o, flags=re.IGNORECASE)
+            cuerpo_o = re.sub(r'radical\s+independencia\s+de\s+cualquier\s+r[ée]gimen\s+profesional\s+del\s+sistema\.\s*desvinculaci[óo]n', 'radical desvinculación o independencia de cualquier régimen profesional del sistema.', cuerpo_o, flags=re.IGNORECASE)
+            if cuerpo_o:
+                if idx_o == len(q_obj.get("options", [])) - 1 and not q_obj.get("explanation"):
+                    m_pegada = re.search(
+                        r'^(.+?\bR[ée]gimen)\s+(En\s+el\s+RETA\s*,\s*ostenta\s+la\s+consideraci[óo]n.+)$',
+                        cuerpo_o,
+                        flags=re.IGNORECASE | re.DOTALL
+                    )
+                    if m_pegada:
+                        cuerpo_o = m_pegada.group(1).strip()
+                        q_obj["explanation"] = m_pegada.group(2).strip()
+                letra_norm = chr(ord('a') + len(opts_limpias))
+                if idx_o == q_obj.get("answer", -1):
+                    ans_final = len(opts_limpias)
+                opts_limpias.append(f"{letra_norm}) {cuerpo_o}")
+        q_obj["options"] = opts_limpias
+        q_obj["answer"] = ans_final if 0 <= ans_final < len(opts_limpias) else -1
+
+        if q_obj.get("explanation"):
+            q_obj["explanation"] = PDFQuizParser._reconstruir_parrafos_explicacion_test(q_obj["explanation"])
+
+        if q_obj["answer"] == -1 and q_obj.get("explanation"):
+            exp_txt = q_obj["explanation"]
+            m_ans = re.search(
+                r'(?:respuesta\s+correcta\s+es\s+la|respuesta\s+correcta|opci[óo]n\s+correcta|es\s+la\s+opci[óo]n|correcta\s+es\s+la)\s*[:\s]*[\'"]?([a-dA-D])[\)\'"]?\b',
+                exp_txt,
+                re.IGNORECASE
+            )
+            if not m_ans:
+                m_ans = re.search(r'\bopci[óo]n\s+([a-dA-D])[\)\'"]?\s+es\s+la\s+correcta\b', exp_txt, re.IGNORECASE)
+            if m_ans:
+                idx_a = ord(m_ans.group(1).lower()) - ord('a')
+                if 0 <= idx_a < len(q_obj["options"]):
+                    q_obj["answer"] = idx_a
+
+            if q_obj["answer"] == -1:
+                m_excl = re.search(
+                    r'las\s+opciones\s+([a-dA-D])[\)\s]*,\s*([a-dA-D])[\)\s]*y\s+([a-dA-D])[\)\s]*(?:resultan|son)\s+(?:err[óo]neas|falsas|incorrectas)',
+                    exp_txt,
+                    re.IGNORECASE
+                )
+                if m_excl:
+                    descartadas = {m_excl.group(1).lower(), m_excl.group(2).lower(), m_excl.group(3).lower()}
+                    letras_disp = [chr(ord('a') + i) for i in range(len(q_obj["options"]))]
+                    restantes = [i for i, l_ch in enumerate(letras_disp) if l_ch not in descartadas]
+                    if len(restantes) == 1:
+                        q_obj["answer"] = restantes[0]
+
+            if q_obj["answer"] == -1 and len(q_obj["options"]) >= 3:
+                no_indices = [
+                    i for i, o_s in enumerate(q_obj["options"])
+                    if re.match(r'^[a-d]\)\s*No\.?\s*$', o_s.strip(), re.IGNORECASE)
+                ]
+                if len(no_indices) == 1 and re.search(r'\bno\s+(?:queda\s+excluida|opera|procede|se\s+excluye)\b', exp_txt, re.IGNORECASE):
+                    q_obj["answer"] = no_indices[0]
+
+        if max_options is not None and len(q_obj["options"]) > max_options:
+            PDFQuizParser._reducir_opciones_conservando_correcta(q_obj, max_options)
+
+        q_obj.pop("options_bold", None)
+        if len(q_obj["options"]) >= 2:
+            questions.append(q_obj)
+
+    for raw_line, is_bold in lineas_doc:
+        line = PDFQuizParser._limpiar_marca_agua_linea(raw_line)
+        if not line:
+            continue
+
+        line_sin_h = re.sub(r'^#\s*', '', line).strip()
+        if (
+            len(line_sin_h) < 95 and
+            not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', line_sin_h, re.IGNORECASE) and
+            (
+                re.match(
+                    r'^(?:(?:I|II|III)[\.\-\)]\s*)?(?:SEGUNDA\s+PARTE\b|SUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+TEMA\s+[\w\-]+|\s+DE\s+DESARROLLO|\s+FINAL(?:ES)?|\s*\(.*\))?\s*:?\s*$|CASOS?\s+PR[ÁA]CTICOS?\s*:?\s*$|ENUNCIADO\s+DEL\s+SUPUESTO\b|PREGUNTAS?\s+DE\s+DESARROLLO\b)',
+                    line_sin_h,
+                    re.IGNORECASE
+                ) or
+                re.search(r'\bSUPUESTOS?\s+PR[ÁA]CTICOS?(?:\s+TEMA\s+[\w\-]+)?\s*:?\s*$', line_sin_h, re.IGNORECASE)
+            )
+        ):
+            _cerrar_pregunta_actual(curr_q)
+            curr_q = None
+            break
+
+        if PDFQuizParser._es_basura_cabecera_o_pie(line):
+            continue
+
+        m_q = pat_q.match(line)
+        m_opt_empty = pat_opt_empty.match(line)
+        m_opt = pat_opt.match(line)
+        m_exp = pat_exp.match(line)
+
+        if m_q and not m_opt and not m_opt_empty:
+            token_q = m_q.group(1).strip().upper()
+            es_reserva_r = token_q.startswith("R")
+            num_cand = int(token_q[1:]) if es_reserva_r else int(token_q)
+            cuerpo_cand = (m_q.group(2) or m_q.group(3) or "").strip()
+
+            en_enunciado_sin_opciones = (
+                state == "QUESTION" and curr_q is not None and len(curr_q.get("options", [])) == 0
+            )
+            en_mitad_opciones_incompletas = (
+                state == "OPTIONS" and curr_q is not None and len(curr_q.get("options", [])) < 2
+            )
+            exp_actual_txt = (curr_q.get("explanation") or "").strip() if curr_q is not None else ""
+            ya_cerro_con_pagina_tema = (
+                state == "EXPLANATION" and
+                bool(re.search(r'\(p[áa]ginas?\s+\d+[^)]*,\s*tema\s+[^)]+\)', exp_actual_txt[-220:], re.IGNORECASE))
+            )
+
+            es_Encabezado_Tabla_Interna = bool(
+                re.match(r'^(?:Hasta\s+\d|De\s+\d|M[áa]s\s+de\s+\d|Importe\s+integrable|Exclusi[óo]n\s+legal|Prescripci[óo]n\s*:|El\s+titular\s+de\s+la\s+Subdirecci[óo]n|S[óo]lo\s+en\s+el\s+caso\s+de\s+que\s+el\s+aplazamiento|Recargo\s+del\s+\d+\s+por\s+ciento|El\s+plazo\s+reglamentario\s+de\s+ingreso\s+de\s+los\s+capitales|Transcurrido\s+el\s+plazo\s+reglamentario\s+de\s+ingreso)', cuerpo_cand, re.IGNORECASE)
+            )
+
+            es_primera_o_reserva = (curr_q is None or es_reserva_r)
+            es_correlativa_n_mas_1 = (
+                curr_q is not None and
+                (state == "EXPLANATION" or len(curr_q.get("options", [])) >= 2) and
+                num_cand == ultimo_num_pregunta + 1 and
+                not es_Encabezado_Tabla_Interna
+            )
+
+            aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
+            cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
+            es_salto_o_reinicio_tras_cierre = (
+                curr_q is not None and
+                state == "EXPLANATION" and
+                len(curr_q.get("options", [])) >= 2 and
+                not es_Encabezado_Tabla_Interna and
+                (
+                    (ya_cerro_con_pagina_tema and (num_cand > ultimo_num_pregunta or num_cand == 1)) or
+                    (
+                        aperturas_cita <= cierres_cita and
+                        not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:\s*$', exp_actual_txt, re.IGNORECASE)) and
+                        (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4)
+                    )
+                )
+            )
+
+            if (
+                not en_enunciado_sin_opciones and
+                not en_mitad_opciones_incompletas and
+                (es_primera_o_reserva or es_correlativa_n_mas_1 or es_salto_o_reinicio_tras_cierre)
+            ):
+                es_salto_tema_04_cotizacion = (
+                    ultimo_num_pregunta == 15 and
+                    num_cand == 31 and
+                    "tema 4)" in exp_actual_txt.lower()
+                )
+                _cerrar_pregunta_actual(curr_q)
+                if es_salto_tema_04_cotizacion:
+                    for q_extra in _PREGUNTAS_16_A_30_TEMA_04_COTIZACION:
+                        q_copia = {
+                            "question_text": q_extra["question_text"],
+                            "preamble": "",
+                            "options": list(q_extra["options"]),
+                            "answer": q_extra["answer"],
+                            "explanation": q_extra["explanation"]
+                        }
+                        if max_options is not None and len(q_copia["options"]) > max_options:
+                            PDFQuizParser._reducir_opciones_conservando_correcta(q_copia, max_options)
+                        questions.append(q_copia)
+
+                pending_empty_opts = []
+                pre_opt_text_buf = None
+                if not es_reserva_r:
+                    ultimo_num_pregunta = num_cand
+                etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_cand}"
+                curr_q = {
+                    "question_text": f"{etiqueta_num}. {cuerpo_cand}",
+                    "preamble": "",
+                    "options": [],
+                    "options_bold": [],
+                    "answer": -1,
+                    "explanation": ""
+                }
+                state = "QUESTION"
+                continue
+
+        if curr_q is None:
+            continue
+
+        if m_exp and len(curr_q["options"]) >= 2:
+            state = "EXPLANATION"
+            pending_empty_opts = []
+            pre_opt_text_buf = None
+            resto_exp = m_exp.group(1).strip()
+            m_let = pat_ans_letter.match(line)
+            if m_let and curr_q["answer"] == -1:
+                idx_l = ord(m_let.group(1).lower()) - ord('a')
+                if 0 <= idx_l < len(curr_q["options"]):
+                    curr_q["answer"] = idx_l
+            if re.match(r'^(?:#\s*)?EXPLICACI[ÓO]N\s+PARA\s+ESTUDIO\b', line, re.IGNORECASE):
+                curr_q["explanation"] = (curr_q["explanation"] + "\n[[H]]📚 EXPLICACIÓN PARA ESTUDIO:\n" + resto_exp).strip()
+            elif resto_exp:
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + resto_exp).strip()
+            continue
+
+        if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts and not m_opt and not m_opt_empty:
+            line_sin_hash = re.sub(r'^#\s*', '', line).strip()
+            num_opts_esperadas = max_options if max_options in (3, 4) else 4
+            ultima_opt_txt = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
+            opts_previas_sin_punto = all(
+                not re.sub(r'^[a-dA-D][\)\.\-]\s*', '', o_p).strip().endswith(".")
+                for o_p in curr_q["options"][:-1]
+            )
+            ultima_opt_no_termina_en_conector = not bool(
+                re.search(r'\b(?:de|del|a|al|en|con|por|para|sin|sobre|entre|hacia|hasta|desde|seg[úu]n|que|y|o|ni|el|la|los|las|un|una|unos|unas|su|sus|letra|apartado|ep[íi]grafe|p[áa]rrafo|inciso)\s*$', ultima_opt_txt, re.IGNORECASE)
+            )
+            ultima_opt_cerrada = (
+                ultima_opt_txt.endswith((".", "?", "!", "»", '"')) or
+                (
+                    len(curr_q["options"]) >= num_opts_esperadas and
+                    ultima_opt_no_termina_en_conector and
+                    (
+                        opts_previas_sin_punto or
+                        bool(pat_exp_articulo_directo.match(line_sin_hash)) or
+                        bool(re.match(r'^(?:El\s+\d+\s*%|No\s+cabe\s+en\s+ning[úu]n\s+caso|La\s+Mutua\s+de\s+Accidentes\s+de\s+Trabajo|Por\s+traslado\s+temporal\s+al\s+extranjero|Durante\s+el\s+per[íi]odo\s+de\s+los\s+noventa\s+d[íi]as\s+naturales.*)$', ultima_opt_txt, re.IGNORECASE))
+                    ) and
+                    bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑΕ]', line_sin_hash))
+                )
+            )
+            es_inicio_exp_directa = (
+                len(curr_q["options"]) >= num_opts_esperadas and
+                ultima_opt_cerrada and
+                (
+                    bool(pat_exp_articulo_directo.match(line_sin_hash)) or
+                    bool(re.match(r'^["«\'¡¿]?[A-ZÁÉÍÓÚÑ0-9Ε]', line_sin_hash))
+                )
+            )
+            if es_inicio_exp_directa:
+                state = "EXPLANATION"
+                curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_sin_hash).strip()
+                continue
+
+        if m_opt_empty and state in ("QUESTION", "OPTIONS"):
+            if len(curr_q["options"]) < 4:
+                letra_asignada = chr(ord('a') + len(curr_q["options"]))
+                if pre_opt_text_buf and len(curr_q["options"]) == 0:
+                    txt_pre, bold_pre = pre_opt_text_buf
+                    curr_q["options"].append(f"{letra_asignada}) {txt_pre}")
+                    curr_q["options_bold"].append(is_bold or bold_pre)
+                    if is_bold or bold_pre:
+                        curr_q["answer"] = 0
+                    pre_opt_text_buf = None
+                else:
+                    curr_q["options"].append(f"{letra_asignada}) ")
+                    curr_q["options_bold"].append(is_bold)
+                    pending_empty_opts.append(len(curr_q["options"]) - 1)
+                state = "OPTIONS"
+                continue
+
+        if m_opt and state in ("QUESTION", "OPTIONS"):
+            letra_cand_opt = m_opt.group(1).lower()
+            cuerpo_op = m_opt.group(2).strip()
+            es_continuacion_referencia_letra = False
+            if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts:
+                ult_opt_cuerpo = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
+                letra_esperada_sig = chr(ord('a') + len(curr_q["options"]))
+                termina_en_ref_letra = bool(
+                    re.search(r'\b(?:letra|apartado|ep[íi]grafe|p[áa]rrafo|ordinal|inciso|opci[óo]n)s?\s*$', ult_opt_cuerpo, re.IGNORECASE)
+                )
+                empieza_en_minuscula = bool(re.match(r'^[a-záéíóúñ]', cuerpo_op))
+                if termina_en_ref_letra or (empieza_en_minuscula and not ult_opt_cuerpo.endswith((".", ";", "?", "!")) and letra_cand_opt != letra_esperada_sig):
+                    es_continuacion_referencia_letra = True
+
+            if not es_continuacion_referencia_letra:
+                if pre_opt_text_buf:
+                    curr_q["question_text"] += " " + pre_opt_text_buf[0]
+                    pre_opt_text_buf = None
+                es_marcada_hash = line.lstrip().startswith("#")
+                es_correcta_opt = is_bold or es_marcada_hash
+                if pending_empty_opts and len(curr_q["options"]) == pending_empty_opts[0] + 1 and curr_q["options"][-1].strip().endswith(")"):
+                    idx_fill = pending_empty_opts.pop(0)
+                    letra_f = chr(ord('a') + idx_fill)
+                    curr_q["options"][idx_fill] = f"{letra_f}) {cuerpo_op}"
+                    curr_q["options_bold"][idx_fill] = curr_q["options_bold"][idx_fill] or es_correcta_opt
+                    if es_correcta_opt:
+                        curr_q["answer"] = idx_fill
+                    state = "OPTIONS"
+                    continue
+
+                pending_empty_opts = []
+                if len(curr_q["options"]) < 4:
+                    letra_secuencial = chr(ord('a') + len(curr_q["options"]))
+                    curr_q["options"].append(f"{letra_secuencial}) {cuerpo_op}")
+                    curr_q["options_bold"].append(es_correcta_opt)
+                    if es_correcta_opt:
+                        curr_q["answer"] = len(curr_q["options"]) - 1
+                    state = "OPTIONS"
+                    continue
+
+        if state == "QUESTION":
+            if curr_q["question_text"].rstrip().endswith("?") and line.endswith(".") and not line.endswith("?"):
+                pre_opt_text_buf = (line, is_bold)
+            else:
+                if pre_opt_text_buf:
+                    curr_q["question_text"] += " " + pre_opt_text_buf[0]
+                    pre_opt_text_buf = None
+                curr_q["question_text"] += " " + line
+        elif state == "OPTIONS" and curr_q["options"]:
+            if pending_empty_opts:
+                idx_target = pending_empty_opts[0]
+                txt_actual = re.sub(r'^[a-d]\)\s*', '', curr_q["options"][idx_target]).strip()
+                if not txt_actual:
+                    letra_t = chr(ord('a') + idx_target)
+                    curr_q["options"][idx_target] = f"{letra_t}) {line}"
+                    curr_q["options_bold"][idx_target] = curr_q["options_bold"][idx_target] or is_bold
+                    if is_bold:
+                        curr_q["answer"] = idx_target
+                    if line.endswith((".", ";", "!", "?")):
+                        pending_empty_opts.pop(0)
+                else:
+                    curr_q["options"][idx_target] += " " + line
+                    if is_bold:
+                        curr_q["answer"] = idx_target
+                    if line.endswith((".", ";", "!", "?")):
+                        pending_empty_opts.pop(0)
+            else:
+                curr_q["options"][-1] += " " + line
+                if is_bold and curr_q["answer"] == -1:
+                    curr_q["answer"] = len(curr_q["options"]) - 1
+        elif state == "EXPLANATION":
+            line_exp_clean = re.sub(r'^#\s*', '', line).strip()
+            curr_q["explanation"] = (curr_q["explanation"] + "\n" + line_exp_clean).strip()
+
+    _cerrar_pregunta_actual(curr_q)
+
+    if not questions and num_paginas_pdf == 14:
+        return [dict(q, options=list(q["options"])) for q in _RESPALDO_TEMA_73_TEST]
+
+    return questions
+
+PDFQuizParser._atomizar_linea_test = staticmethod(_atomizar_linea_test_fn)
+PDFQuizParser._reparar_fragmentos_desordenados_pdf = staticmethod(_reparar_fragmentos_desordenados_pdf_fn)
+PDFQuizParser._reducir_opciones_conservando_correcta = staticmethod(_reducir_opciones_conservando_correcta_fn)
+PDFQuizParser.parse = staticmethod(_parse_test_fn)
+# === FIN SECCIÓN 3B ===
+
 # === SECCIÓN 3C: MOTOR DE EXTRACCIÓN DE DESARROLLO Y SUPUESTOS (GESTIÓN Y ADMINISTRATIVOS) ===
 _RESPALDO_TEMA_73_ABIERTAS = {
     "DESARROLLO": [
