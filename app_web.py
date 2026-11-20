@@ -5012,7 +5012,6 @@ PDFQuizParser.parse_abiertas_gestion = staticmethod(_parse_abiertas_gestion_fn)
 PDFQuizParser.parse_supuestos_test_administrativos = staticmethod(_parse_supuestos_test_administrativos_fn)
 # === FIN SECCIÓN 3C ===
 
-
 # === SECCIÓN 4A: SEGURIDAD, BAJAS, PROTECCIÓN ANTIRRECORTES Y SINCRONIZACIÓN ===
 # Puente automático para evitar NameError con TESTS_DISPONIBLES_COMPLETO
 if "TESTS_DISPONIBLES_COMPLETO" not in globals():
@@ -5207,23 +5206,26 @@ def obtener_tests_segun_rol():
     catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
     if st.session_state.get('rol') == 'INVITADO':
         inv_res = {
-            "ADMINISTRATIVOS": dict(TESTS_DISPONIBLES_INVITADO.get("ADMINISTRATIVOS", {})),
-            "GESTION": dict(TESTS_DISPONIBLES_INVITADO.get("GESTION", {})),
+            "ADMINISTRATIVOS": {},
+            "GESTION": {},
         }
-        inv_res["GESTION"]["DESARROLLO"] = {}
+        base_adm_inv = dict(TESTS_DISPONIBLES_INVITADO.get("ADMINISTRATIVOS", {}))
+        for cat_adm in ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]:
+            inv_res["ADMINISTRATIVOS"][cat_adm] = dict(base_adm_inv.get(cat_adm, {}))
+
+        base_ges_inv = dict(TESTS_DISPONIBLES_INVITADO.get("GESTION", {}))
+        for cat_ges in ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]:
+            inv_res["GESTION"][cat_ges] = dict(base_ges_inv.get(cat_ges, {}))
         return inv_res
 
-    es_adm = usuario_es_admin()
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
 
     for esp in ["ADMINISTRATIVOS", "GESTION"]:
         origen_esp = catalogo_base.get(esp, {})
-        if es_adm:
+        if esp == "GESTION":
             orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]
-        elif esp == "GESTION":
-            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "DESARROLLO"]
         else:
-            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL"]
+            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]
 
         for cat in orden_categorias:
             if cat in origen_esp:
@@ -7386,16 +7388,57 @@ if not st.session_state.questions:
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
     html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
     .block-container { max-width: 820px !important; }
-    div[data-testid="stVerticalBlock"]:has(.marcador-cat-grid) div[role="radiogroup"] {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        max-width: 470px !important;
-        row-gap: 6px !important;
+
+    /* Transformación visual de los checkboxes de categoría en círculos tipo radio para las dos filas (TEST y SUPUESTOS) */
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] {
+        margin-bottom: 0px !important;
+        padding-top: 2px !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.marcador-cat-grid) div[role="radiogroup"] > label {
-        min-width: 135px !important;
-        margin-right: 12px !important;
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] label {
+        align-items: center !important;
+        cursor: pointer !important;
     }
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] label span[data-baseweb="checkbox"],
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] div[data-baseweb="checkbox"] > div:first-child {
+        border-radius: 50% !important;
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
+        min-height: 18px !important;
+        border: 2px solid #1E293B !important;
+        background-color: #FFFFFF !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] svg {
+        display: none !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"]:has(input:checked) span[data-baseweb="checkbox"],
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"]:has(input:checked) div[data-baseweb="checkbox"] > div:first-child {
+        border-color: #1D4ED8 !important;
+        background-color: #EFF6FF !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"]:has(input:checked) span[data-baseweb="checkbox"]::after,
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"]:has(input:checked) div[data-baseweb="checkbox"] > div:first-child::after {
+        content: "" !important;
+        display: block !important;
+        width: 9px !important;
+        height: 9px !important;
+        border-radius: 50% !important;
+        background-color: #1D4ED8 !important;
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] label p,
+    div[data-testid="stVerticalBlock"]:has(.marcador-cat-dos-filas) [data-testid="stCheckbox"] label span {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        color: #1E293B !important;
+        white-space: nowrap !important;
+    }
+
     [data-testid="stExpanderDetails"] div.stButton > button {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
@@ -7420,6 +7463,7 @@ if not st.session_state.questions:
         gap: 0.5rem !important;
     }
     </style>""", unsafe_allow_html=True)
+
     es_admin = usuario_es_admin()
     col_texto, col_img = st.columns([2.5, 1])
     with col_img:
@@ -7430,10 +7474,20 @@ if not st.session_state.questions:
         rol = st.session_state.rol
         TESTS_DISPONIBLES = obtener_tests_segun_rol()
         st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px;'>1. Especialidad</div>", unsafe_allow_html=True)
+
+        def _on_cambio_especialidad():
+            nueva_esp = st.session_state.get("radio_especialidad", "ADMINISTRATIVOS")
+            st.session_state.saved_esp = nueva_esp
+            cats_disp_esp = list(obtener_tests_segun_rol().get(nueva_esp, {}).keys())
+            if st.session_state.get("saved_cat") not in cats_disp_esp:
+                st.session_state.saved_cat = "ESPECIFICO" if "ESPECIFICO" in cats_disp_esp else (cats_disp_esp[0] if cats_disp_esp else "ESPECIFICO")
+            st.session_state.mostrar_opciones_simulacro = False
+            limpiar_todas_las_busquedas()
+
         if rol in ["ACCESO TOTAL", "INVITADO"]:
             l_esp = list(TESTS_DISPONIBLES.keys())
             i_esp = l_esp.index(st.session_state.saved_esp) if st.session_state.get("saved_esp") in l_esp else 0
-            especialidad = st.radio("Selecciona tu especialidad:", l_esp, index=i_esp, horizontal=True, key="radio_especialidad", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad)
+            especialidad = st.radio("Selecciona tu especialidad:", l_esp, index=i_esp, horizontal=True, key="radio_especialidad", label_visibility="collapsed", on_change=_on_cambio_especialidad)
             st.session_state.saved_esp = especialidad
         elif rol in ["ADMTVOS", "GESTION"]:
             especialidad = "ADMINISTRATIVOS" if rol == "ADMTVOS" else "GESTION"
@@ -7442,14 +7496,75 @@ if not st.session_state.questions:
         else:
             st.error("Error en los permisos de usuario."); st.stop()
 
-        with st.container():
-            st.markdown("<div class='marcador-cat-grid'></div><div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px;'>2. Categoría</div>", unsafe_allow_html=True)
-            l_cat = list(TESTS_DISPONIBLES[especialidad].keys())
-            i_cat = l_cat.index(st.session_state.saved_cat) if st.session_state.get("saved_cat") in l_cat else 0
-            categoria = st.radio("Selecciona el tipo de test:", l_cat, index=i_cat, horizontal=True, key="radio_categoria", label_visibility="collapsed", on_change=cambio_categoria_o_especialidad)
-            st.session_state.saved_cat = categoria
+        l_cat = list(TESTS_DISPONIBLES[especialidad].keys())
+        if st.session_state.get("saved_cat") not in l_cat:
+            st.session_state.saved_cat = "ESPECIFICO" if "ESPECIFICO" in l_cat else l_cat[0]
+        categoria_activa = st.session_state.saved_cat
 
-    st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px;'>3. Modo de avance</div>", unsafe_allow_html=True)
+        def _seleccionar_categoria_dos_filas(cat_elegida):
+            st.session_state.saved_cat = cat_elegida
+            st.session_state.radio_categoria = cat_elegida
+            for c_k in l_cat:
+                st.session_state[f"chk_cat_2f_{especialidad}_{c_k}"] = (c_k == cat_elegida)
+            st.session_state.mostrar_opciones_simulacro = False
+            limpiar_todas_las_busquedas()
+
+        etiquetas_visibles_cat = {
+            "ESPECIFICO": "ESPECIFICO",
+            "EXAMENES": "EXÁMENES",
+            "GENERAL": "GENERAL",
+            "SUPUESTOS": "SUPUESTOS",
+            "DESARROLLO": "DESARROLLO",
+        }
+        fila_test_cats = [c for c in ["ESPECIFICO", "EXAMENES", "GENERAL"] if c in l_cat]
+        fila_sup_cats = [c for c in ["SUPUESTOS", "DESARROLLO"] if c in l_cat]
+
+        with st.container():
+            st.markdown("<div class='marcador-cat-dos-filas'></div><div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>2. Categoría</div>", unsafe_allow_html=True)
+
+            # LÍNEA 1: ETIQUETA TEST -> ESPECIFICO, EXÁMENES, GENERAL
+            if fila_test_cats:
+                cols_f1 = st.columns([0.95] + [1.15] * len(fila_test_cats))
+                with cols_f1[0]:
+                    st.markdown(
+                        "<div style='background:#EFF6FF; color:#1E3A8A !important; border:1px solid #93C5FD; border-radius:6px; padding:3px 8px; font-size:12px; font-weight:800; text-align:center; letter-spacing:0.4px; margin-top:2px;'>TEST</div>",
+                        unsafe_allow_html=True
+                    )
+                for idx_c1, cat_1 in enumerate(fila_test_cats):
+                    k_c1 = f"chk_cat_2f_{especialidad}_{cat_1}"
+                    st.session_state[k_c1] = (categoria_activa == cat_1)
+                    with cols_f1[idx_c1 + 1]:
+                        st.checkbox(
+                            etiquetas_visibles_cat.get(cat_1, cat_1),
+                            key=k_c1,
+                            on_change=_seleccionar_categoria_dos_filas,
+                            args=(cat_1,)
+                        )
+
+            # LÍNEA 2: ETIQUETA SUPUESTOS -> SUPUESTOS (Administrativos) / SUPUESTOS y DESARROLLO (Gestión)
+            if fila_sup_cats:
+                relleno_cols = max(0, len(fila_test_cats) - len(fila_sup_cats))
+                pesos_f2 = [0.95] + [1.15] * len(fila_sup_cats) + ([1.15] * relleno_cols if relleno_cols > 0 else [])
+                cols_f2 = st.columns(pesos_f2)
+                with cols_f2[0]:
+                    st.markdown(
+                        "<div style='background:#FEF3C7; color:#92400E !important; border:1px solid #FCD34D; border-radius:6px; padding:3px 6px; font-size:11.5px; font-weight:800; text-align:center; letter-spacing:0.3px; margin-top:2px;'>SUPUESTOS</div>",
+                        unsafe_allow_html=True
+                    )
+                for idx_c2, cat_2 in enumerate(fila_sup_cats):
+                    k_c2 = f"chk_cat_2f_{especialidad}_{cat_2}"
+                    st.session_state[k_c2] = (categoria_activa == cat_2)
+                    with cols_f2[idx_c2 + 1]:
+                        st.checkbox(
+                            etiquetas_visibles_cat.get(cat_2, cat_2),
+                            key=k_c2,
+                            on_change=_seleccionar_categoria_dos_filas,
+                            args=(cat_2,)
+                        )
+
+        categoria = st.session_state.saved_cat
+
+    st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px; margin-top:6px;'>3. Modo de avance</div>", unsafe_allow_html=True)
     op_av = [
         "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)",
         "**Modo metralleta** (pasa a la pregunta siguiente al pulsar una opción)"
@@ -7496,6 +7611,19 @@ if not st.session_state.questions:
                 "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:13.5px; color:#92400E !important;'>"
                 "🔒 <b>Acceso exclusivo para alumnos de Oposiciona 5.0:</b> Esta funcionalidad no está disponible para usuarios invitados. "
                 "Puedes solicitar más información y matricularte escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
+                "</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+        elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and not tests_reales:
+            st.markdown(
+                "<div style='background-color:#FEFCE8; border:2px solid #D97706; border-radius:10px; padding:15px 18px; margin-top:8px; margin-bottom:14px; line-height:1.5; color:#1E293B !important;'>"
+                "<div style='font-size:16px; font-weight:800; color:#92400E !important; margin-bottom:6px;'>📋 ¿En qué consiste la categoría SUPUESTOS de Oposiciona 5.0?</div>"
+                "<p style='font-size:14px; color:#1E293B !important; text-align:justify; margin-bottom:10px;'>"
+                "Entrena casos prácticos reales actualizados a la normativa vigente: en <b>Administrativos</b> mediante supuestos prácticos tipo test con corrección comentada, y en <b>Gestión</b> mediante casos prácticos de desarrollo evaluados en tiempo real por Inteligencia Artificial."
+                "</p>"
+                "<div style='background-color:#FEF3C7; border-left:4px solid #D97706; padding:10px 14px; border-radius:6px; font-size:13.5px; color:#92400E !important;'>"
+                "🔒 <b>Acceso exclusivo para alumnos de Oposiciona 5.0:</b> Solicita más información y matricúlate escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</div>"
                 "</div>",
                 unsafe_allow_html=True
