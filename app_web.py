@@ -7762,8 +7762,80 @@ else:
         padding: 11px 16px !important;
         margin-bottom: 8px !important;
     }
+    a.opo-btn-volver-arriba {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        background-color: #EFF6FF !important;
+        color: #1D4ED8 !important;
+        -webkit-text-fill-color: #1D4ED8 !important;
+        border: 1.5px solid #93C5FD !important;
+        border-radius: 6px !important;
+        padding: 3px 10px !important;
+        font-size: 12px !important;
+        font-weight: 800 !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        transition: all 0.15s ease-in-out !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    }
+    a.opo-btn-volver-arriba:hover {
+        background-color: #1D4ED8 !important;
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        border-color: #1E40AF !important;
+    }
     </style>""", unsafe_allow_html=True)
-    components.html("<script>setTimeout(function() { if(window.parent) window.parent.scrollTo({top: 0, behavior: 'smooth'}); }, 300);</script>", height=0)
+
+    # Ancla superior invisible y manejador JS delegado para que todos los botones 'VOLVER ARRIBA' lleven al top de la ventana activa de Streamlit
+    st.markdown("<div id='opo_top_resultados_anchor' style='position:relative; top:-80px; height:0; width:0;'></div>", unsafe_allow_html=True)
+    components.html("""<script>
+    (function() {
+        var pw = window.parent;
+        var pd = pw.document;
+
+        function scrollAlPrincipioOposiciona() {
+            try {
+                var anchor = pd.getElementById('opo_top_resultados_anchor');
+                if (anchor && anchor.scrollIntoView) {
+                    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                var contenedores = [
+                    pd.querySelector('[data-testid="stAppViewContainer"]'),
+                    pd.querySelector('[data-testid="stMain"]'),
+                    pd.querySelector('section.main'),
+                    pd.documentElement,
+                    pd.body
+                ];
+                for (var i = 0; i < contenedores.length; i++) {
+                    if (contenedores[i] && typeof contenedores[i].scrollTo === 'function') {
+                        contenedores[i].scrollTo({ top: 0, behavior: 'smooth' });
+                    } else if (contenedores[i]) {
+                        contenedores[i].scrollTop = 0;
+                    }
+                }
+                pw.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (err) {}
+        }
+
+        pw.__oposicionaScrollTop = scrollAlPrincipioOposiciona;
+
+        if (!pw.__oposiciona_backtop_listener_ready) {
+            pw.__oposiciona_backtop_listener_ready = true;
+            pd.addEventListener('click', function(e) {
+                var btn = e.target && e.target.closest ? e.target.closest('.opo-btn-volver-arriba') : null;
+                if (btn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pw.__oposicionaScrollTop();
+                }
+            }, true);
+        }
+
+        setTimeout(scrollAlPrincipioOposiciona, 300);
+    })();
+    </script>""", height=0)
 
     puede_rep = usuario_puede_reportar()
     aciertos = fallos = blancos = preg_eval = 0
@@ -8203,20 +8275,16 @@ else:
                 pre_actual, q_txt_actual = _separar_planteamiento_y_pregunta_individual(bloques_q_c, header_opcional=hdr_c)
 
         ph = ""
+        separador_sup_previo = ""
         if pre_actual and not es_sup_res_i:
             ph = f"<div style='font-size:15.5px; font-weight:700; line-height:1.45; text-align:justify; color:#0F172A !important; margin-bottom: 6px;'>{html.escape(pre_actual).replace(chr(10)+chr(10), '<br><br>').replace(chr(10), '<br>')}</div>"
         elif pre_actual and es_sup_res_i and pre_actual != ultimo_preambulo_mostrado:
             ultimo_preambulo_mostrado = pre_actual
             contador_bloque_supuesto += 1
             pre_html_res = html.escape(pre_actual).replace("\n\n", "<br><br>").replace("\n", "<br>")
-            separador_sup_previo = (
-                "<hr style='margin: 22px 0px 14px 0px; border: 0; border-top: 3px solid #1E3A8A;'>"
-                if contador_bloque_supuesto > 1 and total_bloques_supuestos < len(st.session_state.questions) else ""
-            )
-            ph = (
-                f"{separador_sup_previo}"
-                f"<div class='opo-supuesto-planteamiento-res'>{pre_html_res}</div>"
-            )
+            if contador_bloque_supuesto > 1 and total_bloques_supuestos < len(st.session_state.questions):
+                separador_sup_previo = "<hr style='margin: 22px 0px 14px 0px; border: 0; border-top: 3px solid #1E3A8A;'>"
+            ph = f"<div class='opo-supuesto-planteamiento-res'>{pre_html_res}</div>"
 
         q_txt_res_esc = html.escape(q_txt_actual).replace("\n\n", "<br><br>").replace("\n", "<br>")
         bloque_q_res_html = (
@@ -8225,9 +8293,17 @@ else:
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 6px;'><b style='color:#000000 !important;'>{tipo_lbl_res}:</b> {q_txt_res_esc}</div>"
         )
 
+        fila_cabecera_item_html = (
+            f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;'>"
+            f"<span style='color: {col} !important; -webkit-text-fill-color: {col} !important; font-size: 17px; font-weight: 700;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</span>"
+            f"<a href='#opo_top_resultados_anchor' class='opo-btn-volver-arriba' title='Subir al principio de la pantalla'>⬆️ VOLVER ARRIBA</a>"
+            f"</div>"
+        )
+
         st.markdown(
             f"<div style='margin-bottom: 5px;'>"
-            f"<div style='color: {col} !important; font-size: 17px; font-weight: 700; margin-bottom: 6px;'>{tipo_lbl_res} {i+1} | {stat['final_status']}</div>"
+            f"{separador_sup_previo}"
+            f"{fila_cabecera_item_html}"
             f"{ph}"
             f"{bloque_q_res_html}"
             f"<div style='font-size:15px; color:#000000 !important; text-align: justify; line-height: 1.3; margin-bottom: 4px;'><b style='color:#000000 !important;'>Tu respuesta:</b> {stat['selected'] if stat['selected'] else 'Ninguna'}</div>"
