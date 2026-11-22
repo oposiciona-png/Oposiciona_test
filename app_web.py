@@ -641,7 +641,7 @@ def render_bloque_aviso_calendario_pdf(sufijo_key="planes"):
         f"«{TEXTO_AVISO_CALENDARIO_TEMAS}»"
         f"</div>"
         f"<div style='font-size:14.5px; font-weight:600; line-height:1.45; color:#1E293B !important; background:#FFFFFF; border:1px dashed #D97706; border-radius:8px; padding:10px 14px;'>"
-        f"📄 <b>Consulta los temas actuales y próximas incorporaciones:</b> descarga y revisa a continuación el documento PDF actualizado antes de finalizar tu inscripción."
+        f"📄 <b>Consulta los temas incluidos hasta el momento:</b> descarga y revisa a continuación el documento PDF actualizado antes de finalizar tu inscripción."
         f"</div>"
         f"</div>",
         unsafe_allow_html=True
@@ -650,9 +650,9 @@ def render_bloque_aviso_calendario_pdf(sufijo_key="planes"):
     pdf_cal_bytes = obtener_bytes_pdf_calendario()
     if pdf_cal_bytes:
         st.download_button(
-            label="📥 DESCARGAR CALENDARIO Y RELACIÓN DE TEMAS (PDF)",
+            label="📥 DESCARGAR RELACIÓN DE TEMAS ACTUALES (PDF)",
             data=pdf_cal_bytes,
-            file_name="Calendario_Temas_Oposiciona.pdf",
+            file_name="Relacion_Temas_Actuales_Oposiciona.pdf",
             mime="application/pdf",
             use_container_width=True,
             key=f"btn_dl_pdf_calendario_{sufijo_key}"
@@ -662,7 +662,7 @@ def render_bloque_aviso_calendario_pdf(sufijo_key="planes"):
             f"<a href='{URL_PDF_CALENDARIO_VISTA}' target='_blank' rel='noopener noreferrer' "
             f"style='display:block; width:100%; background-color:#FEF3C7; color:#78350F !important; -webkit-text-fill-color:#78350F !important; "
             f"border:2px solid #D97706; border-radius:8px; padding:11px 16px; text-align:center; font-weight:800; font-size:15.5px; text-decoration:none; box-sizing:border-box; margin-bottom:8px;'>"
-            f"📥 ABRIR Y DESCARGAR CALENDARIO DE TEMAS (PDF)"
+            f"📥 DESCARGAR RELACIÓN DE TEMAS ACTUALES (PDF)"
             f"</a>",
             unsafe_allow_html=True
         )
@@ -1314,7 +1314,6 @@ if not st.session_state.autenticado:
                         else:
                             st.error("❌ Código incorrecto. Comprueba el correo recibido.")
         else:
-            # PASO 4: Elección de contraseña personal (si es nuevo alumno o si desea actualizarla antes de pagar)
             pwd_lista_para_pago = False
             if ya_tenia_cuenta_activa_previa and st.session_state.get("pwd_registro_guardada_email") != em_1_limpio:
                 st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Seguirás entrando con tu contraseña habitual (o cámbiala en la pestaña *Recuperar / Cambiar contraseña*).")
