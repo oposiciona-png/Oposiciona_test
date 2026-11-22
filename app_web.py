@@ -623,7 +623,7 @@ PLANES_SUSCRIPCION_OPOSICIONA = {
     }
 }
 
-# Regla estricta de mejora ascendente: cada plan solo puede subir a planes de precio estrictamente mayor (nunca iguales ni inferiores)
+# Regla estricta de mejora ascendente: cada plan solo puede subir a planes de precio estrictamente superior
 MEJORAS_PERMITIDAS_POR_PLAN = {
     "ADM_COMPLETO": ["GES_SOLO_TEST", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"],
     "GES_SOLO_TEST": ["GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"],
@@ -811,6 +811,12 @@ def _stripe_api_request(method, endpoint, data=None, params=None):
     except Exception as e:
         return {"error": {"message": str(e)}}
 
+def _norm_nombre_stripe(txt):
+    s = unicodedata.normalize("NFD", str(txt or ""))
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    s = re.sub(r"[—–\-]+", "-", s.lower())
+    return re.sub(r"\s+", " ", s).strip()
+
 @st.cache_data(ttl=600, show_spinner=False)
 def _obtener_catalogo_stripe_planes():
     res = _stripe_api_request("GET", "prices", params={"active": "true", "limit": "100", "expand[]": "data.product"})
@@ -823,9 +829,9 @@ def _obtener_catalogo_stripe_planes():
             continue
         prod_id = prod.get("id", "")
         price_id = p.get("id", "")
-        nombre_prod = prod.get("name", "")
+        nombre_prod_norm = _norm_nombre_stripe(prod.get("name", ""))
         for plan_id, info_plan in PLANES_SUSCRIPCION_OPOSICIONA.items():
-            if info_plan["nombre_stripe"].lower() == nombre_prod.lower() and prod_id and price_id:
+            if _norm_nombre_stripe(info_plan["nombre_stripe"]) == nombre_prod_norm and prod_id and price_id:
                 mapa_prices[plan_id] = price_id
                 mapa_price_a_plan[price_id] = plan_id
                 mapa_plan_a_prod_price[plan_id] = (prod_id, price_id)
@@ -835,45 +841,44 @@ def _obtener_mapa_precios_stripe():
     mapa_prices, _, _ = _obtener_catalogo_stripe_planes()
     return mapa_prices
 
-@st.cache_data(ttl=1800, show_spinner=False)
 def _obtener_config_portal_solo_subida(plan_actual_id):
     """
     Crea o reutiliza una configuración del Portal de Stripe específica para el plan actual del alumno:
-    - Solo muestra planes de nivel estrictamente superior (nunca inferiores ni de igual importe).
-    - Si ya está en GES_COMPLETO (70 €), desactiva el cambio de plan y solo permite gestionar pago/facturas/cancelación.
-    - Cobra al instante la parte proporcional de la mejora (always_invoice), evitando cualquier devolución o saldo negativo.
+    - Incluye privacy_policy_url, terms_of_service_url y headline corto (obligatorios en la API de Stripe).
+    - Solo muestra planes de importe estrictamente superior (nunca iguales ni inferiores).
+    - Cobra al instante la parte proporcional (always_invoice), sin devoluciones ni saldos negativos.
     """
     _, mapa_plan_a_prod_price, _ = _obtener_catalogo_stripe_planes()
     if not mapa_plan_a_prod_price:
-        return ""
+        return "", "No se encontraron los productos activos en Stripe."
 
     planes_superiores = MEJORAS_PERMITIDAS_POR_PLAN.get(plan_actual_id, [])
-    # Para que Stripe permita cambiar desde el plan actual hacia los superiores, el catálogo de esa sesión
-    # debe contener únicamente el producto actual + los productos estrictamente superiores permitidos.
     planes_incluidos = []
     if planes_superiores and plan_actual_id in mapa_plan_a_prod_price:
         planes_incluidos = [plan_actual_id] + [p for p in planes_superiores if p in mapa_plan_a_prod_price]
 
-    etiqueta_cfg = f"opo_up_v3_{plan_actual_id}" if planes_incluidos else "opo_up_v3_MAX_SIN_CAMBIO"
+    etiqueta_cfg = f"opo_up_v5_{plan_actual_id}" if len(planes_incluidos) >= 2 else "opo_up_v5_MAX"
+    cache_mem = st.session_state.setdefault("_cache_bpc_ids", {})
+    if cache_mem.get(etiqueta_cfg):
+        return cache_mem[etiqueta_cfg], ""
 
     lista_confs = _stripe_api_request("GET", "billing_portal/configurations", params={"active": "true", "limit": "50"})
     for c in lista_confs.get("data", []):
         if (c.get("metadata") or {}).get("origen") == etiqueta_cfg and c.get("id"):
-            return c.get("id")
+            cache_mem[etiqueta_cfg] = c.get("id")
+            return c.get("id"), ""
 
+    # IMPORTANTE: Stripe exige headline <= 60 caracteres + privacy_policy_url + terms_of_service_url cuando subscription_update=true
     payload_conf = {
-        "business_profile[headline]": (
-            "Oposiciona — Mejora tu modalidad mensual o gestiona tu suscripción"
-            if len(planes_incluidos) >= 2 else
-            "Oposiciona — Gestiona tu suscripción y datos de facturación"
-        ),
+        "business_profile[headline]": "Oposiciona — Suscripcion y mejora de plan",
+        "business_profile[privacy_policy_url]": "https://oposiciona.es/",
+        "business_profile[terms_of_service_url]": "https://oposiciona.es/",
         "features[invoice_history][enabled]": "true",
         "features[payment_method_update][enabled]": "true",
         "features[customer_update][enabled]": "true",
         "features[customer_update][allowed_updates][0]": "name",
         "features[customer_update][allowed_updates][1]": "address",
         "features[customer_update][allowed_updates][2]": "phone",
-        "features[customer_update][allowed_updates][3]": "tax_id",
         "features[subscription_cancel][enabled]": "true",
         "features[subscription_cancel][mode]": "at_period_end",
         "metadata[origen]": etiqueta_cfg
@@ -882,7 +887,6 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
     if len(planes_incluidos) >= 2:
         payload_conf["features[subscription_update][enabled]"] = "true"
         payload_conf["features[subscription_update][default_allowed_updates][0]"] = "price"
-        payload_conf["features[subscription_update][default_allowed_updates][1]"] = "promotion_code"
         payload_conf["features[subscription_update][proration_behavior]"] = "always_invoice"
 
         productos_agrupados = {}
@@ -901,15 +905,20 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
 
     nueva_conf = _stripe_api_request("POST", "billing_portal/configurations", data=payload_conf)
     if nueva_conf.get("id"):
-        return nueva_conf["id"]
+        cache_mem[etiqueta_cfg] = nueva_conf["id"]
+        return nueva_conf["id"], ""
 
-    # Respaldo si alguna cuenta restringe always_invoice o promotion_code en el portal
     if len(planes_incluidos) >= 2:
-        payload_conf.pop("features[subscription_update][default_allowed_updates][1]", None)
         payload_conf["features[subscription_update][proration_behavior]"] = "create_prorations"
         nueva_conf_2 = _stripe_api_request("POST", "billing_portal/configurations", data=payload_conf)
-        return nueva_conf_2.get("id", "")
-    return ""
+        if nueva_conf_2.get("id"):
+            cache_mem[etiqueta_cfg] = nueva_conf_2["id"]
+            return nueva_conf_2["id"], ""
+        err_det = (nueva_conf_2.get("error") or {}).get("message", "Error al configurar el portal en Stripe.")
+        return "", err_det
+
+    err_det = (nueva_conf.get("error") or {}).get("message", "Error al configurar el portal en Stripe.")
+    return "", err_det
 
 def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
     cod_limpio = (codigo_texto or "").strip()
@@ -1061,44 +1070,69 @@ def _detectar_plan_desde_suscripcion_stripe(sub_obj):
 
     return (sub_obj.get("metadata") or {}).get("plan_id", "")
 
-def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
+def obtener_suscripcion_activa_detalle_stripe(customer_id, subscription_id=""):
+    """Devuelve (activa_bool, plan_id_detectado, sub_id_activo, cancel_at_period_end_bool)."""
     if subscription_id:
         sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
-        st_sub = sub.get("status", "")
-        if st_sub in ("active", "trialing"):
-            return True, _detectar_plan_desde_suscripcion_stripe(sub)
+        if sub.get("status") in ("active", "trialing"):
+            return True, _detectar_plan_desde_suscripcion_stripe(sub), sub.get("id", ""), bool(sub.get("cancel_at_period_end"))
     if customer_id:
         subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
         for s in subs.get("data", []):
             if s.get("status") in ("active", "trialing"):
-                return True, _detectar_plan_desde_suscripcion_stripe(s)
-    return False, ""
+                return True, _detectar_plan_desde_suscripcion_stripe(s), s.get("id", ""), bool(s.get("cancel_at_period_end"))
+    return False, "", "", False
 
-def crear_enlace_portal_cliente_stripe(customer_id):
+def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
+    act, plan_det, _, _ = obtener_suscripcion_activa_detalle_stripe(customer_id, subscription_id)
+    return act, plan_det
+
+def crear_enlace_portal_stripe_detallado(customer_id, modo="facturacion"):
+    """
+    Genera el enlace al Portal de Stripe:
+    - modo='mejorar': abre DIRECTAMENTE la pantalla de selección de planes superiores (nunca inferiores ni iguales) y redirige a la web tras confirmar.
+    - modo='facturacion': abre el portal con facturas, métodos de pago y botón de cancelar suscripción.
+    Devuelve (url, mensaje_error).
+    """
     cfg = _cfg_suscripciones()
     if not customer_id:
-        return None
+        return None, "No se encontró el identificador de cliente en Stripe."
 
-    # Averiguamos el plan real vigente en Stripe antes de abrir el portal para ofrecerle SOLO mejoras superiores
-    act_st, plan_vigente = verificar_suscripcion_activa_stripe(customer_id)
+    act_st, plan_vigente, sub_id_activo, cancel_programada = obtener_suscripcion_activa_detalle_stripe(customer_id)
     if not plan_vigente:
         plan_vigente = st.session_state.get("plan_suscripcion", "GES_COMPLETO")
 
+    conf_auto_id, err_conf = _obtener_config_portal_solo_subida(plan_vigente)
+    if not conf_auto_id:
+        return None, f"No se pudo preparar la configuración de mejora en Stripe: {err_conf}"
+
+    url_retorno = f"{cfg['app_url']}/?sync_plan=1"
     datos_portal = {
         "customer": customer_id,
-        "return_url": f"{cfg['app_url']}/?sync_plan=1"
+        "configuration": conf_auto_id,
+        "return_url": url_retorno
     }
-    conf_auto_id = _obtener_config_portal_solo_subida(plan_vigente)
-    if conf_auto_id:
-        datos_portal["configuration"] = conf_auto_id
+
+    # Si pulsa MEJORAR MI PLAN y tiene planes superiores disponibles (sin cancelación pendiente), salta directo a elegir el plan superior
+    if modo == "mejorar" and sub_id_activo and MEJORAS_PERMITIDAS_POR_PLAN.get(plan_vigente) and not cancel_programada:
+        datos_directo = dict(datos_portal)
+        datos_directo["flow_data[type]"] = "subscription_update"
+        datos_directo["flow_data[subscription_update][subscription]"] = sub_id_activo
+        datos_directo["flow_data[after_completion][type]"] = "redirect"
+        datos_directo["flow_data[after_completion][redirect][return_url]"] = url_retorno
+        resp_dir = _stripe_api_request("POST", "billing_portal/sessions", data=datos_directo)
+        if resp_dir.get("url"):
+            return resp_dir["url"], ""
 
     resp = _stripe_api_request("POST", "billing_portal/sessions", data=datos_portal)
     if resp.get("url"):
-        return resp["url"]
+        return resp["url"], ""
+    err_sess = (resp.get("error") or {}).get("message", "No se pudo abrir la sesión del portal en Stripe.")
+    return None, err_sess
 
-    datos_portal.pop("configuration", None)
-    resp2 = _stripe_api_request("POST", "billing_portal/sessions", data=datos_portal)
-    return resp2.get("url")
+def crear_enlace_portal_cliente_stripe(customer_id):
+    url_p, _ = crear_enlace_portal_stripe_detallado(customer_id, modo="mejorar")
+    return url_p
 
 def procesar_retorno_pago_stripe(session_id):
     sess = _stripe_api_request("GET", f"checkout/sessions/{session_id}")
@@ -1226,6 +1260,8 @@ if st.session_state.get("autenticado") and st.session_state.get("es_suscriptor_e
     act_ok, nuevo_plan_st = verificar_suscripcion_activa_stripe(st.session_state.get("stripe_customer_id", ""))
     if act_ok and nuevo_plan_st in PLANES_SUSCRIPCION_OPOSICIONA:
         info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_st]
+        if nuevo_plan_st != st.session_state.get("plan_suscripcion"):
+            st.session_state["aviso_plan_mejorado_ok"] = info_np["nombre_corto"]
         guardar_datos_suscriptor(st.session_state.get("email", ""), {"PLAN": nuevo_plan_st, "ROL": info_np["rol"], "ESTADO": "ACTIVO"})
         st.session_state.update(rol=info_np["rol"], plan_suscripcion=nuevo_plan_st, saved_esp=info_np["especialidad"], saved_cat="ESPECIFICO")
         st.rerun()
@@ -1269,17 +1305,20 @@ if not st.session_state.autenticado:
                 else:
                     cust_rec = sub_ext_rec.get("STRIPE_CUSTOMER_ID", "")
                     sub_id_rec = sub_ext_rec.get("STRIPE_SUBSCRIPTION_ID", "")
-                    plan_rec = sub_ext_rec.get("PLAN", "GES_COMPLETO")
+                    plan_previo_gs = sub_ext_rec.get("PLAN", "GES_COMPLETO")
+                    plan_rec = plan_previo_gs
                     rol_final_rec = sub_ext_rec.get("ROL", "GESTION")
                     esp_rec = datos_rec.get("saved_esp", "GESTION")
 
-                    if qp_sync_retorno and cust_rec:
+                    if cust_rec:
                         act_ok_r, nuevo_plan_r = verificar_suscripcion_activa_stripe(cust_rec, sub_id_rec)
                         if act_ok_r and nuevo_plan_r in PLANES_SUSCRIPCION_OPOSICIONA:
                             plan_rec = nuevo_plan_r
                             rol_final_rec = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_r]["rol"]
                             esp_rec = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_r]["especialidad"]
-                            guardar_datos_suscriptor(correo_rec, {"PLAN": plan_rec, "ROL": rol_final_rec, "ESTADO": "ACTIVO"})
+                            if plan_rec != plan_previo_gs:
+                                guardar_datos_suscriptor(correo_rec, {"PLAN": plan_rec, "ROL": rol_final_rec, "ESTADO": "ACTIVO"})
+                                st.session_state["aviso_plan_mejorado_ok"] = PLANES_SUSCRIPCION_OPOSICIONA[plan_rec]["nombre_corto"]
 
                     st.session_state.rol = rol_final_rec
                     st.session_state.es_admin = False
