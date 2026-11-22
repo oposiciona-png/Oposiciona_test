@@ -613,7 +613,6 @@ URL_PDF_CALENDARIO_DESCARGA = f"https://drive.google.com/uc?export=download&id={
 
 @st.cache_data(ttl=60, show_spinner=False)
 def obtener_bytes_pdf_calendario():
-    """Descarga en vivo el PDF actualizado desde Google Drive (refrescándose cada 60 segundos)."""
     headers = {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
@@ -633,7 +632,6 @@ def obtener_bytes_pdf_calendario():
     return None
 
 def render_bloque_aviso_calendario_pdf(sufijo_key="planes"):
-    """Muestra en grande el aviso de carga progresiva y el botón de descarga del PDF actualizado."""
     st.markdown(
         f"<div style='background:#FFFBEB; border:3px solid #D97706; border-radius:12px; padding:20px 22px; margin:12px 0 10px 0; box-shadow:0 4px 12px rgba(217, 119, 6, 0.14);'>"
         f"<div style='font-size:19px; font-weight:900; color:#92400E !important; margin-bottom:10px; letter-spacing:0.2px;'>"
@@ -691,6 +689,15 @@ def _generar_password_legible():
     alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
     return "Opo-" + "".join(secrets.choice(alfabeto) for _ in range(8))
 
+def _validar_password_elegida(pwd1, pwd2):
+    p1 = (pwd1 or "").strip()
+    p2 = (pwd2 or "").strip()
+    if len(p1) < 6:
+        return False, "La contraseña debe tener al menos 6 caracteres."
+    if p1 != p2:
+        return False, "Las dos contraseñas no coinciden."
+    return True, ""
+
 def _llamar_apps_script_suscriptores(payload_extra):
     cfg = _cfg_suscripciones()
     if not cfg["gs_url"] or not cfg["gs_token"]:
@@ -732,6 +739,21 @@ def guardar_datos_suscriptor(email, campos_dict):
     })
     obtener_suscriptores_cacheados.clear()
     return res
+
+def cambiar_password_suscriptor_autenticado(email, pwd_actual, pwd_nueva_1, pwd_nueva_2):
+    em = (email or "").lower().strip()
+    ficha = buscar_suscriptor_externo(em)
+    if not ficha:
+        return False, "No se encontró tu ficha de suscriptor."
+    if ficha.get("PASSWORD_HASH") != _hash_password_suscriptor(pwd_actual):
+        return False, "La contraseña actual introducida no es correcta."
+    ok_val, msg_val = _validar_password_elegida(pwd_nueva_1, pwd_nueva_2)
+    if not ok_val:
+        return False, msg_val
+    res = guardar_datos_suscriptor(em, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_nueva_1.strip())})
+    if res.get("ok"):
+        return True, "✅ Tu contraseña se ha actualizado correctamente."
+    return False, f"No se pudo guardar la nueva contraseña: {res.get('error', 'Error desconocido')}"
 
 def enviar_email_suscriptor(destinatario, asunto, html_body):
     return _llamar_apps_script_suscriptores({
@@ -874,7 +896,8 @@ def procesar_retorno_pago_stripe(session_id):
     st.session_state.pop("_checkout_cache_actual", None)
 
     if existente and existente.get("PASSWORD_HASH"):
-        guardar_datos_suscriptor(email_cliente, {
+        es_primer_alta = (str(existente.get("ESTADO", "")).upper() == "PENDIENTE_PAGO")
+        campos_act = {
             "PLAN": plan_id,
             "ROL": info_plan["rol"],
             "ESTADO": "ACTIVO",
@@ -882,13 +905,29 @@ def procesar_retorno_pago_stripe(session_id):
             "STRIPE_SUBSCRIPTION_ID": sub_id,
             "ULTIMO_ACCESO": ahora_str,
             "SESSION_TOKEN": token_sesion
-        })
+        }
+        if es_primer_alta or not existente.get("FECHA_ALTA"):
+            campos_act["FECHA_ALTA"] = ahora_str
+        guardar_datos_suscriptor(email_cliente, campos_act)
+
+        asunto_mail = "🎓 Bienvenido/a a Oposiciona — Suscripción activada" if es_primer_alta else f"✅ Suscripción reactivada — {info_plan['nombre_corto']}"
         enviar_email_suscriptor(
             email_cliente,
-            f"✅ Suscripción reactivada — {info_plan['nombre_corto']}",
-            f"<p>Hola,</p><p>Tu suscripción a <b>{info_plan['nombre_corto']}</b> en <b>Oposiciona</b> vuelve a estar activa.</p>"
-            f"<p>Puedes entrar con tu correo <b>{email_cliente}</b> y tu contraseña habitual en: <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
-            f"<p>Recuerda que tienes incluidos: consulta de dudas por correo (<i>info@oposiciona.es</i>), actualizaciones comentadas de legislación y acceso a la clase mensual en directo.</p>"
+            asunto_mail,
+            f"<div style='font-family:sans-serif; color:#1E293B; max-width:560px;'>"
+            f"<h2 style='color:#1F77B4;'>{'¡Bienvenido/a a Oposiciona!' if es_primer_alta else '¡Suscripción activa en Oposiciona!'}</h2>"
+            f"<p>Tu suscripción a <b>{info_plan['nombre_corto']}</b> ya está activa.</p>"
+            f"<div style='background:#F8FAFC; border:1px solid #CBD5E1; border-radius:8px; padding:14px; margin:14px 0;'>"
+            f"<p style='margin:4px 0;'><b>🌐 Enlace de acceso:</b> <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
+            f"<p style='margin:4px 0;'><b>📧 Usuario:</b> {email_cliente}</p>"
+            f"<p style='margin:4px 0;'><b>🔑 Contraseña:</b> La contraseña personal que elegiste al registrarte (puedes cambiarla cuando quieras dentro de la plataforma).</p>"
+            f"</div>"
+            f"<p><b>Servicios incluidos en tu suscripción mensual:</b></p>"
+            f"<ul><li>Acceso inmediato a la plataforma de entrenamiento práctico.</li>"
+            f"<li>Resolución de dudas sobre preguntas, supuestos y epígrafes en <b>info@oposiciona.es</b>.</li>"
+            f"<li>Envío de actualizaciones normativas comentadas.</li>"
+            f"<li>Clase online mensual en directo para resolución de dudas.</li></ul>"
+            f"</div>"
         )
     else:
         pwd_nueva = _generar_password_legible()
@@ -912,14 +951,8 @@ def procesar_retorno_pago_stripe(session_id):
             f"<div style='background:#F8FAFC; border:1px solid #CBD5E1; border-radius:8px; padding:14px; margin:14px 0;'>"
             f"<p style='margin:4px 0;'><b>🌐 Enlace de acceso:</b> <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
             f"<p style='margin:4px 0;'><b>📧 Usuario:</b> {email_cliente}</p>"
-            f"<p style='margin:4px 0;'><b>🔑 Contraseña:</b> <code style='font-size:15px; background:#E2E8F0; padding:2px 6px; border-radius:4px;'>{pwd_nueva}</code></p>"
-            f"</div>"
-            f"<p><b>Servicios incluidos en tu suscripción mensual:</b></p>"
-            f"<ul><li>Acceso inmediato a la plataforma de entrenamiento práctico.</li>"
-            f"<li>Resolución de dudas sobre preguntas, supuestos y epígrafes en <b>info@oposiciona.es</b>.</li>"
-            f"<li>Envío de actualizaciones normativas comentadas.</li>"
-            f"<li>Clase online mensual en directo para resolución de dudas.</li></ul>"
-            f"</div>"
+            f"<p style='margin:4px 0;'><b>🔑 Contraseña inicial:</b> <code style='font-size:15px; background:#E2E8F0; padding:2px 6px; border-radius:4px;'>{pwd_nueva}</code> (puedes cambiarla dentro de la plataforma).</p>"
+            f"</div></div>"
         )
 
     st.session_state.update(
@@ -964,11 +997,11 @@ verificar_sesion_unica_suscriptor()
 if not st.session_state.autenticado:
     qp_stripe_sid = st.query_params.get("stripe_session_id", "")
     if qp_stripe_sid:
-        with st.spinner("Activando tu suscripción y generando tus claves de acceso..."):
+        with st.spinner("Activando tu suscripción y preparando tu acceso..."):
             ok_pago, info_pago = procesar_retorno_pago_stripe(qp_stripe_sid)
         st.query_params.clear()
         if ok_pago:
-            st.success(f"🎉 ¡Suscripción activada para {info_pago}! Te hemos enviado un correo con tus claves de acceso.")
+            st.success(f"🎉 ¡Suscripción activada para {info_pago}! Bienvenido/a a Oposiciona.")
             time.sleep(1.2)
             st.rerun()
         else:
@@ -1067,7 +1100,7 @@ if not st.session_state.autenticado:
     tab_login, tab_planes, tab_recuperar = st.tabs([
         "🔑 Iniciar sesión",
         "🎓 Suscribirme (Planes)",
-        "🔄 Recuperar contraseña"
+        "🔄 Recuperar / Cambiar contraseña"
     ])
 
     with tab_login:
@@ -1218,23 +1251,26 @@ if not st.session_state.autenticado:
 
         if st.session_state.get("email_verificado_ok") and st.session_state.get("email_verificado_ok") != em_1_limpio:
             st.session_state["email_verificado_ok"] = ""
+            st.session_state["pwd_registro_guardada_email"] = ""
             st.session_state["aviso_calendario_aceptado"] = False
 
         ficha_existente = buscar_suscriptor_externo(em_1_limpio) if (em_1_limpio and em_1_limpio == em_2_limpio and re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio)) else None
-        ya_estuvo_registrado = bool(ficha_existente and ficha_existente.get("EMAIL"))
+        ya_tenia_cuenta_activa_previa = bool(
+            ficha_existente and ficha_existente.get("PASSWORD_HASH") and str(ficha_existente.get("ESTADO", "")).upper() != "PENDIENTE_PAGO"
+        )
         ya_activo_ahora = False
-        if ya_estuvo_registrado and str(ficha_existente.get("ESTADO", "")).upper() == "ACTIVO":
+        if ya_tenia_cuenta_activa_previa and str(ficha_existente.get("ESTADO", "")).upper() == "ACTIVO":
             act_st, _ = verificar_suscripcion_activa_stripe(ficha_existente.get("STRIPE_CUSTOMER_ID", ""), ficha_existente.get("STRIPE_SUBSCRIPTION_ID", ""))
             ya_activo_ahora = act_st
 
         ya_verificado = bool(
             em_1_limpio and em_1_limpio == em_2_limpio and (
-                st.session_state.get("email_verificado_ok") == em_1_limpio or ya_estuvo_registrado
+                st.session_state.get("email_verificado_ok") == em_1_limpio or ya_tenia_cuenta_activa_previa
             )
         )
 
         if ya_activo_ahora:
-            st.warning(f"⚠️ El correo **{em_1_limpio}** ya tiene una suscripción activa en vigor. Ve a la pestaña **«🔑 Iniciar sesión»** (o usa *Recuperar contraseña* si no la recuerdas) para no duplicar pagos.")
+            st.warning(f"⚠️ El correo **{em_1_limpio}** ya tiene una suscripción activa en vigor. Ve a la pestaña **«🔑 Iniciar sesión»** (o usa *Recuperar / Cambiar contraseña* si no la recuerdas) para no duplicar pagos.")
         elif not ya_verificado:
             if st.button("📩 Enviar código de verificación a mi correo", use_container_width=True, type="primary", key="btn_enviar_cod_verif"):
                 if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio):
@@ -1278,54 +1314,134 @@ if not st.session_state.autenticado:
                         else:
                             st.error("❌ Código incorrecto. Comprueba el correo recibido.")
         else:
-            if ya_estuvo_registrado:
-                st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Conservarás tu misma contraseña al reactivar.")
+            # PASO 4: Elección de contraseña personal (si es nuevo alumno o si desea actualizarla antes de pagar)
+            pwd_lista_para_pago = False
+            if ya_tenia_cuenta_activa_previa and st.session_state.get("pwd_registro_guardada_email") != em_1_limpio:
+                st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Seguirás entrando con tu contraseña habitual (o cámbiala en la pestaña *Recuperar / Cambiar contraseña*).")
+                pwd_lista_para_pago = True
+            elif st.session_state.get("pwd_registro_guardada_email") == em_1_limpio:
+                st.success(f"✅ Correo (**{em_1_limpio}**) y contraseña personal configurados correctamente.")
+                if st.button("✏️ Elegir otra contraseña distinta", key="btn_cambiar_pwd_pre_pago"):
+                    st.session_state["pwd_registro_guardada_email"] = ""
+                    st.session_state["aviso_calendario_aceptado"] = False
+                    st.rerun()
+                pwd_lista_para_pago = True
             else:
                 st.success(f"✅ Correo electrónico verificado correctamente: **{em_1_limpio}**")
+                st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-top:10px; margin-bottom:6px;'>4. Elige tu contraseña personal de acceso</div>", unsafe_allow_html=True)
+                cpw1, cpw2 = st.columns(2)
+                with cpw1:
+                    pwd_alta_1 = st.text_input("Elige tu contraseña (mín. 6 caracteres):", type="password", key="in_pwd_alta_1")
+                with cpw2:
+                    pwd_alta_2 = st.text_input("Repite tu contraseña:", type="password", key="in_pwd_alta_2")
 
-            info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
-            st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
+                if st.button("🔒 Guardar mi contraseña y continuar", use_container_width=True, type="primary", key="btn_guardar_pwd_alta"):
+                    ok_pw, msg_pw = _validar_password_elegida(pwd_alta_1, pwd_alta_2)
+                    if not ok_pw:
+                        st.error(f"⚠️ {msg_pw}")
+                    else:
+                        info_p_pre = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
+                        res_g = guardar_datos_suscriptor(em_1_limpio, {
+                            "PASSWORD_HASH": _hash_password_suscriptor(pwd_alta_1.strip()),
+                            "PLAN": plan_elegido,
+                            "ROL": info_p_pre["rol"],
+                            "ESTADO": "PENDIENTE_PAGO"
+                        })
+                        if res_g.get("ok"):
+                            st.session_state["pwd_registro_guardada_email"] = em_1_limpio
+                            st.rerun()
+                        else:
+                            st.error(f"❌ No se pudo guardar la contraseña: {res_g.get('error', 'Error desconocido')}")
 
-            st.markdown("<div style='font-size:17.5px; font-weight:900; color:#1E293B !important; margin-top:14px; margin-bottom:4px;'>4. Información importante antes de suscribirte</div>", unsafe_allow_html=True)
-            render_bloque_aviso_calendario_pdf(sufijo_key="planes")
+            if pwd_lista_para_pago:
+                info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
+                st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
 
-            if not st.session_state.get("aviso_calendario_aceptado", False):
-                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-                if st.button("✅ ACEPTAR Y CONTINUAR CON LA SUSCRIPCIÓN", use_container_width=True, type="primary", key="btn_aceptar_aviso_temas"):
-                    st.session_state["aviso_calendario_aceptado"] = True
-                    st.rerun()
-            else:
-                st.success("✅ Condiciones de calendario de temas aceptadas.")
-                with st.spinner("Preparando pasarela de pago segura..."):
-                    url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido)
-                if url_checkout:
-                    st.link_button(
-                        "💳 Continuar al pago seguro y activar acceso inmediato",
-                        url_checkout,
-                        use_container_width=True,
-                        type="primary"
-                    )
+                num_paso_aviso = "4" if ya_tenia_cuenta_activa_previa else "5"
+                st.markdown(f"<div style='font-size:17.5px; font-weight:900; color:#1E293B !important; margin-top:14px; margin-bottom:4px;'>{num_paso_aviso}. Información importante antes de suscribirte</div>", unsafe_allow_html=True)
+                render_bloque_aviso_calendario_pdf(sufijo_key="planes")
+
+                if not st.session_state.get("aviso_calendario_aceptado", False):
+                    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+                    if st.button("✅ ACEPTAR Y CONTINUAR CON LA SUSCRIPCIÓN", use_container_width=True, type="primary", key="btn_aceptar_aviso_temas"):
+                        st.session_state["aviso_calendario_aceptado"] = True
+                        st.rerun()
                 else:
-                    st.error(f"❌ {err_chk}")
+                    st.success("✅ Condiciones de calendario de temas aceptadas.")
+                    with st.spinner("Preparando pasarela de pago segura..."):
+                        url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido)
+                    if url_checkout:
+                        st.link_button(
+                            "💳 Continuar al pago seguro y activar acceso inmediato",
+                            url_checkout,
+                            use_container_width=True,
+                            type="primary"
+                        )
+                    else:
+                        st.error(f"❌ {err_chk}")
 
     with tab_recuperar:
-        st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
-        email_rec = st.text_input("Correo electrónico registrado:", key="rec_email_in")
-        if st.button("📩 Enviarme nueva contraseña por correo", use_container_width=True, type="primary", key="btn_enviar_rec"):
-            em_r = (email_rec or "").lower().strip()
-            sub_r = buscar_suscriptor_externo(em_r)
-            if not sub_r:
-                st.error("❌ No encontramos ninguna suscripción externa asociada a ese correo electrónico.")
-            else:
-                pwd_temp = _generar_password_legible()
-                guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_temp)})
-                enviar_email_suscriptor(
-                    em_r,
-                    "🔑 Nueva contraseña de acceso — Oposiciona",
-                    f"<p>Hola,</p><p>Hemos restablecido tu contraseña de acceso a la plataforma <b>Oposiciona</b>.</p>"
-                    f"<p><b>Usuario:</b> {em_r}<br><b>Nueva contraseña:</b> <code>{pwd_temp}</code></p>"
-                )
-                st.success("✅ Te hemos enviado un correo electrónico con tu nueva contraseña.")
+        st.markdown(
+            "<p style='font-size:13.8px; color:#1E293B !important;'>Si has olvidado tu contraseña o deseas elegir una nueva, verifica tu correo con un código de seguridad y establece la contraseña que prefieras:</p>",
+            unsafe_allow_html=True
+        )
+        email_rec = st.text_input("Correo electrónico de tu suscripción:", key="rec_email_in")
+        em_r = (email_rec or "").lower().strip()
+
+        if st.session_state.get("rec_email_verificado") and st.session_state.get("rec_email_verificado") != em_r:
+            st.session_state["rec_email_verificado"] = ""
+
+        if st.session_state.get("rec_email_verificado") != em_r:
+            if st.button("📩 Enviar código de seguridad a mi correo", use_container_width=True, type="primary", key="btn_enviar_rec"):
+                sub_r = buscar_suscriptor_externo(em_r)
+                if not sub_r:
+                    st.error("❌ No encontramos ninguna suscripción externa asociada a ese correo electrónico.")
+                else:
+                    cod_rec = f"{secrets.randbelow(900000) + 100000}"
+                    st.session_state["rec_cod_pendiente"] = cod_rec
+                    st.session_state["rec_email_pendiente"] = em_r
+                    st.session_state["rec_ts_pendiente"] = time.time()
+                    enviar_email_suscriptor(
+                        em_r,
+                        f"🔑 Código para cambiar tu contraseña ({cod_rec}) — Oposiciona",
+                        f"<div style='font-family:sans-serif; color:#1E293B; max-width:520px;'>"
+                        f"<h3 style='color:#1F77B4;'>Cambio / Recuperación de contraseña</h3>"
+                        f"<p>Introduce este código de 6 dígitos en la plataforma <b>Oposiciona</b> para elegir tu nueva contraseña:</p>"
+                        f"<div style='font-size:26px; font-weight:800; letter-spacing:4px; background:#EFF6FF; border:1px solid #93C5FD; padding:12px; text-align:center; border-radius:8px; color:#1E3A8A;'>{cod_rec}</div>"
+                        f"<p style='font-size:12.5px; color:#64748B; margin-top:12px;'>Este código caduca en 15 minutos.</p></div>"
+                    )
+                    st.success(f"✅ Hemos enviado un código de 6 dígitos a **{em_r}**.")
+
+            if st.session_state.get("rec_email_pendiente") == em_r and em_r:
+                cr1, cr2 = st.columns([2, 1.2])
+                with cr1:
+                    cod_rec_in = st.text_input("Código de 6 dígitos recibido:", max_chars=6, key="in_rec_cod_6")
+                with cr2:
+                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                    if st.button("✔️ Validar código", use_container_width=True, type="primary", key="btn_val_rec_cod"):
+                        if (time.time() - st.session_state.get("rec_ts_pendiente", 0)) > 900:
+                            st.error("⚠️ El código ha caducado. Solicita uno nuevo arriba.")
+                        elif (cod_rec_in or "").strip() == st.session_state.get("rec_cod_pendiente"):
+                            st.session_state["rec_email_verificado"] = em_r
+                            st.rerun()
+                        else:
+                            st.error("❌ Código incorrecto.")
+        else:
+            st.success(f"✅ Identidad verificada para **{em_r}**. Escribe ahora tu nueva contraseña:")
+            np1, np2 = st.columns(2)
+            with np1:
+                nueva_pw_1 = st.text_input("Nueva contraseña (mín. 6 caracteres):", type="password", key="rec_new_pw1")
+            with np2:
+                nueva_pw_2 = st.text_input("Repite la nueva contraseña:", type="password", key="rec_new_pw2")
+            if st.button("💾 Guardar nueva contraseña", use_container_width=True, type="primary", key="btn_save_rec_pw"):
+                ok_np, msg_np = _validar_password_elegida(nueva_pw_1, nueva_pw_2)
+                if not ok_np:
+                    st.error(f"⚠️ {msg_np}")
+                else:
+                    guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(nueva_pw_1.strip())})
+                    st.session_state["rec_email_verificado"] = ""
+                    st.session_state["rec_email_pendiente"] = ""
+                    st.success("✅ ¡Contraseña actualizada con éxito! Ya puedes entrar en la pestaña «🔑 Iniciar sesión».")
     st.stop()
 # === FIN SECCIÓN 1 ===
 
