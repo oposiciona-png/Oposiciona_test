@@ -861,6 +861,8 @@ def _stripe_api_directo(sk, method, endpoint, data=None, params=None):
     try:
         if method.upper() == "GET":
             r = requests.get(url, headers=headers, params=params, timeout=15)
+        elif method.upper() == "DELETE":
+            r = requests.delete(url, headers=headers, params=params, timeout=15)
         else:
             r = requests.post(url, headers=headers, data=data, timeout=15)
         return r.json()
@@ -902,6 +904,11 @@ def _obtener_mapa_precios_stripe():
     return mapa_prices
 
 def _obtener_config_portal_solo_subida(plan_actual_id):
+    """
+    Configuración del Portal de Stripe:
+    - Solo permite cambiar de precio hacia modalidades estrictamente superiores (SIN campo de nuevos códigos promocionales).
+    - Respeta automáticamente cualquier descuento vigente que ya tuviera la suscripción hasta su caducidad original.
+    """
     _, mapa_plan_a_prod_price, _ = _obtener_catalogo_stripe_planes()
     if not mapa_plan_a_prod_price:
         return "", "No se encontraron los productos activos en Stripe."
@@ -911,7 +918,7 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
     if planes_superiores and plan_actual_id in mapa_plan_a_prod_price:
         planes_incluidos = [plan_actual_id] + [p for p in planes_superiores if p in mapa_plan_a_prod_price]
 
-    etiqueta_cfg = f"opo_up_v5_{plan_actual_id}" if len(planes_incluidos) >= 2 else "opo_up_v5_MAX"
+    etiqueta_cfg = f"opo_up_v6_sin_nuevo_promo_{plan_actual_id}" if len(planes_incluidos) >= 2 else "opo_up_v6_MAX"
     cache_mem = st.session_state.setdefault("_cache_bpc_ids", {})
     if cache_mem.get(etiqueta_cfg):
         return cache_mem[etiqueta_cfg], ""
@@ -939,6 +946,7 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
 
     if len(planes_incluidos) >= 2:
         payload_conf["features[subscription_update][enabled]"] = "true"
+        # SOLO permitimos cambio de precio (price), NUNCA meter códigos promocionales nuevos en la mejora
         payload_conf["features[subscription_update][default_allowed_updates][0]"] = "price"
         payload_conf["features[subscription_update][proration_behavior]"] = "always_invoice"
 
@@ -974,44 +982,222 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
     return "", err_det
 
 def obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id=""):
+    params_exp = {"expand[0]": "discounts", "expand[1]": "latest_invoice"}
     if subscription_id:
-        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
+        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}", params=params_exp)
         if sub.get("status") in ("active", "trialing"):
             return sub
     if customer_id:
-        subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
+        subs = _stripe_api_request("GET", "subscriptions", params={
+            "customer": customer_id,
+            "limit": "5",
+            "expand[0]": "data.discounts",
+            "expand[1]": "data.latest_invoice"
+        })
         for s in subs.get("data", []):
             if s.get("status") in ("active", "trialing"):
                 return s
     return None
 
+def _extraer_cupon_de_objeto_descuento(disc_obj):
+    if not isinstance(disc_obj, dict):
+        return None, None
+    cupon = disc_obj.get("coupon")
+    if not isinstance(cupon, dict):
+        src = disc_obj.get("source") or {}
+        if isinstance(src, dict):
+            cupon_src = src.get("coupon")
+            if isinstance(cupon_src, dict):
+                cupon = cupon_src
+            elif isinstance(cupon_src, str) and cupon_src:
+                c_fetch = _stripe_api_request("GET", f"coupons/{cupon_src}")
+                if c_fetch.get("id"):
+                    cupon = c_fetch
+    elif isinstance(cupon, str) and cupon:
+        c_fetch = _stripe_api_request("GET", f"coupons/{cupon}")
+        if c_fetch.get("id"):
+            cupon = c_fetch
+
+    end_ts = disc_obj.get("end")
+    return (cupon if isinstance(cupon, dict) else None), end_ts
+
+def _inspeccionar_descuento_vigente_suscripcion(sub_obj):
+    """
+    Detecta si el suscriptor tiene un código de descuento vigente durante el periodo actual:
+    1) Si la suscripción ya tiene un descuento activo en Stripe (`repeating` o `forever`), Stripe lo aplica solo hasta su fecha `end` original.
+    2) Si el alumno entró este mes con un cupón de 1 solo mes (`once`), Stripe lo quitó de la suscripción tras cobrar el alta,
+       pero sigue perteneciendo a este mismo ciclo mensual pagado: lo rescatamos de la factura vigente para aplicar el mismo % sobre la diferencia de mejora,
+       y lo retiramos justo después del cobro proporcional para que NO se extienda a los meses siguientes.
+    """
+    info_desc = {
+        "tiene_descuento": False,
+        "tipo": "",           # "activo_en_sub" | "rescatado_ciclo_once"
+        "coupon_id": "",
+        "percent_off": None,
+        "etiqueta": ""
+    }
+    if not isinstance(sub_obj, dict):
+        return info_desc
+
+    ahora_ts = time.time()
+
+    # 1. Miramos primero si la suscripción conserva el descuento activo (repeating / forever)
+    lista_discs = []
+    if isinstance(sub_obj.get("discount"), dict):
+        lista_discs.append(sub_obj["discount"])
+    for d_it in (sub_obj.get("discounts") or []):
+        if isinstance(d_it, dict):
+            lista_discs.append(d_it)
+
+    for d_obj in lista_discs:
+        cupon, end_ts = _extraer_cupon_de_objeto_descuento(d_obj)
+        if end_ts and float(end_ts) <= ahora_ts:
+            continue
+        if cupon and cupon.get("id"):
+            pct = cupon.get("percent_off")
+            amt = cupon.get("amount_off")
+            txt_reb = f"-{pct:g}%" if pct else (f"-{float(amt)/100.0:.2f} €" if amt else "descuento activo")
+            txt_hasta = ""
+            if end_ts:
+                fecha_f = datetime.fromtimestamp(float(end_ts), ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y")
+                txt_hasta = f" (vigente hasta el {fecha_f})"
+            info_desc.update({
+                "tiene_descuento": True,
+                "tipo": "activo_en_sub",
+                "coupon_id": cupon["id"],
+                "percent_off": float(pct) if pct else None,
+                "etiqueta": f"{txt_reb}{txt_hasta}"
+            })
+            return info_desc
+
+    # 2. Si no figura en la suscripción, comprobamos la factura del ciclo actual (caso de cupón 'once' usado al suscribirse este mismo mes)
+    latest_inv = sub_obj.get("latest_invoice")
+    if isinstance(latest_inv, str) and latest_inv:
+        latest_inv = _stripe_api_request("GET", f"invoices/{latest_inv}", params={"expand[0]": "discounts"})
+    if isinstance(latest_inv, dict):
+        # Verificamos que la factura pertenezca al ciclo mensual actual aún en curso
+        inv_created = float(latest_inv.get("created") or 0)
+        period_start = float(sub_obj.get("current_period_start") or 0)
+        if not period_start or inv_created >= (period_start - 86400):
+            inv_discs = []
+            if isinstance(latest_inv.get("discount"), dict):
+                inv_discs.append(latest_inv["discount"])
+            for d_inv in (latest_inv.get("discounts") or []):
+                if isinstance(d_inv, str) and d_inv:
+                    pass
+                elif isinstance(d_inv, dict):
+                    inv_discs.append(d_inv)
+            # En API Stripe v2025/2026 también existe total_discount_amounts
+            for d_obj in inv_discs:
+                cupon, _ = _extraer_cupon_de_objeto_descuento(d_obj)
+                if cupon and cupon.get("id") and cupon.get("duration") == "once" and cupon.get("percent_off"):
+                    pct = float(cupon["percent_off"])
+                    info_desc.update({
+                        "tiene_descuento": True,
+                        "tipo": "rescatado_ciclo_once",
+                        "coupon_id": cupon["id"],
+                        "percent_off": pct,
+                        "etiqueta": f"-{pct:g}% de tu promoción del mes actual"
+                    })
+                    return info_desc
+
+            # Respaldo adicional para API 2026: si subtotal > total en la factura de este ciclo, deducimos el % exacto aplicado
+            subt_c = latest_inv.get("subtotal")
+            tot_c = latest_inv.get("total")
+            if subt_c and tot_c is not None and float(subt_c) > float(tot_c) > 0:
+                pct_deducido = round((1.0 - (float(tot_c) / float(subt_c))) * 100.0, 2)
+                if 0 < pct_deducido < 100:
+                    info_desc.update({
+                        "tiene_descuento": True,
+                        "tipo": "rescatado_pct_calculado",
+                        "coupon_id": "",
+                        "percent_off": pct_deducido,
+                        "etiqueta": f"-{pct_deducido:g}% de tu promoción del mes actual"
+                    })
+                    return info_desc
+
+    return info_desc
+
+def _obtener_o_crear_cupon_puente_once(percent_off):
+    """Crea o reutiliza un cupón interno de 1 solo uso para mantener el % exacto en la factura proporcional cuando el descuento original era 'once'."""
+    pct_norm = round(float(percent_off), 2)
+    cid = f"opo_keep_{str(pct_norm).replace('.', '_')}"
+    existente = _stripe_api_request("GET", f"coupons/{cid}")
+    if existente.get("id") and existente.get("valid"):
+        return cid
+    creado = _stripe_api_request("POST", "coupons", data={
+        "id": cid,
+        "percent_off": str(pct_norm),
+        "duration": "once",
+        "name": f"Mantenimiento descuento vigente ({pct_norm:g}%)"
+    })
+    return creado.get("id", "")
+
 def calcular_importe_prorrateo_mejora(customer_id, subscription_id, nuevo_plan_id):
+    """
+    Calcula en tiempo real cuánto abonará hoy el alumno por los días restantes del mes (compatible con Stripe API 2026 `invoices/create_preview` y versiones clásicas),
+    respetando automáticamente el descuento que tuviera activo en su periodo actual.
+    Devuelve (importe_eur, etiqueta_descuento_aplicado).
+    """
     mapa_prices = _obtener_mapa_precios_stripe()
     nuevo_price_id = mapa_prices.get(nuevo_plan_id)
     if not nuevo_price_id or not customer_id:
-        return None
+        return None, ""
     sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
     if not sub_obj:
-        return None
+        return None, ""
     sub_id_real = sub_obj.get("id", "")
     items = ((sub_obj.get("items") or {}).get("data")) or []
     if not items or not sub_id_real:
-        return None
+        return None, ""
     item_id = items[0].get("id", "")
 
-    params_prev = {
+    info_desc = _inspeccionar_descuento_vigente_suscripcion(sub_obj)
+    cupon_extra_preview = ""
+    if info_desc["tiene_descuento"] and info_desc["tipo"] in ("rescatado_ciclo_once", "rescatado_pct_calculado"):
+        if info_desc["coupon_id"]:
+            cupon_extra_preview = info_desc["coupon_id"]
+        elif info_desc["percent_off"]:
+            cupon_extra_preview = _obtener_o_crear_cupon_puente_once(info_desc["percent_off"])
+
+    # 1. Endpoint moderno de Stripe (API 2025/2026: POST /v1/invoices/create_preview)
+    data_prev_v2 = {
+        "customer": customer_id,
+        "subscription": sub_id_real,
+        "subscription_details[items][0][id]": item_id,
+        "subscription_details[items][0][price]": nuevo_price_id,
+        "subscription_details[proration_behavior]": "always_invoice"
+    }
+    if cupon_extra_preview:
+        data_prev_v2["discounts[0][coupon]"] = cupon_extra_preview
+
+    inv = _stripe_api_request("POST", "invoices/create_preview", data=data_prev_v2)
+    if inv.get("amount_due") is not None:
+        return max(0.0, round(float(inv["amount_due"]) / 100.0, 2)), info_desc.get("etiqueta", "")
+
+    # 2. Respaldo para versiones anteriores de API Stripe (GET /v1/invoices/upcoming)
+    params_prev_v1 = {
         "customer": customer_id,
         "subscription": sub_id_real,
         "subscription_items[0][id]": item_id,
         "subscription_items[0][price]": nuevo_price_id,
         "subscription_proration_behavior": "always_invoice"
     }
-    inv = _stripe_api_request("GET", "invoices/upcoming", params=params_prev)
-    if inv.get("amount_due") is not None:
-        return max(0.0, round(float(inv["amount_due"]) / 100.0, 2))
-    return None
+    if cupon_extra_preview:
+        params_prev_v1["coupon"] = cupon_extra_preview
+    inv_old = _stripe_api_request("GET", "invoices/upcoming", params=params_prev_v1)
+    if inv_old.get("amount_due") is not None:
+        return max(0.0, round(float(inv_old["amount_due"]) / 100.0, 2)), info_desc.get("etiqueta", "")
+
+    return None, info_desc.get("etiqueta", "")
 
 def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription_id, plan_actual_id, nuevo_plan_id):
+    """
+    Ejecuta la mejora de plan cobrando la diferencia proporcional al instante:
+    - Si tenía un cupón repeating/forever en vigor, NO toca los descuentos de la suscripción para que Stripe mantenga exactamente el cupón y su fecha de fin original.
+    - Si tenía un cupón 'once' en su mes actual ya pagado, aplica ese mismo % únicamente sobre el cobro proporcional de hoy (duration='once', se auto-consume en esta factura sin afectar al mes siguiente).
+    - Nunca permite añadir nuevos códigos de descuento.
+    """
     permitidos = MEJORAS_PERMITIDAS_POR_PLAN.get(plan_actual_id, [])
     if nuevo_plan_id not in permitidos:
         return False, "Solo se permite mejorar a una modalidad de nivel superior."
@@ -1031,6 +1217,14 @@ def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription
         return False, "No se pudo leer el detalle de tu suscripción actual."
     item_id = items[0].get("id", "")
 
+    info_desc = _inspeccionar_descuento_vigente_suscripcion(sub_obj)
+    cupon_puente_once = ""
+    if info_desc["tiene_descuento"] and info_desc["tipo"] in ("rescatado_ciclo_once", "rescatado_pct_calculado"):
+        if info_desc["coupon_id"]:
+            cupon_puente_once = info_desc["coupon_id"]
+        elif info_desc["percent_off"]:
+            cupon_puente_once = _obtener_o_crear_cupon_puente_once(info_desc["percent_off"])
+
     payload_upd = {
         "items[0][id]": item_id,
         "items[0][price]": nuevo_price_id,
@@ -1039,6 +1233,11 @@ def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription
         "cancel_at_period_end": "false",
         "metadata[plan_id]": nuevo_plan_id
     }
+    if cupon_puente_once:
+        # Al ser un cupón duration='once' y facturarse en este mismo instante (always_invoice),
+        # descuenta únicamente la diferencia proporcional de hoy y se extingue automáticamente para la próxima mensualidad.
+        payload_upd["discounts[0][coupon]"] = cupon_puente_once
+
     res_upd = _stripe_api_request("POST", f"subscriptions/{sub_id_real}", data=payload_upd)
     if res_upd.get("id") and res_upd.get("status") in ("active", "trialing"):
         info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_id]
@@ -1049,6 +1248,22 @@ def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription
             "STRIPE_SUBSCRIPTION_ID": sub_id_real
         }, sincrono=False)
         return True, info_np["nombre_corto"]
+
+    # Reintento de compatibilidad si la versión de API usa 'coupon' en vez de 'discounts[0][coupon]'
+    if cupon_puente_once and (res_upd.get("error") or {}).get("param", "").startswith("discounts"):
+        payload_upd.pop("discounts[0][coupon]", None)
+        payload_upd["coupon"] = cupon_puente_once
+        res_upd2 = _stripe_api_request("POST", f"subscriptions/{sub_id_real}", data=payload_upd)
+        if res_upd2.get("id") and res_upd2.get("status") in ("active", "trialing"):
+            info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_id]
+            guardar_datos_suscriptor(email_usuario, {
+                "PLAN": nuevo_plan_id,
+                "ROL": info_np["rol"],
+                "ESTADO": "ACTIVO",
+                "STRIPE_SUBSCRIPTION_ID": sub_id_real
+            }, sincrono=False)
+            return True, info_np["nombre_corto"]
+        res_upd = res_upd2
 
     err_msg = (res_upd.get("error") or {}).get("message", "No se pudo procesar el cargo proporcional en tu tarjeta. Revisa tu método de pago.")
     return False, err_msg
@@ -1238,7 +1453,6 @@ def _sincronizar_stripe_post_login_bg(email_limpio, cust_id, sub_id, sk, gs_url,
         pass
 
 def crear_enlace_portal_stripe_detallado(customer_id, plan_vigente_hint="", modo="facturacion", **kwargs):
-    """Genera el enlace al Portal de Stripe (acepta tanto modo como plan_vigente_hint para compatibilidad total)."""
     cfg = _cfg_suscripciones()
     if not customer_id:
         return None, "No se encontró el identificador de cliente en Stripe."
