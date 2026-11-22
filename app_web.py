@@ -809,7 +809,6 @@ def guardar_datos_suscriptor(email, campos_dict, sincrono=True):
     cfg = _cfg_suscripciones()
     alm = _almacen_ram_suscriptores()
 
-    # Actualización inmediata en memoria RAM del servidor (0 ms de espera)
     with alm["lock"]:
         ficha_mem = dict(alm["mapa"].get(em, {"EMAIL": em}))
         for k_c, v_c in campos_dict.items():
@@ -987,7 +986,6 @@ def obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id=""):
     return None
 
 def calcular_importe_prorrateo_mejora(customer_id, subscription_id, nuevo_plan_id):
-    """Calcula en tiempo real por API de Stripe cuánto pagará hoy exactamente el alumno por los días restantes del mes al mejorar de plan."""
     mapa_prices = _obtener_mapa_precios_stripe()
     nuevo_price_id = mapa_prices.get(nuevo_plan_id)
     if not nuevo_price_id or not customer_id:
@@ -1014,7 +1012,6 @@ def calcular_importe_prorrateo_mejora(customer_id, subscription_id, nuevo_plan_i
     return None
 
 def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription_id, plan_actual_id, nuevo_plan_id):
-    """Ejecuta la mejora de plan directamente desde Oposiciona (sin salir al diseño blanco de Stripe), cobrando la parte proporcional al instante."""
     permitidos = MEJORAS_PERMITIDAS_POR_PLAN.get(plan_actual_id, [])
     if nuevo_plan_id not in permitidos:
         return False, "Solo se permite mejorar a una modalidad de nivel superior."
@@ -1217,7 +1214,6 @@ def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
     return act, plan_det
 
 def _sincronizar_stripe_post_login_bg(email_limpio, cust_id, sub_id, sk, gs_url, gs_token):
-    """Verifica silenciosamente en segundo plano tras un login ultrarrápido si la suscripción cambió o caducó en Stripe."""
     try:
         if not sk or (not cust_id and not sub_id):
             return
@@ -1241,8 +1237,8 @@ def _sincronizar_stripe_post_login_bg(email_limpio, cust_id, sub_id, sk, gs_url,
     except Exception:
         pass
 
-def crear_enlace_portal_stripe_detallado(customer_id, plan_vigente_hint=""):
-    """Genera el enlace al Portal de Stripe para facturas, método de pago y cancelación."""
+def crear_enlace_portal_stripe_detallado(customer_id, plan_vigente_hint="", modo="facturacion", **kwargs):
+    """Genera el enlace al Portal de Stripe (acepta tanto modo como plan_vigente_hint para compatibilidad total)."""
     cfg = _cfg_suscripciones()
     if not customer_id:
         return None, "No se encontró el identificador de cliente en Stripe."
@@ -1262,6 +1258,10 @@ def crear_enlace_portal_stripe_detallado(customer_id, plan_vigente_hint=""):
         return resp["url"], ""
     err_sess = (resp.get("error") or {}).get("message", "No se pudo abrir la sesión del portal en Stripe.")
     return None, err_sess
+
+def crear_enlace_portal_cliente_stripe(customer_id):
+    url_p, _ = crear_enlace_portal_stripe_detallado(customer_id)
+    return url_p
 
 def procesar_retorno_pago_stripe(session_id):
     sess = _stripe_api_request("GET", f"checkout/sessions/{session_id}")
@@ -1368,7 +1368,6 @@ def verificar_sesion_unica_suscriptor():
     tok_local = st.session_state.get("session_token_externo", "")
     if not em or not tok_local:
         return
-    # Lectura en 0 ms desde la caché en RAM (que se refresca sola en hilo de fondo cada 35 s)
     mapa_ram = obtener_suscriptores_cacheados(forzar_remoto=False)
     datos_gs = mapa_ram.get(em)
     if not datos_gs:
@@ -1400,7 +1399,6 @@ if st.session_state.get("autenticado") and st.session_state.get("es_suscriptor_e
 # === FIN SECCIÓN 1B ===
 
 if not st.session_state.autenticado:
-    # Precarga en segundo plano de la tabla de suscriptores nada más abrir la portada: así el botón Entrar responde al instante
     precargar_suscriptores_en_segundo_plano()
 
     qp_stripe_sid = st.query_params.get("stripe_session_id", "")
@@ -1445,7 +1443,6 @@ if not st.session_state.autenticado:
                     rol_final_rec = PLANES_SUSCRIPCION_OPOSICIONA[plan_rec]["rol"]
                     esp_rec = datos_rec.get("saved_esp") or PLANES_SUSCRIPCION_OPOSICIONA[plan_rec]["especialidad"]
 
-                    # Solo llamamos a Stripe si viene regresando expresamente del Portal (?sync_plan=1)
                     if qp_sync_retorno and cust_rec:
                         act_ok_r, nuevo_plan_r = verificar_suscripcion_activa_stripe(cust_rec, sub_id_rec)
                         if act_ok_r and nuevo_plan_r in PLANES_SUSCRIPCION_OPOSICIONA:
@@ -1554,7 +1551,6 @@ if not st.session_state.autenticado:
                 st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, es_suscriptor_externo=False, do_scroll=True)
                 st.rerun()
             else:
-                # LOGIN ULTRARRÁPIDO (< 0.1 s): lectura desde memoria RAM y actualización en segundo plano si figura ACTIVO
                 sub_ext = buscar_suscriptor_externo(correo_limpio, forzar_remoto=False)
                 if sub_ext and sub_ext.get("PASSWORD_HASH") == _hash_password_suscriptor(password_input):
                     estado_gs = str(sub_ext.get("ESTADO", "")).upper().strip()
@@ -1569,7 +1565,6 @@ if not st.session_state.autenticado:
                         nuevo_tok = secrets.token_hex(16)
                         ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
 
-                        # Escritura no bloqueante en segundo plano (0 ms de espera para el alumno)
                         guardar_datos_suscriptor(correo_limpio, {
                             "ULTIMO_ACCESO": ahora_str,
                             "SESSION_TOKEN": nuevo_tok
@@ -1597,7 +1592,6 @@ if not st.session_state.autenticado:
                         )
                         st.rerun()
                     else:
-                        # Solo si consta como INACTIVO/BAJA consultamos Stripe por si acaba de renovar
                         activo_stripe, plan_stripe = verificar_suscripcion_activa_stripe(cust_id_login, sub_id_login)
                         if activo_stripe:
                             plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
