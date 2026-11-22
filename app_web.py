@@ -861,8 +861,6 @@ def _stripe_api_directo(sk, method, endpoint, data=None, params=None):
     try:
         if method.upper() == "GET":
             r = requests.get(url, headers=headers, params=params, timeout=15)
-        elif method.upper() == "DELETE":
-            r = requests.delete(url, headers=headers, params=params, timeout=15)
         else:
             r = requests.post(url, headers=headers, data=data, timeout=15)
         return r.json()
@@ -906,8 +904,8 @@ def _obtener_mapa_precios_stripe():
 def _obtener_config_portal_solo_subida(plan_actual_id):
     """
     Configuración del Portal de Stripe:
-    - Solo permite cambiar de precio hacia modalidades estrictamente superiores (SIN campo de nuevos códigos promocionales).
-    - Respeta automáticamente cualquier descuento vigente que ya tuviera la suscripción hasta su caducidad original.
+    - Solo muestra planes de importe estrictamente superior (nunca iguales ni inferiores).
+    - No permite añadir códigos de descuento nuevos al mejorar de plan (solo se permite 1 vez en el alta inicial).
     """
     _, mapa_plan_a_prod_price, _ = _obtener_catalogo_stripe_planes()
     if not mapa_plan_a_prod_price:
@@ -918,7 +916,7 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
     if planes_superiores and plan_actual_id in mapa_plan_a_prod_price:
         planes_incluidos = [plan_actual_id] + [p for p in planes_superiores if p in mapa_plan_a_prod_price]
 
-    etiqueta_cfg = f"opo_up_v6_sin_nuevo_promo_{plan_actual_id}" if len(planes_incluidos) >= 2 else "opo_up_v6_MAX"
+    etiqueta_cfg = f"opo_up_v7_{plan_actual_id}" if len(planes_incluidos) >= 2 else "opo_up_v7_MAX"
     cache_mem = st.session_state.setdefault("_cache_bpc_ids", {})
     if cache_mem.get(etiqueta_cfg):
         return cache_mem[etiqueta_cfg], ""
@@ -930,7 +928,7 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
             return c.get("id"), ""
 
     payload_conf = {
-        "business_profile[headline]": "Oposiciona — Suscripcion y facturacion",
+        "business_profile[headline]": "Oposiciona — Suscripcion y mejora de plan",
         "business_profile[privacy_policy_url]": "https://oposiciona.es/",
         "business_profile[terms_of_service_url]": "https://oposiciona.es/",
         "features[invoice_history][enabled]": "true",
@@ -946,7 +944,6 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
 
     if len(planes_incluidos) >= 2:
         payload_conf["features[subscription_update][enabled]"] = "true"
-        # SOLO permitimos cambio de precio (price), NUNCA meter códigos promocionales nuevos en la mejora
         payload_conf["features[subscription_update][default_allowed_updates][0]"] = "price"
         payload_conf["features[subscription_update][proration_behavior]"] = "always_invoice"
 
@@ -981,297 +978,29 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
     err_det = (nueva_conf.get("error") or {}).get("message", "Error al configurar el portal en Stripe.")
     return "", err_det
 
-def obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id=""):
-    params_exp = {"expand[0]": "discounts", "expand[1]": "latest_invoice"}
-    if subscription_id:
-        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}", params=params_exp)
-        if sub.get("status") in ("active", "trialing"):
-            return sub
-    if customer_id:
-        subs = _stripe_api_request("GET", "subscriptions", params={
-            "customer": customer_id,
-            "limit": "5",
-            "expand[0]": "data.discounts",
-            "expand[1]": "data.latest_invoice"
-        })
-        for s in subs.get("data", []):
-            if s.get("status") in ("active", "trialing"):
-                return s
-    return None
+def usuario_ya_consumio_descuento_previo(email_usuario):
+    """Comprueba si este usuario ya tuvo una suscripción previa o aplicó antes un código de descuento (máximo 1 vez por usuario)."""
+    em = (email_usuario or "").lower().strip()
+    if not em:
+        return False
+    ficha = buscar_suscriptor_externo(em)
+    if not ficha:
+        return False
+    notas_txt = str(ficha.get("NOTAS", "")).upper()
+    if "PROMO_USADA" in notas_txt:
+        return True
+    # Si ya tuvo un STRIPE_SUBSCRIPTION_ID previo registrado (es reactivación, no primer alta), tampoco admite otro descuento
+    if str(ficha.get("STRIPE_SUBSCRIPTION_ID", "")).strip().startswith("sub_"):
+        return True
+    return False
 
-def _extraer_cupon_de_objeto_descuento(disc_obj):
-    if not isinstance(disc_obj, dict):
-        return None, None
-    cupon = disc_obj.get("coupon")
-    if not isinstance(cupon, dict):
-        src = disc_obj.get("source") or {}
-        if isinstance(src, dict):
-            cupon_src = src.get("coupon")
-            if isinstance(cupon_src, dict):
-                cupon = cupon_src
-            elif isinstance(cupon_src, str) and cupon_src:
-                c_fetch = _stripe_api_request("GET", f"coupons/{cupon_src}")
-                if c_fetch.get("id"):
-                    cupon = c_fetch
-    elif isinstance(cupon, str) and cupon:
-        c_fetch = _stripe_api_request("GET", f"coupons/{cupon}")
-        if c_fetch.get("id"):
-            cupon = c_fetch
-
-    end_ts = disc_obj.get("end")
-    return (cupon if isinstance(cupon, dict) else None), end_ts
-
-def _inspeccionar_descuento_vigente_suscripcion(sub_obj):
-    """
-    Detecta si el suscriptor tiene un código de descuento vigente durante el periodo actual:
-    1) Si la suscripción ya tiene un descuento activo en Stripe (`repeating` o `forever`), Stripe lo aplica solo hasta su fecha `end` original.
-    2) Si el alumno entró este mes con un cupón de 1 solo mes (`once`), Stripe lo quitó de la suscripción tras cobrar el alta,
-       pero sigue perteneciendo a este mismo ciclo mensual pagado: lo rescatamos de la factura vigente para aplicar el mismo % sobre la diferencia de mejora,
-       y lo retiramos justo después del cobro proporcional para que NO se extienda a los meses siguientes.
-    """
-    info_desc = {
-        "tiene_descuento": False,
-        "tipo": "",           # "activo_en_sub" | "rescatado_ciclo_once"
-        "coupon_id": "",
-        "percent_off": None,
-        "etiqueta": ""
-    }
-    if not isinstance(sub_obj, dict):
-        return info_desc
-
-    ahora_ts = time.time()
-
-    # 1. Miramos primero si la suscripción conserva el descuento activo (repeating / forever)
-    lista_discs = []
-    if isinstance(sub_obj.get("discount"), dict):
-        lista_discs.append(sub_obj["discount"])
-    for d_it in (sub_obj.get("discounts") or []):
-        if isinstance(d_it, dict):
-            lista_discs.append(d_it)
-
-    for d_obj in lista_discs:
-        cupon, end_ts = _extraer_cupon_de_objeto_descuento(d_obj)
-        if end_ts and float(end_ts) <= ahora_ts:
-            continue
-        if cupon and cupon.get("id"):
-            pct = cupon.get("percent_off")
-            amt = cupon.get("amount_off")
-            txt_reb = f"-{pct:g}%" if pct else (f"-{float(amt)/100.0:.2f} €" if amt else "descuento activo")
-            txt_hasta = ""
-            if end_ts:
-                fecha_f = datetime.fromtimestamp(float(end_ts), ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y")
-                txt_hasta = f" (vigente hasta el {fecha_f})"
-            info_desc.update({
-                "tiene_descuento": True,
-                "tipo": "activo_en_sub",
-                "coupon_id": cupon["id"],
-                "percent_off": float(pct) if pct else None,
-                "etiqueta": f"{txt_reb}{txt_hasta}"
-            })
-            return info_desc
-
-    # 2. Si no figura en la suscripción, comprobamos la factura del ciclo actual (caso de cupón 'once' usado al suscribirse este mismo mes)
-    latest_inv = sub_obj.get("latest_invoice")
-    if isinstance(latest_inv, str) and latest_inv:
-        latest_inv = _stripe_api_request("GET", f"invoices/{latest_inv}", params={"expand[0]": "discounts"})
-    if isinstance(latest_inv, dict):
-        # Verificamos que la factura pertenezca al ciclo mensual actual aún en curso
-        inv_created = float(latest_inv.get("created") or 0)
-        period_start = float(sub_obj.get("current_period_start") or 0)
-        if not period_start or inv_created >= (period_start - 86400):
-            inv_discs = []
-            if isinstance(latest_inv.get("discount"), dict):
-                inv_discs.append(latest_inv["discount"])
-            for d_inv in (latest_inv.get("discounts") or []):
-                if isinstance(d_inv, str) and d_inv:
-                    pass
-                elif isinstance(d_inv, dict):
-                    inv_discs.append(d_inv)
-            # En API Stripe v2025/2026 también existe total_discount_amounts
-            for d_obj in inv_discs:
-                cupon, _ = _extraer_cupon_de_objeto_descuento(d_obj)
-                if cupon and cupon.get("id") and cupon.get("duration") == "once" and cupon.get("percent_off"):
-                    pct = float(cupon["percent_off"])
-                    info_desc.update({
-                        "tiene_descuento": True,
-                        "tipo": "rescatado_ciclo_once",
-                        "coupon_id": cupon["id"],
-                        "percent_off": pct,
-                        "etiqueta": f"-{pct:g}% de tu promoción del mes actual"
-                    })
-                    return info_desc
-
-            # Respaldo adicional para API 2026: si subtotal > total en la factura de este ciclo, deducimos el % exacto aplicado
-            subt_c = latest_inv.get("subtotal")
-            tot_c = latest_inv.get("total")
-            if subt_c and tot_c is not None and float(subt_c) > float(tot_c) > 0:
-                pct_deducido = round((1.0 - (float(tot_c) / float(subt_c))) * 100.0, 2)
-                if 0 < pct_deducido < 100:
-                    info_desc.update({
-                        "tiene_descuento": True,
-                        "tipo": "rescatado_pct_calculado",
-                        "coupon_id": "",
-                        "percent_off": pct_deducido,
-                        "etiqueta": f"-{pct_deducido:g}% de tu promoción del mes actual"
-                    })
-                    return info_desc
-
-    return info_desc
-
-def _obtener_o_crear_cupon_puente_once(percent_off):
-    """Crea o reutiliza un cupón interno de 1 solo uso para mantener el % exacto en la factura proporcional cuando el descuento original era 'once'."""
-    pct_norm = round(float(percent_off), 2)
-    cid = f"opo_keep_{str(pct_norm).replace('.', '_')}"
-    existente = _stripe_api_request("GET", f"coupons/{cid}")
-    if existente.get("id") and existente.get("valid"):
-        return cid
-    creado = _stripe_api_request("POST", "coupons", data={
-        "id": cid,
-        "percent_off": str(pct_norm),
-        "duration": "once",
-        "name": f"Mantenimiento descuento vigente ({pct_norm:g}%)"
-    })
-    return creado.get("id", "")
-
-def calcular_importe_prorrateo_mejora(customer_id, subscription_id, nuevo_plan_id):
-    """
-    Calcula en tiempo real cuánto abonará hoy el alumno por los días restantes del mes (compatible con Stripe API 2026 `invoices/create_preview` y versiones clásicas),
-    respetando automáticamente el descuento que tuviera activo en su periodo actual.
-    Devuelve (importe_eur, etiqueta_descuento_aplicado).
-    """
-    mapa_prices = _obtener_mapa_precios_stripe()
-    nuevo_price_id = mapa_prices.get(nuevo_plan_id)
-    if not nuevo_price_id or not customer_id:
-        return None, ""
-    sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
-    if not sub_obj:
-        return None, ""
-    sub_id_real = sub_obj.get("id", "")
-    items = ((sub_obj.get("items") or {}).get("data")) or []
-    if not items or not sub_id_real:
-        return None, ""
-    item_id = items[0].get("id", "")
-
-    info_desc = _inspeccionar_descuento_vigente_suscripcion(sub_obj)
-    cupon_extra_preview = ""
-    if info_desc["tiene_descuento"] and info_desc["tipo"] in ("rescatado_ciclo_once", "rescatado_pct_calculado"):
-        if info_desc["coupon_id"]:
-            cupon_extra_preview = info_desc["coupon_id"]
-        elif info_desc["percent_off"]:
-            cupon_extra_preview = _obtener_o_crear_cupon_puente_once(info_desc["percent_off"])
-
-    # 1. Endpoint moderno de Stripe (API 2025/2026: POST /v1/invoices/create_preview)
-    data_prev_v2 = {
-        "customer": customer_id,
-        "subscription": sub_id_real,
-        "subscription_details[items][0][id]": item_id,
-        "subscription_details[items][0][price]": nuevo_price_id,
-        "subscription_details[proration_behavior]": "always_invoice"
-    }
-    if cupon_extra_preview:
-        data_prev_v2["discounts[0][coupon]"] = cupon_extra_preview
-
-    inv = _stripe_api_request("POST", "invoices/create_preview", data=data_prev_v2)
-    if inv.get("amount_due") is not None:
-        return max(0.0, round(float(inv["amount_due"]) / 100.0, 2)), info_desc.get("etiqueta", "")
-
-    # 2. Respaldo para versiones anteriores de API Stripe (GET /v1/invoices/upcoming)
-    params_prev_v1 = {
-        "customer": customer_id,
-        "subscription": sub_id_real,
-        "subscription_items[0][id]": item_id,
-        "subscription_items[0][price]": nuevo_price_id,
-        "subscription_proration_behavior": "always_invoice"
-    }
-    if cupon_extra_preview:
-        params_prev_v1["coupon"] = cupon_extra_preview
-    inv_old = _stripe_api_request("GET", "invoices/upcoming", params=params_prev_v1)
-    if inv_old.get("amount_due") is not None:
-        return max(0.0, round(float(inv_old["amount_due"]) / 100.0, 2)), info_desc.get("etiqueta", "")
-
-    return None, info_desc.get("etiqueta", "")
-
-def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription_id, plan_actual_id, nuevo_plan_id):
-    """
-    Ejecuta la mejora de plan cobrando la diferencia proporcional al instante:
-    - Si tenía un cupón repeating/forever en vigor, NO toca los descuentos de la suscripción para que Stripe mantenga exactamente el cupón y su fecha de fin original.
-    - Si tenía un cupón 'once' en su mes actual ya pagado, aplica ese mismo % únicamente sobre el cobro proporcional de hoy (duration='once', se auto-consume en esta factura sin afectar al mes siguiente).
-    - Nunca permite añadir nuevos códigos de descuento.
-    """
-    permitidos = MEJORAS_PERMITIDAS_POR_PLAN.get(plan_actual_id, [])
-    if nuevo_plan_id not in permitidos:
-        return False, "Solo se permite mejorar a una modalidad de nivel superior."
-
-    mapa_prices = _obtener_mapa_precios_stripe()
-    nuevo_price_id = mapa_prices.get(nuevo_plan_id)
-    if not nuevo_price_id:
-        return False, "No se encontró el precio del nuevo plan en Stripe."
-
-    sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
-    if not sub_obj:
-        return False, "No se encontró una suscripción activa en Stripe."
-
-    sub_id_real = sub_obj.get("id", "")
-    items = ((sub_obj.get("items") or {}).get("data")) or []
-    if not items:
-        return False, "No se pudo leer el detalle de tu suscripción actual."
-    item_id = items[0].get("id", "")
-
-    info_desc = _inspeccionar_descuento_vigente_suscripcion(sub_obj)
-    cupon_puente_once = ""
-    if info_desc["tiene_descuento"] and info_desc["tipo"] in ("rescatado_ciclo_once", "rescatado_pct_calculado"):
-        if info_desc["coupon_id"]:
-            cupon_puente_once = info_desc["coupon_id"]
-        elif info_desc["percent_off"]:
-            cupon_puente_once = _obtener_o_crear_cupon_puente_once(info_desc["percent_off"])
-
-    payload_upd = {
-        "items[0][id]": item_id,
-        "items[0][price]": nuevo_price_id,
-        "proration_behavior": "always_invoice",
-        "payment_behavior": "error_if_incomplete",
-        "cancel_at_period_end": "false",
-        "metadata[plan_id]": nuevo_plan_id
-    }
-    if cupon_puente_once:
-        # Al ser un cupón duration='once' y facturarse en este mismo instante (always_invoice),
-        # descuenta únicamente la diferencia proporcional de hoy y se extingue automáticamente para la próxima mensualidad.
-        payload_upd["discounts[0][coupon]"] = cupon_puente_once
-
-    res_upd = _stripe_api_request("POST", f"subscriptions/{sub_id_real}", data=payload_upd)
-    if res_upd.get("id") and res_upd.get("status") in ("active", "trialing"):
-        info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_id]
-        guardar_datos_suscriptor(email_usuario, {
-            "PLAN": nuevo_plan_id,
-            "ROL": info_np["rol"],
-            "ESTADO": "ACTIVO",
-            "STRIPE_SUBSCRIPTION_ID": sub_id_real
-        }, sincrono=False)
-        return True, info_np["nombre_corto"]
-
-    # Reintento de compatibilidad si la versión de API usa 'coupon' en vez de 'discounts[0][coupon]'
-    if cupon_puente_once and (res_upd.get("error") or {}).get("param", "").startswith("discounts"):
-        payload_upd.pop("discounts[0][coupon]", None)
-        payload_upd["coupon"] = cupon_puente_once
-        res_upd2 = _stripe_api_request("POST", f"subscriptions/{sub_id_real}", data=payload_upd)
-        if res_upd2.get("id") and res_upd2.get("status") in ("active", "trialing"):
-            info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_id]
-            guardar_datos_suscriptor(email_usuario, {
-                "PLAN": nuevo_plan_id,
-                "ROL": info_np["rol"],
-                "ESTADO": "ACTIVO",
-                "STRIPE_SUBSCRIPTION_ID": sub_id_real
-            }, sincrono=False)
-            return True, info_np["nombre_corto"]
-        res_upd = res_upd2
-
-    err_msg = (res_upd.get("error") or {}).get("message", "No se pudo procesar el cargo proporcional en tu tarjeta. Revisa tu método de pago.")
-    return False, err_msg
-
-def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
+def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0, email_usuario=""):
     cod_limpio = (codigo_texto or "").strip()
     if not cod_limpio:
         return False, None, "Introduce un código promocional."
+    if email_usuario and usuario_ya_consumio_descuento_previo(email_usuario):
+        return False, None, "Los códigos promocionales solo pueden utilizarse una única vez por usuario en el momento de la primera suscripción."
+
     res = _stripe_api_request("GET", "promotion_codes", params={"active": "true", "limit": "100"})
     for pc in res.get("data", []):
         if str(pc.get("code", "")).strip().lower() == cod_limpio.lower():
@@ -1282,8 +1011,8 @@ def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
                 dur = cupon.get("duration", "")
                 meses = cupon.get("duration_in_months")
                 txt_dur = (
-                    "en tu primer mes" if dur == "once" else
-                    (f"durante {meses} meses" if dur == "repeating" and meses else "todos los meses")
+                    "en tu primer alta" if dur == "once" else
+                    (f"durante {meses} meses" if dur == "repeating" and meses else "")
                 )
                 if pct:
                     nuevo_p = round(precio_plan_eur * (1.0 - float(pct) / 100.0), 2)
@@ -1297,7 +1026,12 @@ def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
                 return True, pc.get("id"), resumen
     return False, None, "El código introducido no es válido o ha caducado."
 
-def render_selector_codigo_promocional(plan_id, sufijo_key="planes"):
+def render_selector_codigo_promocional(plan_id, sufijo_key="planes", email_usuario=""):
+    # Si ya consumió descuento o tuvo suscripción previa, mostramos directamente el aviso informativo sin permitir otro código
+    if email_usuario and usuario_ya_consumio_descuento_previo(email_usuario):
+        st.caption("ℹ️ *Recuerda: los códigos promocionales de bienvenida solo se aplican una única vez por usuario en el alta inicial.*")
+        return ""
+
     precio_base = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id, {}).get("precio_eur", 0)
     promo_id_activo = st.session_state.get("promo_code_id_aplicado", "")
     promo_resumen = st.session_state.get("promo_code_resumen_txt", "")
@@ -1312,6 +1046,13 @@ def render_selector_codigo_promocional(plan_id, sufijo_key="planes"):
                 st.session_state["promo_code_resumen_txt"] = ""
                 st.session_state.pop("_checkout_cache_actual", None)
                 st.rerun()
+        st.markdown(
+            "<div style='background:#FFFBEB; border:1px solid #F59E0B; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:12.8px; color:#92400E !important;'>"
+            "ℹ️ <b>Condiciones del código promocional:</b> Los códigos de descuento solo se aplican <b>una única vez por usuario</b>. "
+            "Si más adelante decides mejorar a una modalidad superior, se abonará la diferencia hasta la tarifa general del nuevo plan."
+            "</div>",
+            unsafe_allow_html=True
+        )
         return promo_id_activo
 
     k_mostrar = f"mostrar_caja_promo_{sufijo_key}"
@@ -1324,7 +1065,9 @@ def render_selector_codigo_promocional(plan_id, sufijo_key="planes"):
     else:
         st.markdown(
             "<div style='background:#F5F3FF; border:2px solid #7C3AED; border-radius:10px; padding:10px 14px; margin-bottom:6px;'>"
-            "<b style='color:#5B21B6 !important; font-size:14.5px;'>🎁 Introduce tu código promocional (se aplicará directamente en tu pago):</b>"
+            "<b style='color:#5B21B6 !important; font-size:14.5px;'>🎁 Introduce tu código promocional:</b><br>"
+            "<span style='font-size:12.6px; color:#4C1D95 !important;'>⚠️ <b>Aviso importante:</b> Los códigos de descuento se aplican <b>una sola vez por usuario</b> en la suscripción inicial "
+            "(en caso de mejorar posteriormente de plan, se abonará la diferencia sobre la tarifa oficial sin aplicar nuevos descuentos).</span>"
             "</div>",
             unsafe_allow_html=True
         )
@@ -1333,7 +1076,7 @@ def render_selector_codigo_promocional(plan_id, sufijo_key="planes"):
             cod_in = st.text_input("Código promocional:", placeholder="Ej: PROMOINICIAL", label_visibility="collapsed", key=f"in_txt_promo_{sufijo_key}")
         with cp2:
             if st.button("✔️ Aplicar descuento", type="primary", use_container_width=True, key=f"btn_aplicar_promo_{sufijo_key}"):
-                ok_pr, pid_stripe, msg_pr = validar_codigo_promocional_stripe(cod_in, precio_base)
+                ok_pr, pid_stripe, msg_pr = validar_codigo_promocional_stripe(cod_in, precio_base, email_usuario=email_usuario)
                 if ok_pr:
                     st.session_state["promo_code_id_aplicado"] = pid_stripe
                     st.session_state["promo_code_resumen_txt"] = msg_pr
@@ -1360,6 +1103,7 @@ def crear_sesion_pago_stripe(email_usuario, plan_id, promo_code_id=""):
 
     sub_previo = buscar_suscriptor_externo(em_clean)
     cust_previo = str((sub_previo or {}).get("STRIPE_CUSTOMER_ID", "")).strip()
+    ya_uso_promo = usuario_ya_consumio_descuento_previo(em_clean)
 
     payload_checkout = {
         "mode": "subscription",
@@ -1369,12 +1113,13 @@ def crear_sesion_pago_stripe(email_usuario, plan_id, promo_code_id=""):
         "cancel_url": f"{cfg['app_url']}/?pago_cancelado=1",
         "metadata[plan_id]": plan_id,
         "metadata[email_alumno]": em_clean,
+        "metadata[promo_aplicada]": "SI" if (promo_code_id and not ya_uso_promo) else "NO",
         "subscription_data[metadata][plan_id]": plan_id,
         "subscription_data[metadata][email_alumno]": em_clean
     }
-    if promo_code_id:
+    if promo_code_id and not ya_uso_promo:
         payload_checkout["discounts[0][promotion_code]"] = promo_code_id
-    else:
+    elif not ya_uso_promo:
         payload_checkout["allow_promotion_codes"] = "true"
 
     if cust_previo.startswith("cus_"):
@@ -1418,15 +1163,17 @@ def _detectar_plan_desde_suscripcion_stripe(sub_obj):
 
     return (sub_obj.get("metadata") or {}).get("plan_id", "")
 
-def obtener_suscripcion_activa_detalle_stripe(customer_id, subscription_id=""):
-    sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
-    if sub_obj:
-        return True, _detectar_plan_desde_suscripcion_stripe(sub_obj), sub_obj.get("id", ""), bool(sub_obj.get("cancel_at_period_end"))
-    return False, "", "", False
-
 def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
-    act, plan_det, _, _ = obtener_suscripcion_activa_detalle_stripe(customer_id, subscription_id)
-    return act, plan_det
+    if subscription_id:
+        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
+        if sub.get("status") in ("active", "trialing"):
+            return True, _detectar_plan_desde_suscripcion_stripe(sub)
+    if customer_id:
+        subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
+        for s in subs.get("data", []):
+            if s.get("status") in ("active", "trialing"):
+                return True, _detectar_plan_desde_suscripcion_stripe(s)
+    return False, ""
 
 def _sincronizar_stripe_post_login_bg(email_limpio, cust_id, sub_id, sk, gs_url, gs_token):
     try:
@@ -1492,6 +1239,11 @@ def procesar_retorno_pago_stripe(session_id):
     cust_id = sess.get("customer", "")
     sub_id = sess.get("subscription", "")
 
+    usada_promo_checkout = (
+        (sess.get("metadata") or {}).get("promo_aplicada") == "SI" or
+        float(((sess.get("total_details") or {}).get("amount_discount") or 0)) > 0
+    )
+
     if not email_cliente:
         return False, "No se pudo recuperar el correo electrónico de la sesión de pago."
 
@@ -1499,6 +1251,10 @@ def procesar_retorno_pago_stripe(session_id):
     token_sesion = secrets.token_hex(16)
     ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
     st.session_state.pop("_checkout_cache_actual", None)
+
+    notas_previas = str((existente or {}).get("NOTAS", "")).strip()
+    if usada_promo_checkout and "PROMO_USADA" not in notas_previas.upper():
+        notas_previas = (f"{notas_previas} | PROMO_USADA ({ahora_str})" if notas_previas else f"PROMO_USADA ({ahora_str})")
 
     if existente and existente.get("PASSWORD_HASH"):
         es_primer_alta = (str(existente.get("ESTADO", "")).upper() == "PENDIENTE_PAGO")
@@ -1511,6 +1267,8 @@ def procesar_retorno_pago_stripe(session_id):
             "ULTIMO_ACCESO": ahora_str,
             "SESSION_TOKEN": token_sesion
         }
+        if notas_previas:
+            campos_act["NOTAS"] = notas_previas
         if es_primer_alta or not existente.get("FECHA_ALTA"):
             campos_act["FECHA_ALTA"] = ahora_str
         guardar_datos_suscriptor(email_cliente, campos_act, sincrono=True)
@@ -1536,7 +1294,7 @@ def procesar_retorno_pago_stripe(session_id):
         )
     else:
         pwd_nueva = _generar_password_legible()
-        guardar_datos_suscriptor(email_cliente, {
+        campos_nuevos = {
             "PASSWORD_HASH": _hash_password_suscriptor(pwd_nueva),
             "PLAN": plan_id,
             "ROL": info_plan["rol"],
@@ -1546,7 +1304,10 @@ def procesar_retorno_pago_stripe(session_id):
             "FECHA_ALTA": ahora_str,
             "ULTIMO_ACCESO": ahora_str,
             "SESSION_TOKEN": token_sesion
-        }, sincrono=True)
+        }
+        if notas_previas:
+            campos_nuevos["NOTAS"] = notas_previas
+        guardar_datos_suscriptor(email_cliente, campos_nuevos, sincrono=True)
         enviar_email_suscriptor(
             email_cliente,
             "🎓 Bienvenido/a a Oposiciona — Tus claves de acceso",
@@ -1857,7 +1618,7 @@ if not st.session_state.autenticado:
             render_bloque_aviso_calendario_pdf(sufijo_key="react_login")
             acepta_react = st.checkbox("✅ ACEPTAR: He revisado la información anterior y deseo continuar con la suscripción.", key="chk_aceptar_cal_react")
             if acepta_react:
-                promo_react_id = render_selector_codigo_promocional(plan_sel_react, sufijo_key="react_login")
+                promo_react_id = render_selector_codigo_promocional(plan_sel_react, sufijo_key="react_login", email_usuario=em_react)
                 url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react, promo_code_id=promo_react_id)
                 if url_r_chk:
                     st.link_button("💳 Reactivar mi suscripción ahora (acceso inmediato)", url_r_chk, use_container_width=True, type="primary")
@@ -2044,7 +1805,7 @@ if not st.session_state.autenticado:
                         st.rerun()
                 else:
                     st.success("✅ Condiciones de calendario de temas aceptadas.")
-                    promo_id_sel = render_selector_codigo_promocional(plan_elegido, sufijo_key="planes")
+                    promo_id_sel = render_selector_codigo_promocional(plan_elegido, sufijo_key="planes", email_usuario=em_1_limpio)
                     with st.spinner("Preparando pasarela de pago segura..."):
                         url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido, promo_code_id=promo_id_sel)
                     if url_checkout:
