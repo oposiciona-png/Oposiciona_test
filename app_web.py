@@ -212,16 +212,22 @@ div.stButton > button:hover, button[kind="secondary"]:hover {
     border-color: #94A3B8 !important;
     color: #000000 !important;
 }
-div.stButton > button[kind="primary"], button[kind="primary"] {
+div.stButton > button[kind="primary"], button[kind="primary"],
+div.stLinkButton > a[kind="primary"], a[data-testid="stBaseLinkButton-primary"] {
     background-color: #1F77B4 !important;
     color: #FFFFFF !important;
     border: 1px solid #1F77B4 !important;
+    text-decoration: none !important;
 }
 div.stButton > button[kind="primary"] p, div.stButton > button[kind="primary"] span,
-button[kind="primary"] p, button[kind="primary"] span {
+button[kind="primary"] p, button[kind="primary"] span,
+div.stLinkButton > a[kind="primary"] p, div.stLinkButton > a[kind="primary"] span,
+a[data-testid="stBaseLinkButton-primary"] p, a[data-testid="stBaseLinkButton-primary"] span {
     color: #FFFFFF !important;
+    font-weight: 600 !important;
 }
-div.stButton > button[kind="primary"]:hover, button[kind="primary"]:hover {
+div.stButton > button[kind="primary"]:hover, button[kind="primary"]:hover,
+div.stLinkButton > a[kind="primary"]:hover, a[data-testid="stBaseLinkButton-primary"]:hover {
     background-color: #155A8A !important;
     border-color: #155A8A !important;
 }
@@ -692,6 +698,10 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     err_msg = (resp.get("error") or {}).get("message", "Error desconocido al conectar con Stripe.")
     return None, err_msg
 
+@st.cache_data(ttl=600, show_spinner=False)
+def obtener_url_checkout_cacheada(email_usuario, plan_id):
+    return crear_sesion_pago_stripe(email_usuario, plan_id)
+
 def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
     if subscription_id:
         sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
@@ -1002,7 +1012,6 @@ if not st.session_state.autenticado:
             unsafe_allow_html=True
         )
 
-        # PASO 1: Especialidad y Tarjetas limpias de Modalidad
         st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-bottom:6px;'>1. Elige tu especialidad</div>", unsafe_allow_html=True)
         cuerpo_sel = st.radio(
             "Especialidad:",
@@ -1057,7 +1066,6 @@ if not st.session_state.autenticado:
         em_1_limpio = (email_alta_1 or "").lower().strip()
         em_2_limpio = (email_alta_2 or "").lower().strip()
 
-        # Si el usuario cambia el correo escrito, invalidamos cualquier verificación previa
         if st.session_state.get("email_verificado_ok") and st.session_state.get("email_verificado_ok") != em_1_limpio:
             st.session_state["email_verificado_ok"] = ""
 
@@ -1108,14 +1116,17 @@ if not st.session_state.autenticado:
             st.success(f"✅ Correo electrónico verificado correctamente: **{em_1_limpio}**")
             info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
             st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
-            if st.button("💳 Continuar al pago seguro y activar acceso inmediato", use_container_width=True, type="primary", key="btn_ir_stripe"):
-                with st.spinner("Conectando con la pasarela segura de pago..."):
-                    url_checkout, err_chk = crear_sesion_pago_stripe(em_1_limpio, plan_elegido)
-                if url_checkout:
-                    st.success("✅ Pasarela lista. Pulsa en el botón inferior para completar tu suscripción:")
-                    st.link_button("🔒 Abrir pasarela de pago segura", url_checkout, use_container_width=True, type="primary")
-                else:
-                    st.error(f"❌ {err_chk}")
+            with st.spinner("Preparando acceso seguro a la pasarela de pago..."):
+                url_checkout, err_chk = obtener_url_checkout_cacheada(em_1_limpio, plan_elegido)
+            if url_checkout:
+                st.markdown(
+                    f"<a href='{url_checkout}' target='_top' style='display:block; width:100%; background-color:#1F77B4; color:#FFFFFF !important; text-align:center; padding:11px 16px; border-radius:8px; font-weight:700; font-size:15.5px; text-decoration:none; box-sizing:border-box; border:1px solid #155A8A;'>"
+                    f"💳 Continuar al pago seguro y activar acceso inmediato"
+                    f"</a>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.error(f"❌ {err_chk}")
 
     with tab_recuperar:
         st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
