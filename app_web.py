@@ -623,6 +623,15 @@ PLANES_SUSCRIPCION_OPOSICIONA = {
     }
 }
 
+# Regla estricta de mejora ascendente: cada plan solo puede subir a planes de precio estrictamente mayor (nunca iguales ni inferiores)
+MEJORAS_PERMITIDAS_POR_PLAN = {
+    "ADM_COMPLETO": ["GES_SOLO_TEST", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"],
+    "GES_SOLO_TEST": ["GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"],
+    "GES_TEST_SUPUESTOS": ["GES_COMPLETO"],
+    "GES_TEST_DESARROLLO": ["GES_COMPLETO"],
+    "GES_COMPLETO": []
+}
+
 TEXTO_AVISO_CALENDARIO_TEMAS = (
     "Esta plataforma se irá cargando poco a poco con todos los temas de la oposición, "
     "según calendario de temas adaptado a nuestros alumnos."
@@ -806,7 +815,7 @@ def _stripe_api_request(method, endpoint, data=None, params=None):
 def _obtener_catalogo_stripe_planes():
     res = _stripe_api_request("GET", "prices", params={"active": "true", "limit": "100", "expand[]": "data.product"})
     mapa_prices = {}
-    productos_precios = {}
+    mapa_plan_a_prod_price = {}
     mapa_price_a_plan = {}
     for p in res.get("data", []):
         prod = p.get("product") or {}
@@ -819,30 +828,45 @@ def _obtener_catalogo_stripe_planes():
             if info_plan["nombre_stripe"].lower() == nombre_prod.lower() and prod_id and price_id:
                 mapa_prices[plan_id] = price_id
                 mapa_price_a_plan[price_id] = plan_id
-                productos_precios.setdefault(prod_id, [])
-                if price_id not in productos_precios[prod_id] and len(productos_precios[prod_id]) < 10:
-                    productos_precios[prod_id].append(price_id)
-    return mapa_prices, productos_precios, mapa_price_a_plan
+                mapa_plan_a_prod_price[plan_id] = (prod_id, price_id)
+    return mapa_prices, mapa_plan_a_prod_price, mapa_price_a_plan
 
 def _obtener_mapa_precios_stripe():
     mapa_prices, _, _ = _obtener_catalogo_stripe_planes()
     return mapa_prices
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _obtener_config_portal_stripe_auto():
-    """Crea o reutiliza automáticamente una configuración del Portal de Stripe con cambio de plan entre las 5 modalidades y cancelación activados."""
-    _, productos_precios, _ = _obtener_catalogo_stripe_planes()
-    if not productos_precios:
+def _obtener_config_portal_solo_subida(plan_actual_id):
+    """
+    Crea o reutiliza una configuración del Portal de Stripe específica para el plan actual del alumno:
+    - Solo muestra planes de nivel estrictamente superior (nunca inferiores ni de igual importe).
+    - Si ya está en GES_COMPLETO (70 €), desactiva el cambio de plan y solo permite gestionar pago/facturas/cancelación.
+    - Cobra al instante la parte proporcional de la mejora (always_invoice), evitando cualquier devolución o saldo negativo.
+    """
+    _, mapa_plan_a_prod_price, _ = _obtener_catalogo_stripe_planes()
+    if not mapa_plan_a_prod_price:
         return ""
-    etiqueta_cfg = f"oposiciona_portal_v2_{len(productos_precios)}"
 
-    lista_confs = _stripe_api_request("GET", "billing_portal/configurations", params={"active": "true", "limit": "25"})
+    planes_superiores = MEJORAS_PERMITIDAS_POR_PLAN.get(plan_actual_id, [])
+    # Para que Stripe permita cambiar desde el plan actual hacia los superiores, el catálogo de esa sesión
+    # debe contener únicamente el producto actual + los productos estrictamente superiores permitidos.
+    planes_incluidos = []
+    if planes_superiores and plan_actual_id in mapa_plan_a_prod_price:
+        planes_incluidos = [plan_actual_id] + [p for p in planes_superiores if p in mapa_plan_a_prod_price]
+
+    etiqueta_cfg = f"opo_up_v3_{plan_actual_id}" if planes_incluidos else "opo_up_v3_MAX_SIN_CAMBIO"
+
+    lista_confs = _stripe_api_request("GET", "billing_portal/configurations", params={"active": "true", "limit": "50"})
     for c in lista_confs.get("data", []):
         if (c.get("metadata") or {}).get("origen") == etiqueta_cfg and c.get("id"):
             return c.get("id")
 
     payload_conf = {
-        "business_profile[headline]": "Oposiciona — Gestiona o mejora tu modalidad mensual",
+        "business_profile[headline]": (
+            "Oposiciona — Mejora tu modalidad mensual o gestiona tu suscripción"
+            if len(planes_incluidos) >= 2 else
+            "Oposiciona — Gestiona tu suscripción y datos de facturación"
+        ),
         "features[invoice_history][enabled]": "true",
         "features[payment_method_update][enabled]": "true",
         "features[customer_update][enabled]": "true",
@@ -852,25 +876,40 @@ def _obtener_config_portal_stripe_auto():
         "features[customer_update][allowed_updates][3]": "tax_id",
         "features[subscription_cancel][enabled]": "true",
         "features[subscription_cancel][mode]": "at_period_end",
-        "features[subscription_update][enabled]": "true",
-        "features[subscription_update][default_allowed_updates][0]": "price",
-        "features[subscription_update][default_allowed_updates][1]": "promotion_code",
-        "features[subscription_update][proration_behavior]": "create_prorations",
         "metadata[origen]": etiqueta_cfg
     }
-    for idx_p, (prod_id, lista_pr) in enumerate(productos_precios.items()):
-        payload_conf[f"features[subscription_update][products][{idx_p}][product]"] = prod_id
-        for idx_pr, pr_id in enumerate(lista_pr):
-            payload_conf[f"features[subscription_update][products][{idx_p}][prices][{idx_pr}]"] = pr_id
+
+    if len(planes_incluidos) >= 2:
+        payload_conf["features[subscription_update][enabled]"] = "true"
+        payload_conf["features[subscription_update][default_allowed_updates][0]"] = "price"
+        payload_conf["features[subscription_update][default_allowed_updates][1]"] = "promotion_code"
+        payload_conf["features[subscription_update][proration_behavior]"] = "always_invoice"
+
+        productos_agrupados = {}
+        for pid in planes_incluidos:
+            prod_id, price_id = mapa_plan_a_prod_price[pid]
+            productos_agrupados.setdefault(prod_id, [])
+            if price_id not in productos_agrupados[prod_id]:
+                productos_agrupados[prod_id].append(price_id)
+
+        for idx_p, (prod_id, lista_pr) in enumerate(productos_agrupados.items()):
+            payload_conf[f"features[subscription_update][products][{idx_p}][product]"] = prod_id
+            for idx_pr, pr_id in enumerate(lista_pr):
+                payload_conf[f"features[subscription_update][products][{idx_p}][prices][{idx_pr}]"] = pr_id
+    else:
+        payload_conf["features[subscription_update][enabled]"] = "false"
 
     nueva_conf = _stripe_api_request("POST", "billing_portal/configurations", data=payload_conf)
     if nueva_conf.get("id"):
         return nueva_conf["id"]
 
-    # Reintento de respaldo solo con cambio de precio si la cuenta restringe cupones en portal
-    payload_conf.pop("features[subscription_update][default_allowed_updates][1]", None)
-    nueva_conf_2 = _stripe_api_request("POST", "billing_portal/configurations", data=payload_conf)
-    return nueva_conf_2.get("id", "")
+    # Respaldo si alguna cuenta restringe always_invoice o promotion_code en el portal
+    if len(planes_incluidos) >= 2:
+        payload_conf.pop("features[subscription_update][default_allowed_updates][1]", None)
+        payload_conf["features[subscription_update][proration_behavior]"] = "create_prorations"
+        nueva_conf_2 = _stripe_api_request("POST", "billing_portal/configurations", data=payload_conf)
+        return nueva_conf_2.get("id", "")
+    return ""
 
 def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
     cod_limpio = (codigo_texto or "").strip()
@@ -1039,11 +1078,17 @@ def crear_enlace_portal_cliente_stripe(customer_id):
     cfg = _cfg_suscripciones()
     if not customer_id:
         return None
+
+    # Averiguamos el plan real vigente en Stripe antes de abrir el portal para ofrecerle SOLO mejoras superiores
+    act_st, plan_vigente = verificar_suscripcion_activa_stripe(customer_id)
+    if not plan_vigente:
+        plan_vigente = st.session_state.get("plan_suscripcion", "GES_COMPLETO")
+
     datos_portal = {
         "customer": customer_id,
         "return_url": f"{cfg['app_url']}/?sync_plan=1"
     }
-    conf_auto_id = _obtener_config_portal_stripe_auto()
+    conf_auto_id = _obtener_config_portal_solo_subida(plan_vigente)
     if conf_auto_id:
         datos_portal["configuration"] = conf_auto_id
 
@@ -1051,7 +1096,6 @@ def crear_enlace_portal_cliente_stripe(customer_id):
     if resp.get("url"):
         return resp["url"]
 
-    # Respaldo sin configuration personalizada si hubiera alguna restricción puntual
     datos_portal.pop("configuration", None)
     resp2 = _stripe_api_request("POST", "billing_portal/sessions", data=datos_portal)
     return resp2.get("url")
@@ -1229,7 +1273,6 @@ if not st.session_state.autenticado:
                     rol_final_rec = sub_ext_rec.get("ROL", "GESTION")
                     esp_rec = datos_rec.get("saved_esp", "GESTION")
 
-                    # Si regresa del Portal de Stripe (?sync_plan=1), sincroniza al instante el nuevo plan contratado
                     if qp_sync_retorno and cust_rec:
                         act_ok_r, nuevo_plan_r = verificar_suscripcion_activa_stripe(cust_rec, sub_id_rec)
                         if act_ok_r and nuevo_plan_r in PLANES_SUSCRIPCION_OPOSICIONA:
@@ -8673,10 +8716,13 @@ if not st.session_state.questions:
 
         categoria = st.session_state.saved_cat
 
-    # Barra de gestión de suscripción y aviso de tutoría mensual (solo para suscriptores externos de pago)
+    # Barra de mejora de plan, gestión de suscripción y cambio de contraseña (solo para suscriptores externos de pago)
     if st.session_state.get("es_suscriptor_externo"):
         cfg_sub_ui = _cfg_suscripciones()
-        c_sub1, c_sub2 = st.columns([2.3, 1.4])
+        plan_act_ui = st.session_state.get("plan_suscripcion", "")
+        tiene_mejoras_disp = bool(MEJORAS_PERMITIDAS_POR_PLAN.get(plan_act_ui, []))
+
+        c_sub1, c_sub2 = st.columns([2.2, 1.5])
         with c_sub1:
             if cfg_sub_ui["modo_fiscal"] == "EXENTO_TUTORIZADO":
                 st.markdown(
@@ -8686,12 +8732,34 @@ if not st.session_state.questions:
                     unsafe_allow_html=True
                 )
         with c_sub2:
-            if st.button("💳 Gestionar / Cambiar plan", key="btn_portal_stripe_alumno", use_container_width=True):
+            lbl_btn_portal = "⬆️ MEJORA TU PLAN / SUSCRIPCIÓN" if tiene_mejoras_disp else "💳 Mi suscripción / Facturación"
+            lbl_link_portal = "🚀 Abrir portal para MEJORAR MI PLAN o gestionar suscripción" if tiene_mejoras_disp else "🔗 Abrir mi portal de facturación y suscripción"
+            if st.button(lbl_btn_portal, key="btn_portal_stripe_alumno", use_container_width=True, type="primary" if tiene_mejoras_disp else "secondary"):
                 url_portal = crear_enlace_portal_cliente_stripe(st.session_state.get("stripe_customer_id", ""))
                 if url_portal:
-                    st.link_button("🔗 Abrir mi portal de facturación Stripe", url_portal, use_container_width=True, type="primary")
+                    st.link_button(lbl_link_portal, url_portal, use_container_width=True, type="primary")
                 else:
                     st.warning("No se pudo abrir el portal en este momento. Escríbenos a info@oposiciona.es.")
+
+        with st.expander("🔑 Cambiar mi contraseña de acceso"):
+            cp_act, cp_n1, cp_n2 = st.columns(3)
+            with cp_act:
+                in_pw_act = st.text_input("Contraseña actual:", type="password", key="panel_pw_actual")
+            with cp_n1:
+                in_pw_n1 = st.text_input("Nueva contraseña:", type="password", key="panel_pw_nueva1")
+            with cp_n2:
+                in_pw_n2 = st.text_input("Repetir nueva:", type="password", key="panel_pw_nueva2")
+            if st.button("💾 Actualizar contraseña", key="btn_actualizar_pw_panel", use_container_width=True):
+                ok_chg, msg_chg = cambiar_password_suscriptor_autenticado(
+                    st.session_state.get("email", ""),
+                    in_pw_act,
+                    in_pw_n1,
+                    in_pw_n2
+                )
+                if ok_chg:
+                    st.success(msg_chg)
+                else:
+                    st.error(f"⚠️ {msg_chg}")
 
     st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px; margin-top:6px;'>3. Modo de avance</div>", unsafe_allow_html=True)
     op_av = [
