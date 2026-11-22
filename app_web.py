@@ -514,6 +514,22 @@ with col2:
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
 if not st.session_state.autenticado:
+    qp_stripe_sid = st.query_params.get("stripe_session_id", "")
+    if qp_stripe_sid:
+        with st.spinner("Activando tu suscripción y generando tus claves de acceso..."):
+            ok_pago, info_pago = procesar_retorno_pago_stripe(qp_stripe_sid)
+        st.query_params.clear()
+        if ok_pago:
+            st.success(f"🎉 ¡Suscripción activada para {info_pago}! Te hemos enviado un correo con tus claves de acceso.")
+            time.sleep(1.2)
+            st.rerun()
+        else:
+            st.error(f"⚠️ {info_pago}")
+
+    if st.query_params.get("pago_cancelado"):
+        st.query_params.clear()
+        st.info("ℹ️ Has cancelado el proceso de pago. Puedes elegir tu plan cuando quieras.")
+
     qp_restore = st.query_params.get("restore_session", "")
     qp_draft = st.query_params.get("draft_txt", "")
     if qp_restore:
@@ -521,11 +537,20 @@ if not st.session_state.autenticado:
             datos_rec = _descifrar_backup_sesion(qp_restore)
             correo_rec = (datos_rec.get("email") or "").lower().strip()
             rol_rec = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_rec in lc), None)
-            if rol_rec:
+            sub_ext_rec = None if rol_rec else buscar_suscriptor_externo(correo_rec)
+            if rol_rec or (sub_ext_rec and str(sub_ext_rec.get("ESTADO", "")).upper() == "ACTIVO"):
                 st.session_state.autenticado = True
                 st.session_state.email = correo_rec
-                st.session_state.rol = "ACCESO TOTAL" if correo_rec in USUARIOS_ADMIN else rol_rec
-                st.session_state.es_admin = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
+                if rol_rec:
+                    st.session_state.rol = "ACCESO TOTAL" if correo_rec in USUARIOS_ADMIN else rol_rec
+                    st.session_state.es_admin = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
+                else:
+                    st.session_state.rol = sub_ext_rec.get("ROL", "GESTION")
+                    st.session_state.es_admin = False
+                    st.session_state.es_suscriptor_externo = True
+                    st.session_state.plan_suscripcion = sub_ext_rec.get("PLAN", "")
+                    st.session_state.stripe_customer_id = sub_ext_rec.get("STRIPE_CUSTOMER_ID", "")
+                    st.session_state.session_token_externo = sub_ext_rec.get("SESSION_TOKEN", "")
                 st.session_state.saved_esp = datos_rec.get("saved_esp", "ADMINISTRATIVOS")
                 st.session_state.saved_cat = datos_rec.get("saved_cat", "ESPECIFICO")
                 st.session_state.modo_avance = datos_rec.get("modo_avance", st.session_state.modo_avance)
@@ -580,31 +605,456 @@ if not st.session_state.autenticado:
     })();
     </script>""", height=0)
 
-    c_img1, c_img2, c_img3 = st.columns([1, 0.25, 1])
+    c_img1, c_img2, c_img3 = st.columns([1, 0.22, 1])
     with c_img2:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
         except: pass
-    st.markdown("<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -5px;'>🔒 Acceso Restringido</h3><p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 20px;'>Plataforma exclusiva de <b>Oposiciona</b>. Introduce tus credenciales para acceder.</p>", unsafe_allow_html=True)
-    email_input = st.text_input("Usuario o correo electrónico asociado")
-    password_input = st.text_input("Contraseña de acceso", type="password")
-    if st.button("Entrar a la plataforma", use_container_width=True, type="primary"):
-        correo_limpio = email_input.lower().strip()
-        rol_usuario = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_limpio in lc), None)
-        if correo_limpio in USUARIOS_ADMIN:
-            if password_input == PASSWORD_ADMIN:
-                st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, do_scroll=True)
+    st.markdown(
+        "<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -5px;'>🔒 Plataforma de Preparación Oposiciona</h3>"
+        "<p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 14px;'>Accede con tus credenciales de alumno o suscríbete a nuestros programas de preparación tutorizada.</p>",
+        unsafe_allow_html=True
+    )
+
+    tab_login, tab_planes, tab_recuperar = st.tabs([
+        "🔑 Iniciar sesión",
+        "🎓 Suscribirme (Planes)",
+        "🔄 Recuperar contraseña"
+    ])
+
+    with tab_login:
+        email_input = st.text_input("Usuario o correo electrónico asociado", key="login_email_in")
+        password_input = st.text_input("Contraseña de acceso", type="password", key="login_pwd_in")
+        if st.button("Entrar a la plataforma", use_container_width=True, type="primary", key="btn_entrar_plat"):
+            correo_limpio = email_input.lower().strip()
+            rol_usuario = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_limpio in lc), None)
+            if correo_limpio in USUARIOS_ADMIN:
+                if password_input == PASSWORD_ADMIN:
+                    st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, es_suscriptor_externo=False, do_scroll=True)
+                    st.rerun()
+                else:
+                    st.error("❌ Contraseña de administrador incorrecta.")
+            elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
+                st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, es_suscriptor_externo=False, do_scroll=True)
                 st.rerun()
-            else: st.error("❌ Contraseña de administrador incorrecta.")
-        elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
-            st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, do_scroll=True)
-            st.rerun()
-        elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
-            es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
-            st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, do_scroll=True)
-            st.rerun()
-        else: st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
+            elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
+                es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
+                st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, es_suscriptor_externo=False, do_scroll=True)
+                st.rerun()
+            else:
+                sub_ext = buscar_suscriptor_externo(correo_limpio)
+                if sub_ext and sub_ext.get("PASSWORD_HASH") == _hash_password_suscriptor(password_input):
+                    activo_stripe, plan_stripe = verificar_suscripcion_activa_stripe(
+                        sub_ext.get("STRIPE_CUSTOMER_ID", ""),
+                        sub_ext.get("STRIPE_SUBSCRIPTION_ID", "")
+                    )
+                    if activo_stripe:
+                        plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
+                        rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
+                        nuevo_tok = secrets.token_hex(16)
+                        ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
+                        guardar_datos_suscriptor(correo_limpio, {
+                            "PLAN": plan_final,
+                            "ROL": rol_final,
+                            "ESTADO": "ACTIVO",
+                            "ULTIMO_ACCESO": ahora_str,
+                            "SESSION_TOKEN": nuevo_tok
+                        })
+                        st.session_state.update(
+                            autenticado=True,
+                            rol=rol_final,
+                            email=correo_limpio,
+                            es_admin=False,
+                            es_suscriptor_externo=True,
+                            plan_suscripcion=plan_final,
+                            stripe_customer_id=sub_ext.get("STRIPE_CUSTOMER_ID", ""),
+                            session_token_externo=nuevo_tok,
+                            saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
+                            do_scroll=True
+                        )
+                        st.rerun()
+                    else:
+                        guardar_datos_suscriptor(correo_limpio, {"ESTADO": "INACTIVO"})
+                        st.error("⚠️ Tu suscripción mensual figura como cancelada o pendiente de pago. Puedes reactivarla desde la pestaña «Suscribirme (Planes)».")
+                else:
+                    st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
+
+    with tab_planes:
+        cfg_f = _cfg_suscripciones()
+        if cfg_f["modo_fiscal"] == "EXENTO_TUTORIZADO":
+            st.markdown(
+                "<div style='background:#EFF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px; margin-bottom:12px;'>"
+                "<b style='color:#1E3A8A !important;'>🎓 Preparación Mensual Tutorizada (Exenta de IVA — Art. 20.Uno.9.º LIVA)</b><br>"
+                "<span style='font-size:13px; color:#1E293B !important;'>Todas las modalidades incluyen: <b>resolución de dudas por email</b> sobre cualquier pregunta, supuesto o epígrafe, "
+                "<b>envío periódico de actualizaciones comentadas de legislación</b> y <b>clase online mensual en directo</b> para resolver dudas. Sin permanencia: cancela en 1 clic cuando quieras.</span>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+        email_alta = st.text_input("1️⃣ Introduce tu correo electrónico (recibirás ahí tus claves de acceso):", placeholder="tuemail@ejemplo.com", key="sub_email_alta")
+        cuerpo_sel = st.radio("2️⃣ Elige tu especialidad:", ["GESTIÓN DE LA SEGURIDAD SOCIAL (A2)", "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL (C1)"], horizontal=True, key="sub_cuerpo_rad")
+
+        if "ADMINISTRATIVO" in cuerpo_sel:
+            opciones_plan = ["ADM_COMPLETO"]
+        else:
+            opciones_plan = ["GES_COMPLETO", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_SOLO_TEST"]
+
+        plan_elegido = st.radio(
+            "3️⃣ Selecciona tu modalidad mensual:",
+            opciones_plan,
+            format_func=lambda pid: f"{PLANES_SUSCRIPCION_OPOSICIONA[pid]['nombre_corto']} — {PLANES_SUSCRIPCION_OPOSICIONA[pid]['descripcion']}",
+            key="sub_plan_elegido"
+        )
+
+        if st.button("💳 Continuar al pago seguro y activar acceso inmediato", use_container_width=True, type="primary", key="btn_ir_stripe"):
+            em_val = (email_alta or "").lower().strip()
+            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_val):
+                st.error("⚠️ Introduce un correo electrónico válido antes de continuar.")
+            else:
+                with st.spinner("Conectando con la pasarela segura de Stripe..."):
+                    url_checkout, err_chk = crear_sesion_pago_stripe(em_val, plan_elegido)
+                if url_checkout:
+                    st.success("✅ Pasarela lista. Pulsa en el botón inferior para completar el pago:")
+                    st.link_button("🔒 Abrir pasarela de pago segura (Stripe)", url_checkout, use_container_width=True, type="primary")
+                else:
+                    st.error(f"❌ {err_chk}")
+
+    with tab_recuperar:
+        st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
+        email_rec = st.text_input("Correo electrónico registrado:", key="rec_email_in")
+        if st.button("📩 Enviarme nueva contraseña por correo", use_container_width=True, key="btn_enviar_rec"):
+            em_r = (email_rec or "").lower().strip()
+            sub_r = buscar_suscriptor_externo(em_r)
+            if not sub_r:
+                st.error("❌ No encontramos ninguna suscripción externa asociada a ese correo electrónico.")
+            else:
+                pwd_temp = _generar_password_legible()
+                guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_temp)})
+                enviar_email_suscriptor(
+                    em_r,
+                    "🔑 Nueva contraseña de acceso — Oposiciona",
+                    f"<p>Hola,</p><p>Hemos restablecido tu contraseña de acceso a la plataforma <b>Oposiciona</b>.</p>"
+                    f"<p><b>Usuario:</b> {em_r}<br><b>Nueva contraseña:</b> <code>{pwd_temp}</code></p>"
+                )
+                st.success("✅ Te hemos enviado un correo electrónico con tu nueva contraseña.")
     st.stop()
 # === FIN SECCIÓN 1 ===
+
+# === SECCIÓN 1B: MOTOR DE SUSCRIPCIONES, STRIPE, CORREOS Y SESIÓN ÚNICA ===
+import hashlib, secrets
+
+PLANES_SUSCRIPCION_OPOSICIONA = {
+    "ADM_COMPLETO": {
+        "nombre_corto": "Administrativo — Acceso Completo (30 €/mes)",
+        "nombre_stripe": "Curso mensual y tutorización — Administrativo Seguridad Social (Acceso Completo)",
+        "especialidad": "ADMINISTRATIVOS",
+        "precio_eur": 30,
+        "rol": "ADMTVOS",
+        "descripcion": "Test Específico, General, Exámenes Oficiales y Supuestos Prácticos + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+    },
+    "GES_SOLO_TEST": {
+        "nombre_corto": "Gestión — Solo Test (50 €/mes)",
+        "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Solo Test)",
+        "especialidad": "GESTION",
+        "precio_eur": 50,
+        "rol": "GESTION_SOLO_TEST",
+        "descripcion": "Test Específico, General y Exámenes Oficiales + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+    },
+    "GES_TEST_SUPUESTOS": {
+        "nombre_corto": "Gestión — Test + Supuestos (60 €/mes)",
+        "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Test + Supuestos)",
+        "especialidad": "GESTION",
+        "precio_eur": 60,
+        "rol": "GESTION_TEST_SUPUESTOS",
+        "descripcion": "Todos los Test + Supuestos Prácticos corregidos con IA + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+    },
+    "GES_TEST_DESARROLLO": {
+        "nombre_corto": "Gestión — Test + Desarrollo (60 €/mes)",
+        "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Test + Desarrollo)",
+        "especialidad": "GESTION",
+        "precio_eur": 60,
+        "rol": "GESTION_TEST_DESARROLLO",
+        "descripcion": "Todos los Test + Epígrafes de Desarrollo corregidos según baremo del Tribunal + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+    },
+    "GES_COMPLETO": {
+        "nombre_corto": "Gestión — Acceso Completo (70 €/mes) ⭐",
+        "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Acceso Completo)",
+        "especialidad": "GESTION",
+        "precio_eur": 70,
+        "rol": "GESTION",
+        "descripcion": "Acceso total: Test, Supuestos Prácticos y Epígrafes de Desarrollo con IA + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+    }
+}
+
+def _cfg_suscripciones():
+    def _get_sec(k, default=""):
+        try:
+            return str(st.secrets.get(k, default)).strip()
+        except Exception:
+            return default
+    return {
+        "gs_url": _get_sec("APPS_SCRIPT_SUSCRIPTORES_URL"),
+        "gs_token": _get_sec("APPS_SCRIPT_SUSCRIPTORES_TOKEN"),
+        "stripe_key": _get_sec("STRIPE_SECRET_KEY"),
+        "app_url": _get_sec("URL_PUBLICA_APP", "https://test-oposiciona.streamlit.app").rstrip("/"),
+        "modo_fiscal": _get_sec("MODO_FISCAL_SUSCRIPCION", "EXENTO_TUTORIZADO")
+    }
+
+def _hash_password_suscriptor(password_plana):
+    sal = "Oposiciona_Salt_2026_SS#"
+    return hashlib.sha256((sal + str(password_plana)).encode("utf-8")).hexdigest()
+
+def _generar_password_legible():
+    alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+    return "Opo-" + "".join(secrets.choice(alfabeto) for _ in range(8))
+
+def _llamar_apps_script_suscriptores(payload_extra):
+    cfg = _cfg_suscripciones()
+    if not cfg["gs_url"] or not cfg["gs_token"]:
+        return {"ok": False, "error": "Falta configurar Secrets de Apps Script."}
+    payload = {"token": cfg["gs_token"]}
+    payload.update(payload_extra)
+    try:
+        r = requests.post(cfg["gs_url"], json=payload, timeout=15)
+        if r.status_code == 200:
+            return r.json()
+        return {"ok": False, "error": f"HTTP {r.status_code}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@st.cache_data(ttl=120, show_spinner=False)
+def obtener_suscriptores_cacheados():
+    res = _llamar_apps_script_suscriptores({"action": "listar_suscriptores"})
+    if res.get("ok"):
+        mapa = {}
+        for item in res.get("suscriptores", []):
+            em = str(item.get("EMAIL", "")).lower().strip()
+            if em:
+                mapa[em] = item
+        return mapa
+    return {}
+
+def buscar_suscriptor_externo(email):
+    em = (email or "").lower().strip()
+    if not em:
+        return None
+    mapa = obtener_suscriptores_cacheados()
+    return mapa.get(em)
+
+def guardar_datos_suscriptor(email, campos_dict):
+    res = _llamar_apps_script_suscriptores({
+        "action": "guardar_suscriptor",
+        "email": (email or "").lower().strip(),
+        "campos": campos_dict
+    })
+    obtener_suscriptores_cacheados.clear()
+    return res
+
+def enviar_email_suscriptor(destinatario, asunto, html_body):
+    return _llamar_apps_script_suscriptores({
+        "action": "enviar_email",
+        "destinatario": destinatario,
+        "asunto": asunto,
+        "html_body": html_body,
+        "remitente_nombre": "Oposiciona — Plataforma de Preparación",
+        "reply_to": "info@oposiciona.es"
+    })
+
+def _stripe_api_request(method, endpoint, data=None, params=None):
+    cfg = _cfg_suscripciones()
+    sk = cfg["stripe_key"]
+    if not sk:
+        return {"error": {"message": "Falta STRIPE_SECRET_KEY en Secrets."}}
+    url = f"https://api.stripe.com/v1/{endpoint.lstrip('/')}"
+    headers = {"Authorization": f"Bearer {sk}"}
+    try:
+        if method.upper() == "GET":
+            r = requests.get(url, headers=headers, params=params, timeout=15)
+        else:
+            r = requests.post(url, headers=headers, data=data, timeout=15)
+        return r.json()
+    except Exception as e:
+        return {"error": {"message": str(e)}}
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _obtener_mapa_precios_stripe():
+    res = _stripe_api_request("GET", "prices", params={"active": "true", "limit": "50", "expand[]": "data.product"})
+    mapa_prices = {}
+    for p in res.get("data", []):
+        prod = p.get("product") or {}
+        nombre_prod = prod.get("name", "") if isinstance(prod, dict) else ""
+        for plan_id, info_plan in PLANES_SUSCRIPCION_OPOSICIONA.items():
+            if info_plan["nombre_stripe"].lower() == nombre_prod.lower():
+                mapa_prices[plan_id] = p.get("id")
+    return mapa_prices
+
+def crear_sesion_pago_stripe(email_usuario, plan_id):
+    cfg = _cfg_suscripciones()
+    info_plan = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id)
+    if not info_plan:
+        return None, "Plan no válido."
+    mapa_prices = _obtener_mapa_precios_stripe()
+    price_id = mapa_prices.get(plan_id)
+    if not price_id:
+        return None, f"No se encontró en Stripe el producto '{info_plan['nombre_stripe']}'. Verifica su nombre exacto."
+
+    texto_legal = (
+        "Operación exenta de IVA conforme al art. 20.Uno.9.º de la Ley 37/1992 (Servicio formativo tutorizado con resolución de dudas por correo, actualizaciones comentadas y clase mensual en directo)."
+        if cfg["modo_fiscal"] == "EXENTO_TUTORIZADO"
+        else "Suscripción mensual con 21 % de IVA incluido."
+    )
+
+    payload_checkout = {
+        "mode": "subscription",
+        "customer_email": email_usuario.lower().strip(),
+        "line_items[0][price]": price_id,
+        "line_items[0][quantity]": "1",
+        "success_url": f"{cfg['app_url']}/?stripe_session_id={{CHECKOUT_SESSION_ID}}",
+        "cancel_url": f"{cfg['app_url']}/?pago_cancelado=1",
+        "metadata[plan_id]": plan_id,
+        "metadata[email_alumno]": email_usuario.lower().strip(),
+        "subscription_data[metadata][plan_id]": plan_id,
+        "subscription_data[metadata][email_alumno]": email_usuario.lower().strip(),
+        "custom_text[submit][message]": texto_legal
+    }
+    resp = _stripe_api_request("POST", "checkout/sessions", data=payload_checkout)
+    if resp.get("url"):
+        return resp["url"], None
+    err_msg = (resp.get("error") or {}).get("message", "Error desconocido al conectar con Stripe.")
+    return None, err_msg
+
+def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
+    if subscription_id:
+        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
+        st_sub = sub.get("status", "")
+        if st_sub in ("active", "trialing"):
+            plan_meta = (sub.get("metadata") or {}).get("plan_id", "")
+            return True, plan_meta
+    if customer_id:
+        subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
+        for s in subs.get("data", []):
+            if s.get("status") in ("active", "trialing"):
+                plan_meta = (s.get("metadata") or {}).get("plan_id", "")
+                return True, plan_meta
+    return False, ""
+
+def crear_enlace_portal_cliente_stripe(customer_id):
+    cfg = _cfg_suscripciones()
+    if not customer_id:
+        return None
+    resp = _stripe_api_request("POST", "billing_portal/sessions", data={
+        "customer": customer_id,
+        "return_url": cfg["app_url"]
+    })
+    return resp.get("url")
+
+def procesar_retorno_pago_stripe(session_id):
+    sess = _stripe_api_request("GET", f"checkout/sessions/{session_id}")
+    if sess.get("payment_status") != "paid" and sess.get("status") != "complete":
+        return False, "El pago aún no figura como completado en Stripe."
+
+    email_cliente = (
+        sess.get("customer_email") or
+        (sess.get("customer_details") or {}).get("email") or
+        (sess.get("metadata") or {}).get("email_alumno") or ""
+    ).lower().strip()
+    plan_id = (sess.get("metadata") or {}).get("plan_id", "GES_COMPLETO")
+    info_plan = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id, PLANES_SUSCRIPCION_OPOSICIONA["GES_COMPLETO"])
+    cust_id = sess.get("customer", "")
+    sub_id = sess.get("subscription", "")
+
+    if not email_cliente:
+        return False, "No se pudo recuperar el correo electrónico de la sesión de pago."
+
+    existente = buscar_suscriptor_externo(email_cliente)
+    token_sesion = secrets.token_hex(16)
+    ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
+
+    if existente and existente.get("PASSWORD_HASH"):
+        guardar_datos_suscriptor(email_cliente, {
+            "PLAN": plan_id,
+            "ROL": info_plan["rol"],
+            "ESTADO": "ACTIVO",
+            "STRIPE_CUSTOMER_ID": cust_id,
+            "STRIPE_SUBSCRIPTION_ID": sub_id,
+            "ULTIMO_ACCESO": ahora_str,
+            "SESSION_TOKEN": token_sesion
+        })
+        enviar_email_suscriptor(
+            email_cliente,
+            f"✅ Suscripción activada — {info_plan['nombre_corto']}",
+            f"<p>Hola,</p><p>Tu suscripción al plan <b>{info_plan['nombre_corto']}</b> en <b>Oposiciona</b> ya está activa.</p>"
+            f"<p>Puedes entrar con tu correo <b>{email_cliente}</b> y tu contraseña habitual en: <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
+            f"<p>Recuerda que tienes incluidos: consulta de dudas por email (<i>info@oposiciona.es</i>), actualizaciones comentadas de legislación y acceso a la clase mensual en directo.</p>"
+        )
+    else:
+        pwd_nueva = _generar_password_legible()
+        guardar_datos_suscriptor(email_cliente, {
+            "PASSWORD_HASH": _hash_password_suscriptor(pwd_nueva),
+            "PLAN": plan_id,
+            "ROL": info_plan["rol"],
+            "ESTADO": "ACTIVO",
+            "STRIPE_CUSTOMER_ID": cust_id,
+            "STRIPE_SUBSCRIPTION_ID": sub_id,
+            "FECHA_ALTA": ahora_str,
+            "ULTIMO_ACCESO": ahora_str,
+            "SESSION_TOKEN": token_sesion
+        })
+        enviar_email_suscriptor(
+            email_cliente,
+            "🎓 Bienvenido/a a Oposiciona — Tus claves de acceso",
+            f"<div style='font-family:sans-serif; color:#1E293B; max-width:560px;'>"
+            f"<h2 style='color:#1F77B4;'>¡Bienvenido/a a Oposiciona!</h2>"
+            f"<p>Tu alta en el <b>{info_plan['nombre_corto']}</b> se ha completado correctamente.</p>"
+            f"<div style='background:#F8FAFC; border:1px solid #CBD5E1; border-radius:8px; padding:14px; margin:14px 0;'>"
+            f"<p style='margin:4px 0;'><b>🌐 Enlace de acceso:</b> <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
+            f"<p style='margin:4px 0;'><b>📧 Usuario:</b> {email_cliente}</p>"
+            f"<p style='margin:4px 0;'><b>🔑 Contraseña:</b> <code style='font-size:15px; background:#E2E8F0; padding:2px 6px; border-radius:4px;'>{pwd_nueva}</code></p>"
+            f"</div>"
+            f"<p><b>Servicios incluidos en tu matrícula mensual:</b></p>"
+            f"<ul><li>Acceso inmediato a la plataforma de entrenamiento práctico.</li>"
+            f"<li>Resolución de dudas sobre preguntas, supuestos y epígrafes en <b>info@oposiciona.es</b>.</li>"
+            f"<li>Envío de actualizaciones normativas comentadas.</li>"
+            f"<li>Clase online mensual en directo para resolución de dudas.</li></ul>"
+            f"</div>"
+        )
+
+    st.session_state.update(
+        autenticado=True,
+        rol=info_plan["rol"],
+        email=email_cliente,
+        es_admin=False,
+        es_suscriptor_externo=True,
+        plan_suscripcion=plan_id,
+        stripe_customer_id=cust_id,
+        session_token_externo=token_sesion,
+        saved_esp=info_plan["especialidad"],
+        do_scroll=True
+    )
+    return True, email_cliente
+
+def verificar_sesion_unica_suscriptor():
+    if not st.session_state.get("autenticado") or not st.session_state.get("es_suscriptor_externo"):
+        return
+    em = (st.session_state.get("email") or "").lower().strip()
+    tok_local = st.session_state.get("session_token_externo", "")
+    if not em or not tok_local:
+        return
+    datos_gs = buscar_suscriptor_externo(em)
+    if not datos_gs:
+        return
+    if str(datos_gs.get("ESTADO", "")).upper() != "ACTIVO":
+        st.session_state.clear()
+        st.session_state.borrar_backup_ls = True
+        st.error("⚠️ Tu suscripción no figura como activa. Inicia sesión o renueva tu plan para continuar.")
+        st.stop()
+    tok_remoto = str(datos_gs.get("SESSION_TOKEN", "")).strip()
+    if tok_remoto and tok_remoto != tok_local:
+        st.session_state.clear()
+        st.session_state.borrar_backup_ls = True
+        st.warning("🔒 Se ha iniciado sesión con tu cuenta en otro dispositivo o navegador. Por seguridad, cada suscripción admite una única sesión simultánea.")
+        st.stop()
+
+verificar_sesion_unica_suscriptor()
+# === FIN SECCIÓN 1B ===
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
 NUEVOS_HOY = [
@@ -5248,7 +5698,8 @@ def activar_proteccion_antirecortes_alumno():
 
 def obtener_tests_segun_rol():
     catalogo_base = globals().get("TESTS_DISPONIBLES_COMPLETO") or globals().get("TESTS_DISPONIBLES") or globals().get("ESTS_DISPONIBLES") or {}
-    if st.session_state.get('rol') == 'INVITADO':
+    rol_act = st.session_state.get('rol')
+    if rol_act == 'INVITADO':
         inv_res = {
             "ADMINISTRATIVOS": {},
             "GESTION": {},
@@ -5263,13 +5714,17 @@ def obtener_tests_segun_rol():
         return inv_res
 
     resultado = {"ADMINISTRATIVOS": {}, "GESTION": {}}
+    cats_permitidas_gestion = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]
+    if rol_act == "GESTION_SOLO_TEST":
+        cats_permitidas_gestion = ["ESPECIFICO", "EXAMENES", "GENERAL"]
+    elif rol_act == "GESTION_TEST_SUPUESTOS":
+        cats_permitidas_gestion = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]
+    elif rol_act == "GESTION_TEST_DESARROLLO":
+        cats_permitidas_gestion = ["ESPECIFICO", "EXAMENES", "GENERAL", "DESARROLLO"]
 
     for esp in ["ADMINISTRATIVOS", "GESTION"]:
         origen_esp = catalogo_base.get(esp, {})
-        if esp == "GESTION":
-            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS", "DESARROLLO"]
-        else:
-            orden_categorias = ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]
+        orden_categorias = cats_permitidas_gestion if esp == "GESTION" else ["ESPECIFICO", "EXAMENES", "GENERAL", "SUPUESTOS"]
 
         for cat in orden_categorias:
             if cat in origen_esp:
@@ -7528,15 +7983,23 @@ if not st.session_state.questions:
             st.session_state.mostrar_opciones_simulacro = False
             limpiar_todas_las_busquedas()
 
+
+    ROLES_GESTION_TODOS = ["GESTION", "GESTION_SOLO_TEST", "GESTION_TEST_SUPUESTOS", "GESTION_TEST_DESARROLLO"]
+
         if rol in ["ACCESO TOTAL", "INVITADO"]:
             l_esp = list(TESTS_DISPONIBLES.keys())
             i_esp = l_esp.index(st.session_state.saved_esp) if st.session_state.get("saved_esp") in l_esp else 0
             especialidad = st.radio("Selecciona tu especialidad:", l_esp, index=i_esp, horizontal=True, key="radio_especialidad", label_visibility="collapsed", on_change=_on_cambio_especialidad)
             st.session_state.saved_esp = especialidad
-        elif rol in ["ADMTVOS", "GESTION"]:
+        elif rol == "ADMTVOS" or rol in ROLES_GESTION_TODOS:
             especialidad = "ADMINISTRATIVOS" if rol == "ADMTVOS" else "GESTION"
             st.session_state.saved_esp = especialidad
-            st.info(f"Tienes acceso directo a tu especialidad: **{especialidad}**")
+            etiqueta_plan_act = especialidad
+            if st.session_state.get("es_suscriptor_externo"):
+                p_id = st.session_state.get("plan_suscripcion", "")
+                if p_id in PLANES_SUSCRIPCION_OPOSICIONA:
+                    etiqueta_plan_act = PLANES_SUSCRIPCION_OPOSICIONA[p_id]["nombre_corto"]
+            st.info(f"Especialidad activa: **{etiqueta_plan_act}**")
         else:
             st.error("Error en los permisos de usuario."); st.stop()
 
@@ -7607,6 +8070,26 @@ if not st.session_state.questions:
                         )
 
         categoria = st.session_state.saved_cat
+
+    # Barra de gestión de suscripción y aviso de tutoría mensual (solo para suscriptores externos de pago)
+    if st.session_state.get("es_suscriptor_externo"):
+        cfg_sub_ui = _cfg_suscripciones()
+        c_sub1, c_sub2 = st.columns([2.3, 1.4])
+        with c_sub1:
+            if cfg_sub_ui["modo_fiscal"] == "EXENTO_TUTORIZADO":
+                st.markdown(
+                    "<div style='background:#F0FDF4; border:1px solid #86EFAC; border-radius:8px; padding:8px 12px; font-size:12.5px; color:#14532D !important;'>"
+                    "📅 <b>Tutoría incluida:</b> Dudas por correo en <b>info@oposiciona.es</b>, boletín normativo y clase mensual en directo (domingos)."
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+        with c_sub2:
+            if st.button("💳 Gestionar / Cambiar plan", key="btn_portal_stripe_alumno", use_container_width=True):
+                url_portal = crear_enlace_portal_cliente_stripe(st.session_state.get("stripe_customer_id", ""))
+                if url_portal:
+                    st.link_button("🔗 Abrir mi portal de facturación Stripe", url_portal, use_container_width=True, type="primary")
+                else:
+                    st.warning("No se pudo abrir el portal en este momento. Escríbenos a info@oposiciona.es.")
 
     st.markdown("<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:5px; margin-top:6px;'>3. Modo de avance</div>", unsafe_allow_html=True)
     op_av = [
@@ -7754,9 +8237,8 @@ if not st.session_state.questions:
                         ex = generar_simulacro_aleatorio(especialidad, amb, total_deseadas, TESTS_DISPONIBLES)
                         if ex: procesar_preguntas(ex)
                         else: st.error("No se pudo extraer ninguna pregunta.")
-
-    if rol != "INVITADO":
-        with st.expander("Opcional: Subir un PDF o Word (.docx) manualmente desde tu dispositivo"):
+                        
+if rol != "INVITADO" and not st.session_state.get("es_suscriptor_externo"):
             uf = st.file_uploader("", type=["pdf", "docx"])
             if uf is not None:
                 limpiar_estados_reportes_error()
