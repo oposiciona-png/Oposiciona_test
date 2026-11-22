@@ -572,7 +572,7 @@ with col2:
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4 !important;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
-# === SECCIÓN 1B: MOTOR DE SUSCRIPCIONES, STRIPE, CORREOS Y SESIÓN ÚNICA ===
+# === SECCIÓN 1B: MOTOR ULTRARRÁPIDO DE SUSCRIPCIONES, STRIPE, CORREOS Y SESIÓN ÚNICA ===
 import hashlib, secrets
 
 PLANES_SUSCRIPCION_OPOSICIONA = {
@@ -623,7 +623,6 @@ PLANES_SUSCRIPCION_OPOSICIONA = {
     }
 }
 
-# Regla estricta de mejora ascendente: cada plan solo puede subir a planes de precio estrictamente superior
 MEJORAS_PERMITIDAS_POR_PLAN = {
     "ADM_COMPLETO": ["GES_SOLO_TEST", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"],
     "GES_SOLO_TEST": ["GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"],
@@ -728,47 +727,107 @@ def _validar_password_elegida(pwd1, pwd2):
         return False, "Las dos contraseñas no coinciden."
     return True, ""
 
-def _llamar_apps_script_suscriptores(payload_extra):
-    cfg = _cfg_suscripciones()
-    if not cfg["gs_url"] or not cfg["gs_token"]:
+# --- CACHÉ DE SERVIDOR EN RAM (Stale-While-Revalidate) PARA LOGIN EN < 0.1 SEGUNDOS ---
+@st.cache_resource
+def _almacen_ram_suscriptores():
+    return {"mapa": {}, "ts": 0.0, "cargando": False, "lock": threading.Lock()}
+
+def _llamar_gs_directo(gs_url, gs_token, payload_extra):
+    if not gs_url or not gs_token:
         return {"ok": False, "error": "Falta configurar Secrets de Apps Script."}
-    payload = {"token": cfg["gs_token"]}
+    payload = {"token": gs_token}
     payload.update(payload_extra)
     try:
-        r = requests.post(cfg["gs_url"], json=payload, timeout=15)
+        r = requests.post(gs_url, json=payload, timeout=15)
         if r.status_code == 200:
             return r.json()
         return {"ok": False, "error": f"HTTP {r.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-@st.cache_data(ttl=60, show_spinner=False)
-def obtener_suscriptores_cacheados():
-    res = _llamar_apps_script_suscriptores({"action": "listar_suscriptores"})
-    if res.get("ok"):
-        mapa = {}
-        for item in res.get("suscriptores", []):
-            em = str(item.get("EMAIL", "")).lower().strip()
-            if em:
-                mapa[em] = item
-        return mapa
-    return {}
+def _llamar_apps_script_suscriptores(payload_extra):
+    cfg = _cfg_suscripciones()
+    return _llamar_gs_directo(cfg["gs_url"], cfg["gs_token"], payload_extra)
 
-def buscar_suscriptor_externo(email):
+def _refrescar_ram_suscriptores_sync(gs_url, gs_token):
+    alm = _almacen_ram_suscriptores()
+    try:
+        res = _llamar_gs_directo(gs_url, gs_token, {"action": "listar_suscriptores"})
+        if res.get("ok"):
+            nuevo_mapa = {}
+            for item in res.get("suscriptores", []):
+                em = str(item.get("EMAIL", "")).lower().strip()
+                if em:
+                    nuevo_mapa[em] = dict(item)
+            with alm["lock"]:
+                alm["mapa"] = nuevo_mapa
+                alm["ts"] = time.time()
+    finally:
+        alm["cargando"] = False
+
+def obtener_suscriptores_cacheados(forzar_remoto=False):
+    cfg = _cfg_suscripciones()
+    alm = _almacen_ram_suscriptores()
+    ahora = time.time()
+
+    if forzar_remoto or alm["ts"] == 0.0:
+        _refrescar_ram_suscriptores_sync(cfg["gs_url"], cfg["gs_token"])
+    elif (ahora - alm["ts"]) > 35.0 and not alm["cargando"]:
+        alm["cargando"] = True
+        threading.Thread(
+            target=_refrescar_ram_suscriptores_sync,
+            args=(cfg["gs_url"], cfg["gs_token"]),
+            daemon=True
+        ).start()
+    return alm["mapa"]
+
+def precargar_suscriptores_en_segundo_plano():
+    cfg = _cfg_suscripciones()
+    alm = _almacen_ram_suscriptores()
+    if alm["ts"] == 0.0 and not alm["cargando"] and cfg["gs_url"] and cfg["gs_token"]:
+        alm["cargando"] = True
+        threading.Thread(
+            target=_refrescar_ram_suscriptores_sync,
+            args=(cfg["gs_url"], cfg["gs_token"]),
+            daemon=True
+        ).start()
+
+def buscar_suscriptor_externo(email, forzar_remoto=False):
     em = (email or "").lower().strip()
     if not em:
         return None
-    mapa = obtener_suscriptores_cacheados()
-    return mapa.get(em)
+    mapa = obtener_suscriptores_cacheados(forzar_remoto=forzar_remoto)
+    if em in mapa:
+        return mapa[em]
+    if not forzar_remoto:
+        mapa2 = obtener_suscriptores_cacheados(forzar_remoto=True)
+        return mapa2.get(em)
+    return None
 
-def guardar_datos_suscriptor(email, campos_dict):
-    res = _llamar_apps_script_suscriptores({
-        "action": "guardar_suscriptor",
-        "email": (email or "").lower().strip(),
-        "campos": campos_dict
-    })
-    obtener_suscriptores_cacheados.clear()
-    return res
+def guardar_datos_suscriptor(email, campos_dict, sincrono=True):
+    em = (email or "").lower().strip()
+    cfg = _cfg_suscripciones()
+    alm = _almacen_ram_suscriptores()
+
+    # Actualización inmediata en memoria RAM del servidor (0 ms de espera)
+    with alm["lock"]:
+        ficha_mem = dict(alm["mapa"].get(em, {"EMAIL": em}))
+        for k_c, v_c in campos_dict.items():
+            ficha_mem[str(k_c).upper()] = str(v_c)
+        alm["mapa"][em] = ficha_mem
+        if alm["ts"] == 0.0:
+            alm["ts"] = time.time()
+
+    payload_g = {"action": "guardar_suscriptor", "email": em, "campos": campos_dict}
+    if sincrono:
+        return _llamar_gs_directo(cfg["gs_url"], cfg["gs_token"], payload_g)
+    else:
+        threading.Thread(
+            target=_llamar_gs_directo,
+            args=(cfg["gs_url"], cfg["gs_token"], payload_g),
+            daemon=True
+        ).start()
+        return {"ok": True}
 
 def cambiar_password_suscriptor_autenticado(email, pwd_actual, pwd_nueva_1, pwd_nueva_2):
     em = (email or "").lower().strip()
@@ -780,7 +839,7 @@ def cambiar_password_suscriptor_autenticado(email, pwd_actual, pwd_nueva_1, pwd_
     ok_val, msg_val = _validar_password_elegida(pwd_nueva_1, pwd_nueva_2)
     if not ok_val:
         return False, msg_val
-    res = guardar_datos_suscriptor(em, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_nueva_1.strip())})
+    res = guardar_datos_suscriptor(em, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_nueva_1.strip())}, sincrono=True)
     if res.get("ok"):
         return True, "✅ Tu contraseña se ha actualizado correctamente."
     return False, f"No se pudo guardar la nueva contraseña: {res.get('error', 'Error desconocido')}"
@@ -795,9 +854,7 @@ def enviar_email_suscriptor(destinatario, asunto, html_body):
         "reply_to": "info@oposiciona.es"
     })
 
-def _stripe_api_request(method, endpoint, data=None, params=None):
-    cfg = _cfg_suscripciones()
-    sk = cfg["stripe_key"]
+def _stripe_api_directo(sk, method, endpoint, data=None, params=None):
     if not sk:
         return {"error": {"message": "Falta STRIPE_SECRET_KEY en Secrets."}}
     url = f"https://api.stripe.com/v1/{endpoint.lstrip('/')}"
@@ -811,13 +868,17 @@ def _stripe_api_request(method, endpoint, data=None, params=None):
     except Exception as e:
         return {"error": {"message": str(e)}}
 
+def _stripe_api_request(method, endpoint, data=None, params=None):
+    cfg = _cfg_suscripciones()
+    return _stripe_api_directo(cfg["stripe_key"], method, endpoint, data=data, params=params)
+
 def _norm_nombre_stripe(txt):
     s = unicodedata.normalize("NFD", str(txt or ""))
     s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
     s = re.sub(r"[—–\-]+", "-", s.lower())
     return re.sub(r"\s+", " ", s).strip()
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=1800, show_spinner=False)
 def _obtener_catalogo_stripe_planes():
     res = _stripe_api_request("GET", "prices", params={"active": "true", "limit": "100", "expand[]": "data.product"})
     mapa_prices = {}
@@ -842,12 +903,6 @@ def _obtener_mapa_precios_stripe():
     return mapa_prices
 
 def _obtener_config_portal_solo_subida(plan_actual_id):
-    """
-    Crea o reutiliza una configuración del Portal de Stripe específica para el plan actual del alumno:
-    - Incluye privacy_policy_url, terms_of_service_url y headline corto (obligatorios en la API de Stripe).
-    - Solo muestra planes de importe estrictamente superior (nunca iguales ni inferiores).
-    - Cobra al instante la parte proporcional (always_invoice), sin devoluciones ni saldos negativos.
-    """
     _, mapa_plan_a_prod_price, _ = _obtener_catalogo_stripe_planes()
     if not mapa_plan_a_prod_price:
         return "", "No se encontraron los productos activos en Stripe."
@@ -868,9 +923,8 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
             cache_mem[etiqueta_cfg] = c.get("id")
             return c.get("id"), ""
 
-    # IMPORTANTE: Stripe exige headline <= 60 caracteres + privacy_policy_url + terms_of_service_url cuando subscription_update=true
     payload_conf = {
-        "business_profile[headline]": "Oposiciona — Suscripcion y mejora de plan",
+        "business_profile[headline]": "Oposiciona — Suscripcion y facturacion",
         "business_profile[privacy_policy_url]": "https://oposiciona.es/",
         "business_profile[terms_of_service_url]": "https://oposiciona.es/",
         "features[invoice_history][enabled]": "true",
@@ -919,6 +973,88 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
 
     err_det = (nueva_conf.get("error") or {}).get("message", "Error al configurar el portal en Stripe.")
     return "", err_det
+
+def obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id=""):
+    if subscription_id:
+        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
+        if sub.get("status") in ("active", "trialing"):
+            return sub
+    if customer_id:
+        subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
+        for s in subs.get("data", []):
+            if s.get("status") in ("active", "trialing"):
+                return s
+    return None
+
+def calcular_importe_prorrateo_mejora(customer_id, subscription_id, nuevo_plan_id):
+    """Calcula en tiempo real por API de Stripe cuánto pagará hoy exactamente el alumno por los días restantes del mes al mejorar de plan."""
+    mapa_prices = _obtener_mapa_precios_stripe()
+    nuevo_price_id = mapa_prices.get(nuevo_plan_id)
+    if not nuevo_price_id or not customer_id:
+        return None
+    sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
+    if not sub_obj:
+        return None
+    sub_id_real = sub_obj.get("id", "")
+    items = ((sub_obj.get("items") or {}).get("data")) or []
+    if not items or not sub_id_real:
+        return None
+    item_id = items[0].get("id", "")
+
+    params_prev = {
+        "customer": customer_id,
+        "subscription": sub_id_real,
+        "subscription_items[0][id]": item_id,
+        "subscription_items[0][price]": nuevo_price_id,
+        "subscription_proration_behavior": "always_invoice"
+    }
+    inv = _stripe_api_request("GET", "invoices/upcoming", params=params_prev)
+    if inv.get("amount_due") is not None:
+        return max(0.0, round(float(inv["amount_due"]) / 100.0, 2))
+    return None
+
+def ejecutar_mejora_plan_directa_stripe(email_usuario, customer_id, subscription_id, plan_actual_id, nuevo_plan_id):
+    """Ejecuta la mejora de plan directamente desde Oposiciona (sin salir al diseño blanco de Stripe), cobrando la parte proporcional al instante."""
+    permitidos = MEJORAS_PERMITIDAS_POR_PLAN.get(plan_actual_id, [])
+    if nuevo_plan_id not in permitidos:
+        return False, "Solo se permite mejorar a una modalidad de nivel superior."
+
+    mapa_prices = _obtener_mapa_precios_stripe()
+    nuevo_price_id = mapa_prices.get(nuevo_plan_id)
+    if not nuevo_price_id:
+        return False, "No se encontró el precio del nuevo plan en Stripe."
+
+    sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
+    if not sub_obj:
+        return False, "No se encontró una suscripción activa en Stripe."
+
+    sub_id_real = sub_obj.get("id", "")
+    items = ((sub_obj.get("items") or {}).get("data")) or []
+    if not items:
+        return False, "No se pudo leer el detalle de tu suscripción actual."
+    item_id = items[0].get("id", "")
+
+    payload_upd = {
+        "items[0][id]": item_id,
+        "items[0][price]": nuevo_price_id,
+        "proration_behavior": "always_invoice",
+        "payment_behavior": "error_if_incomplete",
+        "cancel_at_period_end": "false",
+        "metadata[plan_id]": nuevo_plan_id
+    }
+    res_upd = _stripe_api_request("POST", f"subscriptions/{sub_id_real}", data=payload_upd)
+    if res_upd.get("id") and res_upd.get("status") in ("active", "trialing"):
+        info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_id]
+        guardar_datos_suscriptor(email_usuario, {
+            "PLAN": nuevo_plan_id,
+            "ROL": info_np["rol"],
+            "ESTADO": "ACTIVO",
+            "STRIPE_SUBSCRIPTION_ID": sub_id_real
+        }, sincrono=False)
+        return True, info_np["nombre_corto"]
+
+    err_msg = (res_upd.get("error") or {}).get("message", "No se pudo procesar el cargo proporcional en tu tarjeta. Revisa tu método de pago.")
+    return False, err_msg
 
 def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
     cod_limpio = (codigo_texto or "").strip()
@@ -1071,68 +1207,61 @@ def _detectar_plan_desde_suscripcion_stripe(sub_obj):
     return (sub_obj.get("metadata") or {}).get("plan_id", "")
 
 def obtener_suscripcion_activa_detalle_stripe(customer_id, subscription_id=""):
-    """Devuelve (activa_bool, plan_id_detectado, sub_id_activo, cancel_at_period_end_bool)."""
-    if subscription_id:
-        sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
-        if sub.get("status") in ("active", "trialing"):
-            return True, _detectar_plan_desde_suscripcion_stripe(sub), sub.get("id", ""), bool(sub.get("cancel_at_period_end"))
-    if customer_id:
-        subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
-        for s in subs.get("data", []):
-            if s.get("status") in ("active", "trialing"):
-                return True, _detectar_plan_desde_suscripcion_stripe(s), s.get("id", ""), bool(s.get("cancel_at_period_end"))
+    sub_obj = obtener_suscripcion_activa_completa_stripe(customer_id, subscription_id)
+    if sub_obj:
+        return True, _detectar_plan_desde_suscripcion_stripe(sub_obj), sub_obj.get("id", ""), bool(sub_obj.get("cancel_at_period_end"))
     return False, "", "", False
 
 def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
     act, plan_det, _, _ = obtener_suscripcion_activa_detalle_stripe(customer_id, subscription_id)
     return act, plan_det
 
-def crear_enlace_portal_stripe_detallado(customer_id, modo="facturacion"):
-    """
-    Genera el enlace al Portal de Stripe:
-    - modo='mejorar': abre DIRECTAMENTE la pantalla de selección de planes superiores (nunca inferiores ni iguales) y redirige a la web tras confirmar.
-    - modo='facturacion': abre el portal con facturas, métodos de pago y botón de cancelar suscripción.
-    Devuelve (url, mensaje_error).
-    """
+def _sincronizar_stripe_post_login_bg(email_limpio, cust_id, sub_id, sk, gs_url, gs_token):
+    """Verifica silenciosamente en segundo plano tras un login ultrarrápido si la suscripción cambió o caducó en Stripe."""
+    try:
+        if not sk or (not cust_id and not sub_id):
+            return
+        sub_activa = None
+        if sub_id:
+            s = _stripe_api_directo(sk, "GET", f"subscriptions/{sub_id}")
+            if s.get("status") in ("active", "trialing"):
+                sub_activa = s
+        if not sub_activa and cust_id:
+            subs = _stripe_api_directo(sk, "GET", "subscriptions", params={"customer": cust_id, "limit": "5"})
+            for s in subs.get("data", []):
+                if s.get("status") in ("active", "trialing"):
+                    sub_activa = s
+                    break
+        alm = _almacen_ram_suscriptores()
+        if not sub_activa:
+            with alm["lock"]:
+                if email_limpio in alm["mapa"]:
+                    alm["mapa"][email_limpio]["ESTADO"] = "INACTIVO"
+            _llamar_gs_directo(gs_url, gs_token, {"action": "guardar_suscriptor", "email": email_limpio, "campos": {"ESTADO": "INACTIVO"}})
+    except Exception:
+        pass
+
+def crear_enlace_portal_stripe_detallado(customer_id, plan_vigente_hint=""):
+    """Genera el enlace al Portal de Stripe para facturas, método de pago y cancelación."""
     cfg = _cfg_suscripciones()
     if not customer_id:
         return None, "No se encontró el identificador de cliente en Stripe."
 
-    act_st, plan_vigente, sub_id_activo, cancel_programada = obtener_suscripcion_activa_detalle_stripe(customer_id)
-    if not plan_vigente:
-        plan_vigente = st.session_state.get("plan_suscripcion", "GES_COMPLETO")
-
+    plan_vigente = plan_vigente_hint or st.session_state.get("plan_suscripcion", "GES_COMPLETO")
     conf_auto_id, err_conf = _obtener_config_portal_solo_subida(plan_vigente)
     if not conf_auto_id:
-        return None, f"No se pudo preparar la configuración de mejora en Stripe: {err_conf}"
+        return None, f"No se pudo preparar el portal de Stripe: {err_conf}"
 
-    url_retorno = f"{cfg['app_url']}/?sync_plan=1"
     datos_portal = {
         "customer": customer_id,
         "configuration": conf_auto_id,
-        "return_url": url_retorno
+        "return_url": f"{cfg['app_url']}/?sync_plan=1"
     }
-
-    # Si pulsa MEJORAR MI PLAN y tiene planes superiores disponibles (sin cancelación pendiente), salta directo a elegir el plan superior
-    if modo == "mejorar" and sub_id_activo and MEJORAS_PERMITIDAS_POR_PLAN.get(plan_vigente) and not cancel_programada:
-        datos_directo = dict(datos_portal)
-        datos_directo["flow_data[type]"] = "subscription_update"
-        datos_directo["flow_data[subscription_update][subscription]"] = sub_id_activo
-        datos_directo["flow_data[after_completion][type]"] = "redirect"
-        datos_directo["flow_data[after_completion][redirect][return_url]"] = url_retorno
-        resp_dir = _stripe_api_request("POST", "billing_portal/sessions", data=datos_directo)
-        if resp_dir.get("url"):
-            return resp_dir["url"], ""
-
     resp = _stripe_api_request("POST", "billing_portal/sessions", data=datos_portal)
     if resp.get("url"):
         return resp["url"], ""
     err_sess = (resp.get("error") or {}).get("message", "No se pudo abrir la sesión del portal en Stripe.")
     return None, err_sess
-
-def crear_enlace_portal_cliente_stripe(customer_id):
-    url_p, _ = crear_enlace_portal_stripe_detallado(customer_id, modo="mejorar")
-    return url_p
 
 def procesar_retorno_pago_stripe(session_id):
     sess = _stripe_api_request("GET", f"checkout/sessions/{session_id}")
@@ -1152,7 +1281,7 @@ def procesar_retorno_pago_stripe(session_id):
     if not email_cliente:
         return False, "No se pudo recuperar el correo electrónico de la sesión de pago."
 
-    existente = buscar_suscriptor_externo(email_cliente)
+    existente = buscar_suscriptor_externo(email_cliente, forzar_remoto=True)
     token_sesion = secrets.token_hex(16)
     ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
     st.session_state.pop("_checkout_cache_actual", None)
@@ -1170,7 +1299,7 @@ def procesar_retorno_pago_stripe(session_id):
         }
         if es_primer_alta or not existente.get("FECHA_ALTA"):
             campos_act["FECHA_ALTA"] = ahora_str
-        guardar_datos_suscriptor(email_cliente, campos_act)
+        guardar_datos_suscriptor(email_cliente, campos_act, sincrono=True)
 
         asunto_mail = "🎓 Bienvenido/a a Oposiciona — Suscripción activada" if es_primer_alta else f"✅ Suscripción reactivada — {info_plan['nombre_corto']}"
         enviar_email_suscriptor(
@@ -1203,7 +1332,7 @@ def procesar_retorno_pago_stripe(session_id):
             "FECHA_ALTA": ahora_str,
             "ULTIMO_ACCESO": ahora_str,
             "SESSION_TOKEN": token_sesion
-        })
+        }, sincrono=True)
         enviar_email_suscriptor(
             email_cliente,
             "🎓 Bienvenido/a a Oposiciona — Tus claves de acceso",
@@ -1225,6 +1354,7 @@ def procesar_retorno_pago_stripe(session_id):
         es_suscriptor_externo=True,
         plan_suscripcion=plan_id,
         stripe_customer_id=cust_id,
+        stripe_subscription_id=sub_id,
         session_token_externo=token_sesion,
         saved_esp=info_plan["especialidad"],
         do_scroll=True
@@ -1238,7 +1368,9 @@ def verificar_sesion_unica_suscriptor():
     tok_local = st.session_state.get("session_token_externo", "")
     if not em or not tok_local:
         return
-    datos_gs = buscar_suscriptor_externo(em)
+    # Lectura en 0 ms desde la caché en RAM (que se refresca sola en hilo de fondo cada 35 s)
+    mapa_ram = obtener_suscriptores_cacheados(forzar_remoto=False)
+    datos_gs = mapa_ram.get(em)
     if not datos_gs:
         return
     if str(datos_gs.get("ESTADO", "")).upper() != "ACTIVO":
@@ -1257,17 +1389,20 @@ verificar_sesion_unica_suscriptor()
 
 if st.session_state.get("autenticado") and st.session_state.get("es_suscriptor_externo") and st.query_params.get("sync_plan"):
     st.query_params.clear()
-    act_ok, nuevo_plan_st = verificar_suscripcion_activa_stripe(st.session_state.get("stripe_customer_id", ""))
+    act_ok, nuevo_plan_st = verificar_suscripcion_activa_stripe(st.session_state.get("stripe_customer_id", ""), st.session_state.get("stripe_subscription_id", ""))
     if act_ok and nuevo_plan_st in PLANES_SUSCRIPCION_OPOSICIONA:
         info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_st]
         if nuevo_plan_st != st.session_state.get("plan_suscripcion"):
             st.session_state["aviso_plan_mejorado_ok"] = info_np["nombre_corto"]
-        guardar_datos_suscriptor(st.session_state.get("email", ""), {"PLAN": nuevo_plan_st, "ROL": info_np["rol"], "ESTADO": "ACTIVO"})
+        guardar_datos_suscriptor(st.session_state.get("email", ""), {"PLAN": nuevo_plan_st, "ROL": info_np["rol"], "ESTADO": "ACTIVO"}, sincrono=False)
         st.session_state.update(rol=info_np["rol"], plan_suscripcion=nuevo_plan_st, saved_esp=info_np["especialidad"], saved_cat="ESPECIFICO")
         st.rerun()
 # === FIN SECCIÓN 1B ===
 
 if not st.session_state.autenticado:
+    # Precarga en segundo plano de la tabla de suscriptores nada más abrir la portada: así el botón Entrar responde al instante
+    precargar_suscriptores_en_segundo_plano()
+
     qp_stripe_sid = st.query_params.get("stripe_session_id", "")
     if qp_stripe_sid:
         with st.spinner("Activando tu suscripción y preparando tu acceso..."):
@@ -1306,18 +1441,19 @@ if not st.session_state.autenticado:
                     cust_rec = sub_ext_rec.get("STRIPE_CUSTOMER_ID", "")
                     sub_id_rec = sub_ext_rec.get("STRIPE_SUBSCRIPTION_ID", "")
                     plan_previo_gs = sub_ext_rec.get("PLAN", "GES_COMPLETO")
-                    plan_rec = plan_previo_gs
-                    rol_final_rec = sub_ext_rec.get("ROL", "GESTION")
-                    esp_rec = datos_rec.get("saved_esp", "GESTION")
+                    plan_rec = plan_previo_gs if plan_previo_gs in PLANES_SUSCRIPCION_OPOSICIONA else "GES_COMPLETO"
+                    rol_final_rec = PLANES_SUSCRIPCION_OPOSICIONA[plan_rec]["rol"]
+                    esp_rec = datos_rec.get("saved_esp") or PLANES_SUSCRIPCION_OPOSICIONA[plan_rec]["especialidad"]
 
-                    if cust_rec:
+                    # Solo llamamos a Stripe si viene regresando expresamente del Portal (?sync_plan=1)
+                    if qp_sync_retorno and cust_rec:
                         act_ok_r, nuevo_plan_r = verificar_suscripcion_activa_stripe(cust_rec, sub_id_rec)
                         if act_ok_r and nuevo_plan_r in PLANES_SUSCRIPCION_OPOSICIONA:
                             plan_rec = nuevo_plan_r
                             rol_final_rec = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_r]["rol"]
                             esp_rec = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_r]["especialidad"]
                             if plan_rec != plan_previo_gs:
-                                guardar_datos_suscriptor(correo_rec, {"PLAN": plan_rec, "ROL": rol_final_rec, "ESTADO": "ACTIVO"})
+                                guardar_datos_suscriptor(correo_rec, {"PLAN": plan_rec, "ROL": rol_final_rec, "ESTADO": "ACTIVO"}, sincrono=False)
                                 st.session_state["aviso_plan_mejorado_ok"] = PLANES_SUSCRIPCION_OPOSICIONA[plan_rec]["nombre_corto"]
 
                     st.session_state.rol = rol_final_rec
@@ -1325,6 +1461,7 @@ if not st.session_state.autenticado:
                     st.session_state.es_suscriptor_externo = True
                     st.session_state.plan_suscripcion = plan_rec
                     st.session_state.stripe_customer_id = cust_rec
+                    st.session_state.stripe_subscription_id = sub_id_rec
                     st.session_state.session_token_externo = sub_ext_rec.get("SESSION_TOKEN", "")
                     st.session_state.saved_esp = esp_rec
                     st.session_state.saved_cat = "ESPECIFICO" if qp_sync_retorno else datos_rec.get("saved_cat", "ESPECIFICO")
@@ -1417,24 +1554,34 @@ if not st.session_state.autenticado:
                 st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, es_suscriptor_externo=False, do_scroll=True)
                 st.rerun()
             else:
-                sub_ext = buscar_suscriptor_externo(correo_limpio)
+                # LOGIN ULTRARRÁPIDO (< 0.1 s): lectura desde memoria RAM y actualización en segundo plano si figura ACTIVO
+                sub_ext = buscar_suscriptor_externo(correo_limpio, forzar_remoto=False)
                 if sub_ext and sub_ext.get("PASSWORD_HASH") == _hash_password_suscriptor(password_input):
-                    activo_stripe, plan_stripe = verificar_suscripcion_activa_stripe(
-                        sub_ext.get("STRIPE_CUSTOMER_ID", ""),
-                        sub_ext.get("STRIPE_SUBSCRIPTION_ID", "")
-                    )
-                    if activo_stripe:
-                        plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
+                    estado_gs = str(sub_ext.get("ESTADO", "")).upper().strip()
+                    cust_id_login = sub_ext.get("STRIPE_CUSTOMER_ID", "")
+                    sub_id_login = sub_ext.get("STRIPE_SUBSCRIPTION_ID", "")
+
+                    if estado_gs == "ACTIVO":
+                        plan_final = sub_ext.get("PLAN", "GES_COMPLETO")
+                        if plan_final not in PLANES_SUSCRIPCION_OPOSICIONA:
+                            plan_final = "GES_COMPLETO"
                         rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
                         nuevo_tok = secrets.token_hex(16)
                         ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
+
+                        # Escritura no bloqueante en segundo plano (0 ms de espera para el alumno)
                         guardar_datos_suscriptor(correo_limpio, {
-                            "PLAN": plan_final,
-                            "ROL": rol_final,
-                            "ESTADO": "ACTIVO",
                             "ULTIMO_ACCESO": ahora_str,
                             "SESSION_TOKEN": nuevo_tok
-                        })
+                        }, sincrono=False)
+
+                        cfg_bg = _cfg_suscripciones()
+                        threading.Thread(
+                            target=_sincronizar_stripe_post_login_bg,
+                            args=(correo_limpio, cust_id_login, sub_id_login, cfg_bg["stripe_key"], cfg_bg["gs_url"], cfg_bg["gs_token"]),
+                            daemon=True
+                        ).start()
+
                         st.session_state.update(
                             autenticado=True,
                             rol=rol_final,
@@ -1442,17 +1589,46 @@ if not st.session_state.autenticado:
                             es_admin=False,
                             es_suscriptor_externo=True,
                             plan_suscripcion=plan_final,
-                            stripe_customer_id=sub_ext.get("STRIPE_CUSTOMER_ID", ""),
+                            stripe_customer_id=cust_id_login,
+                            stripe_subscription_id=sub_id_login,
                             session_token_externo=nuevo_tok,
                             saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
                             do_scroll=True
                         )
                         st.rerun()
                     else:
-                        guardar_datos_suscriptor(correo_limpio, {"ESTADO": "INACTIVO"})
-                        st.session_state["email_verificado_ok"] = correo_limpio
-                        st.session_state["sub_reactivacion_login"] = correo_limpio
-                        st.session_state["sub_reactivacion_plan"] = sub_ext.get("PLAN", "GES_COMPLETO")
+                        # Solo si consta como INACTIVO/BAJA consultamos Stripe por si acaba de renovar
+                        activo_stripe, plan_stripe = verificar_suscripcion_activa_stripe(cust_id_login, sub_id_login)
+                        if activo_stripe:
+                            plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
+                            rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
+                            nuevo_tok = secrets.token_hex(16)
+                            ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
+                            guardar_datos_suscriptor(correo_limpio, {
+                                "PLAN": plan_final,
+                                "ROL": rol_final,
+                                "ESTADO": "ACTIVO",
+                                "ULTIMO_ACCESO": ahora_str,
+                                "SESSION_TOKEN": nuevo_tok
+                            }, sincrono=False)
+                            st.session_state.update(
+                                autenticado=True,
+                                rol=rol_final,
+                                email=correo_limpio,
+                                es_admin=False,
+                                es_suscriptor_externo=True,
+                                plan_suscripcion=plan_final,
+                                stripe_customer_id=cust_id_login,
+                                stripe_subscription_id=sub_id_login,
+                                session_token_externo=nuevo_tok,
+                                saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
+                                do_scroll=True
+                            )
+                            st.rerun()
+                        else:
+                            st.session_state["email_verificado_ok"] = correo_limpio
+                            st.session_state["sub_reactivacion_login"] = correo_limpio
+                            st.session_state["sub_reactivacion_plan"] = sub_ext.get("PLAN", "GES_COMPLETO")
                 else:
                     st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
 
@@ -1554,10 +1730,7 @@ if not st.session_state.autenticado:
         ya_tenia_cuenta_activa_previa = bool(
             ficha_existente and ficha_existente.get("PASSWORD_HASH") and str(ficha_existente.get("ESTADO", "")).upper() != "PENDIENTE_PAGO"
         )
-        ya_activo_ahora = False
-        if ya_tenia_cuenta_activa_previa and str(ficha_existente.get("ESTADO", "")).upper() == "ACTIVO":
-            act_st, _ = verificar_suscripcion_activa_stripe(ficha_existente.get("STRIPE_CUSTOMER_ID", ""), ficha_existente.get("STRIPE_SUBSCRIPTION_ID", ""))
-            ya_activo_ahora = act_st
+        ya_activo_ahora = bool(ya_tenia_cuenta_activa_previa and str(ficha_existente.get("ESTADO", "")).upper() == "ACTIVO")
 
         ya_verificado = bool(
             em_1_limpio and em_1_limpio == em_2_limpio and (
@@ -1641,7 +1814,7 @@ if not st.session_state.autenticado:
                             "PLAN": plan_elegido,
                             "ROL": info_p_pre["rol"],
                             "ESTADO": "PENDIENTE_PAGO"
-                        })
+                        }, sincrono=True)
                         if res_g.get("ok"):
                             st.session_state["pwd_registro_guardada_email"] = em_1_limpio
                             st.rerun()
@@ -1734,7 +1907,7 @@ if not st.session_state.autenticado:
                 if not ok_np:
                     st.error(f"⚠️ {msg_np}")
                 else:
-                    guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(nueva_pw_1.strip())})
+                    guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(nueva_pw_1.strip())}, sincrono=True)
                     st.session_state["rec_email_verificado"] = ""
                     st.session_state["rec_email_pendiente"] = ""
                     st.success("✅ ¡Contraseña actualizada con éxito! Ya puedes entrar en la pestaña «🔑 Iniciar sesión».")
