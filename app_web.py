@@ -26,8 +26,20 @@ _BACKUP_SECRET_BYTES = b"Oposiciona_5.0_Blindaje_Privado_2026_SS#Key"
 def _obtener_almacen_sesiones_servidor():
     return {}
 
+@st.cache_resource
+def _obtener_registro_sesion_unica_global():
+    """Almacén central en RAM compartido por todas las conexiones del servidor: {email: {'token': str, 'ts': float}}"""
+    return {"sesiones": {}, "lock": threading.Lock()}
+
 def _cifrar_backup_sesion(datos_dict):
-    raw = zlib.compress(json.dumps(datos_dict, ensure_ascii=False).encode("utf-8"), level=9)
+    # Inyectamos automáticamente el sello de sesión única actual para que sobreviva a recargas legítimas (F5) del mismo dispositivo,
+    # pero caduque al instante si otro dispositivo inicia sesión después.
+    if isinstance(datos_dict, dict) and st.session_state.get("session_token_unico"):
+        datos_copia = dict(datos_dict)
+        datos_copia["session_token_unico"] = st.session_state["session_token_unico"]
+    else:
+        datos_copia = datos_dict
+    raw = zlib.compress(json.dumps(datos_copia, ensure_ascii=False).encode("utf-8"), level=9)
     klen = len(_BACKUP_SECRET_BYTES)
     xored = bytes(b ^ _BACKUP_SECRET_BYTES[i % klen] for i, b in enumerate(raw))
     return "v4_" + base64.urlsafe_b64encode(xored).decode("ascii")
@@ -85,9 +97,65 @@ for k, v in [
     ('test_esp', ""), ('test_cat', ""), ('borrar_backup_ls', False),
     ('gemini_api_key_session', GEMINI_API_KEY_DEFAULT),
     ('vista_portada_auth', 'login'),
+    ('session_token_unico', ''),
     ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
 ]:
     if k not in st.session_state: st.session_state[k] = v
+
+def _es_cuenta_exenta_sesion_unica(email_usr, rol_usr="", es_admin_flag=False):
+    em = (email_usr or "").lower().strip()
+    if es_admin_flag or em in USUARIOS_ADMIN:
+        return True
+    if rol_usr == "INVITADO" or em in USUARIOS_AUTORIZADOS.get("INVITADO", []):
+        return True
+    return False
+
+def registrar_nueva_sesion_unica(email_usr, token_forzado=""):
+    """Registra una nueva entrada válida y anula automáticamente cualquier sesión anterior abierta con ese mismo correo."""
+    import secrets as _sec_mod
+    em = (email_usr or "").lower().strip()
+    nuevo_tok = token_forzado or _sec_mod.token_hex(16)
+    if not em:
+        return nuevo_tok
+    reg = _obtener_registro_sesion_unica_global()
+    with reg["lock"]:
+        reg["sesiones"][em] = {"token": nuevo_tok, "ts": time.time()}
+    # Limpiamos también cualquier sid4_ antiguo almacenado en servidor para ese mismo correo con distinto token
+    try:
+        almacen_sid = _obtener_almacen_sesiones_servidor()
+        claves_borrar = [
+            k_sid for k_sid, val_sid in list(almacen_sid.items())
+            if isinstance(val_sid, dict)
+            and str(val_sid.get("email", "")).lower().strip() == em
+            and val_sid.get("session_token_unico") not in ("", None, nuevo_tok)
+        ]
+        for kb in claves_borrar:
+            almacen_sid.pop(kb, None)
+    except Exception:
+        pass
+    return nuevo_tok
+
+def obtener_token_vigente_usuario(email_usr, es_suscriptor_ext=False):
+    em = (email_usr or "").lower().strip()
+    if not em:
+        return ""
+    reg = _obtener_registro_sesion_unica_global()
+    with reg["lock"]:
+        info_mem = reg["sesiones"].get(em)
+    if info_mem and info_mem.get("token"):
+        return str(info_mem["token"]).strip()
+    if es_suscriptor_ext:
+        datos_gs = obtener_suscriptores_cacheados(forzar_remoto=False).get(em)
+        if datos_gs:
+            return str(datos_gs.get("SESSION_TOKEN", "")).strip()
+    return ""
+
+# Endpoint ligero interno (?check_alive_email=...&check_alive_tok=...) para que el navegador detecte expulsiones incluso sin tocar botones
+if st.query_params.get("expulsado_sesion") == "1":
+    st.query_params.clear()
+    st.session_state.clear()
+    st.session_state["aviso_sesion_cerrada_otro_disp"] = True
+    st.session_state["borrar_backup_ls"] = True
 
 _es_sesion_admin = bool(
     st.session_state.get("autenticado", False) and (
@@ -216,7 +284,6 @@ div.stButton > button:hover, button[kind="secondary"]:hover {
 }
 
 /* === BOTONES PASTEL DE NAVEGACIÓN EN LA PANTALLA INICIAL === */
-/* 1. Botón Iniciar sesión: Azul cielo pastel */
 div[data-testid="stVerticalBlock"]:has(.opo-nav-login) div.stButton > button {
     background-color: #E0F2FE !important;
     border: 1.5px solid #93C5FD !important;
@@ -246,7 +313,6 @@ div[data-testid="stVerticalBlock"]:has(.opo-nav-login-active) div.stButton > but
     font-weight: 800 !important;
 }
 
-/* 2. Botón Suscribirme (Planes): Verde menta pastel */
 div[data-testid="stVerticalBlock"]:has(.opo-nav-planes) div.stButton > button {
     background-color: #DCFCE7 !important;
     border: 1.5px solid #86EFAC !important;
@@ -276,7 +342,6 @@ div[data-testid="stVerticalBlock"]:has(.opo-nav-planes-active) div.stButton > bu
     font-weight: 800 !important;
 }
 
-/* 3. Botón Recuperar / Cambiar contraseña: Melocotón / crema pastel */
 div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar) div.stButton > button {
     background-color: #FEF3C7 !important;
     border: 1.5px solid #FCD34D !important;
@@ -665,7 +730,7 @@ with col2:
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4 !important;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
 
-# === SECCIÓN 1B: MOTOR ULTRARRÁPIDO DE SUSCRIPCIONES, STRIPE, CORREOS Y SESIÓN ÚNICA ===
+# === SECCIÓN 1B: MOTOR ULTRARRÁPIDO DE SUSCRIPCIONES, STRIPE, CORREOS Y SESIÓN ÚNICA GLOBAL ===
 import hashlib, secrets
 
 PLANES_SUSCRIPCION_OPOSICIONA = {
@@ -844,6 +909,7 @@ def _llamar_apps_script_suscriptores(payload_extra):
 
 def _refrescar_ram_suscriptores_sync(gs_url, gs_token):
     alm = _almacen_ram_suscriptores()
+    reg_global = _obtener_registro_sesion_unica_global()
     try:
         res = _llamar_gs_directo(gs_url, gs_token, {"action": "listar_suscriptores"})
         if res.get("ok"):
@@ -852,6 +918,12 @@ def _refrescar_ram_suscriptores_sync(gs_url, gs_token):
                 em = str(item.get("EMAIL", "")).lower().strip()
                 if em:
                     nuevo_mapa[em] = dict(item)
+                    tok_gs = str(item.get("SESSION_TOKEN", "")).strip()
+                    if tok_gs:
+                        with reg_global["lock"]:
+                            # Si en esta instancia aún no había token o el de Sheets cambió desde otra réplica, sincronizamos
+                            if em not in reg_global["sesiones"]:
+                                reg_global["sesiones"][em] = {"token": tok_gs, "ts": time.time()}
             with alm["lock"]:
                 alm["mapa"] = nuevo_mapa
                 alm["ts"] = time.time()
@@ -1333,7 +1405,7 @@ def procesar_retorno_pago_stripe(session_id):
         return False, "No se pudo recuperar el correo electrónico de la sesión de pago."
 
     existente = buscar_suscriptor_externo(email_cliente, forzar_remoto=True)
-    token_sesion = secrets.token_hex(16)
+    token_sesion = registrar_nueva_sesion_unica(email_cliente)
     ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
     st.session_state.pop("_checkout_cache_actual", None)
 
@@ -1416,35 +1488,95 @@ def procesar_retorno_pago_stripe(session_id):
         stripe_customer_id=cust_id,
         stripe_subscription_id=sub_id,
         session_token_externo=token_sesion,
+        session_token_unico=token_sesion,
         saved_esp=info_plan["especialidad"],
         do_scroll=True
     )
     return True, email_cliente
 
-def verificar_sesion_unica_suscriptor():
-    if not st.session_state.get("autenticado") or not st.session_state.get("es_suscriptor_externo"):
+def _cerrar_sesion_por_expulsion(motivo_baja=False):
+    st.session_state.clear()
+    components.html("""<script>
+    try {
+        ["oposiciona_test_backup_v1", "oposiciona_auth_backup_v1", "oposiciona_sid_v1", "oposiciona_sid_v3", "oposiciona_sid_v4", "oposiciona_live_draft_txt"].forEach(function(k) {
+            window.parent.localStorage.removeItem(k);
+            window.parent.sessionStorage.removeItem(k);
+        });
+    } catch(e) {}
+    </script>""", height=0)
+    if motivo_baja:
+        st.error("⚠️ Tu suscripción no figura actualmente como activa. Inicia sesión o renueva tu modalidad para continuar.")
+    else:
+        st.warning("🔒 **Sesión cerrada automáticamente:** Se ha iniciado una nueva sesión con tu cuenta en otro dispositivo o navegador. Por protección de credenciales, solo permanece abierta la última sesión iniciada.")
+        if st.button("🔑 Volver a la pantalla de acceso", type="primary", use_container_width=True):
+            st.rerun()
+    st.stop()
+
+def verificar_sesion_unica_global():
+    """
+    Protección global contra uso compartido de claves (tanto alumnos internos como suscriptores externos):
+    - Si entra una nueva conexión con el mismo correo, se le permite el paso y esta sesión anterior queda invalidada al instante.
+    - Excluye únicamente a Administradores e Invitado de demostración.
+    """
+    if not st.session_state.get("autenticado"):
         return
     em = (st.session_state.get("email") or "").lower().strip()
-    tok_local = st.session_state.get("session_token_externo", "")
-    if not em or not tok_local:
+    rol_act = st.session_state.get("rol") or ""
+    es_adm = bool(st.session_state.get("es_admin", False))
+    if _es_cuenta_exenta_sesion_unica(em, rol_act, es_adm):
         return
-    mapa_ram = obtener_suscriptores_cacheados(forzar_remoto=False)
-    datos_gs = mapa_ram.get(em)
-    if not datos_gs:
-        return
-    if str(datos_gs.get("ESTADO", "")).upper() != "ACTIVO":
-        st.session_state.clear()
-        st.session_state.borrar_backup_ls = True
-        st.error("⚠️ Tu suscripción no figura como activa. Inicia sesión o renueva tu plan para continuar.")
-        st.stop()
-    tok_remoto = str(datos_gs.get("SESSION_TOKEN", "")).strip()
-    if tok_remoto and tok_remoto != tok_local:
-        st.session_state.clear()
-        st.session_state.borrar_backup_ls = True
-        st.warning("🔒 Se ha iniciado sesión con tu cuenta en otro dispositivo o navegador. Por seguridad, cada suscripción admite una única sesión simultánea.")
-        st.stop()
 
-verificar_sesion_unica_suscriptor()
+    es_ext = bool(st.session_state.get("es_suscriptor_externo", False))
+
+    # 1. Si es suscriptor externo, verificamos también que siga ACTIVO en caché RAM
+    if es_ext:
+        datos_gs = obtener_suscriptores_cacheados(forzar_remoto=False).get(em)
+        if datos_gs and str(datos_gs.get("ESTADO", "")).upper() != "ACTIVO":
+            _cerrar_sesion_por_expulsion(motivo_baja=True)
+
+    # 2. Comprobación en 0 ms del token único de sesión activa en memoria compartida del servidor
+    tok_local = st.session_state.get("session_token_unico") or st.session_state.get("session_token_externo") or ""
+    if not tok_local:
+        tok_local = registrar_nueva_sesion_unica(em)
+        st.session_state["session_token_unico"] = tok_local
+        return
+
+    tok_servidor = obtener_token_vigente_usuario(em, es_suscriptor_ext=es_ext)
+    if not tok_servidor:
+        # Si el servidor se acaba de reiniciar en caliente y aún no tenía registro en RAM, adoptamos el token actual
+        registrar_nueva_sesion_unica(em, token_forzado=tok_local)
+        return
+
+    if tok_servidor != tok_local:
+        _cerrar_sesion_por_expulsion(motivo_baja=False)
+
+    # 3. Vigilante silencioso cada 25 s: aunque el dispositivo antiguo no toque ningún botón, verifica vigencia y cierra si entró otro
+    try:
+        @st.fragment(run_every=25)
+        def _vigilante_silencioso_sesion_unica():
+            em_f = (st.session_state.get("email") or "").lower().strip()
+            tok_f = st.session_state.get("session_token_unico") or st.session_state.get("session_token_externo") or ""
+            es_ext_f = bool(st.session_state.get("es_suscriptor_externo", False))
+            if not em_f or not tok_f:
+                return
+            tok_vig = obtener_token_vigente_usuario(em_f, es_suscriptor_ext=es_ext_f)
+            if tok_vig and tok_vig != tok_f:
+                components.html("""<script>
+                try {
+                    ["oposiciona_test_backup_v1", "oposiciona_auth_backup_v1", "oposiciona_sid_v1", "oposiciona_sid_v3", "oposiciona_sid_v4", "oposiciona_live_draft_txt"].forEach(function(k) {
+                        window.parent.localStorage.removeItem(k);
+                        window.parent.sessionStorage.removeItem(k);
+                    });
+                    var u = new URL(window.parent.location.href);
+                    u.search = "?expulsado_sesion=1";
+                    window.parent.location.replace(u.toString());
+                } catch(e) {}
+                </script>""", height=0)
+        _vigilante_silencioso_sesion_unica()
+    except Exception:
+        pass
+
+verificar_sesion_unica_global()
 
 if st.session_state.get("autenticado") and st.session_state.get("es_suscriptor_externo") and st.query_params.get("sync_plan"):
     st.query_params.clear()
@@ -1460,6 +1592,10 @@ if st.session_state.get("autenticado") and st.session_state.get("es_suscriptor_e
 
 if not st.session_state.autenticado:
     precargar_suscriptores_en_segundo_plano()
+
+    if st.session_state.get("aviso_sesion_cerrada_otro_disp"):
+        st.session_state.pop("aviso_sesion_cerrada_otro_disp", None)
+        st.warning("🔒 **Sesión anterior cerrada:** Se ha iniciado sesión con tu usuario en otro dispositivo o ventana. Solo permanece activa la última sesión abierta.")
 
     qp_stripe_sid = st.query_params.get("stripe_session_id", "")
     if qp_stripe_sid:
@@ -1488,12 +1624,30 @@ if not st.session_state.autenticado:
             correo_rec = (datos_rec.get("email") or "").lower().strip()
             rol_rec = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_rec in lc), None)
             sub_ext_rec = None if rol_rec else buscar_suscriptor_externo(correo_rec)
-            if rol_rec or (sub_ext_rec and str(sub_ext_rec.get("ESTADO", "")).upper() == "ACTIVO"):
+            es_adm_rec = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
+            tok_backup = str(datos_rec.get("session_token_unico") or datos_rec.get("session_token_externo") or "").strip()
+
+            # Verificamos antes de restaurar que ningún otro dispositivo haya iniciado sesión mientras esta pestaña estaba colgada
+            es_exento_rec = _es_cuenta_exenta_sesion_unica(correo_rec, rol_rec or "", es_adm_rec)
+            tok_vigente_srv = "" if es_exento_rec else obtener_token_vigente_usuario(correo_rec, es_suscriptor_ext=bool(sub_ext_rec))
+            sesion_reemplazada = bool(not es_exento_rec and tok_vigente_srv and (not tok_backup or tok_backup != tok_vigente_srv))
+
+            if sesion_reemplazada:
+                st.query_params.clear()
+                st.session_state["borrar_backup_ls"] = True
+                st.session_state["aviso_sesion_cerrada_otro_disp"] = True
+                st.rerun()
+            elif rol_rec or (sub_ext_rec and str(sub_ext_rec.get("ESTADO", "")).upper() == "ACTIVO"):
+                tok_restaurado = tok_backup or ("" if es_exento_rec else registrar_nueva_sesion_unica(correo_rec))
+                if tok_restaurado and not es_exento_rec and not tok_vigente_srv:
+                    registrar_nueva_sesion_unica(correo_rec, token_forzado=tok_restaurado)
+
                 st.session_state.autenticado = True
                 st.session_state.email = correo_rec
+                st.session_state.session_token_unico = tok_restaurado
                 if rol_rec:
                     st.session_state.rol = "ACCESO TOTAL" if correo_rec in USUARIOS_ADMIN else rol_rec
-                    st.session_state.es_admin = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
+                    st.session_state.es_admin = es_adm_rec
                     st.session_state.saved_esp = datos_rec.get("saved_esp", "ADMINISTRATIVOS")
                     st.session_state.saved_cat = datos_rec.get("saved_cat", "ESPECIFICO")
                 else:
@@ -1520,7 +1674,7 @@ if not st.session_state.autenticado:
                     st.session_state.plan_suscripcion = plan_rec
                     st.session_state.stripe_customer_id = cust_rec
                     st.session_state.stripe_subscription_id = sub_id_rec
-                    st.session_state.session_token_externo = sub_ext_rec.get("SESSION_TOKEN", "")
+                    st.session_state.session_token_externo = tok_restaurado
                     st.session_state.saved_esp = esp_rec
                     st.session_state.saved_cat = "ESPECIFICO" if qp_sync_retorno else datos_rec.get("saved_cat", "ESPECIFICO")
 
@@ -1564,7 +1718,7 @@ if not st.session_state.autenticado:
             var draftTxt = ss.getItem("oposiciona_live_draft_txt") || ls.getItem("oposiciona_live_draft_txt") || "";
 
             var tokenToRestore = savedSid || savedAuth;
-            if (tokenToRestore && window.parent.location.search.indexOf("restore_session=") === -1) {
+            if (tokenToRestore && window.parent.location.search.indexOf("restore_session=") === -1 && window.parent.location.search.indexOf("expulsado_sesion=") === -1) {
                 var url = new URL(window.parent.location.href);
                 url.searchParams.set("restore_session", tokenToRestore);
                 if (draftTxt && draftTxt.length < 1500) {
@@ -1626,16 +1780,25 @@ if not st.session_state.autenticado:
             rol_usuario = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_limpio in lc), None)
             if correo_limpio in USUARIOS_ADMIN:
                 if password_input == PASSWORD_ADMIN:
-                    st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, es_suscriptor_externo=False, do_scroll=True)
+                    st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, es_suscriptor_externo=False, session_token_unico="", do_scroll=True)
                     st.rerun()
                 else:
                     st.error("❌ Contraseña de administrador incorrecta.")
             elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
-                st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, es_suscriptor_externo=False, do_scroll=True)
+                st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, es_suscriptor_externo=False, session_token_unico="", do_scroll=True)
                 st.rerun()
             elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
                 es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
-                st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, es_suscriptor_externo=False, do_scroll=True)
+                tok_interno = "" if es_adm else registrar_nueva_sesion_unica(correo_limpio)
+                st.session_state.update(
+                    autenticado=True,
+                    rol=rol_usuario,
+                    email=correo_limpio,
+                    es_admin=es_adm,
+                    es_suscriptor_externo=False,
+                    session_token_unico=tok_interno,
+                    do_scroll=True
+                )
                 st.rerun()
             else:
                 sub_ext = buscar_suscriptor_externo(correo_limpio, forzar_remoto=False)
@@ -1649,7 +1812,7 @@ if not st.session_state.autenticado:
                         if plan_final not in PLANES_SUSCRIPCION_OPOSICIONA:
                             plan_final = "GES_COMPLETO"
                         rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
-                        nuevo_tok = secrets.token_hex(16)
+                        nuevo_tok = registrar_nueva_sesion_unica(correo_limpio)
                         ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
 
                         guardar_datos_suscriptor(correo_limpio, {
@@ -1674,6 +1837,7 @@ if not st.session_state.autenticado:
                             stripe_customer_id=cust_id_login,
                             stripe_subscription_id=sub_id_login,
                             session_token_externo=nuevo_tok,
+                            session_token_unico=nuevo_tok,
                             saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
                             do_scroll=True
                         )
@@ -1683,7 +1847,7 @@ if not st.session_state.autenticado:
                         if activo_stripe:
                             plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
                             rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
-                            nuevo_tok = secrets.token_hex(16)
+                            nuevo_tok = registrar_nueva_sesion_unica(correo_limpio)
                             ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
                             guardar_datos_suscriptor(correo_limpio, {
                                 "PLAN": plan_final,
@@ -1702,6 +1866,7 @@ if not st.session_state.autenticado:
                                 stripe_customer_id=cust_id_login,
                                 stripe_subscription_id=sub_id_login,
                                 session_token_externo=nuevo_tok,
+                                session_token_unico=nuevo_tok,
                                 saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
                                 do_scroll=True
                             )
