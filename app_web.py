@@ -234,6 +234,27 @@ div[data-testid="stDownloadButton"] > button:hover {
     background-color: #FDE68A !important;
     border-color: #B45309 !important;
 }
+div[data-testid="stVerticalBlock"]:has(.opo-promo-trigger) div.stButton > button {
+    background: linear-gradient(90deg, #7C3AED 0%, #6D28D9 100%) !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    border: 2px solid #5B21B6 !important;
+    border-radius: 8px !important;
+    min-height: 44px !important;
+    box-shadow: 0 3px 8px rgba(109, 40, 217, 0.25) !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-promo-trigger) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-promo-trigger) div.stButton > button span,
+div[data-testid="stVerticalBlock"]:has(.opo-promo-trigger) div.stButton > button * {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    font-weight: 800 !important;
+    font-size: 15px !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-promo-trigger) div.stButton > button:hover {
+    background: linear-gradient(90deg, #6D28D9 0%, #5B21B6 100%) !important;
+    border-color: #4C1D95 !important;
+}
 div.stButton > button[kind="primary"], button[kind="primary"],
 div[data-testid="stLinkButton"] > a,
 div.stLinkButton > a,
@@ -793,7 +814,88 @@ def _obtener_mapa_precios_stripe():
                 mapa_prices[plan_id] = p.get("id")
     return mapa_prices
 
-def crear_sesion_pago_stripe(email_usuario, plan_id):
+def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
+    """Busca en Stripe si el código promocional existe y está activo (sin importar mayúsculas/minúsculas)."""
+    cod_limpio = (codigo_texto or "").strip()
+    if not cod_limpio:
+        return False, None, "Introduce un código promocional."
+    res = _stripe_api_request("GET", "promotion_codes", params={"active": "true", "limit": "100"})
+    for pc in res.get("data", []):
+        if str(pc.get("code", "")).strip().lower() == cod_limpio.lower():
+            cupon = pc.get("coupon") or {}
+            if isinstance(cupon, dict) and cupon.get("valid", True):
+                pct = cupon.get("percent_off")
+                amt = cupon.get("amount_off")
+                dur = cupon.get("duration", "")
+                meses = cupon.get("duration_in_months")
+                txt_dur = (
+                    "en tu primer mes" if dur == "once" else
+                    (f"durante {meses} meses" if dur == "repeating" and meses else "todos los meses")
+                )
+                if pct:
+                    nuevo_p = round(precio_plan_eur * (1.0 - float(pct) / 100.0), 2)
+                    resumen = f"🎁 Código **{pc.get('code')}** aplicado: **-{pct:g}% de descuento** {txt_dur} (se queda en **{nuevo_p:.2f} €**)."
+                elif amt:
+                    rebaja_eur = float(amt) / 100.0
+                    nuevo_p = max(0.0, round(precio_plan_eur - rebaja_eur, 2))
+                    resumen = f"🎁 Código **{pc.get('code')}** aplicado: **-{rebaja_eur:.2f} € de descuento** {txt_dur} (se queda en **{nuevo_p:.2f} €**)."
+                else:
+                    resumen = f"🎁 Código **{pc.get('code')}** aplicado correctamente."
+                return True, pc.get("id"), resumen
+    return False, None, "El código introducido no es válido o ha caducado."
+
+def render_selector_codigo_promocional(plan_id, sufijo_key="planes"):
+    """Muestra un botón morado muy llamativo en la propia app para introducir el código promocional y pre-aplicarlo en Stripe."""
+    precio_base = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id, {}).get("precio_eur", 0)
+    promo_id_activo = st.session_state.get("promo_code_id_aplicado", "")
+    promo_resumen = st.session_state.get("promo_code_resumen_txt", "")
+
+    if promo_id_activo:
+        col_pr1, col_pr2 = st.columns([3.2, 1])
+        with col_pr1:
+            st.success(promo_resumen)
+        with col_pr2:
+            if st.button("✖ Quitar código", key=f"btn_quitar_promo_{sufijo_key}", use_container_width=True):
+                st.session_state["promo_code_id_aplicado"] = ""
+                st.session_state["promo_code_resumen_txt"] = ""
+                st.session_state.pop("_checkout_cache_actual", None)
+                st.rerun()
+        return promo_id_activo
+
+    k_mostrar = f"mostrar_caja_promo_{sufijo_key}"
+    if not st.session_state.get(k_mostrar, False):
+        with st.container():
+            st.markdown("<div class='opo-promo-trigger'></div>", unsafe_allow_html=True)
+            if st.button("🎁 ¿TIENES UN CÓDIGO DE PROMOCIÓN O DESCUENTO? PULSA AQUÍ PARA APLICARLO", use_container_width=True, key=f"btn_abrir_promo_{sufijo_key}"):
+                st.session_state[k_mostrar] = True
+                st.rerun()
+    else:
+        st.markdown(
+            "<div style='background:#F5F3FF; border:2px solid #7C3AED; border-radius:10px; padding:10px 14px; margin-bottom:6px;'>"
+            "<b style='color:#5B21B6 !important; font-size:14.5px;'>🎁 Introduce tu código promocional (se aplicará directamente en tu pago):</b>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+        cp1, cp2, cp3 = st.columns([2.2, 1.1, 0.8])
+        with cp1:
+            cod_in = st.text_input("Código promocional:", placeholder="Ej: PROMOINICIAL", label_visibility="collapsed", key=f"in_txt_promo_{sufijo_key}")
+        with cp2:
+            if st.button("✔️ Aplicar descuento", type="primary", use_container_width=True, key=f"btn_aplicar_promo_{sufijo_key}"):
+                ok_pr, pid_stripe, msg_pr = validar_codigo_promocional_stripe(cod_in, precio_base)
+                if ok_pr:
+                    st.session_state["promo_code_id_aplicado"] = pid_stripe
+                    st.session_state["promo_code_resumen_txt"] = msg_pr
+                    st.session_state.pop("_checkout_cache_actual", None)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg_pr}")
+        with cp3:
+            if st.button("Cerrar", use_container_width=True, key=f"btn_cerrar_promo_{sufijo_key}"):
+                st.session_state[k_mostrar] = False
+                st.rerun()
+    return ""
+
+def crear_sesion_pago_stripe(email_usuario, plan_id, promo_code_id=""):
     cfg = _cfg_suscripciones()
     em_clean = email_usuario.lower().strip()
     info_plan = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id)
@@ -809,7 +911,6 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
 
     payload_checkout = {
         "mode": "subscription",
-        "allow_promotion_codes": "true",
         "line_items[0][price]": price_id,
         "line_items[0][quantity]": "1",
         "success_url": f"{cfg['app_url']}/?stripe_session_id={{CHECKOUT_SESSION_ID}}",
@@ -819,6 +920,12 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
         "subscription_data[metadata][plan_id]": plan_id,
         "subscription_data[metadata][email_alumno]": em_clean
     }
+    # Regla de la API de Stripe: si ya enviamos un código promocional pre-aplicado usamos discounts[0], si no, activamos allow_promotion_codes
+    if promo_code_id:
+        payload_checkout["discounts[0][promotion_code]"] = promo_code_id
+    else:
+        payload_checkout["allow_promotion_codes"] = "true"
+
     if cust_previo.startswith("cus_"):
         payload_checkout["customer"] = cust_previo
     else:
@@ -837,12 +944,12 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     err_msg = (resp.get("error") or {}).get("message", "Error desconocido al conectar con Stripe.")
     return None, err_msg
 
-def obtener_url_checkout_sesion_actual(email_usuario, plan_id):
-    clave_cache = f"{email_usuario.lower().strip()}|{plan_id}"
+def obtener_url_checkout_sesion_actual(email_usuario, plan_id, promo_code_id=""):
+    clave_cache = f"{email_usuario.lower().strip()}|{plan_id}|{promo_code_id}"
     guardado = st.session_state.get("_checkout_cache_actual")
     if guardado and guardado.get("key") == clave_cache and (time.time() - guardado.get("ts", 0)) < 1200:
         return guardado.get("url"), None
-    url_chk, err_chk = crear_sesion_pago_stripe(email_usuario, plan_id)
+    url_chk, err_chk = crear_sesion_pago_stripe(email_usuario, plan_id, promo_code_id=promo_code_id)
     if url_chk:
         st.session_state["_checkout_cache_actual"] = {"key": clave_cache, "url": url_chk, "ts": time.time()}
     return url_chk, err_chk
@@ -1179,7 +1286,8 @@ if not st.session_state.autenticado:
             render_bloque_aviso_calendario_pdf(sufijo_key="react_login")
             acepta_react = st.checkbox("✅ ACEPTAR: He revisado la información anterior y deseo continuar con la suscripción.", key="chk_aceptar_cal_react")
             if acepta_react:
-                url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react)
+                promo_react_id = render_selector_codigo_promocional(plan_sel_react, sufijo_key="react_login")
+                url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react, promo_code_id=promo_react_id)
                 if url_r_chk:
                     st.link_button("💳 Reactivar mi suscripción ahora (acceso inmediato)", url_r_chk, use_container_width=True, type="primary")
                 elif err_r_chk:
@@ -1233,6 +1341,7 @@ if not st.session_state.autenticado:
             )
             if st.button(f"{etiqueta_btn} — {p_info['titulo_nivel']}", key=f"btn_sel_plan_{pid}", use_container_width=True, type=tipo_btn):
                 st.session_state["plan_seleccionado_tarjeta"] = pid
+                st.session_state.pop("_checkout_cache_actual", None)
                 st.rerun()
 
         plan_elegido = st.session_state["plan_seleccionado_tarjeta"]
@@ -1367,8 +1476,9 @@ if not st.session_state.autenticado:
                         st.rerun()
                 else:
                     st.success("✅ Condiciones de calendario de temas aceptadas.")
+                    promo_id_sel = render_selector_codigo_promocional(plan_elegido, sufijo_key="planes")
                     with st.spinner("Preparando pasarela de pago segura..."):
-                        url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido)
+                        url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido, promo_code_id=promo_id_sel)
                     if url_checkout:
                         st.link_button(
                             "💳 Continuar al pago seguro y activar acceso inmediato",
