@@ -84,6 +84,7 @@ for k, v in [
     ('test_start_ts', None), ('fecha_inicio_str', ""), ('hora_inicio_str', ""),
     ('test_esp', ""), ('test_cat', ""), ('borrar_backup_ls', False),
     ('gemini_api_key_session', GEMINI_API_KEY_DEFAULT),
+    ('vista_portada_auth', 'login'),
     ('modo_avance', "**Modo reflexivo** (puedes comprobar la pregunta y el paso a la siguiente es manual pulsando siguiente)")
 ]:
     if k not in st.session_state: st.session_state[k] = v
@@ -213,6 +214,98 @@ div.stButton > button:hover, button[kind="secondary"]:hover {
     border-color: #94A3B8 !important;
     color: #000000 !important;
 }
+
+/* === BOTONES PASTEL DE NAVEGACIÓN EN LA PANTALLA INICIAL === */
+/* 1. Botón Iniciar sesión: Azul cielo pastel */
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login) div.stButton > button {
+    background-color: #E0F2FE !important;
+    border: 1.5px solid #93C5FD !important;
+    border-radius: 10px !important;
+    min-height: 48px !important;
+    padding: 8px 10px !important;
+    transition: all 0.18s ease !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login) div.stButton > button span {
+    color: #0C4A6E !important;
+    -webkit-text-fill-color: #0C4A6E !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login) div.stButton > button:hover {
+    background-color: #BAE6FD !important;
+    border-color: #60A5FA !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login-active) div.stButton > button {
+    background-color: #BAE6FD !important;
+    border: 2.5px solid #0284C7 !important;
+    box-shadow: 0 3px 10px rgba(2, 132, 199, 0.18) !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login-active) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-nav-login-active) div.stButton > button span {
+    font-weight: 800 !important;
+}
+
+/* 2. Botón Suscribirme (Planes): Verde menta pastel */
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes) div.stButton > button {
+    background-color: #DCFCE7 !important;
+    border: 1.5px solid #86EFAC !important;
+    border-radius: 10px !important;
+    min-height: 48px !important;
+    padding: 8px 10px !important;
+    transition: all 0.18s ease !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes) div.stButton > button span {
+    color: #14532D !important;
+    -webkit-text-fill-color: #14532D !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes) div.stButton > button:hover {
+    background-color: #BBF7D0 !important;
+    border-color: #4ADE80 !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes-active) div.stButton > button {
+    background-color: #BBF7D0 !important;
+    border: 2.5px solid #16A34A !important;
+    box-shadow: 0 3px 10px rgba(22, 163, 74, 0.18) !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes-active) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-nav-planes-active) div.stButton > button span {
+    font-weight: 800 !important;
+}
+
+/* 3. Botón Recuperar / Cambiar contraseña: Melocotón / crema pastel */
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar) div.stButton > button {
+    background-color: #FEF3C7 !important;
+    border: 1.5px solid #FCD34D !important;
+    border-radius: 10px !important;
+    min-height: 48px !important;
+    padding: 8px 10px !important;
+    transition: all 0.18s ease !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar) div.stButton > button span {
+    color: #78350F !important;
+    -webkit-text-fill-color: #78350F !important;
+    font-weight: 700 !important;
+    font-size: 13.5px !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar) div.stButton > button:hover {
+    background-color: #FDE68A !important;
+    border-color: #F59E0B !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar-active) div.stButton > button {
+    background-color: #FDE68A !important;
+    border: 2.5px solid #D97706 !important;
+    box-shadow: 0 3px 10px rgba(217, 119, 6, 0.18) !important;
+}
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar-active) div.stButton > button p,
+div[data-testid="stVerticalBlock"]:has(.opo-nav-recuperar-active) div.stButton > button span {
+    font-weight: 800 !important;
+}
+
 div[data-testid="stDownloadButton"] > button {
     background-color: #FEF3C7 !important;
     color: #78350F !important;
@@ -902,11 +995,6 @@ def _obtener_mapa_precios_stripe():
     return mapa_prices
 
 def _obtener_config_portal_solo_subida(plan_actual_id):
-    """
-    Configuración del Portal de Stripe:
-    - Solo muestra planes de importe estrictamente superior (nunca iguales ni inferiores).
-    - No permite añadir códigos de descuento nuevos al mejorar de plan (solo se permite 1 vez en el alta inicial).
-    """
     _, mapa_plan_a_prod_price, _ = _obtener_catalogo_stripe_planes()
     if not mapa_plan_a_prod_price:
         return "", "No se encontraron los productos activos en Stripe."
@@ -979,7 +1067,6 @@ def _obtener_config_portal_solo_subida(plan_actual_id):
     return "", err_det
 
 def usuario_ya_consumio_descuento_previo(email_usuario):
-    """Comprueba si este usuario ya tuvo una suscripción previa o aplicó antes un código de descuento (máximo 1 vez por usuario)."""
     em = (email_usuario or "").lower().strip()
     if not em:
         return False
@@ -989,7 +1076,6 @@ def usuario_ya_consumio_descuento_previo(email_usuario):
     notas_txt = str(ficha.get("NOTAS", "")).upper()
     if "PROMO_USADA" in notas_txt:
         return True
-    # Si ya tuvo un STRIPE_SUBSCRIPTION_ID previo registrado (es reactivación, no primer alta), tampoco admite otro descuento
     if str(ficha.get("STRIPE_SUBSCRIPTION_ID", "")).strip().startswith("sub_"):
         return True
     return False
@@ -1027,7 +1113,6 @@ def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0, email_usu
     return False, None, "El código introducido no es válido o ha caducado."
 
 def render_selector_codigo_promocional(plan_id, sufijo_key="planes", email_usuario=""):
-    # Si ya consumió descuento o tuvo suscripción previa, mostramos directamente el aviso informativo sin permitir otro código
     if email_usuario and usuario_ya_consumio_descuento_previo(email_usuario):
         st.caption("ℹ️ *Recuerda: los códigos promocionales de bienvenida solo se aplican una única vez por usuario en el alta inicial.*")
         return ""
@@ -1391,6 +1476,7 @@ if not st.session_state.autenticado:
     if st.query_params.get("pago_cancelado"):
         st.query_params.clear()
         st.session_state.pop("_checkout_cache_actual", None)
+        st.session_state["vista_portada_auth"] = "planes"
         st.info("ℹ️ Has cancelado el proceso de pago. Puedes retomar tu suscripción cuando quieras.")
 
     qp_restore = st.query_params.get("restore_session", "")
@@ -1500,13 +1586,39 @@ if not st.session_state.autenticado:
         unsafe_allow_html=True
     )
 
-    tab_login, tab_planes, tab_recuperar = st.tabs([
-        "🔑 Iniciar sesión",
-        "🎓 Suscribirme (Planes)",
-        "🔄 Recuperar / Cambiar contraseña"
-    ])
+    # === BOTONERA SUPERIOR EN COLORES PASTEL SUAVES ===
+    vista_actual = st.session_state.get("vista_portada_auth", "login")
+    if vista_actual not in ("login", "planes", "recuperar"):
+        vista_actual = "login"
+        st.session_state["vista_portada_auth"] = "login"
 
-    with tab_login:
+    col_nav1, col_nav2, col_nav3 = st.columns([1, 1.15, 1.35])
+    with col_nav1:
+        with st.container():
+            cls_l = "opo-nav-login opo-nav-login-active" if vista_actual == "login" else "opo-nav-login"
+            st.markdown(f"<div class='{cls_l}' style='display:none;'></div>", unsafe_allow_html=True)
+            if st.button("🔑 Iniciar sesión", use_container_width=True, key="btn_nav_portada_login"):
+                st.session_state["vista_portada_auth"] = "login"
+                st.rerun()
+    with col_nav2:
+        with st.container():
+            cls_p = "opo-nav-planes opo-nav-planes-active" if vista_actual == "planes" else "opo-nav-planes"
+            st.markdown(f"<div class='{cls_p}' style='display:none;'></div>", unsafe_allow_html=True)
+            if st.button("🎓 Suscribirme (Planes)", use_container_width=True, key="btn_nav_portada_planes"):
+                st.session_state["vista_portada_auth"] = "planes"
+                st.rerun()
+    with col_nav3:
+        with st.container():
+            cls_r = "opo-nav-recuperar opo-nav-recuperar-active" if vista_actual == "recuperar" else "opo-nav-recuperar"
+            st.markdown(f"<div class='{cls_r}' style='display:none;'></div>", unsafe_allow_html=True)
+            if st.button("🔄 Recuperar / Cambiar contraseña", use_container_width=True, key="btn_nav_portada_rec"):
+                st.session_state["vista_portada_auth"] = "recuperar"
+                st.rerun()
+
+    st.markdown("<hr style='margin: 8px 0 16px 0; border: none; border-top: 1px solid #E2E8F0;'>", unsafe_allow_html=True)
+
+    # --- VISTA 1: INICIAR SESIÓN ---
+    if vista_actual == "login":
         email_input = st.text_input("Usuario o correo electrónico asociado", key="login_email_in")
         password_input = st.text_input("Contraseña de acceso", type="password", key="login_pwd_in")
         if st.button("Entrar a la plataforma", use_container_width=True, type="primary", key="btn_entrar_plat"):
@@ -1625,7 +1737,8 @@ if not st.session_state.autenticado:
                 elif err_r_chk:
                     st.error(f"❌ {err_r_chk}")
 
-    with tab_planes:
+    # --- VISTA 2: SUSCRIBIRME (PLANES) ---
+    elif vista_actual == "planes":
         st.markdown(
             "<div style='background:#EFF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px 14px; margin-bottom:14px;'>"
             "<b style='color:#1E3A8A !important; font-size:15px;'>🎓 Preparación Mensual Tutorizada Oposiciona</b><br>"
@@ -1708,7 +1821,7 @@ if not st.session_state.autenticado:
         )
 
         if ya_activo_ahora:
-            st.warning(f"⚠️ El correo **{em_1_limpio}** ya tiene una suscripción activa en vigor. Ve a la pestaña **«🔑 Iniciar sesión»** (o usa *Recuperar / Cambiar contraseña* si no la recuerdas) para no duplicar pagos.")
+            st.warning(f"⚠️ El correo **{em_1_limpio}** ya tiene una suscripción activa en vigor. Pulsa arriba en el botón azul **«🔑 Iniciar sesión»** (o usa *Recuperar / Cambiar contraseña* si no la recuerdas) para no duplicar pagos.")
         elif not ya_verificado:
             if st.button("📩 Enviar código de verificación a mi correo", use_container_width=True, type="primary", key="btn_enviar_cod_verif"):
                 if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio):
@@ -1754,7 +1867,7 @@ if not st.session_state.autenticado:
         else:
             pwd_lista_para_pago = False
             if ya_tenia_cuenta_activa_previa and st.session_state.get("pwd_registro_guardada_email") != em_1_limpio:
-                st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Seguirás entrando con tu contraseña habitual (o cámbiala en la pestaña *Recuperar / Cambiar contraseña*).")
+                st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Seguirás entrando con tu contraseña habitual (o cámbiala arriba en *Recuperar / Cambiar contraseña*).")
                 pwd_lista_para_pago = True
             elif st.session_state.get("pwd_registro_guardada_email") == em_1_limpio:
                 st.success(f"✅ Correo (**{em_1_limpio}**) y contraseña personal configurados correctamente.")
@@ -1818,7 +1931,8 @@ if not st.session_state.autenticado:
                     else:
                         st.error(f"❌ {err_chk}")
 
-    with tab_recuperar:
+    # --- VISTA 3: RECUPERAR / CAMBIAR CONTRASEÑA ---
+    else:
         st.markdown(
             "<p style='font-size:13.8px; color:#1E293B !important;'>Si has olvidado tu contraseña o deseas elegir una nueva, verifica tu correo con un código de seguridad y establece la contraseña que prefieras:</p>",
             unsafe_allow_html=True
@@ -1879,7 +1993,7 @@ if not st.session_state.autenticado:
                     guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(nueva_pw_1.strip())}, sincrono=True)
                     st.session_state["rec_email_verificado"] = ""
                     st.session_state["rec_email_pendiente"] = ""
-                    st.success("✅ ¡Contraseña actualizada con éxito! Ya puedes entrar en la pestaña «🔑 Iniciar sesión».")
+                    st.success("✅ ¡Contraseña actualizada con éxito! Pulsa arriba en el botón «🔑 Iniciar sesión» para entrar.")
     st.stop()
 # === FIN SECCIÓN 1 ===
 
