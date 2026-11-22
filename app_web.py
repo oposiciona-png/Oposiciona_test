@@ -8623,27 +8623,6 @@ if not st.session_state.questions:
         white-space: nowrap !important;
     }
 
-    /* Botón secundario para Facturación / Cancelar suscripción en 1 solo clic */
-    div[data-testid="stVerticalBlock"]:has(.opo-portal-sec) div[data-testid="stLinkButton"] > a,
-    div[data-testid="stVerticalBlock"]:has(.opo-portal-sec) div.stLinkButton > a {
-        background-color: #F1F5F9 !important;
-        color: #1E293B !important;
-        -webkit-text-fill-color: #1E293B !important;
-        border: 1px solid #94A3B8 !important;
-    }
-    div[data-testid="stVerticalBlock"]:has(.opo-portal-sec) div[data-testid="stLinkButton"] > a *,
-    div[data-testid="stVerticalBlock"]:has(.opo-portal-sec) div.stLinkButton > a * {
-        color: #1E293B !important;
-        -webkit-text-fill-color: #1E293B !important;
-        font-weight: 700 !important;
-        font-size: 14.5px !important;
-    }
-    div[data-testid="stVerticalBlock"]:has(.opo-portal-sec) div[data-testid="stLinkButton"] > a:hover,
-    div[data-testid="stVerticalBlock"]:has(.opo-portal-sec) div.stLinkButton > a:hover {
-        background-color: #E2E8F0 !important;
-        border-color: #64748B !important;
-    }
-
     [data-testid="stExpanderDetails"] div.stButton > button {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
@@ -8780,7 +8759,7 @@ if not st.session_state.questions:
 
         categoria = st.session_state.saved_cat
 
-    # Barra de mejora directa de plan (1 solo clic), gestión de facturación/baja y cambio de contraseña
+    # Botón único en 1 solo clic (MEJORA / FACTURACIÓN / CANCELACIÓN) + cambio de contraseña
     if st.session_state.get("es_suscriptor_externo"):
         cfg_sub_ui = _cfg_suscripciones()
         plan_act_ui = st.session_state.get("plan_suscripcion", "")
@@ -8795,40 +8774,20 @@ if not st.session_state.questions:
                 unsafe_allow_html=True
             )
 
-        def _obtener_link_portal_1clic(modo_p):
-            clave_p = f"_link_directo_portal_{modo_p}_{cust_id_ui}_{plan_act_ui}"
-            guardado_p = st.session_state.get(clave_p)
-            if guardado_p and guardado_p.get("url") and (time.time() - guardado_p.get("ts", 0)) < 1200:
-                return guardado_p["url"], ""
-            u_nueva, err_nueva = crear_enlace_portal_stripe_detallado(cust_id_ui, modo=modo_p)
-            if u_nueva:
-                st.session_state[clave_p] = {"url": u_nueva, "ts": time.time()}
-            return u_nueva, err_nueva
-
-        if tiene_mejoras_disp:
-            url_up_1c, err_up_1c = _obtener_link_portal_1clic("mejorar")
-            url_fac_1c, err_fac_1c = _obtener_link_portal_1clic("facturacion")
-            col_up1, col_up2 = st.columns(2)
-            with col_up1:
-                if url_up_1c:
-                    st.link_button("⬆️ MEJORAR MI PLAN", url_up_1c, use_container_width=True, type="primary")
-                elif err_up_1c:
-                    st.error(f"⚠️ {err_up_1c}")
-            with col_up2:
-                if url_fac_1c:
-                    with st.container():
-                        st.markdown("<div class='opo-portal-sec'></div>", unsafe_allow_html=True)
-                        st.link_button("💳 Facturas / Cancelar suscripción", url_fac_1c, use_container_width=True)
-                elif err_fac_1c:
-                    st.error(f"⚠️ {err_fac_1c}")
+        clave_p_unico = f"_link_directo_portal_unico_{cust_id_ui}_{plan_act_ui}"
+        guardado_p_unico = st.session_state.get(clave_p_unico)
+        if guardado_p_unico and guardado_p_unico.get("url") and (time.time() - guardado_p_unico.get("ts", 0)) < 1200:
+            url_portal_unico, err_portal_unico = guardado_p_unico["url"], ""
         else:
-            url_fac_max, err_fac_max = _obtener_link_portal_1clic("facturacion")
-            if url_fac_max:
-                with st.container():
-                    st.markdown("<div class='opo-portal-sec'></div>", unsafe_allow_html=True)
-                    st.link_button("💳 Mi suscripción / Facturas / Cancelar", url_fac_max, use_container_width=True)
-            elif err_fac_max:
-                st.error(f"⚠️ {err_fac_max}")
+            url_portal_unico, err_portal_unico = crear_enlace_portal_stripe_detallado(cust_id_ui, modo="facturacion")
+            if url_portal_unico:
+                st.session_state[clave_p_unico] = {"url": url_portal_unico, "ts": time.time()}
+
+        texto_boton_unico = "💳 MEJORA / FACTURACIÓN / CANCELACIÓN" if tiene_mejoras_disp else "💳 FACTURACIÓN / CANCELACIÓN"
+        if url_portal_unico:
+            st.link_button(texto_boton_unico, url_portal_unico, use_container_width=True, type="primary")
+        elif err_portal_unico:
+            st.error(f"⚠️ {err_portal_unico}")
 
         with st.expander("🔑 Cambiar mi contraseña de acceso"):
             cp_act, cp_n1, cp_n2 = st.columns(3)
