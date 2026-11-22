@@ -199,7 +199,8 @@ input::placeholder, textarea::placeholder {
     color: #1E293B !important;
     fill: #1E293B !important;
 }
-div.stButton > button, button[kind="secondary"] {
+div.stButton > button, button[kind="secondary"],
+div[data-testid="stLinkButton"] > a[kind="secondary"] {
     background-color: #F1F5F9 !important;
     color: #1E293B !important;
     border: 1px solid #CBD5E1 !important;
@@ -213,23 +214,34 @@ div.stButton > button:hover, button[kind="secondary"]:hover {
     color: #000000 !important;
 }
 div.stButton > button[kind="primary"], button[kind="primary"],
-div.stLinkButton > a[kind="primary"], a[data-testid="stBaseLinkButton-primary"] {
+div[data-testid="stLinkButton"] > a,
+div.stLinkButton > a,
+a[data-testid="stBaseLinkButton-primary"] {
     background-color: #1F77B4 !important;
     color: #FFFFFF !important;
-    border: 1px solid #1F77B4 !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    border: 1px solid #155A8A !important;
     text-decoration: none !important;
+    font-weight: 800 !important;
 }
 div.stButton > button[kind="primary"] p, div.stButton > button[kind="primary"] span,
 button[kind="primary"] p, button[kind="primary"] span,
-div.stLinkButton > a[kind="primary"] p, div.stLinkButton > a[kind="primary"] span,
-a[data-testid="stBaseLinkButton-primary"] p, a[data-testid="stBaseLinkButton-primary"] span {
+div[data-testid="stLinkButton"] > a *,
+div.stLinkButton > a *,
+a[data-testid="stBaseLinkButton-primary"] * {
     color: #FFFFFF !important;
-    font-weight: 600 !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    font-weight: 800 !important;
+    font-size: 15.5px !important;
 }
 div.stButton > button[kind="primary"]:hover, button[kind="primary"]:hover,
-div.stLinkButton > a[kind="primary"]:hover, a[data-testid="stBaseLinkButton-primary"]:hover {
+div[data-testid="stLinkButton"] > a:hover,
+div.stLinkButton > a:hover,
+a[data-testid="stBaseLinkButton-primary"]:hover {
     background-color: #155A8A !important;
-    border-color: #155A8A !important;
+    border-color: #0F3F63 !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
 }
 div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button {
     background-color: #2e7d32 !important;
@@ -238,6 +250,7 @@ div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button {
 div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button p,
 div[data-testid="stVerticalBlock"]:has(.cargar-test-container) button span {
     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     font-weight: 600 !important;
     font-size: 17px !important;
 }
@@ -604,7 +617,7 @@ def _llamar_apps_script_suscriptores(payload_extra):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def obtener_suscriptores_cacheados():
     res = _llamar_apps_script_suscriptores({"action": "listar_suscriptores"})
     if res.get("ok"):
@@ -672,6 +685,7 @@ def _obtener_mapa_precios_stripe():
 
 def crear_sesion_pago_stripe(email_usuario, plan_id):
     cfg = _cfg_suscripciones()
+    em_clean = email_usuario.lower().strip()
     info_plan = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id)
     if not info_plan:
         return None, "Plan no válido."
@@ -680,27 +694,50 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     if not price_id:
         return None, f"No se encontró en Stripe el producto '{info_plan['nombre_stripe']}'. Verifica su nombre exacto."
 
+    # Si el alumno ya existía antes en la hoja, reutilizamos su STRIPE_CUSTOMER_ID para no duplicar fichas
+    sub_previo = buscar_suscriptor_externo(em_clean)
+    cust_previo = str((sub_previo or {}).get("STRIPE_CUSTOMER_ID", "")).strip()
+
     payload_checkout = {
         "mode": "subscription",
-        "customer_email": email_usuario.lower().strip(),
         "line_items[0][price]": price_id,
         "line_items[0][quantity]": "1",
         "success_url": f"{cfg['app_url']}/?stripe_session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{cfg['app_url']}/?pago_cancelado=1",
         "metadata[plan_id]": plan_id,
-        "metadata[email_alumno]": email_usuario.lower().strip(),
+        "metadata[email_alumno]": em_clean,
         "subscription_data[metadata][plan_id]": plan_id,
-        "subscription_data[metadata][email_alumno]": email_usuario.lower().strip()
+        "subscription_data[metadata][email_alumno]": em_clean
     }
+    if cust_previo.startswith("cus_"):
+        payload_checkout["customer"] = cust_previo
+    else:
+        payload_checkout["customer_email"] = em_clean
+
     resp = _stripe_api_request("POST", "checkout/sessions", data=payload_checkout)
     if resp.get("url"):
         return resp["url"], None
+    # Si el customer_id antiguo no pertenecía a este entorno (ej. cambio test/live), reintentar con customer_email
+    if cust_previo:
+        payload_checkout.pop("customer", None)
+        payload_checkout["customer_email"] = em_clean
+        resp2 = _stripe_api_request("POST", "checkout/sessions", data=payload_checkout)
+        if resp2.get("url"):
+            return resp2["url"], None
+        resp = resp2
     err_msg = (resp.get("error") or {}).get("message", "Error desconocido al conectar con Stripe.")
     return None, err_msg
 
-@st.cache_data(ttl=600, show_spinner=False)
-def obtener_url_checkout_cacheada(email_usuario, plan_id):
-    return crear_sesion_pago_stripe(email_usuario, plan_id)
+def obtener_url_checkout_sesion_actual(email_usuario, plan_id):
+    """Guarda el enlace de pago en la sesión del navegador actual para que st.link_button abra al primer clic y se renueve limpio si vuelve a intentarlo."""
+    clave_cache = f"{email_usuario.lower().strip()}|{plan_id}"
+    guardado = st.session_state.get("_checkout_cache_actual")
+    if guardado and guardado.get("key") == clave_cache and (time.time() - guardado.get("ts", 0)) < 1200:
+        return guardado.get("url"), None
+    url_chk, err_chk = crear_sesion_pago_stripe(email_usuario, plan_id)
+    if url_chk:
+        st.session_state["_checkout_cache_actual"] = {"key": clave_cache, "url": url_chk, "ts": time.time()}
+    return url_chk, err_chk
 
 def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
     if subscription_id:
@@ -748,6 +785,7 @@ def procesar_retorno_pago_stripe(session_id):
     existente = buscar_suscriptor_externo(email_cliente)
     token_sesion = secrets.token_hex(16)
     ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
+    st.session_state.pop("_checkout_cache_actual", None)
 
     if existente and existente.get("PASSWORD_HASH"):
         guardar_datos_suscriptor(email_cliente, {
@@ -761,8 +799,8 @@ def procesar_retorno_pago_stripe(session_id):
         })
         enviar_email_suscriptor(
             email_cliente,
-            f"✅ Suscripción activada — {info_plan['nombre_corto']}",
-            f"<p>Hola,</p><p>Tu suscripción a <b>{info_plan['nombre_corto']}</b> en <b>Oposiciona</b> ya está activa.</p>"
+            f"✅ Suscripción reactivada — {info_plan['nombre_corto']}",
+            f"<p>Hola,</p><p>Tu suscripción a <b>{info_plan['nombre_corto']}</b> en <b>Oposiciona</b> vuelve a estar activa.</p>"
             f"<p>Puedes entrar con tu correo <b>{email_cliente}</b> y tu contraseña habitual en: <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
             f"<p>Recuerda que tienes incluidos: consulta de dudas por correo (<i>info@oposiciona.es</i>), actualizaciones comentadas de legislación y acceso a la clase mensual en directo.</p>"
         )
@@ -852,7 +890,8 @@ if not st.session_state.autenticado:
 
     if st.query_params.get("pago_cancelado"):
         st.query_params.clear()
-        st.info("ℹ️ Has cancelado el proceso de pago. Puedes elegir tu modalidad cuando quieras.")
+        st.session_state.pop("_checkout_cache_actual", None)
+        st.info("ℹ️ Has cancelado el proceso de pago. Puedes retomar tu suscripción cuando quieras.")
 
     qp_restore = st.query_params.get("restore_session", "")
     qp_draft = st.query_params.get("draft_txt", "")
@@ -998,9 +1037,32 @@ if not st.session_state.autenticado:
                         st.rerun()
                     else:
                         guardar_datos_suscriptor(correo_limpio, {"ESTADO": "INACTIVO"})
-                        st.error("⚠️ Tu suscripción mensual figura como cancelada o pendiente de pago. Puedes reactivarla desde la pestaña «Suscribirme (Planes)».")
+                        st.session_state["email_verificado_ok"] = correo_limpio
+                        st.session_state["sub_reactivacion_login"] = correo_limpio
+                        st.session_state["sub_reactivacion_plan"] = sub_ext.get("PLAN", "GES_COMPLETO")
                 else:
                     st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
+
+        # Si un exalumno mete sus credenciales correctas pero su suscripción estaba inactiva, puede reactivarla aquí mismo en 1 clic
+        if st.session_state.get("sub_reactivacion_login"):
+            em_react = st.session_state["sub_reactivacion_login"]
+            st.warning(f"ℹ️ Hola **{em_react}**: tu cuenta ya está verificada, pero tu suscripción mensual figura actualmente como inactiva.")
+            plan_prev = st.session_state.get("sub_reactivacion_plan", "GES_COMPLETO")
+            if plan_prev not in PLANES_SUSCRIPCION_OPOSICIONA:
+                plan_prev = "GES_COMPLETO"
+            lista_p_react = list(PLANES_SUSCRIPCION_OPOSICIONA.keys())
+            plan_sel_react = st.selectbox(
+                "Elige la modalidad con la que deseas reactivar tu acceso:",
+                lista_p_react,
+                index=lista_p_react.index(plan_prev),
+                format_func=lambda k: PLANES_SUSCRIPCION_OPOSICIONA[k]["titulo_nivel"],
+                key="sel_react_login_plan"
+            )
+            url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react)
+            if url_r_chk:
+                st.link_button("💳 Reactivar mi suscripción ahora (acceso inmediato)", url_r_chk, use_container_width=True, type="primary")
+            elif err_r_chk:
+                st.error(f"❌ {err_r_chk}")
 
     with tab_planes:
         st.markdown(
@@ -1055,7 +1117,7 @@ if not st.session_state.autenticado:
         plan_elegido = st.session_state["plan_seleccionado_tarjeta"]
 
         st.markdown("<hr style='margin: 14px 0 12px 0; border:none; border-top:1px solid #CBD5E1;'>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-bottom:6px;'>3. Verifica tu correo electrónico (recibirás aquí tu contraseña)</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-bottom:6px;'>3. Introduce y verifica tu correo electrónico</div>", unsafe_allow_html=True)
 
         col_em1, col_em2 = st.columns(2)
         with col_em1:
@@ -1069,10 +1131,24 @@ if not st.session_state.autenticado:
         if st.session_state.get("email_verificado_ok") and st.session_state.get("email_verificado_ok") != em_1_limpio:
             st.session_state["email_verificado_ok"] = ""
 
-        ya_verificado = bool(em_1_limpio and st.session_state.get("email_verificado_ok") == em_1_limpio)
+        # Si el alumno ya existe en nuestra base de suscriptores (exalumno que vuelve o correo ya registrado antes)
+        ficha_existente = buscar_suscriptor_externo(em_1_limpio) if (em_1_limpio and em_1_limpio == em_2_limpio and re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio)) else None
+        ya_estuvo_registrado = bool(ficha_existente and ficha_existente.get("EMAIL"))
+        ya_activo_ahora = False
+        if ya_estuvo_registrado and str(ficha_existente.get("ESTADO", "")).upper() == "ACTIVO":
+            act_st, _ = verificar_suscripcion_activa_stripe(ficha_existente.get("STRIPE_CUSTOMER_ID", ""), ficha_existente.get("STRIPE_SUBSCRIPTION_ID", ""))
+            ya_activo_ahora = act_st
 
-        if not ya_verificado:
-            if st.button("📩 Enviar código de verificación a mi correo", use_container_width=True, key="btn_enviar_cod_verif"):
+        ya_verificado = bool(
+            em_1_limpio and em_1_limpio == em_2_limpio and (
+                st.session_state.get("email_verificado_ok") == em_1_limpio or ya_estuvo_registrado
+            )
+        )
+
+        if ya_activo_ahora:
+            st.warning(f"⚠️ El correo **{em_1_limpio}** ya tiene una suscripción activa en vigor. Ve a la pestaña **«🔑 Iniciar sesión»** (o usa *Recuperar contraseña* si no la recuerdas) para no duplicar pagos.")
+        elif not ya_verificado:
+            if st.button("📩 Enviar código de verificación a mi correo", use_container_width=True, type="primary", key="btn_enviar_cod_verif"):
                 if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio):
                     st.error("⚠️ Introduce una dirección de correo electrónico válida.")
                 elif em_1_limpio != em_2_limpio:
@@ -1109,21 +1185,25 @@ if not st.session_state.autenticado:
                             st.error("⚠️ El código ha caducado. Pulsa arriba para enviarte uno nuevo.")
                         elif (cod_introducido or "").strip() == st.session_state.get("codigo_verif_pendiente"):
                             st.session_state["email_verificado_ok"] = em_1_limpio
+                            st.session_state.pop("_checkout_cache_actual", None)
                             st.rerun()
                         else:
                             st.error("❌ Código incorrecto. Comprueba el correo recibido.")
         else:
-            st.success(f"✅ Correo electrónico verificado correctamente: **{em_1_limpio}**")
+            if ya_estuvo_registrado:
+                st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Conservarás tu misma contraseña al reactivar.")
+            else:
+                st.success(f"✅ Correo electrónico verificado correctamente: **{em_1_limpio}**")
             info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
             st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
-            with st.spinner("Preparando acceso seguro a la pasarela de pago..."):
-                url_checkout, err_chk = obtener_url_checkout_cacheada(em_1_limpio, plan_elegido)
+            with st.spinner("Preparando pasarela de pago segura..."):
+                url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido)
             if url_checkout:
-                st.markdown(
-                    f"<a href='{url_checkout}' target='_top' style='display:block; width:100%; background-color:#1F77B4; color:#FFFFFF !important; text-align:center; padding:11px 16px; border-radius:8px; font-weight:700; font-size:15.5px; text-decoration:none; box-sizing:border-box; border:1px solid #155A8A;'>"
-                    f"💳 Continuar al pago seguro y activar acceso inmediato"
-                    f"</a>",
-                    unsafe_allow_html=True
+                st.link_button(
+                    "💳 Continuar al pago seguro y activar acceso inmediato",
+                    url_checkout,
+                    use_container_width=True,
+                    type="primary"
                 )
             else:
                 st.error(f"❌ {err_chk}")
@@ -1131,7 +1211,7 @@ if not st.session_state.autenticado:
     with tab_recuperar:
         st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
         email_rec = st.text_input("Correo electrónico registrado:", key="rec_email_in")
-        if st.button("📩 Enviarme nueva contraseña por correo", use_container_width=True, key="btn_enviar_rec"):
+        if st.button("📩 Enviarme nueva contraseña por correo", use_container_width=True, type="primary", key="btn_enviar_rec"):
             em_r = (email_rec or "").lower().strip()
             sub_r = buscar_suscriptor_externo(em_r)
             if not sub_r:
