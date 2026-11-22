@@ -815,7 +815,6 @@ def _obtener_mapa_precios_stripe():
     return mapa_prices
 
 def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
-    """Busca en Stripe si el código promocional existe y está activo (sin importar mayúsculas/minúsculas)."""
     cod_limpio = (codigo_texto or "").strip()
     if not cod_limpio:
         return False, None, "Introduce un código promocional."
@@ -845,7 +844,6 @@ def validar_codigo_promocional_stripe(codigo_texto, precio_plan_eur=0):
     return False, None, "El código introducido no es válido o ha caducado."
 
 def render_selector_codigo_promocional(plan_id, sufijo_key="planes"):
-    """Muestra un botón morado muy llamativo en la propia app para introducir el código promocional y pre-aplicarlo en Stripe."""
     precio_base = PLANES_SUSCRIPCION_OPOSICIONA.get(plan_id, {}).get("precio_eur", 0)
     promo_id_activo = st.session_state.get("promo_code_id_aplicado", "")
     promo_resumen = st.session_state.get("promo_code_resumen_txt", "")
@@ -920,7 +918,6 @@ def crear_sesion_pago_stripe(email_usuario, plan_id, promo_code_id=""):
         "subscription_data[metadata][plan_id]": plan_id,
         "subscription_data[metadata][email_alumno]": em_clean
     }
-    # Regla de la API de Stripe: si ya enviamos un código promocional pre-aplicado usamos discounts[0], si no, activamos allow_promotion_codes
     if promo_code_id:
         payload_checkout["discounts[0][promotion_code]"] = promo_code_id
     else:
@@ -954,19 +951,32 @@ def obtener_url_checkout_sesion_actual(email_usuario, plan_id, promo_code_id="")
         st.session_state["_checkout_cache_actual"] = {"key": clave_cache, "url": url_chk, "ts": time.time()}
     return url_chk, err_chk
 
+def _detectar_plan_desde_suscripcion_stripe(sub_obj):
+    """Detecta el plan real actual mirando primero el Price ID activo en Stripe (por si el alumno cambió de plan en el portal)."""
+    if not isinstance(sub_obj, dict):
+        return ""
+    mapa_prices = _obtener_mapa_precios_stripe()
+    mapa_inverso = {v: k for k, v in mapa_prices.items() if v}
+
+    items = ((sub_obj.get("items") or {}).get("data")) or []
+    for it in items:
+        pr_id = ((it.get("price") or {}).get("id")) or ""
+        if pr_id in mapa_inverso:
+            return mapa_inverso[pr_id]
+
+    return (sub_obj.get("metadata") or {}).get("plan_id", "")
+
 def verificar_suscripcion_activa_stripe(customer_id, subscription_id=""):
     if subscription_id:
         sub = _stripe_api_request("GET", f"subscriptions/{subscription_id}")
         st_sub = sub.get("status", "")
         if st_sub in ("active", "trialing"):
-            plan_meta = (sub.get("metadata") or {}).get("plan_id", "")
-            return True, plan_meta
+            return True, _detectar_plan_desde_suscripcion_stripe(sub)
     if customer_id:
         subs = _stripe_api_request("GET", "subscriptions", params={"customer": customer_id, "limit": "5"})
         for s in subs.get("data", []):
             if s.get("status") in ("active", "trialing"):
-                plan_meta = (s.get("metadata") or {}).get("plan_id", "")
-                return True, plan_meta
+                return True, _detectar_plan_desde_suscripcion_stripe(s)
     return False, ""
 
 def crear_enlace_portal_cliente_stripe(customer_id):
@@ -975,7 +985,7 @@ def crear_enlace_portal_cliente_stripe(customer_id):
         return None
     resp = _stripe_api_request("POST", "billing_portal/sessions", data={
         "customer": customer_id,
-        "return_url": cfg["app_url"]
+        "return_url": f"{cfg['app_url']}/?sync_plan=1"
     })
     return resp.get("url")
 
@@ -1099,6 +1109,15 @@ def verificar_sesion_unica_suscriptor():
         st.stop()
 
 verificar_sesion_unica_suscriptor()
+
+if st.session_state.get("autenticado") and st.session_state.get("es_suscriptor_externo") and st.query_params.get("sync_plan"):
+    st.query_params.clear()
+    act_ok, nuevo_plan_st = verificar_suscripcion_activa_stripe(st.session_state.get("stripe_customer_id", ""))
+    if act_ok and nuevo_plan_st in PLANES_SUSCRIPCION_OPOSICIONA:
+        info_np = PLANES_SUSCRIPCION_OPOSICIONA[nuevo_plan_st]
+        guardar_datos_suscriptor(st.session_state.get("email", ""), {"PLAN": nuevo_plan_st, "ROL": info_np["rol"], "ESTADO": "ACTIVO"})
+        st.session_state.update(rol=info_np["rol"], plan_suscripcion=nuevo_plan_st, saved_esp=info_np["especialidad"], saved_cat="ESPECIFICO")
+        st.rerun()
 # === FIN SECCIÓN 1B ===
 
 if not st.session_state.autenticado:
