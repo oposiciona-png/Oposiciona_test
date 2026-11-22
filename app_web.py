@@ -439,8 +439,6 @@ def registrar_actividad_sheets(
     sincrono=False
 ):
     email_actual = (st.session_state.get("email") or "").lower().strip()
-    # Solo excluir las cuentas genéricas 'ponentes@oposiciona.es'; permitir que 'ignacio.garcia.heras@gmail.com'
-    # y cualquier otro usuario registren siempre aunque hayan entrado con contraseña de administrador.
     if email_actual in USUARIOS_ADMIN:
         return
 
@@ -512,231 +510,6 @@ with col2:
     except: pass
     st.markdown("<p style='text-align: center; font-size: 12px; margin-top: -15px; margin-bottom: 0px;'><a href='https://oposiciona.es/' style='text-decoration: none; color: #1f77b4 !important;'>🌐 oposiciona.es</a></p>", unsafe_allow_html=True)
 st.markdown("<hr style='margin-top: 5px; margin-bottom: 12px; border: none; border-top: 1px solid #d3d3d3;'>", unsafe_allow_html=True)
-
-if not st.session_state.autenticado:
-    qp_stripe_sid = st.query_params.get("stripe_session_id", "")
-    if qp_stripe_sid:
-        with st.spinner("Activando tu suscripción y generando tus claves de acceso..."):
-            ok_pago, info_pago = procesar_retorno_pago_stripe(qp_stripe_sid)
-        st.query_params.clear()
-        if ok_pago:
-            st.success(f"🎉 ¡Suscripción activada para {info_pago}! Te hemos enviado un correo con tus claves de acceso.")
-            time.sleep(1.2)
-            st.rerun()
-        else:
-            st.error(f"⚠️ {info_pago}")
-
-    if st.query_params.get("pago_cancelado"):
-        st.query_params.clear()
-        st.info("ℹ️ Has cancelado el proceso de pago. Puedes elegir tu plan cuando quieras.")
-
-    qp_restore = st.query_params.get("restore_session", "")
-    qp_draft = st.query_params.get("draft_txt", "")
-    if qp_restore:
-        try:
-            datos_rec = _descifrar_backup_sesion(qp_restore)
-            correo_rec = (datos_rec.get("email") or "").lower().strip()
-            rol_rec = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_rec in lc), None)
-            sub_ext_rec = None if rol_rec else buscar_suscriptor_externo(correo_rec)
-            if rol_rec or (sub_ext_rec and str(sub_ext_rec.get("ESTADO", "")).upper() == "ACTIVO"):
-                st.session_state.autenticado = True
-                st.session_state.email = correo_rec
-                if rol_rec:
-                    st.session_state.rol = "ACCESO TOTAL" if correo_rec in USUARIOS_ADMIN else rol_rec
-                    st.session_state.es_admin = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
-                else:
-                    st.session_state.rol = sub_ext_rec.get("ROL", "GESTION")
-                    st.session_state.es_admin = False
-                    st.session_state.es_suscriptor_externo = True
-                    st.session_state.plan_suscripcion = sub_ext_rec.get("PLAN", "")
-                    st.session_state.stripe_customer_id = sub_ext_rec.get("STRIPE_CUSTOMER_ID", "")
-                    st.session_state.session_token_externo = sub_ext_rec.get("SESSION_TOKEN", "")
-                st.session_state.saved_esp = datos_rec.get("saved_esp", "ADMINISTRATIVOS")
-                st.session_state.saved_cat = datos_rec.get("saved_cat", "ESPECIFICO")
-                st.session_state.modo_avance = datos_rec.get("modo_avance", st.session_state.modo_avance)
-                st.session_state.saved_avance = st.session_state.modo_avance
-                if datos_rec.get("questions"):
-                    st.session_state.questions = datos_rec["questions"]
-                    st.session_state.stats = {int(k): v for k, v in datos_rec.get("stats", {}).items()}
-                    st.session_state.current_index = int(datos_rec.get("current_index", 0))
-                    st.session_state.finished = bool(datos_rec.get("finished", False))
-                    st.session_state.checked = bool(datos_rec.get("checked", False))
-                    st.session_state.test_name = datos_rec.get("test_name")
-                    st.session_state.test_esp = datos_rec.get("test_esp", "")
-                    st.session_state.test_cat = datos_rec.get("test_cat", "")
-                    st.session_state.test_start_ts = datos_rec.get("test_start_ts", time.time())
-                    st.session_state.fecha_inicio_str = datos_rec.get("fecha_inicio_str", "")
-                    st.session_state.hora_inicio_str = datos_rec.get("hora_inicio_str", "")
-                    st.session_state.inicio_registrado_sheets = bool(datos_rec.get("inicio_registrado_sheets", False))
-                    st.session_state.resultado_registrado = bool(datos_rec.get("resultado_registrado", False))
-                    idx_r = st.session_state.current_index
-                    if qp_draft and idx_r in st.session_state.stats:
-                        if not st.session_state.stats[idx_r].get("selected"):
-                            st.session_state.stats[idx_r]["selected"] = qp_draft
-                            st.session_state[f"open_txt_{idx_r}"] = qp_draft
-                st.query_params.clear()
-                st.rerun()
-        except Exception:
-            st.query_params.clear()
-
-    components.html("""<script>
-    (function() {
-        try {
-            var ss = window.parent.sessionStorage;
-            var ls = window.parent.localStorage;
-            ["oposiciona_sid_v1", "oposiciona_sid_v3"].forEach(function(k) {
-                ss.removeItem(k);
-                ls.removeItem(k);
-            });
-            var savedSid = ss.getItem("oposiciona_sid_v4") || ls.getItem("oposiciona_sid_v4");
-            var savedAuth = ss.getItem("oposiciona_auth_backup_v1") || ls.getItem("oposiciona_auth_backup_v1");
-            var draftTxt = ss.getItem("oposiciona_live_draft_txt") || ls.getItem("oposiciona_live_draft_txt") || "";
-
-            var tokenToRestore = savedSid || savedAuth;
-            if (tokenToRestore && window.parent.location.search.indexOf("restore_session=") === -1) {
-                var url = new URL(window.parent.location.href);
-                url.searchParams.set("restore_session", tokenToRestore);
-                if (draftTxt && draftTxt.length < 1500) {
-                    url.searchParams.set("draft_txt", draftTxt);
-                }
-                window.parent.location.replace(url.toString());
-            }
-        } catch(e) {}
-    })();
-    </script>""", height=0)
-
-    c_img1, c_img2, c_img3 = st.columns([1, 0.22, 1])
-    with c_img2:
-        try: st.image("test-utiles-768x768.png", use_container_width=True)
-        except: pass
-    st.markdown(
-        "<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -5px;'>🔒 Plataforma de Preparación Oposiciona</h3>"
-        "<p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 14px;'>Accede con tus credenciales de alumno o suscríbete a nuestros programas de preparación tutorizada.</p>",
-        unsafe_allow_html=True
-    )
-
-    tab_login, tab_planes, tab_recuperar = st.tabs([
-        "🔑 Iniciar sesión",
-        "🎓 Suscribirme (Planes)",
-        "🔄 Recuperar contraseña"
-    ])
-
-    with tab_login:
-        email_input = st.text_input("Usuario o correo electrónico asociado", key="login_email_in")
-        password_input = st.text_input("Contraseña de acceso", type="password", key="login_pwd_in")
-        if st.button("Entrar a la plataforma", use_container_width=True, type="primary", key="btn_entrar_plat"):
-            correo_limpio = email_input.lower().strip()
-            rol_usuario = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_limpio in lc), None)
-            if correo_limpio in USUARIOS_ADMIN:
-                if password_input == PASSWORD_ADMIN:
-                    st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, es_suscriptor_externo=False, do_scroll=True)
-                    st.rerun()
-                else:
-                    st.error("❌ Contraseña de administrador incorrecta.")
-            elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
-                st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, es_suscriptor_externo=False, do_scroll=True)
-                st.rerun()
-            elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
-                es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
-                st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, es_suscriptor_externo=False, do_scroll=True)
-                st.rerun()
-            else:
-                sub_ext = buscar_suscriptor_externo(correo_limpio)
-                if sub_ext and sub_ext.get("PASSWORD_HASH") == _hash_password_suscriptor(password_input):
-                    activo_stripe, plan_stripe = verificar_suscripcion_activa_stripe(
-                        sub_ext.get("STRIPE_CUSTOMER_ID", ""),
-                        sub_ext.get("STRIPE_SUBSCRIPTION_ID", "")
-                    )
-                    if activo_stripe:
-                        plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
-                        rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
-                        nuevo_tok = secrets.token_hex(16)
-                        ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
-                        guardar_datos_suscriptor(correo_limpio, {
-                            "PLAN": plan_final,
-                            "ROL": rol_final,
-                            "ESTADO": "ACTIVO",
-                            "ULTIMO_ACCESO": ahora_str,
-                            "SESSION_TOKEN": nuevo_tok
-                        })
-                        st.session_state.update(
-                            autenticado=True,
-                            rol=rol_final,
-                            email=correo_limpio,
-                            es_admin=False,
-                            es_suscriptor_externo=True,
-                            plan_suscripcion=plan_final,
-                            stripe_customer_id=sub_ext.get("STRIPE_CUSTOMER_ID", ""),
-                            session_token_externo=nuevo_tok,
-                            saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
-                            do_scroll=True
-                        )
-                        st.rerun()
-                    else:
-                        guardar_datos_suscriptor(correo_limpio, {"ESTADO": "INACTIVO"})
-                        st.error("⚠️ Tu suscripción mensual figura como cancelada o pendiente de pago. Puedes reactivarla desde la pestaña «Suscribirme (Planes)».")
-                else:
-                    st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
-
-    with tab_planes:
-        cfg_f = _cfg_suscripciones()
-        if cfg_f["modo_fiscal"] == "EXENTO_TUTORIZADO":
-            st.markdown(
-                "<div style='background:#EFF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px; margin-bottom:12px;'>"
-                "<b style='color:#1E3A8A !important;'>🎓 Preparación Mensual Tutorizada (Exenta de IVA — Art. 20.Uno.9.º LIVA)</b><br>"
-                "<span style='font-size:13px; color:#1E293B !important;'>Todas las modalidades incluyen: <b>resolución de dudas por email</b> sobre cualquier pregunta, supuesto o epígrafe, "
-                "<b>envío periódico de actualizaciones comentadas de legislación</b> y <b>clase online mensual en directo</b> para resolver dudas. Sin permanencia: cancela en 1 clic cuando quieras.</span>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-        email_alta = st.text_input("1️⃣ Introduce tu correo electrónico (recibirás ahí tus claves de acceso):", placeholder="tuemail@ejemplo.com", key="sub_email_alta")
-        cuerpo_sel = st.radio("2️⃣ Elige tu especialidad:", ["GESTIÓN DE LA SEGURIDAD SOCIAL (A2)", "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL (C1)"], horizontal=True, key="sub_cuerpo_rad")
-
-        if "ADMINISTRATIVO" in cuerpo_sel:
-            opciones_plan = ["ADM_COMPLETO"]
-        else:
-            opciones_plan = ["GES_COMPLETO", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_SOLO_TEST"]
-
-        plan_elegido = st.radio(
-            "3️⃣ Selecciona tu modalidad mensual:",
-            opciones_plan,
-            format_func=lambda pid: f"{PLANES_SUSCRIPCION_OPOSICIONA[pid]['nombre_corto']} — {PLANES_SUSCRIPCION_OPOSICIONA[pid]['descripcion']}",
-            key="sub_plan_elegido"
-        )
-
-        if st.button("💳 Continuar al pago seguro y activar acceso inmediato", use_container_width=True, type="primary", key="btn_ir_stripe"):
-            em_val = (email_alta or "").lower().strip()
-            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_val):
-                st.error("⚠️ Introduce un correo electrónico válido antes de continuar.")
-            else:
-                with st.spinner("Conectando con la pasarela segura de Stripe..."):
-                    url_checkout, err_chk = crear_sesion_pago_stripe(em_val, plan_elegido)
-                if url_checkout:
-                    st.success("✅ Pasarela lista. Pulsa en el botón inferior para completar el pago:")
-                    st.link_button("🔒 Abrir pasarela de pago segura (Stripe)", url_checkout, use_container_width=True, type="primary")
-                else:
-                    st.error(f"❌ {err_chk}")
-
-    with tab_recuperar:
-        st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
-        email_rec = st.text_input("Correo electrónico registrado:", key="rec_email_in")
-        if st.button("📩 Enviarme nueva contraseña por correo", use_container_width=True, key="btn_enviar_rec"):
-            em_r = (email_rec or "").lower().strip()
-            sub_r = buscar_suscriptor_externo(em_r)
-            if not sub_r:
-                st.error("❌ No encontramos ninguna suscripción externa asociada a ese correo electrónico.")
-            else:
-                pwd_temp = _generar_password_legible()
-                guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_temp)})
-                enviar_email_suscriptor(
-                    em_r,
-                    "🔑 Nueva contraseña de acceso — Oposiciona",
-                    f"<p>Hola,</p><p>Hemos restablecido tu contraseña de acceso a la plataforma <b>Oposiciona</b>.</p>"
-                    f"<p><b>Usuario:</b> {em_r}<br><b>Nueva contraseña:</b> <code>{pwd_temp}</code></p>"
-                )
-                st.success("✅ Te hemos enviado un correo electrónico con tu nueva contraseña.")
-    st.stop()
-# === FIN SECCIÓN 1 ===
 
 # === SECCIÓN 1B: MOTOR DE SUSCRIPCIONES, STRIPE, CORREOS Y SESIÓN ÚNICA ===
 import hashlib, secrets
@@ -1055,6 +828,231 @@ def verificar_sesion_unica_suscriptor():
 
 verificar_sesion_unica_suscriptor()
 # === FIN SECCIÓN 1B ===
+
+if not st.session_state.autenticado:
+    qp_stripe_sid = st.query_params.get("stripe_session_id", "")
+    if qp_stripe_sid:
+        with st.spinner("Activando tu suscripción y generando tus claves de acceso..."):
+            ok_pago, info_pago = procesar_retorno_pago_stripe(qp_stripe_sid)
+        st.query_params.clear()
+        if ok_pago:
+            st.success(f"🎉 ¡Suscripción activada para {info_pago}! Te hemos enviado un correo con tus claves de acceso.")
+            time.sleep(1.2)
+            st.rerun()
+        else:
+            st.error(f"⚠️ {info_pago}")
+
+    if st.query_params.get("pago_cancelado"):
+        st.query_params.clear()
+        st.info("ℹ️ Has cancelado el proceso de pago. Puedes elegir tu plan cuando quieras.")
+
+    qp_restore = st.query_params.get("restore_session", "")
+    qp_draft = st.query_params.get("draft_txt", "")
+    if qp_restore:
+        try:
+            datos_rec = _descifrar_backup_sesion(qp_restore)
+            correo_rec = (datos_rec.get("email") or "").lower().strip()
+            rol_rec = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_rec in lc), None)
+            sub_ext_rec = None if rol_rec else buscar_suscriptor_externo(correo_rec)
+            if rol_rec or (sub_ext_rec and str(sub_ext_rec.get("ESTADO", "")).upper() == "ACTIVO"):
+                st.session_state.autenticado = True
+                st.session_state.email = correo_rec
+                if rol_rec:
+                    st.session_state.rol = "ACCESO TOTAL" if correo_rec in USUARIOS_ADMIN else rol_rec
+                    st.session_state.es_admin = bool(datos_rec.get("es_admin", False) or (correo_rec in USUARIOS_ADMIN))
+                else:
+                    st.session_state.rol = sub_ext_rec.get("ROL", "GESTION")
+                    st.session_state.es_admin = False
+                    st.session_state.es_suscriptor_externo = True
+                    st.session_state.plan_suscripcion = sub_ext_rec.get("PLAN", "")
+                    st.session_state.stripe_customer_id = sub_ext_rec.get("STRIPE_CUSTOMER_ID", "")
+                    st.session_state.session_token_externo = sub_ext_rec.get("SESSION_TOKEN", "")
+                st.session_state.saved_esp = datos_rec.get("saved_esp", "ADMINISTRATIVOS")
+                st.session_state.saved_cat = datos_rec.get("saved_cat", "ESPECIFICO")
+                st.session_state.modo_avance = datos_rec.get("modo_avance", st.session_state.modo_avance)
+                st.session_state.saved_avance = st.session_state.modo_avance
+                if datos_rec.get("questions"):
+                    st.session_state.questions = datos_rec["questions"]
+                    st.session_state.stats = {int(k): v for k, v in datos_rec.get("stats", {}).items()}
+                    st.session_state.current_index = int(datos_rec.get("current_index", 0))
+                    st.session_state.finished = bool(datos_rec.get("finished", False))
+                    st.session_state.checked = bool(datos_rec.get("checked", False))
+                    st.session_state.test_name = datos_rec.get("test_name")
+                    st.session_state.test_esp = datos_rec.get("test_esp", "")
+                    st.session_state.test_cat = datos_rec.get("test_cat", "")
+                    st.session_state.test_start_ts = datos_rec.get("test_start_ts", time.time())
+                    st.session_state.fecha_inicio_str = datos_rec.get("fecha_inicio_str", "")
+                    st.session_state.hora_inicio_str = datos_rec.get("hora_inicio_str", "")
+                    st.session_state.inicio_registrado_sheets = bool(datos_rec.get("inicio_registrado_sheets", False))
+                    st.session_state.resultado_registrado = bool(datos_rec.get("resultado_registrado", False))
+                    idx_r = st.session_state.current_index
+                    if qp_draft and idx_r in st.session_state.stats:
+                        if not st.session_state.stats[idx_r].get("selected"):
+                            st.session_state.stats[idx_r]["selected"] = qp_draft
+                            st.session_state[f"open_txt_{idx_r}"] = qp_draft
+                st.query_params.clear()
+                st.rerun()
+        except Exception:
+            st.query_params.clear()
+
+    components.html("""<script>
+    (function() {
+        try {
+            var ss = window.parent.sessionStorage;
+            var ls = window.parent.localStorage;
+            ["oposiciona_sid_v1", "oposiciona_sid_v3"].forEach(function(k) {
+                ss.removeItem(k);
+                ls.removeItem(k);
+            });
+            var savedSid = ss.getItem("oposiciona_sid_v4") || ls.getItem("oposiciona_sid_v4");
+            var savedAuth = ss.getItem("oposiciona_auth_backup_v1") || ls.getItem("oposiciona_auth_backup_v1");
+            var draftTxt = ss.getItem("oposiciona_live_draft_txt") || ls.getItem("oposiciona_live_draft_txt") || "";
+
+            var tokenToRestore = savedSid || savedAuth;
+            if (tokenToRestore && window.parent.location.search.indexOf("restore_session=") === -1) {
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set("restore_session", tokenToRestore);
+                if (draftTxt && draftTxt.length < 1500) {
+                    url.searchParams.set("draft_txt", draftTxt);
+                }
+                window.parent.location.replace(url.toString());
+            }
+        } catch(e) {}
+    })();
+    </script>""", height=0)
+
+    c_img1, c_img2, c_img3 = st.columns([1, 0.22, 1])
+    with c_img2:
+        try: st.image("test-utiles-768x768.png", use_container_width=True)
+        except: pass
+    st.markdown(
+        "<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -5px;'>🔒 Plataforma de Preparación Oposiciona</h3>"
+        "<p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 14px;'>Accede con tus credenciales de alumno o suscríbete a nuestros programas de preparación tutorizada.</p>",
+        unsafe_allow_html=True
+    )
+
+    tab_login, tab_planes, tab_recuperar = st.tabs([
+        "🔑 Iniciar sesión",
+        "🎓 Suscribirme (Planes)",
+        "🔄 Recuperar contraseña"
+    ])
+
+    with tab_login:
+        email_input = st.text_input("Usuario o correo electrónico asociado", key="login_email_in")
+        password_input = st.text_input("Contraseña de acceso", type="password", key="login_pwd_in")
+        if st.button("Entrar a la plataforma", use_container_width=True, type="primary", key="btn_entrar_plat"):
+            correo_limpio = email_input.lower().strip()
+            rol_usuario = next((r for r, lc in USUARIOS_AUTORIZADOS.items() if correo_limpio in lc), None)
+            if correo_limpio in USUARIOS_ADMIN:
+                if password_input == PASSWORD_ADMIN:
+                    st.session_state.update(autenticado=True, rol="ACCESO TOTAL", email=correo_limpio, es_admin=True, es_suscriptor_externo=False, do_scroll=True)
+                    st.rerun()
+                else:
+                    st.error("❌ Contraseña de administrador incorrecta.")
+            elif rol_usuario == "INVITADO" and password_input == PASSWORD_INVITADO:
+                st.session_state.update(autenticado=True, rol="INVITADO", email=correo_limpio, es_admin=False, es_suscriptor_externo=False, do_scroll=True)
+                st.rerun()
+            elif rol_usuario and password_input in [PASSWORD_ACCESO, PASSWORD_ADMIN]:
+                es_adm = (password_input == PASSWORD_ADMIN) or (correo_limpio in USUARIOS_ADMIN)
+                st.session_state.update(autenticado=True, rol=rol_usuario, email=correo_limpio, es_admin=es_adm, es_suscriptor_externo=False, do_scroll=True)
+                st.rerun()
+            else:
+                sub_ext = buscar_suscriptor_externo(correo_limpio)
+                if sub_ext and sub_ext.get("PASSWORD_HASH") == _hash_password_suscriptor(password_input):
+                    activo_stripe, plan_stripe = verificar_suscripcion_activa_stripe(
+                        sub_ext.get("STRIPE_CUSTOMER_ID", ""),
+                        sub_ext.get("STRIPE_SUBSCRIPTION_ID", "")
+                    )
+                    if activo_stripe:
+                        plan_final = plan_stripe if plan_stripe in PLANES_SUSCRIPCION_OPOSICIONA else sub_ext.get("PLAN", "GES_COMPLETO")
+                        rol_final = PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["rol"]
+                        nuevo_tok = secrets.token_hex(16)
+                        ahora_str = datetime.now(ZoneInfo("Europe/Madrid")).strftime("%d/%m/%Y %H:%M:%S")
+                        guardar_datos_suscriptor(correo_limpio, {
+                            "PLAN": plan_final,
+                            "ROL": rol_final,
+                            "ESTADO": "ACTIVO",
+                            "ULTIMO_ACCESO": ahora_str,
+                            "SESSION_TOKEN": nuevo_tok
+                        })
+                        st.session_state.update(
+                            autenticado=True,
+                            rol=rol_final,
+                            email=correo_limpio,
+                            es_admin=False,
+                            es_suscriptor_externo=True,
+                            plan_suscripcion=plan_final,
+                            stripe_customer_id=sub_ext.get("STRIPE_CUSTOMER_ID", ""),
+                            session_token_externo=nuevo_tok,
+                            saved_esp=PLANES_SUSCRIPCION_OPOSICIONA[plan_final]["especialidad"],
+                            do_scroll=True
+                        )
+                        st.rerun()
+                    else:
+                        guardar_datos_suscriptor(correo_limpio, {"ESTADO": "INACTIVO"})
+                        st.error("⚠️ Tu suscripción mensual figura como cancelada o pendiente de pago. Puedes reactivarla desde la pestaña «Suscribirme (Planes)».")
+                else:
+                    st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
+
+    with tab_planes:
+        cfg_f = _cfg_suscripciones()
+        if cfg_f["modo_fiscal"] == "EXENTO_TUTORIZADO":
+            st.markdown(
+                "<div style='background:#EFF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px; margin-bottom:12px;'>"
+                "<b style='color:#1E3A8A !important;'>🎓 Preparación Mensual Tutorizada (Exenta de IVA — Art. 20.Uno.9.º LIVA)</b><br>"
+                "<span style='font-size:13px; color:#1E293B !important;'>Todas las modalidades incluyen: <b>resolución de dudas por email</b> sobre cualquier pregunta, supuesto o epígrafe, "
+                "<b>envío periódico de actualizaciones comentadas de legislación</b> y <b>clase online mensual en directo</b> para resolver dudas. Sin permanencia: cancela en 1 clic cuando quieras.</span>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+        email_alta = st.text_input("1️⃣ Introduce tu correo electrónico (recibirás ahí tus claves de acceso):", placeholder="tuemail@ejemplo.com", key="sub_email_alta")
+        cuerpo_sel = st.radio("2️⃣ Elige tu especialidad:", ["GESTIÓN DE LA SEGURIDAD SOCIAL (A2)", "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL (C1)"], horizontal=True, key="sub_cuerpo_rad")
+
+        if "ADMINISTRATIVO" in cuerpo_sel:
+            opciones_plan = ["ADM_COMPLETO"]
+        else:
+            opciones_plan = ["GES_COMPLETO", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_SOLO_TEST"]
+
+        plan_elegido = st.radio(
+            "3️⃣ Selecciona tu modalidad mensual:",
+            opciones_plan,
+            format_func=lambda pid: f"{PLANES_SUSCRIPCION_OPOSICIONA[pid]['nombre_corto']} — {PLANES_SUSCRIPCION_OPOSICIONA[pid]['descripcion']}",
+            key="sub_plan_elegido"
+        )
+
+        if st.button("💳 Continuar al pago seguro y activar acceso inmediato", use_container_width=True, type="primary", key="btn_ir_stripe"):
+            em_val = (email_alta or "").lower().strip()
+            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_val):
+                st.error("⚠️ Introduce un correo electrónico válido antes de continuar.")
+            else:
+                with st.spinner("Conectando con la pasarela segura de Stripe..."):
+                    url_checkout, err_chk = crear_sesion_pago_stripe(em_val, plan_elegido)
+                if url_checkout:
+                    st.success("✅ Pasarela lista. Pulsa en el botón inferior para completar el pago:")
+                    st.link_button("🔒 Abrir pasarela de pago segura (Stripe)", url_checkout, use_container_width=True, type="primary")
+                else:
+                    st.error(f"❌ {err_chk}")
+
+    with tab_recuperar:
+        st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
+        email_rec = st.text_input("Correo electrónico registrado:", key="rec_email_in")
+        if st.button("📩 Enviarme nueva contraseña por correo", use_container_width=True, key="btn_enviar_rec"):
+            em_r = (email_rec or "").lower().strip()
+            sub_r = buscar_suscriptor_externo(em_r)
+            if not sub_r:
+                st.error("❌ No encontramos ninguna suscripción externa asociada a ese correo electrónico.")
+            else:
+                pwd_temp = _generar_password_legible()
+                guardar_datos_suscriptor(em_r, {"PASSWORD_HASH": _hash_password_suscriptor(pwd_temp)})
+                enviar_email_suscriptor(
+                    em_r,
+                    "🔑 Nueva contraseña de acceso — Oposiciona",
+                    f"<p>Hola,</p><p>Hemos restablecido tu contraseña de acceso a la plataforma <b>Oposiciona</b>.</p>"
+                    f"<p><b>Usuario:</b> {em_r}<br><b>Nueva contraseña:</b> <code>{pwd_temp}</code></p>"
+                )
+                st.success("✅ Te hemos enviado un correo electrónico con tu nueva contraseña.")
+    st.stop()
+# === FIN SECCIÓN 1 ===
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
 NUEVOS_HOY = [
