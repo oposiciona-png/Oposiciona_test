@@ -516,44 +516,49 @@ import hashlib, secrets
 
 PLANES_SUSCRIPCION_OPOSICIONA = {
     "ADM_COMPLETO": {
+        "titulo_nivel": "Nivel Único: Acceso Completo — 30 €/mes",
         "nombre_corto": "Administrativo — Acceso Completo (30 €/mes)",
         "nombre_stripe": "Curso mensual y tutorización — Administrativo Seguridad Social (Acceso Completo)",
         "especialidad": "ADMINISTRATIVOS",
         "precio_eur": 30,
         "rol": "ADMTVOS",
-        "descripcion": "Test Específico, General, Exámenes Oficiales y Supuestos Prácticos + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+        "descripcion": "Incluye todos los Test de Temario General y Específico, Exámenes Oficiales, Supuestos Prácticos comentados, resolución de dudas por correo electrónico, boletín de actualizaciones normativas comentadas y sesión mensual en directo."
     },
     "GES_SOLO_TEST": {
-        "nombre_corto": "Gestión — Solo Test (50 €/mes)",
+        "titulo_nivel": "Nivel 1: Modalidad Test — 50 €/mes",
+        "nombre_corto": "Gestión — Modalidad Test (50 €/mes)",
         "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Solo Test)",
         "especialidad": "GESTION",
         "precio_eur": 50,
         "rol": "GESTION_SOLO_TEST",
-        "descripcion": "Test Específico, General y Exámenes Oficiales + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+        "descripcion": "Incluye Test de Temario General y Específico, Exámenes Oficiales y Simulacros Globales, resolución de dudas por correo electrónico, actualizaciones normativas comentadas y sesión mensual en directo."
     },
     "GES_TEST_SUPUESTOS": {
+        "titulo_nivel": "Nivel 2A: Test + Supuestos Prácticos — 60 €/mes",
         "nombre_corto": "Gestión — Test + Supuestos (60 €/mes)",
         "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Test + Supuestos)",
         "especialidad": "GESTION",
         "precio_eur": 60,
         "rol": "GESTION_TEST_SUPUESTOS",
-        "descripcion": "Todos los Test + Supuestos Prácticos corregidos con IA + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+        "descripcion": "Incluye todos los Test y Exámenes + Supuestos Prácticos del 2.º Ejercicio con evaluación razonada y respuesta técnica oficial, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
     },
     "GES_TEST_DESARROLLO": {
+        "titulo_nivel": "Nivel 2B: Test + Epígrafes de Desarrollo — 60 €/mes",
         "nombre_corto": "Gestión — Test + Desarrollo (60 €/mes)",
         "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Test + Desarrollo)",
         "especialidad": "GESTION",
         "precio_eur": 60,
         "rol": "GESTION_TEST_DESARROLLO",
-        "descripcion": "Todos los Test + Epígrafes de Desarrollo corregidos según baremo del Tribunal + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+        "descripcion": "Incluye todos los Test y Exámenes + Epígrafes de Desarrollo calificados conforme a los criterios oficiales del Tribunal Calificador, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
     },
     "GES_COMPLETO": {
-        "nombre_corto": "Gestión — Acceso Completo (70 €/mes) ⭐",
+        "titulo_nivel": "Nivel 3: Preparación Integral Completa — 70 €/mes ⭐",
+        "nombre_corto": "Gestión — Acceso Completo (70 €/mes)",
         "nombre_stripe": "Curso mensual y tutorización — Gestión Seguridad Social (Acceso Completo)",
         "especialidad": "GESTION",
         "precio_eur": 70,
         "rol": "GESTION",
-        "descripcion": "Acceso total: Test, Supuestos Prácticos y Epígrafes de Desarrollo con IA + tutoría por email, actualizaciones comentadas y clase mensual en directo."
+        "descripcion": "Acceso total sin restricciones: Test General y Específico, Exámenes, Supuestos Prácticos y Epígrafes de Desarrollo calificados según criterios del Tribunal, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
     }
 }
 
@@ -669,12 +674,6 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     if not price_id:
         return None, f"No se encontró en Stripe el producto '{info_plan['nombre_stripe']}'. Verifica su nombre exacto."
 
-    texto_legal = (
-        "Operación exenta de IVA conforme al art. 20.Uno.9.º de la Ley 37/1992 (Servicio formativo tutorizado con resolución de dudas por correo, actualizaciones comentadas y clase mensual en directo)."
-        if cfg["modo_fiscal"] == "EXENTO_TUTORIZADO"
-        else "Suscripción mensual con 21 % de IVA incluido."
-    )
-
     payload_checkout = {
         "mode": "subscription",
         "customer_email": email_usuario.lower().strip(),
@@ -685,8 +684,7 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
         "metadata[plan_id]": plan_id,
         "metadata[email_alumno]": email_usuario.lower().strip(),
         "subscription_data[metadata][plan_id]": plan_id,
-        "subscription_data[metadata][email_alumno]": email_usuario.lower().strip(),
-        "custom_text[submit][message]": texto_legal
+        "subscription_data[metadata][email_alumno]": email_usuario.lower().strip()
     }
     resp = _stripe_api_request("POST", "checkout/sessions", data=payload_checkout)
     if resp.get("url"):
@@ -754,9 +752,9 @@ def procesar_retorno_pago_stripe(session_id):
         enviar_email_suscriptor(
             email_cliente,
             f"✅ Suscripción activada — {info_plan['nombre_corto']}",
-            f"<p>Hola,</p><p>Tu suscripción al plan <b>{info_plan['nombre_corto']}</b> en <b>Oposiciona</b> ya está activa.</p>"
+            f"<p>Hola,</p><p>Tu suscripción a <b>{info_plan['nombre_corto']}</b> en <b>Oposiciona</b> ya está activa.</p>"
             f"<p>Puedes entrar con tu correo <b>{email_cliente}</b> y tu contraseña habitual en: <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
-            f"<p>Recuerda que tienes incluidos: consulta de dudas por email (<i>info@oposiciona.es</i>), actualizaciones comentadas de legislación y acceso a la clase mensual en directo.</p>"
+            f"<p>Recuerda que tienes incluidos: consulta de dudas por correo (<i>info@oposiciona.es</i>), actualizaciones comentadas de legislación y acceso a la clase mensual en directo.</p>"
         )
     else:
         pwd_nueva = _generar_password_legible()
@@ -776,13 +774,13 @@ def procesar_retorno_pago_stripe(session_id):
             "🎓 Bienvenido/a a Oposiciona — Tus claves de acceso",
             f"<div style='font-family:sans-serif; color:#1E293B; max-width:560px;'>"
             f"<h2 style='color:#1F77B4;'>¡Bienvenido/a a Oposiciona!</h2>"
-            f"<p>Tu alta en el <b>{info_plan['nombre_corto']}</b> se ha completado correctamente.</p>"
+            f"<p>Tu alta en <b>{info_plan['nombre_corto']}</b> se ha completado correctamente.</p>"
             f"<div style='background:#F8FAFC; border:1px solid #CBD5E1; border-radius:8px; padding:14px; margin:14px 0;'>"
             f"<p style='margin:4px 0;'><b>🌐 Enlace de acceso:</b> <a href='{_cfg_suscripciones()['app_url']}'>{_cfg_suscripciones()['app_url']}</a></p>"
             f"<p style='margin:4px 0;'><b>📧 Usuario:</b> {email_cliente}</p>"
             f"<p style='margin:4px 0;'><b>🔑 Contraseña:</b> <code style='font-size:15px; background:#E2E8F0; padding:2px 6px; border-radius:4px;'>{pwd_nueva}</code></p>"
             f"</div>"
-            f"<p><b>Servicios incluidos en tu matrícula mensual:</b></p>"
+            f"<p><b>Servicios incluidos en tu suscripción mensual:</b></p>"
             f"<ul><li>Acceso inmediato a la plataforma de entrenamiento práctico.</li>"
             f"<li>Resolución de dudas sobre preguntas, supuestos y epígrafes en <b>info@oposiciona.es</b>.</li>"
             f"<li>Envío de actualizaciones normativas comentadas.</li>"
@@ -844,7 +842,7 @@ if not st.session_state.autenticado:
 
     if st.query_params.get("pago_cancelado"):
         st.query_params.clear()
-        st.info("ℹ️ Has cancelado el proceso de pago. Puedes elegir tu plan cuando quieras.")
+        st.info("ℹ️ Has cancelado el proceso de pago. Puedes elegir tu modalidad cuando quieras.")
 
     qp_restore = st.query_params.get("restore_session", "")
     qp_draft = st.query_params.get("draft_txt", "")
@@ -927,7 +925,7 @@ if not st.session_state.autenticado:
         except: pass
     st.markdown(
         "<h3 style='text-align: center; color: #2C3E50 !important; margin-top: -5px;'>🔒 Plataforma de Preparación Oposiciona</h3>"
-        "<p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 14px;'>Accede con tus credenciales de alumno o suscríbete a nuestros programas de preparación tutorizada.</p>",
+        "<p style='text-align: center; font-size: 14px; color: #1E293B !important; margin-bottom: 14px;'>Accede con tus credenciales de alumno o suscríbete a nuestras modalidades mensuales.</p>",
         unsafe_allow_html=True
     )
 
@@ -995,41 +993,127 @@ if not st.session_state.autenticado:
                     st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
 
     with tab_planes:
-        cfg_f = _cfg_suscripciones()
-        if cfg_f["modo_fiscal"] == "EXENTO_TUTORIZADO":
-            st.markdown(
-                "<div style='background:#EFF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px; margin-bottom:12px;'>"
-                "<b style='color:#1E3A8A !important;'>🎓 Preparación Mensual Tutorizada (Exenta de IVA — Art. 20.Uno.9.º LIVA)</b><br>"
-                "<span style='font-size:13px; color:#1E293B !important;'>Todas las modalidades incluyen: <b>resolución de dudas por email</b> sobre cualquier pregunta, supuesto o epígrafe, "
-                "<b>envío periódico de actualizaciones comentadas de legislación</b> y <b>clase online mensual en directo</b> para resolver dudas. Sin permanencia: cancela en 1 clic cuando quieras.</span>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-        email_alta = st.text_input("1️⃣ Introduce tu correo electrónico (recibirás ahí tus claves de acceso):", placeholder="tuemail@ejemplo.com", key="sub_email_alta")
-        cuerpo_sel = st.radio("2️⃣ Elige tu especialidad:", ["GESTIÓN DE LA SEGURIDAD SOCIAL (A2)", "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL (C1)"], horizontal=True, key="sub_cuerpo_rad")
+        st.markdown(
+            "<div style='background:#EFF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px 14px; margin-bottom:14px;'>"
+            "<b style='color:#1E3A8A !important; font-size:15px;'>🎓 Preparación Mensual Tutorizada Oposiciona</b><br>"
+            "<span style='font-size:13.2px; color:#1E293B !important;'>Todas las modalidades incluyen acceso a la plataforma práctica, <b>resolución de dudas por correo electrónico</b> con nuestros preparadores, "
+            "<b>actualizaciones comentadas de legislación</b> y <b>clase online mensual en directo</b>. Sin permanencia: cancela en un clic cuando quieras.</span>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+        # PASO 1: Especialidad y Tarjetas limpias de Modalidad
+        st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-bottom:6px;'>1. Elige tu especialidad</div>", unsafe_allow_html=True)
+        cuerpo_sel = st.radio(
+            "Especialidad:",
+            ["GESTIÓN DE LA SEGURIDAD SOCIAL (A2)", "ADMINISTRATIVO DE LA SEGURIDAD SOCIAL (C1)"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="sub_cuerpo_rad"
+        )
 
         if "ADMINISTRATIVO" in cuerpo_sel:
             opciones_plan = ["ADM_COMPLETO"]
+            plan_default = "ADM_COMPLETO"
         else:
-            opciones_plan = ["GES_COMPLETO", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_SOLO_TEST"]
+            opciones_plan = ["GES_SOLO_TEST", "GES_TEST_SUPUESTOS", "GES_TEST_DESARROLLO", "GES_COMPLETO"]
+            plan_default = "GES_COMPLETO"
 
-        plan_elegido = st.radio(
-            "3️⃣ Selecciona tu modalidad mensual:",
-            opciones_plan,
-            format_func=lambda pid: f"{PLANES_SUSCRIPCION_OPOSICIONA[pid]['nombre_corto']} — {PLANES_SUSCRIPCION_OPOSICIONA[pid]['descripcion']}",
-            key="sub_plan_elegido"
-        )
+        if st.session_state.get("plan_seleccionado_tarjeta") not in opciones_plan:
+            st.session_state["plan_seleccionado_tarjeta"] = plan_default
 
-        if st.button("💳 Continuar al pago seguro y activar acceso inmediato", use_container_width=True, type="primary", key="btn_ir_stripe"):
-            em_val = (email_alta or "").lower().strip()
-            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_val):
-                st.error("⚠️ Introduce un correo electrónico válido antes de continuar.")
-            else:
-                with st.spinner("Conectando con la pasarela segura de Stripe..."):
-                    url_checkout, err_chk = crear_sesion_pago_stripe(em_val, plan_elegido)
+        st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-top:8px; margin-bottom:8px;'>2. Selecciona tu modalidad mensual</div>", unsafe_allow_html=True)
+
+        for pid in opciones_plan:
+            p_info = PLANES_SUSCRIPCION_OPOSICIONA[pid]
+            es_elegido = (st.session_state.get("plan_seleccionado_tarjeta") == pid)
+            borde_c = "2.5px solid #1D4ED8" if es_elegido else "1px solid #CBD5E1"
+            fondo_c = "#EFF6FF" if es_elegido else "#F8FAFC"
+            etiqueta_btn = "✅ Seleccionado" if es_elegido else "Seleccionar"
+            tipo_btn = "primary" if es_elegido else "secondary"
+
+            st.markdown(
+                f"<div style='background:{fondo_c}; border:{borde_c}; border-radius:10px; padding:12px 15px; margin-bottom:6px;'>"
+                f"<div style='font-size:16px; font-weight:800; color:#0F172A !important; margin-bottom:5px;'>{p_info['titulo_nivel']}</div>"
+                f"<div style='font-size:13.3px; color:#334155 !important; line-height:1.45; text-align:justify;'>{p_info['descripcion']}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            if st.button(f"{etiqueta_btn} — {p_info['titulo_nivel']}", key=f"btn_sel_plan_{pid}", use_container_width=True, type=tipo_btn):
+                st.session_state["plan_seleccionado_tarjeta"] = pid
+                st.rerun()
+
+        plan_elegido = st.session_state["plan_seleccionado_tarjeta"]
+
+        st.markdown("<hr style='margin: 14px 0 12px 0; border:none; border-top:1px solid #CBD5E1;'>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-bottom:6px;'>3. Verifica tu correo electrónico (recibirás aquí tu contraseña)</div>", unsafe_allow_html=True)
+
+        col_em1, col_em2 = st.columns(2)
+        with col_em1:
+            email_alta_1 = st.text_input("Correo electrónico:", placeholder="tucorreo@ejemplo.com", key="sub_email_alta_1")
+        with col_em2:
+            email_alta_2 = st.text_input("Repite tu correo electrónico:", placeholder="tucorreo@ejemplo.com", key="sub_email_alta_2")
+
+        em_1_limpio = (email_alta_1 or "").lower().strip()
+        em_2_limpio = (email_alta_2 or "").lower().strip()
+
+        # Si el usuario cambia el correo escrito, invalidamos cualquier verificación previa
+        if st.session_state.get("email_verificado_ok") and st.session_state.get("email_verificado_ok") != em_1_limpio:
+            st.session_state["email_verificado_ok"] = ""
+
+        ya_verificado = bool(em_1_limpio and st.session_state.get("email_verificado_ok") == em_1_limpio)
+
+        if not ya_verificado:
+            if st.button("📩 Enviar código de verificación a mi correo", use_container_width=True, key="btn_enviar_cod_verif"):
+                if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio):
+                    st.error("⚠️ Introduce una dirección de correo electrónico válida.")
+                elif em_1_limpio != em_2_limpio:
+                    st.error("⚠️ Los dos correos electrónicos no coinciden. Revísalos antes de continuar.")
+                else:
+                    cod_6 = f"{secrets.randbelow(900000) + 100000}"
+                    st.session_state["codigo_verif_pendiente"] = cod_6
+                    st.session_state["email_verif_pendiente"] = em_1_limpio
+                    st.session_state["ts_verif_pendiente"] = time.time()
+                    with st.spinner("Enviando código de verificación a tu bandeja de entrada..."):
+                        r_mail = enviar_email_suscriptor(
+                            em_1_limpio,
+                            f"🔐 Código de verificación ({cod_6}) — Oposiciona",
+                            f"<div style='font-family:sans-serif; color:#1E293B; max-width:520px;'>"
+                            f"<h3 style='color:#1F77B4;'>Verificación de tu correo electrónico</h3>"
+                            f"<p>Introduce el siguiente código de 6 dígitos en la pantalla de registro de <b>Oposiciona</b> para confirmar que tu correo es correcto:</p>"
+                            f"<div style='font-size:26px; font-weight:800; letter-spacing:4px; background:#EFF6FF; border:1px solid #93C5FD; padding:12px; text-align:center; border-radius:8px; color:#1E3A8A;'>{cod_6}</div>"
+                            f"<p style='font-size:12.5px; color:#64748B; margin-top:12px;'>Este código caduca en 15 minutos.</p></div>"
+                        )
+                    if r_mail.get("ok"):
+                        st.success(f"✅ Hemos enviado un código de 6 dígitos a **{em_1_limpio}** (revisa también Spam/Promociones).")
+                    else:
+                        st.error(f"❌ No se pudo enviar el correo de verificación: {r_mail.get('error', 'Error desconocido')}")
+
+            if st.session_state.get("email_verif_pendiente") == em_1_limpio and em_1_limpio:
+                col_cod1, col_cod2 = st.columns([2, 1.2])
+                with col_cod1:
+                    cod_introducido = st.text_input("Introduce el código de 6 dígitos recibido:", max_chars=6, placeholder="123456", key="in_cod_verif_6")
+                with col_cod2:
+                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                    if st.button("✔️ Confirmar código", use_container_width=True, type="primary", key="btn_confirmar_cod_6"):
+                        expirado = (time.time() - st.session_state.get("ts_verif_pendiente", 0)) > 900
+                        if expirado:
+                            st.error("⚠️ El código ha caducado. Pulsa arriba para enviarte uno nuevo.")
+                        elif (cod_introducido or "").strip() == st.session_state.get("codigo_verif_pendiente"):
+                            st.session_state["email_verificado_ok"] = em_1_limpio
+                            st.rerun()
+                        else:
+                            st.error("❌ Código incorrecto. Comprueba el correo recibido.")
+        else:
+            st.success(f"✅ Correo electrónico verificado correctamente: **{em_1_limpio}**")
+            info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
+            st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
+            if st.button("💳 Continuar al pago seguro y activar acceso inmediato", use_container_width=True, type="primary", key="btn_ir_stripe"):
+                with st.spinner("Conectando con la pasarela segura de pago..."):
+                    url_checkout, err_chk = crear_sesion_pago_stripe(em_1_limpio, plan_elegido)
                 if url_checkout:
-                    st.success("✅ Pasarela lista. Pulsa en el botón inferior para completar el pago:")
-                    st.link_button("🔒 Abrir pasarela de pago segura (Stripe)", url_checkout, use_container_width=True, type="primary")
+                    st.success("✅ Pasarela lista. Pulsa en el botón inferior para completar tu suscripción:")
+                    st.link_button("🔒 Abrir pasarela de pago segura", url_checkout, use_container_width=True, type="primary")
                 else:
                     st.error(f"❌ {err_chk}")
 
