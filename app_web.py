@@ -213,6 +213,27 @@ div.stButton > button:hover, button[kind="secondary"]:hover {
     border-color: #94A3B8 !important;
     color: #000000 !important;
 }
+div[data-testid="stDownloadButton"] > button {
+    background-color: #FEF3C7 !important;
+    color: #78350F !important;
+    -webkit-text-fill-color: #78350F !important;
+    border: 2px solid #D97706 !important;
+    border-radius: 8px !important;
+    padding: 10px 16px !important;
+    min-height: 46px !important;
+}
+div[data-testid="stDownloadButton"] > button p,
+div[data-testid="stDownloadButton"] > button span,
+div[data-testid="stDownloadButton"] > button * {
+    color: #78350F !important;
+    -webkit-text-fill-color: #78350F !important;
+    font-weight: 800 !important;
+    font-size: 15.5px !important;
+}
+div[data-testid="stDownloadButton"] > button:hover {
+    background-color: #FDE68A !important;
+    border-color: #B45309 !important;
+}
 div.stButton > button[kind="primary"], button[kind="primary"],
 div[data-testid="stLinkButton"] > a,
 div.stLinkButton > a,
@@ -585,6 +606,68 @@ TEXTO_AVISO_CALENDARIO_TEMAS = (
     "Esta plataforma se irá cargando poco a poco con todos los temas de la oposición, "
     "según calendario de temas adaptado a nuestros alumnos."
 )
+
+ID_PDF_CALENDARIO_TEMAS = "1wreD3wxKRr-mGzxmKQ8k6ZQx6tdRe8t_"
+URL_PDF_CALENDARIO_VISTA = f"https://drive.google.com/file/d/{ID_PDF_CALENDARIO_TEMAS}/view?usp=drive_link"
+URL_PDF_CALENDARIO_DESCARGA = f"https://drive.google.com/uc?export=download&id={ID_PDF_CALENDARIO_TEMAS}"
+
+@st.cache_data(ttl=60, show_spinner=False)
+def obtener_bytes_pdf_calendario():
+    """Descarga en vivo el PDF actualizado desde Google Drive (refrescándose cada 60 segundos)."""
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "User-Agent": "Mozilla/5.0"
+    }
+    urls_intento = [
+        f"https://drive.usercontent.google.com/download?id={ID_PDF_CALENDARIO_TEMAS}&export=download&confirm=t",
+        f"https://drive.google.com/uc?export=download&id={ID_PDF_CALENDARIO_TEMAS}"
+    ]
+    for u in urls_intento:
+        try:
+            r = requests.get(u, headers=headers, timeout=12, allow_redirects=True)
+            if r.status_code == 200 and r.content and r.content[:4] == b"%PDF":
+                return r.content
+        except Exception:
+            continue
+    return None
+
+def render_bloque_aviso_calendario_pdf(sufijo_key="planes"):
+    """Muestra en grande el aviso de carga progresiva y el botón de descarga del PDF actualizado."""
+    st.markdown(
+        f"<div style='background:#FFFBEB; border:3px solid #D97706; border-radius:12px; padding:20px 22px; margin:12px 0 10px 0; box-shadow:0 4px 12px rgba(217, 119, 6, 0.14);'>"
+        f"<div style='font-size:19px; font-weight:900; color:#92400E !important; margin-bottom:10px; letter-spacing:0.2px;'>"
+        f"⚠️ AVISO IMPORTANTE SOBRE EL CALENDARIO DE CONTENIDOS"
+        f"</div>"
+        f"<div style='font-size:18px; font-weight:700; line-height:1.55; color:#78350F !important; text-align:justify; margin-bottom:12px;'>"
+        f"«{TEXTO_AVISO_CALENDARIO_TEMAS}»"
+        f"</div>"
+        f"<div style='font-size:14.5px; font-weight:600; line-height:1.45; color:#1E293B !important; background:#FFFFFF; border:1px dashed #D97706; border-radius:8px; padding:10px 14px;'>"
+        f"📄 <b>Consulta los temas actuales y próximas incorporaciones:</b> descarga y revisa a continuación el documento PDF actualizado antes de finalizar tu inscripción."
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+    pdf_cal_bytes = obtener_bytes_pdf_calendario()
+    if pdf_cal_bytes:
+        st.download_button(
+            label="📥 DESCARGAR CALENDARIO Y RELACIÓN DE TEMAS (PDF)",
+            data=pdf_cal_bytes,
+            file_name="Calendario_Temas_Oposiciona.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key=f"btn_dl_pdf_calendario_{sufijo_key}"
+        )
+    else:
+        st.markdown(
+            f"<a href='{URL_PDF_CALENDARIO_VISTA}' target='_blank' rel='noopener noreferrer' "
+            f"style='display:block; width:100%; background-color:#FEF3C7; color:#78350F !important; -webkit-text-fill-color:#78350F !important; "
+            f"border:2px solid #D97706; border-radius:8px; padding:11px 16px; text-align:center; font-weight:800; font-size:15.5px; text-decoration:none; box-sizing:border-box; margin-bottom:8px;'>"
+            f"📥 ABRIR Y DESCARGAR CALENDARIO DE TEMAS (PDF)"
+            f"</a>",
+            unsafe_allow_html=True
+        )
 
 def _cfg_suscripciones():
     def _get_sec(k, default=""):
@@ -1060,13 +1143,8 @@ if not st.session_state.autenticado:
                 format_func=lambda k: PLANES_SUSCRIPCION_OPOSICIONA[k]["titulo_nivel"],
                 key="sel_react_login_plan"
             )
-            st.markdown(
-                f"<div style='background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:8px; padding:11px 14px; margin:8px 0; font-size:13.5px; color:#78350F !important;'>"
-                f"📌 <b>Nota importante:</b> {TEXTO_AVISO_CALENDARIO_TEMAS}"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-            acepta_react = st.checkbox("✅ ACEPTAR: He leído esta información y deseo continuar con la suscripción.", key="chk_aceptar_cal_react")
+            render_bloque_aviso_calendario_pdf(sufijo_key="react_login")
+            acepta_react = st.checkbox("✅ ACEPTAR: He revisado la información anterior y deseo continuar con la suscripción.", key="chk_aceptar_cal_react")
             if acepta_react:
                 url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react)
                 if url_r_chk:
@@ -1208,16 +1286,11 @@ if not st.session_state.autenticado:
             info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
             st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
 
-            st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-top:10px; margin-bottom:6px;'>4. Información importante antes de suscribirte</div>", unsafe_allow_html=True)
-            st.markdown(
-                f"<div style='background:#FFFBEB; border:2px solid #F59E0B; border-radius:10px; padding:14px 16px; margin-bottom:10px; font-size:14px; line-height:1.5; color:#78350F !important;'>"
-                f"⚠️ <b>Aviso sobre el calendario de contenidos:</b><br>"
-                f"«{TEXTO_AVISO_CALENDARIO_TEMAS}»"
-                f"</div>",
-                unsafe_allow_html=True
-            )
+            st.markdown("<div style='font-size:17.5px; font-weight:900; color:#1E293B !important; margin-top:14px; margin-bottom:4px;'>4. Información importante antes de suscribirte</div>", unsafe_allow_html=True)
+            render_bloque_aviso_calendario_pdf(sufijo_key="planes")
 
             if not st.session_state.get("aviso_calendario_aceptado", False):
+                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
                 if st.button("✅ ACEPTAR Y CONTINUAR CON LA SUSCRIPCIÓN", use_container_width=True, type="primary", key="btn_aceptar_aviso_temas"):
                     st.session_state["aviso_calendario_aceptado"] = True
                     st.rerun()
