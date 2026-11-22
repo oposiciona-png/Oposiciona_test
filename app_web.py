@@ -581,6 +581,11 @@ PLANES_SUSCRIPCION_OPOSICIONA = {
     }
 }
 
+TEXTO_AVISO_CALENDARIO_TEMAS = (
+    "Esta plataforma se irá cargando poco a poco con todos los temas de la oposición, "
+    "según calendario de temas adaptado a nuestros alumnos."
+)
+
 def _cfg_suscripciones():
     def _get_sec(k, default=""):
         try:
@@ -694,12 +699,12 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     if not price_id:
         return None, f"No se encontró en Stripe el producto '{info_plan['nombre_stripe']}'. Verifica su nombre exacto."
 
-    # Si el alumno ya existía antes en la hoja, reutilizamos su STRIPE_CUSTOMER_ID para no duplicar fichas
     sub_previo = buscar_suscriptor_externo(em_clean)
     cust_previo = str((sub_previo or {}).get("STRIPE_CUSTOMER_ID", "")).strip()
 
     payload_checkout = {
         "mode": "subscription",
+        "allow_promotion_codes": "true",
         "line_items[0][price]": price_id,
         "line_items[0][quantity]": "1",
         "success_url": f"{cfg['app_url']}/?stripe_session_id={{CHECKOUT_SESSION_ID}}",
@@ -717,7 +722,6 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     resp = _stripe_api_request("POST", "checkout/sessions", data=payload_checkout)
     if resp.get("url"):
         return resp["url"], None
-    # Si el customer_id antiguo no pertenecía a este entorno (ej. cambio test/live), reintentar con customer_email
     if cust_previo:
         payload_checkout.pop("customer", None)
         payload_checkout["customer_email"] = em_clean
@@ -729,7 +733,6 @@ def crear_sesion_pago_stripe(email_usuario, plan_id):
     return None, err_msg
 
 def obtener_url_checkout_sesion_actual(email_usuario, plan_id):
-    """Guarda el enlace de pago en la sesión del navegador actual para que st.link_button abra al primer clic y se renueve limpio si vuelve a intentarlo."""
     clave_cache = f"{email_usuario.lower().strip()}|{plan_id}"
     guardado = st.session_state.get("_checkout_cache_actual")
     if guardado and guardado.get("key") == clave_cache and (time.time() - guardado.get("ts", 0)) < 1200:
@@ -1043,7 +1046,6 @@ if not st.session_state.autenticado:
                 else:
                     st.error("❌ Correo o contraseña incorrectos, o no tienes autorización activa.")
 
-        # Si un exalumno mete sus credenciales correctas pero su suscripción estaba inactiva, puede reactivarla aquí mismo en 1 clic
         if st.session_state.get("sub_reactivacion_login"):
             em_react = st.session_state["sub_reactivacion_login"]
             st.warning(f"ℹ️ Hola **{em_react}**: tu cuenta ya está verificada, pero tu suscripción mensual figura actualmente como inactiva.")
@@ -1058,11 +1060,19 @@ if not st.session_state.autenticado:
                 format_func=lambda k: PLANES_SUSCRIPCION_OPOSICIONA[k]["titulo_nivel"],
                 key="sel_react_login_plan"
             )
-            url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react)
-            if url_r_chk:
-                st.link_button("💳 Reactivar mi suscripción ahora (acceso inmediato)", url_r_chk, use_container_width=True, type="primary")
-            elif err_r_chk:
-                st.error(f"❌ {err_r_chk}")
+            st.markdown(
+                f"<div style='background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:8px; padding:11px 14px; margin:8px 0; font-size:13.5px; color:#78350F !important;'>"
+                f"📌 <b>Nota importante:</b> {TEXTO_AVISO_CALENDARIO_TEMAS}"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            acepta_react = st.checkbox("✅ ACEPTAR: He leído esta información y deseo continuar con la suscripción.", key="chk_aceptar_cal_react")
+            if acepta_react:
+                url_r_chk, err_r_chk = obtener_url_checkout_sesion_actual(em_react, plan_sel_react)
+                if url_r_chk:
+                    st.link_button("💳 Reactivar mi suscripción ahora (acceso inmediato)", url_r_chk, use_container_width=True, type="primary")
+                elif err_r_chk:
+                    st.error(f"❌ {err_r_chk}")
 
     with tab_planes:
         st.markdown(
@@ -1130,8 +1140,8 @@ if not st.session_state.autenticado:
 
         if st.session_state.get("email_verificado_ok") and st.session_state.get("email_verificado_ok") != em_1_limpio:
             st.session_state["email_verificado_ok"] = ""
+            st.session_state["aviso_calendario_aceptado"] = False
 
-        # Si el alumno ya existe en nuestra base de suscriptores (exalumno que vuelve o correo ya registrado antes)
         ficha_existente = buscar_suscriptor_externo(em_1_limpio) if (em_1_limpio and em_1_limpio == em_2_limpio and re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', em_1_limpio)) else None
         ya_estuvo_registrado = bool(ficha_existente and ficha_existente.get("EMAIL"))
         ya_activo_ahora = False
@@ -1194,19 +1204,36 @@ if not st.session_state.autenticado:
                 st.success(f"✅ ¡Hola de nuevo! Hemos reconocido tu cuenta verificada (**{em_1_limpio}**). Conservarás tu misma contraseña al reactivar.")
             else:
                 st.success(f"✅ Correo electrónico verificado correctamente: **{em_1_limpio}**")
+
             info_resumen = PLANES_SUSCRIPCION_OPOSICIONA[plan_elegido]
             st.info(f"📌 Modalidad elegida: **{info_resumen['titulo_nivel']}**")
-            with st.spinner("Preparando pasarela de pago segura..."):
-                url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido)
-            if url_checkout:
-                st.link_button(
-                    "💳 Continuar al pago seguro y activar acceso inmediato",
-                    url_checkout,
-                    use_container_width=True,
-                    type="primary"
-                )
+
+            st.markdown("<div style='font-size:15.5px; font-weight:800; color:#1E293B !important; margin-top:10px; margin-bottom:6px;'>4. Información importante antes de suscribirte</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='background:#FFFBEB; border:2px solid #F59E0B; border-radius:10px; padding:14px 16px; margin-bottom:10px; font-size:14px; line-height:1.5; color:#78350F !important;'>"
+                f"⚠️ <b>Aviso sobre el calendario de contenidos:</b><br>"
+                f"«{TEXTO_AVISO_CALENDARIO_TEMAS}»"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+            if not st.session_state.get("aviso_calendario_aceptado", False):
+                if st.button("✅ ACEPTAR Y CONTINUAR CON LA SUSCRIPCIÓN", use_container_width=True, type="primary", key="btn_aceptar_aviso_temas"):
+                    st.session_state["aviso_calendario_aceptado"] = True
+                    st.rerun()
             else:
-                st.error(f"❌ {err_chk}")
+                st.success("✅ Condiciones de calendario de temas aceptadas.")
+                with st.spinner("Preparando pasarela de pago segura..."):
+                    url_checkout, err_chk = obtener_url_checkout_sesion_actual(em_1_limpio, plan_elegido)
+                if url_checkout:
+                    st.link_button(
+                        "💳 Continuar al pago seguro y activar acceso inmediato",
+                        url_checkout,
+                        use_container_width=True,
+                        type="primary"
+                    )
+                else:
+                    st.error(f"❌ {err_chk}")
 
     with tab_recuperar:
         st.markdown("<p style='font-size:13.5px; color:#1E293B !important;'>Introduce tu correo de suscriptor y te enviaremos al instante una nueva contraseña de acceso.</p>", unsafe_allow_html=True)
