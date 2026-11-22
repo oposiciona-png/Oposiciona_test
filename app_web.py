@@ -7968,7 +7968,7 @@ if not st.session_state.questions:
     with col_img:
         try: st.image("test-utiles-768x768.png", use_container_width=True)
         except: pass
-  with col_texto:
+    with col_texto:
         st.markdown("<div style='font-size:22px; font-weight:700; color:#2C3E50 !important; margin-top: -10px; margin-bottom: 8px;'>📚 Comienza a practicar</div>", unsafe_allow_html=True)
         rol = st.session_state.rol
         TESTS_DISPONIBLES = obtener_tests_segun_rol()
@@ -8236,8 +8236,9 @@ if not st.session_state.questions:
                         ex = generar_simulacro_aleatorio(especialidad, amb, total_deseadas, TESTS_DISPONIBLES)
                         if ex: procesar_preguntas(ex)
                         else: st.error("No se pudo extraer ninguna pregunta.")
-                        
-if rol != "INVITADO" and not st.session_state.get("es_suscriptor_externo"):
+
+    if rol != "INVITADO" and not st.session_state.get("es_suscriptor_externo"):
+        with st.expander("Opcional: Subir un PDF o Word (.docx) manualmente desde tu dispositivo"):
             uf = st.file_uploader("", type=["pdf", "docx"])
             if uf is not None:
                 limpiar_estados_reportes_error()
