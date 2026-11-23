@@ -9138,7 +9138,6 @@ if not st.session_state.questions:
         with st.container():
             st.markdown("<div class='marcador-cat-dos-filas'></div><div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>2. Categoría</div>", unsafe_allow_html=True)
 
-            # LÍNEA 1: ETIQUETA TEST -> ESPECIFICO, EXÁMENES, GENERAL
             if fila_test_cats:
                 cols_f1 = st.columns([0.95] + [1.15] * len(fila_test_cats))
                 with cols_f1[0]:
@@ -9157,7 +9156,6 @@ if not st.session_state.questions:
                             args=(cat_1,)
                         )
 
-            # LÍNEA 2: ETIQUETA SUPUESTOS -> SUPUESTOS (Administrativos) / SUPUESTOS y DESARROLLO (Gestión)
             if fila_sup_cats:
                 relleno_cols = max(0, len(fila_test_cats) - len(fila_sup_cats))
                 pesos_f2 = [0.95] + [1.15] * len(fila_sup_cats) + ([1.15] * relleno_cols if relleno_cols > 0 else [])
@@ -9180,7 +9178,7 @@ if not st.session_state.questions:
 
         categoria = st.session_state.saved_cat
 
-    # Botón único en 1 solo clic (MEJORA / FACTURACIÓN / CANCELACIÓN) + cambio de contraseña
+    # Botón único en 1 solo clic al Portal de Stripe + aviso sobre uso único de códigos de descuento
     if st.session_state.get("es_suscriptor_externo"):
         cfg_sub_ui = _cfg_suscripciones()
         plan_act_ui = st.session_state.get("plan_suscripcion", "")
@@ -9189,8 +9187,17 @@ if not st.session_state.questions:
 
         if cfg_sub_ui["modo_fiscal"] == "EXENTO_TUTORIZADO":
             st.markdown(
-                "<div style='background:#F0FDF4; border:1px solid #86EFAC; border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:12.5px; color:#14532D !important;'>"
+                "<div style='background:#F0FDF4; border:1px solid #86EFAC; border-radius:8px; padding:8px 12px; margin-bottom:6px; font-size:12.5px; color:#14532D !important;'>"
                 "📅 <b>Tutoría incluida:</b> Dudas por correo en <b>info@oposiciona.es</b>, boletín normativo y clase mensual en directo (domingos)."
+                "</div>",
+                unsafe_allow_html=True
+            )
+
+        if tiene_mejoras_disp:
+            st.markdown(
+                "<div style='background:#FFFBEB; border:1px solid #F59E0B; border-radius:8px; padding:7px 12px; margin-bottom:6px; font-size:12.3px; color:#92400E !important;'>"
+                "ℹ️ <b>Nota sobre mejoras de modalidad:</b> Los códigos promocionales o de descuento solo se aplican <b>una única vez por usuario</b> en la suscripción inicial. "
+                "Al mejorar a un plan superior se abonará la diferencia hasta la tarifa general del nuevo plan."
                 "</div>",
                 unsafe_allow_html=True
             )
@@ -9200,7 +9207,7 @@ if not st.session_state.questions:
         if guardado_p_unico and guardado_p_unico.get("url") and (time.time() - guardado_p_unico.get("ts", 0)) < 1200:
             url_portal_unico, err_portal_unico = guardado_p_unico["url"], ""
         else:
-            url_portal_unico, err_portal_unico = crear_enlace_portal_stripe_detallado(cust_id_ui, modo="facturacion")
+            url_portal_unico, err_portal_unico = crear_enlace_portal_stripe_detallado(cust_id_ui, plan_vigente_hint=plan_act_ui)
             if url_portal_unico:
                 st.session_state[clave_p_unico] = {"url": url_portal_unico, "ts": time.time()}
 
@@ -9252,10 +9259,10 @@ if not st.session_state.questions:
 
     st.markdown(f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] and es_admin:
-        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Incluye dictado por voz en tiempo real y valoración por IA según los Criterios Oficiales del Tribunal.")
+        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Incluye dictado por voz en tiempo real y corrección técnica según los Criterios Oficiales del Tribunal.")
     elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
         if "GESTI" in especialidad.upper():
-            st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos Gestión):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en recuadro gris en negrita), permite dictar por voz y valora cada cuestión de 0 a 10 comparándola con la solución oficial.")
+            st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos Gestión):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en recuadro gris en negrita), permite dictar por voz y califica cada cuestión de 0 a 10 comparándola con la solución técnica oficial.")
         else:
             st.info("🔒 **Modo Administrador — Supuestos Prácticos Tipo Test (Administrativos):** Extrae los supuestos prácticos (uno o varios por tema), muestra el planteamiento en recuadro gris en negrita, la pregunta en marco y las 4 opciones tipo test seleccionables con corrección oficial.")
 
@@ -9278,7 +9285,7 @@ if not st.session_state.questions:
                 "<div style='background-color:#FEFCE8; border:2px solid #D97706; border-radius:10px; padding:14px 18px; margin-top:4px; margin-bottom:12px; line-height:1.5; color:#1E293B !important;'>"
                 "<div style='font-size:15.5px; font-weight:800; color:#92400E !important; margin-bottom:6px;'>📋 Demostración para Invitado — Categoría SUPUESTOS (Oposiciona 5.0)</div>"
                 "<p style='font-size:13.5px; color:#1E293B !important; text-align:justify; margin-bottom:0px;'>"
-                "Tienes habilitado un supuesto práctico completo de demostración en esta especialidad (tipo test comentado en <b>Administrativos</b> y de desarrollo evaluado por IA en <b>Gestión</b>). "
+                "Tienes habilitado un supuesto práctico completo de demostración en esta especialidad (tipo test comentado en <b>Administrativos</b> y de desarrollo con corrección técnica conforme a los criterios del Tribunal en <b>Gestión</b>). "
                 "Solicita acceso al catálogo completo escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</p>"
                 "</div>",
