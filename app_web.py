@@ -6988,7 +6988,7 @@ def descargar_pdf_fresco(url):
     return ultimo_resp if ultimo_resp is not None else requests.get(url, headers=headers, timeout=20)
 # === FIN SECCIÓN 4A ===
 
-# === SECCIÓN 4B: MOTOR DE INTELIGENCIA ARTIFICIAL (GEMINI) Y EVALUACIÓN DE DESARROLLO Y SUPUESTOS ===
+# === SECCIÓN 4B: MOTOR DE EVALUACIÓN TÉCNICA DEL TRIBUNAL PARA DESARROLLO Y SUPUESTOS ===
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
     if not t_raw:
@@ -7659,7 +7659,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if aviso_respaldo_inapropiado is not None:
         etiqueta_cero = "[[NOTA_SUPUESTO: 0.00]]" if modo in ("SUPUESTO", "SUPUESTOS") else "[[NOTAS_TRIBUNAL: C1=0.00 | C2=0.00 | C3=0.00]]"
         prompt_educado = (
-            "Actúa como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual).\n"
             "El alumno ha introducido el siguiente texto en lugar de resolver adecuadamente el ejercicio:\n"
             f"«{respuesta_alumno}»\n\n"
             f"Pregunta planteada: {pregunta}\n"
@@ -7699,7 +7699,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "\n4. **TONO CONSTRUCTIVO ANTE RESPUESTAS CORTAS O DUDOSAS:** Si la respuesta del alumno es demasiado breve o incompleta, anímale de forma muy educada a practicar lo aprendido desarrollando tanto la solución como su fundamentación jurídica.\n"
         )
         prompt = (
-            "Actúa como el equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual).\n"
             "Evalúa la respuesta del alumno a esta cuestión de un SUPUESTO PRÁCTICO comparándola directamente con la "
             "EXPLICACIÓN Y RESPUESTA TÉCNICA OFICIAL de la pregunta (SIN aplicar baremos ni criterios formales de Tribunal C1/C2/C3).\n\n"
             "=== REGLAS DE CORRECCIÓN DEL SUPUESTO PRÁCTICO ===\n"
@@ -7734,7 +7734,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         )
 
         prompt = (
-            "Actúa como el Tribunal Calificador y equipo de preparadores del Cuerpo de Gestión de la Administración de la Seguridad Social.\n"
+            "Actúa exclusivamente como el Tribunal Calificador y equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual).\n"
             "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
             "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
             "=== REGLAS EQUILIBRADAS DE VALORACIÓN DEL TRIBUNAL ===\n"
@@ -7873,7 +7873,7 @@ def generar_pdf_reporte_error(datos_rep):
                 "RESPUESTA ESCRITA POR EL ALUMNO:",
                 rep.get("respuesta_alumno", ""),
                 "-" * 78,
-                "VALORACIÓN DE LA IA:",
+                "DICTAMEN DE CORRECCIÓN TÉCNICA:",
                 rep.get("valoracion_ia", ""),
                 "-" * 78,
             ])
@@ -8033,7 +8033,7 @@ def render_cuadro_reporte_error(q, num_pregunta, ubicacion_key):
                     "ALUMNO_Y_TEMA": f"Alumno: {usuario_rep} | Tema: {tema_vis} | Archivo: {nombre_pdf} ({tipo_lbl} {num_pregunta})",
                     "ENUNCIADO_PREGUNTA_O_EPIGRAFE": pregunta_txt[:1500],
                     "RESPUESTA_DEL_ALUMNO": resp_alumno_env[:2500],
-                    "VALORACION_DE_LA_IA": dictamen_env[:2500],
+                    "DICTAMEN_DE_CORRECCION": dictamen_env[:2500],
                     "TEXTO_OFICIAL_REFERENCIA": exp_limpia[:2500],
                     "message": f"REPORTE DE {usuario_rep}: {motivo_limpio}\n\nTest: {nombre_pdf} ({tipo_lbl} {num_pregunta})\nEnunciado: {pregunta_txt}",
                     "_template": "table",
@@ -10038,7 +10038,7 @@ elif not st.session_state.finished:
                 stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
                 if es_desarrollo_epigrafe:
                     registrar_epigrafe_desarrollo_en_sheets(idx)
-                st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres que la IA evalúe tu redacción, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
+                st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres recibir la valoración y calificación de tu redacción conforme a los criterios del Tribunal, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
             else:
                 if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
                     slot_tribunal_5b = st.empty()
@@ -10104,7 +10104,7 @@ elif not st.session_state.finished:
 
                     st.markdown(
                         "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 VALORACIÓN DE LA IA Y ORIENTACIÓN PARA TU ESTUDIO</div>"
+                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>⚖️ VALORACIÓN TÉCNICA Y ORIENTACIÓN PARA TU ESTUDIO</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -10139,7 +10139,7 @@ elif not st.session_state.finished:
 
                     st.markdown(
                         "<div style='background-color:#f0fdf4; border:2px solid #16a34a; border-radius:8px; padding:10px 14px 4px 14px; margin-top:8px; margin-bottom:8px;'>"
-                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>🤖 ANÁLISIS COMPARATIVO Y VALORACIÓN DE LA IA</div>"
+                        "<div style='font-size:15px; font-weight:800; color:#15803d !important; margin-bottom:4px;'>⚖️ ANÁLISIS COMPARATIVO Y DICTAMEN DE CORRECCIÓN</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
@@ -10404,7 +10404,7 @@ else:
         st.session_state.animacion_fin_mostrada = True
         st.session_state.fase_deliberacion_tribunal = False
         msg_inicial_anim = (
-            f"El Tribunal Calificador de IA está revisando y puntuando {len(pendientes_ia)} respuesta(s) escrita(s). Por favor, espera unos segundos..."
+            f"El Tribunal Calificador está revisando y puntuando {len(pendientes_ia)} respuesta(s) escrita(s) conforme al baremo oficial. Por favor, espera unos segundos..."
             if pendientes_ia else
             "El Tribunal Calificador está comprobando tu hoja de respuestas y calculando tu nota oficial..."
         )
@@ -10782,7 +10782,7 @@ else:
             unsafe_allow_html=True
         )
         if q.get("is_open") and stat.get("ai_feedback"):
-            with st.expander(f"🤖 Ver valoración detallada de la IA para {tipo_lbl_res} {i + 1}"):
+            with st.expander(f"⚖️ Ver valoración técnica detallada para {tipo_lbl_res} {i + 1}"):
                 st.markdown(stat["ai_feedback"])
         if puede_rep:
             key_rep_res = f"rep_open_res_{id_test_fin}_{i + 1}"
@@ -10803,8 +10803,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5C ===
-
-
-
-
-
