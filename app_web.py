@@ -3915,7 +3915,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
             cola_exp = m_reta_esp.group(2).strip()
         else:
             m_exp_inline = re.search(
-                r'(?<=[.?!»"\)\]])\s*((?:#\s*)?EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?\s*[:\.]\s*.*)$',
+                r'(?<=[.?!»"\)\]])\s*((?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?|Justificaci[óo]n\s+legal)\s*[:\.]\s*.*)$',
                 l,
                 flags=re.IGNORECASE
             )
@@ -3975,7 +3975,7 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
                 num_iso <= 150 and
                 prev_cerrada and
                 t_nx_clean and
-                not re.match(r'^(?:EXPLICACI[ÓO]N|Respuesta|Soluci[óo]n)\b', t_nx_clean, re.IGNORECASE) and
+                not re.match(r'^(?:EXPLICACI[ÓO]N|Justificaci[óo]n\s+legal|Respuesta|Soluci[óo]n)\b', t_nx_clean, re.IGNORECASE) and
                 not re.match(r'^[a-dA-D][\)\.\-]\s*', t_nx_clean) and
                 not re.match(r'^(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)\s+', t_nx_clean, re.IGNORECASE)
             ):
@@ -4099,7 +4099,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                             sb = "bold" in (s.get("font", "") or "").lower() or bool(s.get("flags", 0) & 16)
                             if (
                                 curr_s_txt and
-                                re.match(r'^\s*(?:[a-dA-D][\)\.\-](?:\s+|$)|EXPLICACI[ÓO]N\s*:)', st, re.IGNORECASE) and
+                                re.match(r'^\s*(?:[a-dA-D][\)\.\-](?:\s+|$)|(?:EXPLICACI[ÓO]N|Justificaci[óo]n\s+legal)\s*:)', st, re.IGNORECASE) and
                                 re.search(r'(?:[.?!»"\)\];:]|^[a-dA-D][\)\.\-])\s*$', curr_s_txt.strip()) and
                                 not re.search(r'\b[A-Z]\.\s*$', curr_s_txt.strip())
                             ):
@@ -4117,7 +4117,7 @@ def _parse_test_fn(file_bytes, max_options=None):
                                     not st.startswith((" ", "\t", "\n", ".", ",", ";", ":", ")", "?")) and
                                     (
                                         re.match(r'^(?:#\s*)?(?:[a-dA-D][\)\.\-]|[Rr]?\d{1,3}[\.\-])$', curr_s_txt.strip()) or
-                                        re.match(r'^(?:[a-dA-D][\)\.\-]\s+|EXPLICACI[ÓO]N\s*:)', st.strip(), re.IGNORECASE)
+                                        re.match(r'^(?:[a-dA-D][\)\.\-]\s+|(?:EXPLICACI[ÓO]N|Justificaci[óo]n\s+legal)\s*:)', st.strip(), re.IGNORECASE)
                                     )
                                 ):
                                     curr_s_txt += " " + st
@@ -4196,7 +4196,7 @@ def _parse_test_fn(file_bytes, max_options=None):
     pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
     pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D]\)\s*(?=[A-ZÁÉÍÓÚÑ¡¿"\'«\d])|[a-dA-D][\.\-]\s+)(.+)$')
     pat_exp = re.compile(
-        r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
+        r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|Justificaci[óo]n\s+legal\s*:\s*|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
         re.IGNORECASE
     )
     pat_exp_articulo_directo = re.compile(
@@ -4278,12 +4278,30 @@ def _parse_test_fn(file_bytes, max_options=None):
         if len(q_obj["options"]) >= 2:
             questions.append(q_obj)
 
-    for raw_line, is_bold in lineas_doc:
+    _mapa_griegos_agua = str.maketrans("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", "ABEZHIKMNOPTYX")
+
+    def _tiene_opciones_debajo_test(idx_actual):
+        vistas = 0
+        for j_lk in range(idx_actual + 1, min(len(lineas_doc), idx_actual + 18)):
+            txt_lk = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(lineas_doc[j_lk][0])).strip()
+            txt_lk_lat = txt_lk.translate(_mapa_griegos_agua)
+            if not txt_lk or PDFQuizParser._es_basura_cabecera_o_pie(txt_lk_lat):
+                continue
+            if pat_opt.match(txt_lk) or pat_opt_empty.match(txt_lk):
+                vistas += 1
+                if vistas >= 2:
+                    return True
+            elif vistas == 0 and pat_exp.match(txt_lk):
+                return False
+        return False
+
+    for idx_line_doc, (raw_line, is_bold) in enumerate(lineas_doc):
         line = PDFQuizParser._limpiar_marca_agua_linea(raw_line)
         if not line:
             continue
 
         line_sin_h = re.sub(r'^#\s*', '', line).strip()
+        line_sin_h_lat = line_sin_h.translate(_mapa_griegos_agua)
         if (
             len(line_sin_h) < 95 and
             not re.match(r'^\d{1,3}[\.\-\)]\s*Supuestos?\s+pr[áa]cticos?\s*:\s*\S+', line_sin_h, re.IGNORECASE) and
@@ -4300,7 +4318,7 @@ def _parse_test_fn(file_bytes, max_options=None):
             curr_q = None
             break
 
-        if PDFQuizParser._es_basura_cabecera_o_pie(line):
+        if PDFQuizParser._es_basura_cabecera_o_pie(line_sin_h_lat):
             continue
 
         m_q = pat_q.match(line)
@@ -4340,6 +4358,11 @@ def _parse_test_fn(file_bytes, max_options=None):
 
             aperturas_cita = len(re.findall(r'«|<+', exp_actual_txt))
             cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
+            es_errata_numeracion_con_opciones = (
+                state == "EXPLANATION" and
+                exp_actual_txt.endswith((".", "?", "!", "»", '"', ")")) and
+                _tiene_opciones_debajo_test(idx_line_doc)
+            )
             es_salto_o_reinicio_tras_cierre = (
                 curr_q is not None and
                 state == "EXPLANATION" and
@@ -4350,7 +4373,10 @@ def _parse_test_fn(file_bytes, max_options=None):
                     (
                         aperturas_cita <= cierres_cita and
                         not bool(re.search(r'(?:Art[íi]culo|Art\.|apartado)\s*[\d\.]*\s*:\s*$', exp_actual_txt, re.IGNORECASE)) and
-                        (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4)
+                        (
+                            (ultimo_num_pregunta + 1 < num_cand <= ultimo_num_pregunta + 4) or
+                            es_errata_numeracion_con_opciones
+                        )
                     )
                 )
             )
@@ -4381,9 +4407,15 @@ def _parse_test_fn(file_bytes, max_options=None):
 
                 pending_empty_opts = []
                 pre_opt_text_buf = None
+                num_mostrar = num_cand
                 if not es_reserva_r:
-                    ultimo_num_pregunta = num_cand
-                etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_cand}"
+                    if es_errata_numeracion_con_opciones and num_cand > ultimo_num_pregunta + 4:
+                        ultimo_num_pregunta = ultimo_num_pregunta + 1
+                        num_mostrar = ultimo_num_pregunta
+                    else:
+                        ultimo_num_pregunta = num_cand
+                        num_mostrar = num_cand
+                etiqueta_num = f"R{num_cand}" if es_reserva_r else f"{num_mostrar}"
                 curr_q = {
                     "question_text": f"{etiqueta_num}. {cuerpo_cand}",
                     "preamble": "",
