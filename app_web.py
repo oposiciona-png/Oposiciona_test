@@ -2164,6 +2164,7 @@ if not st.session_state.autenticado:
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
 NUEVOS_HOY = [
+    "TEMA 15 EL ACTO ADMINISTRATIVO",
     "TEMA 05b - RECAUDACIÓN VOLUNTARIA",
     "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
     "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES",
@@ -2238,6 +2239,7 @@ TESTS_DISPONIBLES = {
             "TEMA 12 - MINISTERIO": "https://drive.google.com/uc?export=download&id=1JzqJfb8ddB2wPb7ijOE6tsTA3rhPrhhH",
             "TEMA 13 REPASO FUENTES DEL DERECHO GENERAL": "https://drive.google.com/uc?export=download&id=1pMqfE5ThZaFgiqvqAWnXFeYfkOwCMUur",
             "TEMA 14 REPASO LA LEY GENERAL": "https://drive.google.com/uc?export=download&id=1k4RXRU6DKUQZ-MCI9A0T3kgiGOL39zgN",
+            "TEMA 15 EL ACTO ADMINISTRATIVO": "https://drive.google.com/uc?export=download&id=1EDynBcAjEGRp6wGo8BU4mzmlr1wMKKGR",
             "TEMA 20 - ATENCION AL PÚBLICO": "https://drive.google.com/uc?export=download&id=1v7I4oL03hQF8Q66MoG9ZiRnj_tHxjN2f",
         },
         "SUPUESTOS": {
