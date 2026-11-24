@@ -3945,7 +3945,7 @@ def _atomizar_linea_test_fn(raw_line, is_bold):
         segmentos.append((l, is_bold))
     else:
         partes_opt = re.split(
-            r'(?:(?<=[.?!»"\)\];:])(?<!\b[A-Z]\.)\s*|\s{2,})(?=(?:#\s*)?(?:[a-d]\)\s*|[a-d][\.\-]\s+|[A-D]\)\s*)[A-ZÁÉÍÓÚÑ¡¿"\'«\d])',
+            r'(?:(?<=[.?!»"\)\];:])(?<!\b[A-Z]\.)\s*|\s{2,})(?=(?:#\s*)?(?:[a-d]\)\s*|[a-d][\.\-]\s+|[A-D]\)\s*)[A-ZÁÉÍÓÚÑ¡¿"\'«\d])|(?<=[.?!»"])(?<!\bart\.)(?<!\bArt\.)\s+(?=(?:#\s*)?[a-d]\)\s+[a-záéíóúñ]{2,})',
             l
         )
         for p in partes_opt:
@@ -3977,7 +3977,7 @@ def _reparar_fragmentos_desordenados_pdf_fn(lineas_pagina):
                 num_iso <= 150 and
                 prev_cerrada and
                 t_nx_clean and
-                not re.match(r'^(?:EXPLICACI[ÓO]N|Justificaci[óo]n\s+legal|Respuesta|Soluci[óo]n)\b', t_nx_clean, re.IGNORECASE) and
+                not re.match(r'^(?:EXPLICACI[ÓO]N|Respuesta|Soluci[óo]n)\b', t_nx_clean, re.IGNORECASE) and
                 not re.match(r'^[a-dA-D][\)\.\-]\s*', t_nx_clean) and
                 not re.match(r'^(?:Pregunta\s+)?[Rr]?\d{1,3}\s*(?:\.\-|\-\.|\.|\-)\s+', t_nx_clean, re.IGNORECASE)
             ):
@@ -4196,7 +4196,7 @@ def _parse_test_fn(file_bytes, max_options=None):
         r'^(?:#\s*)?(?:Pregunta\s+)?([Rr]?\d{1,3})(?!\d)\s*(?:(?:\.\-|\-\.|\.|\-)\s*(["«\'¿¡\(\[]*[A-ZÁÉÍÓÚÑ].*)|([¿¡\[][A-ZÁÉÍÓÚÑ].*))$'
     )
     pat_opt_empty = re.compile(r'^(?:#\s*)?([a-dA-D])[\)\.\-]\s*$')
-    pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D]\)\s*(?=[A-ZÁÉÍÓÚÑ¡¿"\'«\d])|[a-dA-D][\.\-]\s+)(.+)$')
+    pat_opt = re.compile(r'^(?:#\s*)?([a-dA-D]\)\s*(?=[A-ZÁÉÍÓÚÑ¡¿"\'«\d])|[a-d]\)\s+(?=[a-záéíóúñ]{2,}\b)|[a-dA-D][\.\-]\s+)(.+)$')
     pat_exp = re.compile(
         r'^(?:#\s*)?(?:EXPLICACI[ÓO]N(?:\s+DETALLADA|\s+Y\s+JUSTIFICACI[ÓO]N\s+LEGAL|\s+Y\s+BASE\s+LEGAL|\s+PARA\s+ESTUDIO|\s*\([^)]*\))?(?:\s*[:\.]\s*|\s+(?=[A-ZÁÉÍÓÚÑ"«¡¿]))|Justificaci[óo]n\s+legal\s*:\s*|(?:Respuesta(?:\s+correcta)?|Soluci[óo]n)\s*:\s*)(.*)$',
         re.IGNORECASE
@@ -4284,18 +4284,25 @@ def _parse_test_fn(file_bytes, max_options=None):
 
     def _tiene_opciones_debajo_test(idx_actual):
         vistas = 0
-        for j_lk in range(idx_actual + 1, min(len(lineas_doc), idx_actual + 18)):
-            txt_lk = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(lineas_doc[j_lk][0])).strip()
+        tiene_marca_correcta_o_exp = False
+        for j_lk in range(idx_actual + 1, min(len(lineas_doc), idx_actual + 24)):
+            raw_lk, bold_lk = lineas_doc[j_lk]
+            txt_lk = re.sub(r'^#\s*', '', PDFQuizParser._limpiar_marca_agua_linea(raw_lk)).strip()
             txt_lk_lat = txt_lk.translate(_mapa_griegos_agua)
             if not txt_lk or PDFQuizParser._es_basura_cabecera_o_pie(txt_lk_lat):
                 continue
             if pat_opt.match(txt_lk) or pat_opt_empty.match(txt_lk):
                 vistas += 1
-                if vistas >= 2:
-                    return True
-            elif vistas == 0 and pat_exp.match(txt_lk):
-                return False
-        return False
+                if bold_lk or raw_lk.lstrip().startswith("#"):
+                    tiene_marca_correcta_o_exp = True
+            elif pat_exp.match(txt_lk):
+                if vistas == 0:
+                    return False
+                tiene_marca_correcta_o_exp = True
+                break
+            elif vistas >= 2 and pat_q.match(txt_lk):
+                break
+        return vistas >= 2 and tiene_marca_correcta_o_exp
 
     for idx_line_doc, (raw_line, is_bold) in enumerate(lineas_doc):
         line = PDFQuizParser._limpiar_marca_agua_linea(raw_line)
@@ -4362,6 +4369,8 @@ def _parse_test_fn(file_bytes, max_options=None):
             cierres_cita = len(re.findall(r'»|>+', exp_actual_txt))
             es_errata_numeracion_con_opciones = (
                 state == "EXPLANATION" and
+                num_cand > ultimo_num_pregunta and
+                not ya_cerro_con_pagina_tema and
                 exp_actual_txt.endswith((".", "?", "!", "»", '"', ")")) and
                 _tiene_opciones_debajo_test(idx_line_doc)
             )
@@ -4506,15 +4515,33 @@ def _parse_test_fn(file_bytes, max_options=None):
         if m_opt and state in ("QUESTION", "OPTIONS"):
             letra_cand_opt = m_opt.group(1)[0].lower()
             cuerpo_op = m_opt.group(2).strip()
+            empieza_en_minuscula = bool(re.match(r'^[a-záéíóúñ]', cuerpo_op))
+            es_cola_cita_normativa_minuscula = bool(
+                empieza_en_minuscula and
+                re.match(r'^(?:del|de\s+la|de\s+los|de\s+las|al|y\s+[a-d]\)|o\s+[a-d]\))\b', cuerpo_op, re.IGNORECASE)
+            )
             es_continuacion_referencia_letra = False
-            if state == "OPTIONS" and curr_q["options"] and not pending_empty_opts:
+            if state == "QUESTION" and empieza_en_minuscula:
+                q_acum_txt = curr_q["question_text"].rstrip()
+                if (
+                    letra_cand_opt != "a" or
+                    es_cola_cita_normativa_minuscula or
+                    bool(re.search(r'\b(?:letra|apartado|ep[íi]grafe|p[áa]rrafo|ordinal|inciso|art[íi]culo|art\.)\s*[\d\.]*\s*$', q_acum_txt, re.IGNORECASE)) or
+                    not q_acum_txt.endswith(("?", ":", "."))
+                ):
+                    es_continuacion_referencia_letra = True
+            elif state == "OPTIONS" and curr_q["options"] and not pending_empty_opts:
                 ult_opt_cuerpo = re.sub(r'^[a-dA-D][\)\.\-]\s*', '', curr_q["options"][-1]).strip()
                 letra_esperada_sig = chr(ord('a') + len(curr_q["options"]))
                 termina_en_ref_letra = bool(
-                    re.search(r'\b(?:letra|apartado|ep[íi]grafe|p[áa]rrafo|ordinal|inciso|opci[óo]n)s?\s*$', ult_opt_cuerpo, re.IGNORECASE)
+                    re.search(r'\b(?:letra|apartado|ep[íi]grafe|p[áa]rrafo|ordinal|inciso|opci[óo]n)s?\s*$', ult_opt_cuerpo, re.IGNORECASE) or
+                    (empieza_en_minuscula and re.search(r'(?:art[íi]culo|art\.)\s*\d+(?:\.\d+)*\.?\s*$', ult_opt_cuerpo, re.IGNORECASE))
                 )
-                empieza_en_minuscula = bool(re.match(r'^[a-záéíóúñ]', cuerpo_op))
-                if termina_en_ref_letra or (empieza_en_minuscula and not ult_opt_cuerpo.endswith((".", ";", "?", "!")) and letra_cand_opt != letra_esperada_sig):
+                if (
+                    termina_en_ref_letra or
+                    es_cola_cita_normativa_minuscula or
+                    (empieza_en_minuscula and not ult_opt_cuerpo.endswith((".", ";", "?", "!")) and letra_cand_opt != letra_esperada_sig)
+                ):
                     es_continuacion_referencia_letra = True
 
             if not es_continuacion_referencia_letra:
