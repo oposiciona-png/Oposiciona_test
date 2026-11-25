@@ -768,7 +768,7 @@ PLANES_SUSCRIPCION_OPOSICIONA = {
         "especialidad": "GESTION",
         "precio_eur": 60,
         "rol": "GESTION_TEST_DESARROLLO",
-        "descripcion": "Incluye todos los Test y Exámenes + Epígrafes de Desarrollo calificados conforme a los criterios oficiales del Tribunal Calificador, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
+        "descripcion": "Incluye todos los Test y Exámenes + Epígrafes de Desarrollo corregidos por nuestros preparadores aplicando el baremo oficial de la oposición, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
     },
     "GES_COMPLETO": {
         "titulo_nivel": "Nivel 3: Preparación Integral Completa — 70 €/mes ⭐",
@@ -777,7 +777,7 @@ PLANES_SUSCRIPCION_OPOSICIONA = {
         "especialidad": "GESTION",
         "precio_eur": 70,
         "rol": "GESTION",
-        "descripcion": "Acceso total sin restricciones: Test General y Específico, Exámenes, Supuestos Prácticos y Epígrafes de Desarrollo calificados según criterios del Tribunal, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
+        "descripcion": "Acceso total sin restricciones: Test General y Específico, Exámenes, Supuestos Prácticos y Epígrafes de Desarrollo corregidos según el baremo oficial de la oposición, resolución de dudas por correo, actualizaciones comentadas y sesión mensual en directo."
     }
 }
 
@@ -7049,7 +7049,7 @@ def descargar_pdf_fresco(url):
     return ultimo_resp if ultimo_resp is not None else requests.get(url, headers=headers, timeout=20)
 # === FIN SECCIÓN 4A ===
 
-# === SECCIÓN 4B: MOTOR DE EVALUACIÓN TÉCNICA DEL TRIBUNAL PARA DESARROLLO Y SUPUESTOS ===
+# === SECCIÓN 4B: MOTOR DE EVALUACIÓN TÉCNICA DEL EQUIPO DE PREPARADORES OPOSICIONA ===
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
     if not t_raw:
@@ -7084,7 +7084,7 @@ def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     return None
 
 NOTA_METODOLOGICA_PREPARADORES = (
-    "ℹ️ <b>Criterios Oficiales de Valoración del Tribunal:</b> La calificación se realiza aplicando los criterios oficiales del Segundo Ejercicio "
+    "ℹ️ <b>Baremo Oficial aplicado por los Preparadores de Oposiciona:</b> Nuestro equipo de preparadores realiza la calificación aplicando los criterios públicos oficiales del Segundo Ejercicio "
     "del Cuerpo de Gestión de la Administración de la Seguridad Social con un enfoque constructivo y formativo: "
     "<b>Criterio 1 (0 a 45 puntos)</b> por conocimiento y desarrollo de los apartados del epígrafe preguntado, valorando positivamente tanto la comprensión "
     "conceptual como las aportaciones conexas que enriquezcan el tema; <b>Criterio 2 (0 a 3 puntos)</b> por orden de las ideas y estructura; y "
@@ -7679,7 +7679,7 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
 
     faltan_c1 = round(max(0.0, 45.0 - c1), 2)
     partes.append(
-        "4. **🎓 Calificación por Criterios del Tribunal y Resumen sencillo de puntos sumados y restados:**\n"
+        "4. **🎓 Calificación de tus Preparadores de Oposiciona (Baremo Oficial) y Resumen sencillo de puntos sumados y restados:**\n"
         f"- **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `{c1:.2f} / 45,00 puntos`\n"
         f"- **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `{c2:.2f} / 3,00 puntos`\n"
         f"- **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `{c3:.2f} / 2,00 puntos`\n"
@@ -7720,7 +7720,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if aviso_respaldo_inapropiado is not None:
         etiqueta_cero = "[[NOTA_SUPUESTO: 0.00]]" if modo in ("SUPUESTO", "SUPUESTOS") else "[[NOTAS_TRIBUNAL: C1=0.00 | C2=0.00 | C3=0.00]]"
         prompt_educado = (
-            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual).\n"
+            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual, y PROHIBIDO atribuirte la condición de Tribunal o miembro de un Tribunal oficial: tú eres siempre el equipo de preparadores de Oposiciona).\n"
             "El alumno ha introducido el siguiente texto en lugar de resolver adecuadamente el ejercicio:\n"
             f"«{respuesta_alumno}»\n\n"
             f"Pregunta planteada: {pregunta}\n"
@@ -7755,14 +7755,14 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if modo in ("SUPUESTO", "SUPUESTOS"):
         instruccion_escueta_sup = (
             "\n4. **ATENCIÓN A RESPUESTAS MUY BREVES, TELEGRÁFICAS O INADECUADAS:**\n"
-            "   - Si observas que el alumno ha escrito muy poco (solo unas palabras sueltas sin razonar), está contestando sin rigor o con desgana, responde siempre de forma muy educada y constructiva: valóralo en su justa medida pero pídele amablemente que practique lo aprendido desarrollando el razonamiento jurídico completo (la conclusión, el porqué normativo y el artículo aplicable), explicándole que en el examen oficial del Cuerpo de Gestión el Tribunal valora la argumentación y no solo una palabra suelta.\n"
+            "   - Si observas que el alumno ha escrito muy poco (solo unas palabras sueltas sin razonar), está contestando sin rigor o con desgana, responde siempre de forma muy educada y constructiva: valóralo en su justa medida pero pídele amablemente que practique lo aprendido desarrollando el razonamiento jurídico completo (la conclusión, el porqué normativo y el artículo aplicable), explicándole que en el examen oficial del Cuerpo de Gestión se exige desarrollar la argumentación jurídica y no solo una palabra suelta.\n"
             if es_respuesta_muy_escueta else
             "\n4. **TONO CONSTRUCTIVO ANTE RESPUESTAS CORTAS O DUDOSAS:** Si la respuesta del alumno es demasiado breve o incompleta, anímale de forma muy educada a practicar lo aprendido desarrollando tanto la solución como su fundamentación jurídica.\n"
         )
         prompt = (
-            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual).\n"
+            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual, y PROHIBIDO atribuirte la condición de Tribunal o miembro de un Tribunal oficial: tú eres siempre el equipo de preparadores de Oposiciona).\n"
             "Evalúa la respuesta del alumno a esta cuestión de un SUPUESTO PRÁCTICO comparándola directamente con la "
-            "EXPLICACIÓN Y RESPUESTA TÉCNICA OFICIAL de la pregunta (SIN aplicar baremos ni criterios formales de Tribunal C1/C2/C3).\n\n"
+            "EXPLICACIÓN Y RESPUESTA TÉCNICA OFICIAL de la pregunta (SIN aplicar los subapartados C1/C2/C3 propios de la pregunta de desarrollo).\n\n"
             "=== REGLAS DE CORRECCIÓN DEL SUPUESTO PRÁCTICO ===\n"
             "1. Califica la respuesta de **0,00 a 10,00 puntos** (siendo 5,00 el aprobado), aplicando un criterio justo, constructivo y ligeramente indulgente cuando el alumno identifique bien la solución jurídica o el planteamiento del cálculo.\n"
             "2. Si el alumno falta al respeto, escribe tonterías o demuestra nulo interés, otórgale `0.00` puntos y respóndele de forma sumamente educada, elegante y constructiva pidiéndole que aproveche el estudio y practique lo aprendido.\n"
@@ -7795,10 +7795,10 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         )
 
         prompt = (
-            "Actúa exclusivamente como el Tribunal Calificador y equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual).\n"
+            "Actúa exclusivamente como el Equipo de Preparadores de Oposiciona (Tribunal Oposiciona) para el Cuerpo de Gestión de la Administración de la Seguridad Social. PROHIBIDO mencionar las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual, y PROHIBIDO decir o dar a entender que eres el Tribunal oficial o miembro de un tribunal de oposiciones: habla siempre como los preparadores de Oposiciona aplicando el baremo público oficial de la convocatoria.\n"
             "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
             "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
-            "=== REGLAS EQUILIBRADAS DE VALORACIÓN DEL TRIBUNAL ===\n"
+            "=== REGLAS EQUILIBRADAS DE VALORACIÓN DE LOS PREPARADORES DE OPOSICIONA ===\n"
             "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE, RESPUESTA MUY ESCUETA O FALTA DE RESPETO VS. RESPUESTA PERTINENTE (`" + pregunta + "`):**\n"
             "   - **Si el alumno falta al respeto o escribe comentarios improcedentes:** Otórgale `0.00` puntos y respóndele con máxima educación, elegancia y firmeza constructiva pidiéndole que practique lo aprendido.\n"
             "   - **Si el alumno escribe muy poco (unas pocas líneas esquemáticas):** Respóndele de forma muy educada y motivadora, valorando los conceptos que haya mencionado pero invitándole a practicar lo aprendido desarrollando todos los apartados del epígrafe con redacción jurídica completa.\n"
@@ -7812,7 +7812,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MUY LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
             "   - Omitir números de artículos incluidos en la explicación oficial debe restar **muy poco** cuando el alumno ha sabido explicar el concepto jurídico.\n"
             f"   - Relación detectada: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
-            "=== BAREMO OFICIAL DEL TRIBUNAL CALIFICADOR ===\n"
+            "=== BAREMO PÚBLICO OFICIAL DE LA CONVOCATORIA APLICADO POR OPOSICIONA ===\n"
             "- Puntuación total: de 0 a 50 puntos (mínimo 25,00 puntos para aprobar).\n"
             "- Criterio 1 (0 a 45 puntos): Conocimiento y desarrollo de los apartados de la explicación oficial de este epígrafe + puntos extra por conceptos o artículos adicionales conexos válidos que mejoren el epígrafe - resta muy leve por los artículos omitidos de la explicación.\n"
             "- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
@@ -7837,7 +7837,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
             "   - Valora las normas y artículos bien citados.\n"
             f"   - Escribe en una línea limpia: **Artículos omitidos:** {arts_omitidos_str}\n"
             f"   - Respecto a las siglas sin presentar, indica únicamente: **Siglas sin presentación previa:** {siglas_mal_str}\n"
-            "4. **🎓 Calificación por Criterios del Tribunal y Desglose sencillo de puntos sumados y restados:**\n"
+            "4. **🎓 Calificación de tus Preparadores de Oposiciona (Baremo Oficial) y Desglose sencillo de puntos sumados y restados:**\n"
             "   - Muestra las puntuaciones otorgadas en:\n"
             "     • **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
             "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `X,XX / 3,00 puntos`\n"
@@ -9320,7 +9320,7 @@ if not st.session_state.questions:
 
     st.markdown(f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:6px;'>{titulo_paso_4}</div>", unsafe_allow_html=True)
     if categoria in ["DESARROLLO", "PREGUNTA DE DESARROLLO"] and es_admin:
-        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Incluye dictado por voz en tiempo real y corrección técnica según los Criterios Oficiales del Tribunal.")
+        st.info("🔒 **Modo Administrador — 2.º Ejercicio — 1.ª Parte (Preguntas de Desarrollo: 0 a 50 ptos):** Soporta archivos Word (`.docx`) y PDF (`.pdf`). Incluye dictado por voz en tiempo real y corrección técnica por el Equipo de Preparadores de Oposiciona según el baremo oficial de la convocatoria.")
     elif categoria in ["SUPUESTOS", "SUPUESTOS PRÁCTICOS"] and es_admin:
         if "GESTI" in especialidad.upper():
             st.info("🔒 **Modo Administrador — 2.º Ejercicio — 2.ª Parte (Supuestos Prácticos Gestión):** Descarta cualquier texto previo al encabezado `SUPUESTO PRÁCTICO`, mantiene el planteamiento fijo en cada pregunta (en recuadro gris en negrita), permite dictar por voz y califica cada cuestión de 0 a 10 comparándola con la solución técnica oficial.")
@@ -9335,7 +9335,7 @@ if not st.session_state.questions:
                 "<div style='background-color:#EFF6FF; border:2px solid #2563EB; border-radius:10px; padding:14px 18px; margin-top:4px; margin-bottom:12px; line-height:1.5; color:#1E293B !important;'>"
                 "<div style='font-size:15.5px; font-weight:800; color:#1E3A8A !important; margin-bottom:6px;'>📝 Demostración para Invitado — Categoría DESARROLLO (Oposiciona 5.0)</div>"
                 "<p style='font-size:13.5px; color:#1E293B !important; text-align:justify; margin-bottom:8px;'>"
-                "Prueba a continuación el tema de demostración habilitado: puedes redactar o dictar por voz tu respuesta a cualquiera de sus epígrafes y recibirás en tiempo real la <b>calificación de 0 a 50 puntos según los Criterios Oficiales del Tribunal Calificador</b> junto con el texto mínimo oficial. "
+                "Prueba a continuación el tema de demostración habilitado: puedes redactar o dictar por voz tu respuesta a cualquiera de sus epígrafes y recibirás en tiempo real la <b>calificación de 0 a 50 puntos de nuestros preparadores aplicando el baremo oficial de la oposición</b> junto con el texto mínimo oficial. "
                 "Para acceder al catálogo completo de temas de Oposiciona 5.0 escribe a <a href='mailto:info@oposiciona.es' style='color:#1D4ED8 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</p>"
                 "</div>",
@@ -9346,7 +9346,7 @@ if not st.session_state.questions:
                 "<div style='background-color:#FEFCE8; border:2px solid #D97706; border-radius:10px; padding:14px 18px; margin-top:4px; margin-bottom:12px; line-height:1.5; color:#1E293B !important;'>"
                 "<div style='font-size:15.5px; font-weight:800; color:#92400E !important; margin-bottom:6px;'>📋 Demostración para Invitado — Categoría SUPUESTOS (Oposiciona 5.0)</div>"
                 "<p style='font-size:13.5px; color:#1E293B !important; text-align:justify; margin-bottom:0px;'>"
-                "Tienes habilitado un supuesto práctico completo de demostración en esta especialidad (tipo test comentado en <b>Administrativos</b> y de desarrollo con corrección técnica conforme a los criterios del Tribunal en <b>Gestión</b>). "
+                "Tienes habilitado un supuesto práctico completo de demostración en esta especialidad (tipo test comentado en <b>Administrativos</b> y de desarrollo con corrección técnica de nuestros preparadores en <b>Gestión</b>). "
                 "Solicita acceso al catálogo completo escribiendo a <a href='mailto:info@oposiciona.es' style='color:#B45309 !important; font-weight:800; text-decoration:underline;'>info@oposiciona.es</a>."
                 "</p>"
                 "</div>",
@@ -9848,7 +9848,7 @@ elif not st.session_state.finished:
             "<div style='margin-bottom: 18px; display: flex; justify-content: center; animation: opoPulseBadge5B 1.8s infinite;'>"
             "<svg width='600' height='42' viewBox='0 0 600 42' style='max-width: 100%; height: auto;' xmlns='http://www.w3.org/2000/svg'>"
             "<rect x='2' y='2' width='596' height='38' rx='19' fill='#1E3A8A' stroke='#93C5FD' stroke-width='2.5'/>"
-            "<text x='300' y='26' text-anchor='middle' fill='#FFFFFF' font-family='Arial, Helvetica, sans-serif' font-size='12.2' font-weight='900' letter-spacing='0.4' style='fill: #FFFFFF !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>⚖️ TRIBUNAL CALIFICADOR EN DELIBERACIÓN — PROCESANDO EXAMEN</text>"
+            "<text x='300' y='26' text-anchor='middle' fill='#FFFFFF' font-family='Arial, Helvetica, sans-serif' font-size='12.2' font-weight='900' letter-spacing='0.4' style='fill: #FFFFFF !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>⚖️ EQUIPO DE PREPARADORES OPOSICIONA — CORRIGIENDO EJERCICIO</text>"
             "</svg>"
             "</div>"
             "<div style='display: flex; justify-content: center; align-items: center; gap: 28px; flex-wrap: wrap; margin: 6px 0 18px 0;'>"
@@ -9869,7 +9869,7 @@ elif not st.session_state.finished:
             "</g>"
             "</svg>"
             "</div>"
-            "<span style='font-size: 12px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;'>Tribunal BOE</span>"
+            "<span style='font-size: 12px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;'>Preparadores Oposiciona</span>"
             "</div>"
             "<div style='position: relative; width: 118px; height: 94px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>"
             "<div style='position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam5B 1.5s ease-in-out infinite;'></div>"
@@ -10099,14 +10099,14 @@ elif not st.session_state.finished:
                 stat["ai_eval"] = {"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0}
                 if es_desarrollo_epigrafe:
                     registrar_epigrafe_desarrollo_en_sheets(idx)
-                st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres recibir la valoración y calificación de tu redacción conforme a los criterios del Tribunal, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
+                st.info("⚪ **Consulta en blanco (0,00 puntos):** No has escrito ninguna respuesta. A continuación te mostramos la **Solución y Explicación Oficial** para que puedas estudiarla. Si quieres recibir la valoración y calificación de nuestros preparadores conforme al baremo oficial, escribe tu respuesta arriba y vuelve a pulsar «Comprobar».")
             else:
                 if stat.get("last_evaluated_text") != txt_alumno or not stat.get("ai_feedback") or not stat.get("ai_eval"):
                     slot_tribunal_5b = st.empty()
                     titulo_5b = (
-                        f"El Tribunal Calificador está valorando tu Cuestión Práctica {idx + 1} de {tot}..."
+                        f"El Equipo de Preparadores de Oposiciona está valorando tu Cuestión Práctica {idx + 1} de {tot}..."
                         if es_supuesto_abierto_q else
-                        f"El Tribunal Calificador está valorando tu Epígrafe {idx + 1} de {tot}..."
+                        f"El Equipo de Preparadores de Oposiciona está valorando tu Epígrafe {idx + 1} de {tot}..."
                     )
                     subtitulo_5b = "Contrastando tus argumentos, cálculos y citas del TRLGSS con la solución oficial. Por favor, espera unos segundos..."
                     _render_tarjeta_tribunal_en_vivo(slot_tribunal_5b, titulo_5b, subtitulo_5b, 60)
@@ -10179,7 +10179,7 @@ elif not st.session_state.finished:
 
                     st.markdown(
                         f"<div style='background-color:{bg_card}; border:2px solid {border_card}; border-radius:10px; padding:14px 16px; margin-top:12px; margin-bottom:10px; text-align:center;'>"
-                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN OTORGADA SEGÚN LOS CRITERIOS DEL TRIBUNAL</div>"
+                        f"<div style='font-size:13px; font-weight:700; color:{color_nota} !important; letter-spacing:0.5px; margin-bottom:4px;'>🎯 CALIFICACIÓN DE PREPARADORES OPOSICIONA (BAREMO OFICIAL)</div>"
                         f"<div style='font-size:28px; font-weight:900; color:{color_nota} !important; margin-bottom:2px;'>{n50_q:.2f} / 50,00 PUNTOS</div>"
                         f"<div style='font-size:17px; font-weight:700; color:#1E293B !important; margin-bottom:8px;'>Nota equivalente sobre 10: <span style='color:{color_nota} !important;'>{n10_q:.2f} / 10</span> &nbsp;|&nbsp; {badge_txt}</div>"
                         f"<div style='font-size:13.5px; color:#334155 !important; background:#ffffff; padding:8px 10px; border-radius:6px; border:1px solid #cbd5e1;'>"
@@ -10407,7 +10407,7 @@ else:
             "<div style='margin-bottom: 18px; display: flex; justify-content: center; animation: opoPulseBadge 1.8s infinite;'>"
             "<svg width='600' height='42' viewBox='0 0 600 42' style='max-width: 100%; height: auto;' xmlns='http://www.w3.org/2000/svg'>"
             "<rect x='2' y='2' width='596' height='38' rx='19' fill='#1E3A8A' stroke='#93C5FD' stroke-width='2.5'/>"
-            "<text x='300' y='26' text-anchor='middle' fill='#FFFFFF' font-family='Arial, Helvetica, sans-serif' font-size='12.2' font-weight='900' letter-spacing='0.4' style='fill: #FFFFFF !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>⚖️ TRIBUNAL CALIFICADOR EN DELIBERACIÓN — PROCESANDO EXAMEN</text>"
+            "<text x='300' y='26' text-anchor='middle' fill='#FFFFFF' font-family='Arial, Helvetica, sans-serif' font-size='12.2' font-weight='900' letter-spacing='0.4' style='fill: #FFFFFF !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>⚖️ EQUIPO DE PREPARADORES OPOSICIONA — CORRIGIENDO EJERCICIO</text>"
             "</svg>"
             "</div>"
             "<div style='display: flex; justify-content: center; align-items: center; gap: 28px; flex-wrap: wrap; margin: 6px 0 18px 0;'>"
@@ -10428,7 +10428,7 @@ else:
             "</g>"
             "</svg>"
             "</div>"
-            "<span style='font-size: 12px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;'>Tribunal BOE</span>"
+            "<span style='font-size: 12px; font-weight: 700; color: #1E3A8A !important; margin-top: 6px;'>Preparadores Oposiciona</span>"
             "</div>"
             "<div style='position: relative; width: 118px; height: 94px; background: #FFFFFF; border: 2px solid #334155; border-radius: 10px; padding: 12px 14px; box-sizing: border-box; box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>"
             "<div style='position: absolute; left: 6px; right: 6px; height: 4px; background: linear-gradient(90deg, transparent, #2563EB, #38BDF8, #2563EB, transparent); border-radius: 4px; animation: opoScanBeam 1.5s ease-in-out infinite;'></div>"
@@ -10465,9 +10465,9 @@ else:
         st.session_state.animacion_fin_mostrada = True
         st.session_state.fase_deliberacion_tribunal = False
         msg_inicial_anim = (
-            f"El Tribunal Calificador está revisando y puntuando {len(pendientes_ia)} respuesta(s) escrita(s) conforme al baremo oficial. Por favor, espera unos segundos..."
+            f"El Equipo de Preparadores de Oposiciona está revisando y puntuando {len(pendientes_ia)} respuesta(s) escrita(s) conforme al baremo oficial. Por favor, espera unos segundos..."
             if pendientes_ia else
-            "El Tribunal Calificador está comprobando tu hoja de respuestas y calculando tu nota oficial..."
+            "El Equipo de Preparadores de Oposiciona está comprobando tu hoja de respuestas y calculando tu nota..."
         )
         slot_animacion_correccion.markdown(
             _html_animacion_tribunal_corrigiendo(msg_inicial_anim, 25 if pendientes_ia else 85),
@@ -10864,3 +10864,8 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5C ===
+
+
+
+
+
