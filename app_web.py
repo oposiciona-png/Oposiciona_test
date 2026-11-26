@@ -2164,6 +2164,8 @@ if not st.session_state.autenticado:
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
 NUEVOS_HOY = [
+    "TEMA 69. LA RECAUDACIÓN EN PERIODO VOLUNTARIO",
+    "TEMA 69 - RECAUDACIÓN VOLUNTARIA",
     "TEMA 15 EL ACTO ADMINISTRATIVO",
     "TEMA 05b - RECAUDACIÓN VOLUNTARIA",
     "TEMA 55 ACCIÓN PROTECTORA CONTENIDO Y CLASIFICACIÓN DE LAS PRESTACIONES",
@@ -2309,6 +2311,7 @@ TESTS_DISPONIBLES = {
             "Tema 67 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10oRTI6Rw_yF0yFZTQXhP8f8cHrZUWxK6",
             "TEMA 68 - GESTION RECAUDATORIA": "https://drive.google.com/uc?export=download&id=1ciJMrMtlDhBGQz-Vijo-_XUnvFhCpXVb",
             "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO": "https://drive.google.com/uc?export=download&id=1XTCIwNZ2LI_ObF6gtSeuCTqzb9PcOgX3",
+            "TEMA 69. LA RECAUDACIÓN EN PERIODO VOLUNTARIO": "https://drive.google.com/uc?export=download&id=12rXL-h7QbFuB0kZ-RPu_XDRphkoeJmIE",
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
             "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Cct-h4j1Pn9g5YUg27ihZ0bNk9dKNUQO",
             "TEMA 74 - RETA, SETA  Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18N_VW51u8AsyPx57fBzQ9TUAacy4YEw6",
@@ -2375,6 +2378,7 @@ TESTS_DISPONIBLES = {
             "TEMA 61 JUBILACION CONTRIBUTIVA": "https://drive.google.com/uc?export=download&id=1mGxNc-Ph1pXahlNfcVUEQxWJhFctz6cJ",
             "TEMA 62 MUERTE Y SUPERVIVENCIA": "https://drive.google.com/uc?export=download&id=1UKbboomy3DuPZI_wQuW82KJ8MXqQ8yjv",
             "TEMA 67 - COTIZACION": "https://drive.google.com/uc?export=download&id=1c15J-mxBJXF19LUVbriap4q_rsvSZcI3",
+            "TEMA 69 - RECAUDACIÓN VOLUNTARIA": "https://drive.google.com/uc?export=download&id=1Rz3ikivHbew2R1J2glypYL5mT1nO5yT1",
             "TEMA 73. LOS REGÍMENES ESPECIALES DE LA SEGURIDAD SOCIAL INTEGRADOS EN EL RÉGIMEN GENERAL": "https://drive.google.com/uc?export=download&id=1jaElumEJxMrl1MV6roobYJHOwQ45vAxK",
             "TEMA 74. RETA SETA Y MAR": "https://drive.google.com/uc?export=download&id=1vz75WRZxHjKpqt5W_Z-O8YruY76Tbbsk",
         },
