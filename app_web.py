@@ -6442,7 +6442,11 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 re.IGNORECASE
             )
             pat_nuevo_supuesto_bloque = re.compile(
-                r'^(?:#\s*)?(?:(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|[A-Z][\)\.\-]\s+(?:Do[ñn]a|Don|D\.|D\.ª|Dª|Dña\.|La\s+(?:empresa|mercantil|sociedad|consultor[íi]a|asesor[íi]a|entidad)|El\s+trabajador|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+trabaja|\s+presta|\s+ostenta|\s+solicita|\s+\(\d+\s*a[ñn]os\))).*)$'
+                r'^(?:#\s*)?(?:'
+                r'(?:[A-Z][\)\.\-]\s*)?PLANTEAMIENTO(?:\s+[A-Z0-9]+)?\s*[:\.\-]\s*.*|'
+                r'(?:SUPUESTO|Supuesto|CASO|Caso)(?:\s+(?:PR[ÁA]CTICO|Pr[áa]ctico))?\s+(?:[A-Z]|\d{1,2}|[IVX]{1,4})(?!\w)(?:\s*[:\.\-\)]\s*.*)?|'
+                r'[A-Z][\)\.\-]\s+(?:PLANTEAMIENTO\s*[:\.\-]?\s*)?(?:Do[ñn]a|Don|D\.|D\.ª|Dª|Dña\.|Contra\s+la\s+|Durante\s+el\s+ejercicio|Como\s+consecuencia\s+de|El\s+d[íi]a\s+\d|La\s+(?:empresa|mercantil|sociedad|consultor[íi]a|asesor[íi]a|entidad|mutua)|El\s+(?:trabajador|empresario)|La\s+trabajadora|Un\s+trabajador|Una\s+trabajadora|En\s+fecha|Con\s+fecha|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+es\s+un|\s+trabaja|\s+presta|\s+ostenta|\s+solicita|\s+\(\d+\s*a[ñn]os\))).*'
+                r')$'
             )
 
             def _construir_preambulo_texto(lista_lineas):
@@ -6601,12 +6605,19 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                 resp_str = _reconstruir_respuesta_supuesto_integrada(c_obj["resp"])
                 exp_str = _reconstruir_respuesta_supuesto_integrada(c_obj["exp"])
 
-                if not resp_str and exp_str:
-                    resp_str = exp_str
-                elif not exp_str and resp_str:
-                    exp_str = resp_str
+                if exp_str and resp_str and exp_str != resp_str:
+                    exp_completa = (
+                        f"[[H]]📌 EXPLICACIÓN Y ANÁLISIS DEL SUPUESTO:\n{exp_str}\n\n"
+                        f"[[H]]⚖️ RESPUESTA TÉCNICA Y FUNDAMENTACIÓN JURÍDICA:\n{resp_str}"
+                    )
+                    m_sol_corta = re.match(r'^(?:Soluci[óo]n\s*[:\.\-]?\s*)(.+?)(?:\n|$)', exp_str, flags=re.IGNORECASE)
+                    resumen_corto = m_sol_corta.group(1).strip() if m_sol_corta else "Ver solución y fundamentación jurídica detallada en el cuadro inferior."
+                else:
+                    exp_completa = exp_str or resp_str
+                    m_sol_corta = re.match(r'^(?:Soluci[óo]n\s*[:\.\-]?\s*)(.+?)(?:\n|$)', exp_completa or "", flags=re.IGNORECASE)
+                    resumen_corto = m_sol_corta.group(1).strip() if m_sol_corta else exp_completa
 
-                if q_str and resp_str:
+                if q_str and exp_completa:
                     preguntas_supuestos.append({
                         "is_open": True,
                         "tipo_abierta": "SUPUESTO",
@@ -6614,8 +6625,9 @@ def _parse_abiertas_gestion_fn(file_bytes, modo="TODOS"):
                         "question_text": q_str,
                         "options": [],
                         "answer": -1,
-                        "official_answer": resp_str,
-                        "explanation": exp_str
+                        "answer_text": resumen_corto,
+                        "official_answer": resumen_corto,
+                        "explanation": exp_completa
                     })
 
     if modo_u in ("DESARROLLO", "PREGUNTA DE DESARROLLO"):
