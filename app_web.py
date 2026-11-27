@@ -7128,6 +7128,10 @@ CRITERIOS OFICIALES DE CORRECCIÓN, VALORACIÓN Y SUPERACIÓN DEL SEGUNDO EJERCI
 - Criterio 3 (de 0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas ("Nombre completo (SIGLA)" o "Nombre completo, en adelante, SIGLA").
 """
 
+def _normalizar_sin_acentos(s):
+    s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
+    return re.sub(r'\s+', ' ', s).strip()
+
 def auditar_siglas_sin_definir_previa(texto_alumno):
     if not texto_alumno:
         return []
@@ -7188,6 +7192,81 @@ def auditar_siglas_sin_definir_previa(texto_alumno):
 
     return siglas_sin_definir
 
+def _normalizar_codigo_norma_juridica(norma_str):
+    if not norma_str:
+        return ""
+    nc = _normalizar_sin_acentos(norma_str).upper()
+    if "84/1996" in nc or "RIA" in nc or "INSCRIPCION" in nc:
+        return "RIA"
+    if "8/2015" in nc or "TRLGSS" in nc or "LGSS" in nc or "LEY GENERAL DE LA SEGURIDAD SOCIAL" in nc:
+        return "TRLGSS"
+    if "2064/1995" in nc or "RGCL" in nc or "COTIZACION Y LIQUIDACION" in nc:
+        return "RGCL"
+    if "1415/2004" in nc or "RGR" in nc or "REGLAMENTO GENERAL DE RECAUDACION" in nc or "RECAUDACION DE LA SEGURIDAD SOCIAL" in nc:
+        return "RGR"
+    if "1562/2005" in nc:
+        return "ORDEN TAS/1562/2005"
+    if "297/2026" in nc or "ORDEN DE COTIZACION" in nc or "PJC/" in nc:
+        return "ORDEN COTIZACION"
+    if "16 DE JULIO DE 2004" in nc or "19 DE ABRIL DE 2024" in nc or "INSTRUCCION" in nc or "RESOLUCION" in nc:
+        return "RESOLUCION TGSS"
+    if "1620/2011" in nc:
+        return "RD 1620/2011"
+    if "2621/1986" in nc:
+        return "RD 2621/1986"
+    if "148/1996" in nc:
+        return "RD 148/1996"
+    if "ESTATUTO DE LOS TRABAJADORES" in nc or nc in ("ET", "TRET") or "2/2015" in nc:
+        return "ET"
+    if "CONSTITUCION" in nc or nc == "CE":
+        return "CE"
+    if "LISOS" in nc or "5/2000" in nc or "INFRACCIONES Y SANCIONES" in nc:
+        return "LISOS"
+    if "39/2015" in nc or "LPAC" in nc:
+        return "LPAC"
+    return norma_str.strip().upper()
+
+def _detectar_normas_genericas_en_texto(texto):
+    if not texto:
+        return []
+    t_low = _normalizar_sin_acentos(texto)
+    catalogo_normas = [
+        ("TRLGSS", "TRLGSS (RD Legislativo 8/2015)", r'\b(trlgss|lgss|ley\s+general\s+de\s+la\s+seguridad\s+social|8/2015)\b'),
+        ("RGR", "Reglamento General de Recaudación (RGR / RD 1415/2004)", r'\b(rgr|reglamento\s+general\s+de\s+recaudacion|reglamento\s+de\s+recaudacion|1415/2004)\b'),
+        ("RGCL", "Reglamento General de Cotización y Liquidación (RGCL / RD 2064/1995)", r'\b(rgcl|reglamento\s+general\s+(?:sobre|de)\s+cotizacion|reglamento\s+de\s+cotizacion|2064/1995)\b'),
+        ("RIA", "Reglamento General de Inscripción y Afiliación (RIA / RD 84/1996)", r'\b(ria|reglamento\s+general\s+(?:sobre|de)\s+inscripcion|reglamento\s+de\s+afiliacion|84/1996)\b'),
+        ("ORDEN COTIZACION", "Orden de Cotización (Orden PJC/297/2026)", r'\b(orden\s+pjc/297/2026|pjc/297/2026|orden\s+de\s+cotizacion|orden\s+anual\s+de\s+cotizacion)\b'),
+        ("ORDEN TAS/1562/2005", "Orden TAS/1562/2005", r'\b(tas/1562/2005|orden\s+de\s+desarrollo\s+del\s+reglamento\s+de\s+recaudacion)\b'),
+        ("RESOLUCION TGSS", "Resolución de 16 de julio de 2004 (competencias recaudatorias TGSS)", r'\b(resolucion\s+de\s+16\s+de\s+julio\s+de\s+2004|resolucion\s+de\s+19\s+de\s+abril\s+de\s+2024|instruccion\s+(?:cuarta|quinta))\b'),
+        ("RD 1620/2011", "RD 1620/2011 (Empleados de Hogar)", r'\b(1620/2011)\b'),
+        ("RD 148/1996", "RD 148/1996 (Reintegro de prestaciones)", r'\b(148/1996)\b'),
+        ("ET", "Estatuto de los Trabajadores (ET)", r'\b(estatuto\s+de\s+los\s+trabajadores|\bet\b|\btret\b|2/2015)\b'),
+        ("CE", "Constitución Española (CE)", r'\b(constitucion\s+espanola|\bce\b)\b'),
+        ("LISOS", "LISOS (RDL 5/2000)", r'\b(lisos|infracciones\s+y\s+sanciones\s+en\s+el\s+orden\s+social|5/2000)\b'),
+        ("LPAC", "Ley 39/2015 (LPAC)", r'\b(39/2015|lpac|procedimiento\s+administrativo\s+comun)\b'),
+    ]
+    halladas = []
+    for cod, lbl, pat in catalogo_normas:
+        if re.search(pat, t_low):
+            halladas.append((cod, lbl))
+    m_otros = re.findall(r'\b((?:real\s+decreto(?:\-ley|\s+legislativo)?|rdl|rd|ley(?:\s+organica)?|orden\s+[a-z]{2,4})\s+\d{1,4}/\d{4})\b', t_low)
+    cods_vistos = {c for c, _ in halladas}
+    for mo in m_otros:
+        cod_o = _normalizar_codigo_norma_juridica(mo)
+        if cod_o not in cods_vistos:
+            cods_vistos.add(cod_o)
+            halladas.append((cod_o, mo.upper()))
+    return halladas
+
+def _tiene_epigrafe_o_apartado_en_cita(cita_raw, contexto_posterior=""):
+    c = (cita_raw or "").strip()
+    if re.search(r'^\d{1,3}(?:\.\d+|\.[a-z]\)|\.[ºª°]|\s*[a-z]\)|,\s*apartado)', c, re.IGNORECASE):
+        return True
+    ctx = (contexto_posterior or "")[:55]
+    if re.search(r'^(?:\s*,)?\s*(?:apartados?|apdos?\.|ep[íi]grafes?|p[áa]rrafos?|letras?|n[úu]meros?|puntos?|incisos?)\s+[0-9a-z\.ºª°]+', ctx, re.IGNORECASE):
+        return True
+    return False
+
 def _extraer_articulos_detallados_de_texto(texto):
     if not texto:
         return [], set()
@@ -7197,42 +7276,23 @@ def _extraer_articulos_detallados_de_texto(texto):
     numeros_base = set()
     vistos_norm = set()
 
-    def _detectar_norma_cercana(norma_capturada, pos_fin_match):
+    def _detectar_norma_cercana(norma_capturada, pos_inicio_match, pos_fin_match):
         if norma_capturada and norma_capturada.strip():
-            nc = norma_capturada.strip().upper()
-            if "84/1996" in nc or "RIA" in nc:
-                return "RIA"
-            if "8/2015" in nc or "TRLGSS" in nc or "LGSS" in nc:
-                return "TRLGSS"
-            if "2064/1995" in nc or "RGCL" in nc:
-                return "RGCL"
-            if "1415/2004" in nc or "RGR" in nc:
-                return "RGR"
-            if "ET" in nc or "ESTATUTO" in nc:
-                return "ET"
-            if "CE" in nc or "CONSTITUCI" in nc:
-                return "CE"
-            if "LISOS" in nc or "5/2000" in nc:
-                return "LISOS"
-            return norma_capturada.strip()
-        ventana_sig = t_limpio[pos_fin_match:pos_fin_match + 55]
-        if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RIA|Reglamento\s+General\s+sobre\s+inscripci|RD\s*84/1996)', ventana_sig, re.IGNORECASE):
-            return "RIA"
-        if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RGCL|Reglamento\s+General\s+sobre\s+Cotizaci|RD\s*2064/1995)', ventana_sig, re.IGNORECASE):
-            return "RGCL"
-        if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RGR|Reglamento\s+General\s+de\s+Recaudaci|RD\s*1415/2004)', ventana_sig, re.IGNORECASE):
-            return "RGR"
-        if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:TRLGSS|LGSS|Texto\s+Refundido|RDL\s*8/2015)', ventana_sig, re.IGNORECASE):
-            return "TRLGSS"
-        m_ord = re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(Orden\s+[A-Z]+/\d+/\d{4}|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley)?\s+\d+/\d{4}|Ley\s+\d+/\d{4})', ventana_sig, re.IGNORECASE)
-        if m_ord:
-            return m_ord.group(1).strip()
+            return _normalizar_codigo_norma_juridica(norma_capturada)
+        ventana_sig = t_limpio[pos_fin_match:pos_fin_match + 95]
+        normas_sig = _detectar_normas_genericas_en_texto(ventana_sig)
+        if normas_sig:
+            return normas_sig[0][0]
+        ventana_ant = t_limpio[max(0, pos_inicio_match - 80):pos_inicio_match]
+        normas_ant = _detectar_normas_genericas_en_texto(ventana_ant)
+        if normas_ant:
+            return normas_ant[-1][0]
         return ""
 
-    pat_multi = r'\b(?:art[íi]culos?|arts?\.)\s*(\d{1,3}(?:\.\d+)?(?:\s*(?:,\s*\d{1,3}(?:\.\d+)?)*\s*(?:y|a|al|\-|–)\s*\d{1,3}(?:\.\d+)?))(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
+    pat_multi = r'\b(?:art[íi]culos?|arts?\.)\s*(\d{1,3}(?:\.\d+)*(?:[\.\s]*[a-z]\))?(?:\s*(?:,\s*\d{1,3}(?:\.\d+)*(?:[\.\s]*[a-z]\))?)*\s*(?:y|a|al|\-|–)\s*\d{1,3}(?:\.\d+)*(?:[\.\s]*[a-z]\))?))(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
     for m in re.finditer(pat_multi, t_limpio, flags=re.IGNORECASE):
         rango_txt = re.sub(r'\s+', ' ', m.group(1).strip())
-        norma_txt = _detectar_norma_cercana(m.group(2), m.end())
+        norma_txt = _detectar_norma_cercana(m.group(2), m.start(), m.end())
         nums_hallados = re.findall(r'\b(\d{1,3})\b', rango_txt)
         for nh in nums_hallados:
             numeros_base.add(nh)
@@ -7241,34 +7301,44 @@ def _extraer_articulos_detallados_de_texto(texto):
             if ini <= fin and (fin - ini) <= 60:
                 for k_n in range(ini, fin + 1):
                     numeros_base.add(str(k_n))
+        tiene_ep = bool(re.search(r'\d{1,3}\.\d+|\d{1,3}\.[a-z]', rango_txt, re.IGNORECASE)) or _tiene_epigrafe_o_apartado_en_cita("", t_limpio[m.end():m.end()+60])
         lbl = f"Arts. {rango_txt}" + (f" {norma_txt}" if norma_txt else "")
-        clave_v = lbl.lower()
+        clave_v = f"{lbl.lower()}|{tiene_ep}"
         if clave_v not in vistos_norm:
             vistos_norm.add(clave_v)
-            etiquetas.append((nums_hallados, norma_txt.upper(), lbl))
+            etiquetas.append((nums_hallados, norma_txt.upper(), lbl, tiene_ep))
 
-    pat_indiv = r'\b(?:art[íi]culo|art\.)\s*(\d{1,3}(?:\.\d+)*(?:[\.\s]*[a-z]\))?(?:\.[ºª°a-z])?)(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
+    pat_indiv = r'\b(?:art[íi]culo|art\.)\s*(\d{1,3}(?:\s*bis|\s*ter|\s*quater)?(?:\.\d+)*(?:[\.\s]*[a-z]\))?(?:\.[ºª°a-z])?)(?:\s*,?\s*(?:apartados?|apdos?\.|p[áa]rrafos?|letras?|ep[íi]grafes?)\s+[0-9a-z\.ºª°\(\)]+)?(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
     for m in re.finditer(pat_indiv, t_limpio, flags=re.IGNORECASE):
+        frag_entero = m.group(0)
         num_completo = m.group(1).strip()
         num_base = re.match(r'^(\d{1,3})', num_completo).group(1)
-        norma_txt = _detectar_norma_cercana(m.group(2), m.end())
+        norma_txt = _detectar_norma_cercana(m.group(2), m.start(), m.end())
         numeros_base.add(num_base)
+        tiene_ep = (
+            _tiene_epigrafe_o_apartado_en_cita(num_completo, t_limpio[m.end():m.end()+55])
+            or bool(re.search(r'(?:apartados?|apdos?\.|p[áa]rrafos?|letras?|ep[íi]grafes?)\s+[0-9a-z]', frag_entero, re.IGNORECASE))
+        )
         lbl = f"Art. {num_completo}" + (f" {norma_txt}" if norma_txt else "")
-        ya_incluido = any(num_base in nums_g and (not norma_txt or norma_txt.upper() == n_g or not n_g) for nums_g, n_g, _ in etiquetas)
+        ya_incluido = any(
+            num_base in nums_g and (not norma_txt or norma_txt.upper() == n_g or not n_g) and (ep_g or not tiene_ep)
+            for nums_g, n_g, _, ep_g in etiquetas
+        )
         if not ya_incluido:
-            etiquetas.append(([num_base], norma_txt.upper(), lbl))
+            etiquetas.append(([num_base], norma_txt.upper(), lbl, tiene_ep))
 
     pat_disp = r'\b(DA\s+\d+[\.ºª°a-z]*|DT\s+\d+[\.ºª°a-z]*|Disposici[óo]n\s+(?:adicional|transitoria|final)\s+[0-9a-záéíóúñ\s\.ºª°]+?)(?=\s+(?:del?\s+|de\s+la\s+)?(?:TRLGSS|LGSS|RIA|RGR|RGCL|ET|Orden|RD|Ley)|[,;\.\)]|$)(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGR|RGCL|ET))?'
     for m in re.finditer(pat_disp, t_limpio, flags=re.IGNORECASE):
         d_txt = re.sub(r'\s+', ' ', m.group(1).strip())
-        norma_txt = (m.group(2) or "").strip()
+        norma_txt = _detectar_norma_cercana(m.group(2), m.start(), m.end())
         num_d = re.findall(r'\d+', d_txt)
         token_d = f"DA_{num_d[0]}" if num_d else _normalizar_sin_acentos(d_txt)[:22]
         numeros_base.add(token_d)
+        tiene_ep = bool(re.search(r'(?:apartado|p[áa]rrafo|letra|\d+\.\d+)', d_txt + " " + t_limpio[m.end():m.end()+40], re.IGNORECASE))
         lbl = f"{d_txt}" + (f" {norma_txt}" if norma_txt else "")
         if lbl.lower() not in vistos_norm:
             vistos_norm.add(lbl.lower())
-            etiquetas.append(([token_d], norma_txt.upper(), lbl))
+            etiquetas.append(([token_d], norma_txt.upper(), lbl, tiene_ep))
 
     pat_instruccion = r'\b(Instrucci[óo]n\s+[a-záéíóúñ0-9\.ºª°]+(?:\s+de\s+la\s+Resoluci[óo]n\s+de\s+\d+\s+de\s+[a-záéíóúñ]+\s+de\s+\d{4})?)'
     for m in re.finditer(pat_instruccion, t_limpio, flags=re.IGNORECASE):
@@ -7277,33 +7347,88 @@ def _extraer_articulos_detallados_de_texto(texto):
         numeros_base.add(tok_i)
         if inst_txt.lower() not in vistos_norm:
             vistos_norm.add(inst_txt.lower())
-            etiquetas.append(([tok_i], "RESOLUCION", inst_txt))
+            etiquetas.append(([tok_i], "RESOLUCION TGSS", inst_txt, True))
 
     return etiquetas, numeros_base
 
-def _detectar_citas_genericas_sin_articulo(texto_alumno, etiquetas_al):
-    if not texto_alumno or etiquetas_al:
-        return []
-    t_low = _normalizar_sin_acentos(texto_alumno)
-    normas_genericas = [
-        ("TRLGSS / Ley General de la Seguridad Social", r'\b(trlgss|lgss|ley\s+general\s+de\s+la\s+seguridad\s+social|rdl\s*8/2015)\b'),
-        ("Reglamento General de Recaudación (RGR / RD 1415/2004)", r'\b(rgr|reglamento\s+general\s+de\s+recaudacion|1415/2004)\b'),
-        ("Reglamento General de Cotización y Liquidación (RGCL / RD 2064/1995)", r'\b(rgcl|reglamento\s+general\s+(?:sobre|de)\s+cotizacion|2064/1995)\b'),
-        ("Reglamento General de Inscripción y Afiliación (RIA / RD 84/1996)", r'\b(ria|reglamento\s+general\s+(?:sobre|de)\s+inscripcion|84/1996)\b'),
-        ("Orden de Cotización (Orden PJC/297/2026)", r'\b(orden\s+de\s+cotizacion|pjc/297/2026|orden\s+anual)\b'),
-        ("Orden TAS/1562/2005", r'\b(tas/1562/2005|orden\s+de\s+recaudacion)\b'),
-        ("Estatuto de los Trabajadores (ET)", r'\b(estatuto\s+de\s+los\s+trabajadores|\bet\b|\btret\b)\b'),
-        ("Constitución Española (CE)", r'\b(constitucion\s+espanola|\bce\b)\b'),
-    ]
-    detectadas = []
-    for nombre_n, pat_n in normas_genericas:
-        if re.search(pat_n, t_low):
-            detectadas.append(nombre_n)
-    return detectadas
+def auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explicacion_oficial):
+    """
+    Evalúa exactamente en cuál de los 4 escalones de rigor normativo se sitúa la respuesta del alumno en un SUPUESTO:
+    - Nivel 0 (SIN NORMATIVA O NORMA ERRÓNEA): Tope máximo estricto = 5,00 / 10 (cualquier error en el supuesto baja de 5,00 y suspende).
+    - Nivel 1 (SOLO TEXTO LEGAL GENÉRICO ACERTADO, sin artículo): Parte de 5,50 si acierta y tope máximo estricto = 7,90 (< 8,00).
+    - Nivel 2 (NORMA + ARTÍCULO GENÉRICO ACERTADO, sin epígrafe/apartado): Tope máximo estricto = 9,00 / 10.
+    - Nivel 3 (NORMA + ARTÍCULO + EPÍGRAFE/APARTADO EXACTO, o artículo único sin subapartados en la norma oficial): Tope = 10,00 / 10.
+    """
+    ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
+    etiquetas_ref, _ = _extraer_articulos_detallados_de_texto(ref_completa)
+    etiquetas_al, _ = _extraer_articulos_detallados_de_texto(texto_alumno)
 
-def _normalizar_sin_acentos(s):
-    s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
-    return re.sub(r'\s+', ' ', s).strip()
+    normas_ref = _detectar_normas_genericas_en_texto(ref_completa)
+    normas_al = _detectar_normas_genericas_en_texto(texto_alumno)
+    cods_normas_ref = {c for c, _ in normas_ref} | {n_g for _, n_g, _, _ in etiquetas_ref if n_g}
+    cods_normas_al = {c for c, _ in normas_al} | {n_g for _, n_g, _, _ in etiquetas_al if n_g}
+
+    normas_acertadas_lbl = [lbl for cod, lbl in normas_al if (not cods_normas_ref or cod in cods_normas_ref)]
+    tiene_norma_correcta = bool(normas_acertadas_lbl) or bool(cods_normas_al & cods_normas_ref)
+
+    ref_exige_epigrafe = any(ep_r for _, _, _, ep_r in etiquetas_ref)
+
+    acierto_art_con_epigrafe = []
+    acierto_art_generico = []
+
+    for nums_r, norma_r, lbl_r, ep_r in etiquetas_ref:
+        for nums_a, norma_a, lbl_a, ep_a in etiquetas_al:
+            if any(n in nums_a for n in nums_r):
+                norma_compatible = (not norma_r) or (norma_a == norma_r) or (not norma_a and tiene_norma_correcta)
+                if norma_compatible:
+                    if (ep_a and (norma_a or tiene_norma_correcta)) or (not ep_r and not ref_exige_epigrafe and (norma_a or tiene_norma_correcta)):
+                        acierto_art_con_epigrafe.append(lbl_a)
+                    else:
+                        acierto_art_generico.append(lbl_a)
+
+    if acierto_art_con_epigrafe:
+        return {
+            "nivel": 3,
+            "etiqueta": "Nivel 3 — Máximo rigor normativo (cita norma + artículo + epígrafe/apartado exacto)",
+            "tope_max": 10.0,
+            "suelo_acierto": 8.5,
+            "normas_citadas_ok": normas_acertadas_lbl,
+            "articulos_con_epigrafe_ok": acierto_art_con_epigrafe,
+            "articulos_genericos_ok": acierto_art_generico,
+            "ref_exige_epigrafe": ref_exige_epigrafe,
+        }
+    if acierto_art_generico:
+        return {
+            "nivel": 2,
+            "etiqueta": "Nivel 2 — Cita norma y artículo de forma genérica (sin precisar el epígrafe/apartado concreto)",
+            "tope_max": 9.0,
+            "suelo_acierto": 7.5,
+            "normas_citadas_ok": normas_acertadas_lbl,
+            "articulos_con_epigrafe_ok": [],
+            "articulos_genericos_ok": acierto_art_generico,
+            "ref_exige_epigrafe": ref_exige_epigrafe,
+        }
+    if tiene_norma_correcta:
+        return {
+            "nivel": 1,
+            "etiqueta": "Nivel 1 — Cita únicamente el texto normativo genérico (sin artículo concreto aplicable)",
+            "tope_max": 7.90,
+            "suelo_acierto": 5.50,
+            "normas_citadas_ok": normas_acertadas_lbl,
+            "articulos_con_epigrafe_ok": [],
+            "articulos_genericos_ok": [],
+            "ref_exige_epigrafe": ref_exige_epigrafe,
+        }
+    return {
+        "nivel": 0,
+        "etiqueta": "Nivel 0 — Sin cita de la normativa aplicable (o cita normativa errónea)",
+        "tope_max": 5.00,
+        "suelo_acierto": 0.0,
+        "normas_citadas_ok": [],
+        "articulos_con_epigrafe_ok": [],
+        "articulos_genericos_ok": [],
+        "ref_exige_epigrafe": ref_exige_epigrafe,
+    }
 
 def _extraer_bloques_estructurales_epigrafe(explicacion_oficial):
     if not explicacion_oficial:
@@ -7456,10 +7581,10 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
     articulos_acertados_limpios = []
     articulos_cita_norma_erronea = []
 
-    for nums_grupo, norma_g, lbl_art in etiquetas_ref:
+    for nums_grupo, norma_g, lbl_art, _ in etiquetas_ref:
         coincidencia_valida = False
         coincidencia_norma_distinta = False
-        for nums_al_g, norma_al_g, lbl_al_g in etiquetas_al:
+        for nums_al_g, norma_al_g, _, _ in etiquetas_al:
             if any(n in nums_al_g for n in nums_grupo):
                 if not norma_g or not norma_al_g or norma_g == norma_al_g:
                     coincidencia_valida = True
@@ -7473,12 +7598,12 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
             if coincidencia_norma_distinta:
                 articulos_cita_norma_erronea.append(lbl_art)
 
-    citas_solo_ley_sin_articulo = _detectar_citas_genericas_sin_articulo(texto_alumno, etiquetas_al)
+    escalera_sup = auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explicacion_oficial)
     aud_bloques = auditar_pertinencia_y_bloques_epigrafe(enunciado_pregunta, ref_completa, texto_alumno)
 
     articulos_extra_validos = []
     articulos_extra_erroneos = []
-    for nums_grupo, norma_al, lbl_al in etiquetas_al:
+    for nums_grupo, norma_al, lbl_al, _ in etiquetas_al:
         if all(n not in nums_ref for n in nums_grupo):
             num_p = nums_grupo[0]
             if num_p.isdigit():
@@ -7500,8 +7625,7 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
         "articulos_acertados": articulos_acertados_limpios,
         "articulos_omitidos": articulos_omitidos_limpios,
         "articulos_cita_norma_erronea": articulos_cita_norma_erronea,
-        "citas_solo_ley_sin_articulo": citas_solo_ley_sin_articulo,
-        "tiene_algun_articulo_concreto_alumno": len(etiquetas_al) > 0,
+        "escalera_normativa_supuesto": escalera_sup,
         "articulos_extra_validos": articulos_extra_validos,
         "articulos_extra_erroneos": articulos_extra_erroneos,
         "siglas_sin_presentar": siglas_sin_presentar,
@@ -7523,6 +7647,48 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
             "auditoria": auditoria
         }
 
+    es_ctx_supuesto = (
+        ("RESPUESTA TÉCNICA" in (explicacion_oficial or "").upper())
+        or ("EXPLICACIÓN Y ANÁLISIS DEL SUPUESTO" in (explicacion_oficial or "").upper())
+        or bool(re.search(r'(?:^|\s)\d{1,2}\.\s+(?:En\s+relaci[óo]n|Respecto|Determine|Calcule|Indique|Analice|¿)', (enunciado_pregunta or ""), re.IGNORECASE))
+    )
+
+    if es_ctx_supuesto:
+        esc = auditoria["escalera_normativa_supuesto"]
+        nivel_n = esc["nivel"]
+        tope_n = esc["tope_max"]
+        ratio_f = aud_b.get("ratio_cobertura_epigrafe", 0.0)
+
+        if nivel_n == 0:
+            nota_10_s = round(min(5.00, max(0.50, ratio_f * 5.00)), 2)
+        elif nivel_n == 1:
+            if ratio_f >= 0.45:
+                nota_10_s = round(min(7.90, 5.50 + ((ratio_f - 0.45) / 0.55) * 2.40), 2)
+            else:
+                nota_10_s = round(max(1.00, ratio_f * 10.0), 2)
+        elif nivel_n == 2:
+            if ratio_f >= 0.45:
+                nota_10_s = round(min(9.00, 6.50 + ((ratio_f - 0.45) / 0.55) * 2.50), 2)
+            else:
+                nota_10_s = round(max(1.50, ratio_f * 11.5), 2)
+        else:
+            if ratio_f >= 0.45:
+                nota_10_s = round(min(10.00, 7.25 + ((ratio_f - 0.45) / 0.55) * 2.75), 2)
+            else:
+                nota_10_s = round(max(2.00, ratio_f * 12.5), 2)
+
+        nota_10_s = min(tope_n, nota_10_s)
+        nota_50_s = round(nota_10_s * 5.0, 2)
+        return {
+            "nota": nota_10_s,
+            "nota_50": nota_50_s,
+            "pts_criterio_1": round(nota_10_s * 4.5, 2),
+            "pts_criterio_2": 0.0,
+            "pts_criterio_3": 0.0,
+            "supera_umbral_20": nota_10_s >= 5.0,
+            "auditoria": auditoria
+        }
+
     if aud_b["desviacion_epigrafe"]:
         n_comp = len(aud_b["apartados_completos"])
         n_parciales = len(aud_b["apartados_incompletos"])
@@ -7541,20 +7707,9 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     ratio_cobertura_real = aud_b.get("ratio_cobertura_epigrafe", 0.0)
     pts_base_c1 = ratio_cobertura_real * 43.0
-
-    # Si es respaldo de SUPUESTO (detectable por encabezados de supuesto o pregunta numerada), aplicamos peso estricto del artículo principal
-    es_ctx_supuesto = ("RESPUESTA TÉCNICA" in (explicacion_oficial or "").upper()) or bool(re.match(r'^\s*\d{1,2}\.\s+', (enunciado_pregunta or "").strip()))
-    if es_ctx_supuesto and (auditoria["articulos_acertados"] or auditoria["articulos_omitidos"]):
-        if auditoria["articulos_acertados"]:
-            ajuste_normativo_sup = min(6.0, len(auditoria["articulos_acertados"]) * 3.5)
-        else:
-            # Penalización efectiva por omitir el artículo principal o citar solo la ley en abstracto
-            ajuste_normativo_sup = -7.5
-        pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + ajuste_normativo_sup)), 2)
-    else:
-        bonus_extra = min(4.0, len(auditoria["articulos_extra_validos"]) * 0.65)
-        resta_arts_omitidos = min(1.50, len(auditoria["articulos_omitidos"]) * 0.08)
-        pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
+    bonus_extra = min(4.0, len(auditoria["articulos_extra_validos"]) * 0.65)
+    resta_arts_omitidos = min(1.50, len(auditoria["articulos_omitidos"]) * 0.08)
+    pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
@@ -7656,12 +7811,16 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     if not texto_ia:
         return ev_out, ""
 
-    aud_b = (ev_out.get("auditoria") or {}).get("auditoria_bloques") or {}
+    aud_full = ev_out.get("auditoria") or {}
+    aud_b = aud_full.get("auditoria_bloques") or {}
     hay_desviacion = bool(aud_b.get("desviacion_epigrafe", False))
+    esc_sup = aud_full.get("escalera_normativa_supuesto") or {}
 
     m_sup = re.search(r'\[\[NOTA_SUPUESTO:\s*(\d+(?:[\.,]\d+)?)\s*\]\]', texto_ia, flags=re.IGNORECASE)
     if m_sup:
-        nota_10 = round(max(0.0, min(10.0, float(m_sup.group(1).replace(",", ".")))), 2)
+        nota_10_raw = float(m_sup.group(1).replace(",", "."))
+        tope_normativo = float(esc_sup.get("tope_max", 10.0))
+        nota_10 = round(max(0.0, min(tope_normativo, min(10.0, nota_10_raw))), 2)
         nota_50 = round(nota_10 * 5.0, 2)
         texto_ia = re.sub(r'\[\[NOTA_SUPUESTO:[^\]]*\]\]\s*', '', texto_ia, flags=re.IGNORECASE).strip()
         ev_out.update({
@@ -7734,7 +7893,7 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los artículos principales de aplicación"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno"
-    citas_genericas_list = aud.get("citas_solo_ley_sin_articulo") or []
+    esc_sup = aud.get("escalera_normativa_supuesto") or {}
     siglas_mal_str = (
         ", ".join([f"**{s}** (debiste presentar la primera vez como *«{ej}»*)" for s, ej in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
@@ -7747,21 +7906,23 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
     n10 = ev_fallback.get("nota", 0.0)
 
     if modo == "SUPUESTO":
-        aviso_norma_sup = (
-            f"- **⚖️ Penalización por cita normativa genérica o ausente:** Has citado únicamente la norma general ({', '.join(citas_genericas_list)}) sin precisar el artículo concreto aplicable; en el supuesto práctico la cita sin número de artículo no puntúa y la falta del precepto principal resta puntuación.\n"
-            if citas_genericas_list and not aud["articulos_acertados"] else (
-                "- **⚖️ Penalización normativa:** No has incluido el artículo principal de aplicación al caso, lo cual resta puntos en la calificación del supuesto.\n"
-                if not aud["articulos_acertados"] and aud["articulos_omitidos"] else ""
-            )
-        )
+        niv = esc_sup.get("nivel", 0)
+        tope_v = esc_sup.get("tope_max", 5.0)
+        explicacion_tramo = {
+            0: "Al no citar la normativa aplicable, la calificación máxima posible queda limitada a **5,00 / 10**, restando cualquier error o imprecisión.",
+            1: "Has citado con acierto el texto legal genérico (partiendo de **5,50** si la solución es correcta), pero al no precisar el artículo aplicable no puede alcanzarse el **8,00** (tope **7,90 / 10**).",
+            2: "Has citado la norma y el artículo de forma genérica sin concretar el epígrafe/apartado exacto, por lo que la nota máxima alcanzable es **9,00 / 10**.",
+            3: "Has citado con máximo rigor la norma, el artículo y su epígrafe/apartado específico, habilitando el tramo de hasta **10,00 / 10** según la exactitud del fondo."
+        }.get(niv, "")
         return (
             f"1. **✅ Lo que has acertado en esta cuestión práctica:**\n"
-            f"- **Artículos principales de aplicación citados correctamente:** {arts_acertados_str}.\n"
+            f"- **Nivel de rigor normativo alcanzado:** {esc_sup.get('etiqueta', '')} *(tope del tramo: {tope_v:.2f}/10)*.\n"
+            f"- **Preceptos de la solución citados:** {arts_acertados_str}.\n"
             f"- **Bloques o cálculos identificados:** {len(comp) + len(inc)} de {tot_ap}.\n\n"
-            f"2. **⚠️ Por qué obtienes esta nota (fundamentación normativa y aspectos a reforzar):**\n"
-            f"{aviso_norma_sup}"
-            f"- **Artículos principales de la solución no citados:** {arts_omitidos_str}.\n"
-            f"- Revisa debajo la **Explicación y Respuesta Técnica oficial** para contrastar los cálculos, plazos y artículos exactos.\n\n"
+            f"2. **⚠️ Por qué obtienes esta nota (escalera de rigor normativo y solución):**\n"
+            f"- {explicacion_tramo}\n"
+            f"- **Preceptos exactos de la solución no completados:** {arts_omitidos_str}.\n"
+            f"- Revisa debajo la **Explicación y Respuesta Técnica oficial** para contrastar cálculos, plazos y epígrafes exactos.\n\n"
             f"3. **🎯 Calificación de la cuestión práctica:** **`{n10:.2f} / 10 puntos`**"
         )
 
@@ -7827,13 +7988,12 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         respuesta_alumno, respuesta_oficial, explicacion_oficial, f"{enunciado_supuesto} {pregunta}"
     )
     aud_b = aud.get("auditoria_bloques") or {}
+    esc_sup = aud.get("escalera_normativa_supuesto") or {}
 
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la solución oficial"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno adicional detectado"
     arts_err_str = "; ".join(aud.get("articulos_extra_erroneos", []) + aud.get("articulos_cita_norma_erronea", [])) or "Ninguno"
-    citas_genericas_list = aud.get("citas_solo_ley_sin_articulo") or []
-    citas_genericas_str = ", ".join(citas_genericas_list) if citas_genericas_list else "Ninguna"
     siglas_mal_str = (
         ", ".join([f"{s} (no fue presentada con su nombre completo antes)" for s, _ in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas empleadas por el alumno fueron correctamente presentadas)"
@@ -7861,43 +8021,55 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         return aviso_respaldo_inapropiado
 
     if modo in ("SUPUESTO", "SUPUESTOS"):
+        nivel_det = esc_sup.get("nivel", 0)
+        tope_det = float(esc_sup.get("tope_max", 5.0))
+        etiqueta_det = esc_sup.get("etiqueta", "")
+        normas_ok_det = ", ".join(esc_sup.get("normas_citadas_ok", [])) or "Ninguna"
+        arts_ep_det = ", ".join(esc_sup.get("articulos_con_epigrafe_ok", [])) or "Ninguno"
+        arts_gen_det = ", ".join(esc_sup.get("articulos_genericos_ok", [])) or "Ninguno"
+
         instruccion_escueta_sup = (
-            "\n5. **RESPUESTA MUY ESCUETA O TELEGRÁFICA:** El alumno ha escrito muy pocas palabras. Valóralo con rigor (en Gestión se exige razonamiento jurídico + cálculo + artículo aplicable, no una cifra o palabra suelta) y anímale educadamente a desarrollar la fundamentación completa.\n"
+            "\n- **ATENCIÓN A RESPUESTA MUY BREVE:** El alumno ha escrito muy pocas palabras. Penaliza la falta de desarrollo jurídico y recuérdale educadamente que en el 2.º ejercicio de Gestión debe razonar jurídicamente el supuesto y citar norma, artículo y apartado.\n"
             if es_respuesta_muy_escueta else ""
         )
+
         prompt = (
             "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar IA, inteligencia artificial, modelo o algoritmo, y PROHIBIDO atribuirte ser Tribunal oficial).\n"
-            "Evalúa con agilidad, precisión y rigor jurídico la respuesta del alumno a esta cuestión de SUPUESTO PRÁCTICO comparándola con la SOLUCIÓN Y RESPUESTA TÉCNICA OFICIAL.\n\n"
-            "=== REGLAS ESTRICTAS DE PUNTUACIÓN DEL SUPUESTO PRÁCTICO (0,00 a 10,00 PUNTOS) ===\n"
-            "1. **PESO OBLIGATORIO DE LA REFERENCIA NORMATIVA PRINCIPAL (REGLA CLAVE DE CALIFICACIÓN):**\n"
-            "   - **Omisión de la referencia normativa principal = RESTA PUNTOS:** Si el alumno NO cita la referencia normativa principal aplicable al supuesto, DEBES restarle entre **1,25 y 2,00 puntos** respecto a la nota que obtendría por el fondo/cálculo (ejemplo: una solución con resultado correcto pero sin citar el artículo principal nunca puede tener 9 ni 10; quedará como máximo entre 7,00 y 8,25 si el razonamiento es impecable).\n"
-            "   - **Cita meramente genérica de la Ley/Reglamento SIN artículo = NO CUENTA (ES DEMASIADO GENERAL):** Si el alumno menciona solo el nombre o sigla de la norma general (por ejemplo, «según el TRLGSS», «conforme al RGR», «según el RGCL» o «según la Orden de cotización») sin indicar el **artículo o disposición concreta**, NO se tiene en cuenta como cita normativa válida y se aplica igualmente la resta por falta del precepto principal. Indícaselo expresamente.\n"
-            "   - **Cita exacta y correcta a nivel de ARTÍCULO de aplicación principal = SUBE NOTA:** Comprueba con rigor si el artículo citado por el alumno es correcto, pertenece a la norma adecuada y es efectivamente el **artículo de aplicación principal** que resuelve el supuesto. Si es así, súbele nota (+1,00 a +1,50 puntos, permitiendo alcanzar el 9,00–10,00 si el cálculo y el razonamiento también son correctos).\n"
-            "   - **Cita de artículo erróneo o secundario que no es el principal:** Si cita un número de artículo equivocado o de otra norma distinta, NO le sumes el plus normativo y penaliza ligeramente la imprecisión indicándole cuál era el artículo exacto.\n"
-            "2. **RESOLUCIÓN TÉCNICA Y CÁLCULOS (hasta 8,00–8,50 puntos base antes del ajuste normativo):**\n"
-            "   - Evalúa si detecta la clave o «trampa» jurídica/matemática del supuesto y si llega a la cuantía, fecha límite o calificación jurídica exacta.\n"
-            "3. Sé directo, claro y conciso (máximo 220-280 palabras en total para no alargar innecesariamente el texto)."
-            f"{instruccion_escueta_sup}\n"
-            "=== AUDITORÍA NORMATIVA AUTOMÁTICA DEL TEXTO DEL ALUMNO ===\n"
-            f"- Artículos de la solución oficial citados correctamente por el alumno: {arts_acertados_str}\n"
-            f"- Artículos de la solución oficial OMITIDOS por el alumno: {arts_omitidos_str}\n"
-            f"- Citas genéricas de ley sin artículo detectadas (NO puntúan por ser demasiado generales): {citas_genericas_str}\n"
-            f"- Artículos adicionales citados por el alumno: {arts_extra_ok_str} | Posibles errores de cita: {arts_err_str}\n\n"
+            "Evalúa con agilidad y rigor la respuesta del alumno a esta cuestión de SUPUESTO PRÁCTICO comparándola con la SOLUCIÓN OFICIAL y aplicando de forma **INQUEBRANTABLE** la siguiente ESCALERA DE RIGOR NORMATIVO (de 0,00 a 10,00 puntos):\n\n"
+            "=== ESCALERA OBLIGATORIA DE RIGOR NORMATIVO EN SUPUESTOS PRÁCTICOS ===\n"
+            "1. **ESCALÓN 0 — SIN CITA DE NORMATIVA (o citando una norma equivocada) ➔ TOPE MÁXIMO ESTRICTO: `5,00 / 10`:**\n"
+            "   - Si el alumno NO cita ninguna norma aplicable, **NUNCA puede superar el `5,00`** aunque clave todos los cálculos y conclusiones.\n"
+            "   - Solo alcanza `5,00` si la resolución práctica y los cálculos son 100 % exactos. **Cualquier error, omisión o fallo en el cálculo o en el fondo le resta puntos por debajo de 5,00 (suspenso, ej. 2,50 a 4,50 según el fallo).**\n"
+            "2. **ESCALÓN 1 — CITA CON ACIERTO SOLO EL TEXTO LEGAL GENÉRICO (ej. TRLGSS, RGR, RGCL, Orden PJC/297/2026) SIN ARTÍCULO ➔ TRAMO `5,50 a 7,90` (PROHIBIDO ALCANZAR EL `8,00`):**\n"
+            "   - Si cita acertadamente la ley/reglamento aplicable de forma genérica y acierta en la respuesta al supuesto, **parte de `5,50`** y sube progresivamente según la calidad de su razonamiento y cálculos, pero **SIN ALCANZAR NUNCA EL `8,00` (máximo `7,75` o `7,90`)** por carecer de referencia a nivel de artículo.\n"
+            "   - Si pese a citar la ley genérica se equivoca en el fondo o en el cálculo del supuesto, resta puntos igualmente pudiendo bajar del aprobado (< 5,00).\n"
+            "3. **ESCALÓN 2 — CITA LA NORMA Y EL ARTÍCULO PRINCIPAL DE FORMA GENÉRICA (ej. «art. 33 del RGR» sin especificar el apartado/epígrafe concreto cuando el precepto lo tiene) ➔ TOPE MÁXIMO ESTRICTO: `9,00 / 10`:**\n"
+            "   - Comprueba que el artículo citado sea correcto y sea el de aplicación principal. Si acierta todo en la pregunta, puede alcanzar **hasta `9,00`**, pero **NO supera el `9,00`** por no concretar el epígrafe/apartado exacto del artículo. Los fallos en cálculos o matices restan proporcionalmente desde ese techo.\n"
+            "4. **ESCALÓN 3 — MÁXIMO RIGOR: CITA NORMA + ARTÍCULO + EPÍGRAFE/APARTADO EXACTO (ej. «art. 33.4.b) del RGR», «art. 56.1.c).2.º del RGR», «art. 29.1 del TRLGSS», o el artículo completo si carece de apartados) ➔ PUEDE ALCANZAR HASTA `10,00 / 10`:**\n"
+            "   - Si cita con exactitud norma, artículo y apartado/epígrafe aplicable y clava todos los cálculos y matices jurídicos de la pregunta, alcanza entre **`9,25 y 10,00`**.\n\n"
+            "=== AUDITORÍA AUTOMÁTICA VERIFICADA SOBRE EL TEXTO DEL ALUMNO (RESPETA SU TOPE MÁXIMO) ===\n"
+            f"- Escalón detectado: **{etiqueta_det}**\n"
+            f"- **TOPE MÁXIMO PERMITIDO PARA ESTA RESPUESTA: `{tope_det:.2f} / 10`** (jamás otorgues una nota superior a `{tope_det:.2f}`).\n"
+            f"- Normas genéricas válidas detectadas: {normas_ok_det}\n"
+            f"- Artículos con epígrafe/apartado exacto detectados: {arts_ep_det}\n"
+            f"- Artículos genéricos (sin epígrafe) detectados: {arts_gen_det}\n"
+            f"- Preceptos de la solución oficial NO citados o incompletos: {arts_omitidos_str} | Posibles errores de cita: {arts_err_str}"
+            f"{instruccion_escueta_sup}\n\n"
             f"=== PLANTEAMIENTO DEL SUPUESTO ===\n{enunciado_limpio}\n\n"
             f"=== PREGUNTA PRÁCTICA ===\n{pregunta}\n\n"
             f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
             f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
-            "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
-            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota final sobre 10 (con punto decimal):\n"
+            "=== FORMATO OBLIGATORIO DE TU RESPUESTA (CONCISO Y DIRECTO, MÁXIMO 240 PALABRAS) ===\n"
+            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal y sin superar el tope permitido):\n"
             "[[NOTA_SUPUESTO: X.XX]]\n\n"
-            "Después redacta tu dictamen directo en estos 3 puntos:\n"
-            "1. **✅ Aciertos en la resolución y fundamentación normativa:**\n"
-            "   - Indica qué cálculos, plazos o conclusiones ha acertado y si ha sumado puntos por citar correctamente el **artículo principal de aplicación**.\n"
-            "2. **⚠️ Ajuste de nota (cálculos, matices y control del artículo principal):**\n"
-            "   - Explica con precisión qué le ha faltado en el razonamiento/cálculo y detalla el impacto normativo: si restó puntos por omitir la referencia normativa principal, si citó solo la ley en general sin artículo (explicando que no se computa por ser demasiado general) o si equivocó el precepto.\n"
-            f"   - Incluye la línea: **Artículos principales de la solución no citados:** {arts_omitidos_str}\n"
+            "Después redacta tu valoración en estos 3 puntos:\n"
+            "1. **✅ Resolución del supuesto y escalón de rigor normativo alcanzado:**\n"
+            "   - Indica qué cálculos, plazos o conclusiones ha resuelto bien y en qué escalón normativo se sitúa su cita (sin norma / norma genérica / norma + artículo / norma + artículo + epígrafe).\n"
+            "2. **⚠️ Justificación exacta de tu nota (por qué llegas a esta puntuación y qué restó o limitó el techo):**\n"
+            "   - Explica con total transparencia cómo han influido tanto el techo de su escalón normativo (5,00 / <8,00 / 9,00 / 10,00) como cualquier error o matiz omitido en la solución del supuesto.\n"
+            f"   - Indica en una línea limpia: **Referencia normativa exacta de la solución:** {arts_omitidos_str if arts_omitidos_str != 'Ninguno' else arts_acertados_str}\n"
             "3. **💡 Clave de examen de tus preparadores:**\n"
-            "   - Una frase breve y directa para fijar el artículo principal y la regla del caso."
+            "   - Una frase directa para memorizar la cita exacta (norma + artículo + apartado) y no perder puntos en el examen."
         )
         max_tok_modo = 780
     else:
