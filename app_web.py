@@ -7067,6 +7067,17 @@ def descargar_pdf_fresco(url):
 # === FIN SECCIÓN 4A ===
 
 # === SECCIÓN 4B: MOTOR DE EVALUACIÓN TÉCNICA DEL EQUIPO DE PREPARADORES OPOSICIONA ===
+@st.cache_resource
+def _obtener_sesion_http_gemini():
+    s = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10)
+    s.mount("https://", adapter)
+    return s
+
+@st.cache_resource
+def _obtener_cache_modelo_rapido_gemini():
+    return {"modelo_activo": None}
+
 def detectar_respuesta_inapropiada_o_sin_interes(texto_alumno):
     t_raw = (texto_alumno or "").strip()
     if not t_raw:
@@ -7204,7 +7215,7 @@ def _extraer_articulos_detallados_de_texto(texto):
             if "LISOS" in nc or "5/2000" in nc:
                 return "LISOS"
             return norma_capturada.strip()
-        ventana_sig = t_limpio[pos_fin_match:pos_fin_match + 45]
+        ventana_sig = t_limpio[pos_fin_match:pos_fin_match + 55]
         if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RIA|Reglamento\s+General\s+sobre\s+inscripci|RD\s*84/1996)', ventana_sig, re.IGNORECASE):
             return "RIA"
         if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:RGCL|Reglamento\s+General\s+sobre\s+Cotizaci|RD\s*2064/1995)', ventana_sig, re.IGNORECASE):
@@ -7213,6 +7224,9 @@ def _extraer_articulos_detallados_de_texto(texto):
             return "RGR"
         if re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(?:TRLGSS|LGSS|Texto\s+Refundido|RDL\s*8/2015)', ventana_sig, re.IGNORECASE):
             return "TRLGSS"
+        m_ord = re.search(r'^\s*(?:del?\s+|de\s+la\s+)?(Orden\s+[A-Z]+/\d+/\d{4}|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley)?\s+\d+/\d{4}|Ley\s+\d+/\d{4})', ventana_sig, re.IGNORECASE)
+        if m_ord:
+            return m_ord.group(1).strip()
         return ""
 
     pat_multi = r'\b(?:art[íi]culos?|arts?\.)\s*(\d{1,3}(?:\.\d+)?(?:\s*(?:,\s*\d{1,3}(?:\.\d+)?)*\s*(?:y|a|al|\-|–)\s*\d{1,3}(?:\.\d+)?))(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
@@ -7233,7 +7247,7 @@ def _extraer_articulos_detallados_de_texto(texto):
             vistos_norm.add(clave_v)
             etiquetas.append((nums_hallados, norma_txt.upper(), lbl))
 
-    pat_indiv = r'\b(?:art[íi]culo|art\.)\s*(\d{1,3}(?:\.\d+)*(?:\.[ºª°a-z])?)(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
+    pat_indiv = r'\b(?:art[íi]culo|art\.)\s*(\d{1,3}(?:\.\d+)*(?:[\.\s]*[a-z]\))?(?:\.[ºª°a-z])?)(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGCL|RGR|ET|TRET|CE|LISOS|RD\s+\d+/\d{4}|Real\s+Decreto(?:\-ley|\s+Legislativo)?\s+\d+/\d{4}|Orden\s+[A-Z]+/\d+/\d{4}|Ley\s+\d+/\d{4}))?'
     for m in re.finditer(pat_indiv, t_limpio, flags=re.IGNORECASE):
         num_completo = m.group(1).strip()
         num_base = re.match(r'^(\d{1,3})', num_completo).group(1)
@@ -7244,19 +7258,48 @@ def _extraer_articulos_detallados_de_texto(texto):
         if not ya_incluido:
             etiquetas.append(([num_base], norma_txt.upper(), lbl))
 
-    pat_disp = r'\b(DA\s+\d+[\.ºª°a-z]*|DT\s+\d+[\.ºª°a-z]*|Disposici[óo]n\s+(?:adicional|transitoria|final)\s+[0-9a-záéíóúñ\.ºª°]+)(?:\s+(?:del?\s+)?(TRLGSS|LGSS|RIA|ET))?'
+    pat_disp = r'\b(DA\s+\d+[\.ºª°a-z]*|DT\s+\d+[\.ºª°a-z]*|Disposici[óo]n\s+(?:adicional|transitoria|final)\s+[0-9a-záéíóúñ\s\.ºª°]+?)(?=\s+(?:del?\s+|de\s+la\s+)?(?:TRLGSS|LGSS|RIA|RGR|RGCL|ET|Orden|RD|Ley)|[,;\.\)]|$)(?:\s+(?:del?\s+|de\s+la\s+)?(TRLGSS|LGSS|RIA|RGR|RGCL|ET))?'
     for m in re.finditer(pat_disp, t_limpio, flags=re.IGNORECASE):
         d_txt = re.sub(r'\s+', ' ', m.group(1).strip())
         norma_txt = (m.group(2) or "").strip()
         num_d = re.findall(r'\d+', d_txt)
-        token_d = f"DA_{num_d[0]}" if num_d else d_txt.lower()
+        token_d = f"DA_{num_d[0]}" if num_d else _normalizar_sin_acentos(d_txt)[:22]
         numeros_base.add(token_d)
         lbl = f"{d_txt}" + (f" {norma_txt}" if norma_txt else "")
         if lbl.lower() not in vistos_norm:
             vistos_norm.add(lbl.lower())
             etiquetas.append(([token_d], norma_txt.upper(), lbl))
 
+    pat_instruccion = r'\b(Instrucci[óo]n\s+[a-záéíóúñ0-9\.ºª°]+(?:\s+de\s+la\s+Resoluci[óo]n\s+de\s+\d+\s+de\s+[a-záéíóúñ]+\s+de\s+\d{4})?)'
+    for m in re.finditer(pat_instruccion, t_limpio, flags=re.IGNORECASE):
+        inst_txt = re.sub(r'\s+', ' ', m.group(1).strip())
+        tok_i = "INST_" + _normalizar_sin_acentos(inst_txt)[:18]
+        numeros_base.add(tok_i)
+        if inst_txt.lower() not in vistos_norm:
+            vistos_norm.add(inst_txt.lower())
+            etiquetas.append(([tok_i], "RESOLUCION", inst_txt))
+
     return etiquetas, numeros_base
+
+def _detectar_citas_genericas_sin_articulo(texto_alumno, etiquetas_al):
+    if not texto_alumno or etiquetas_al:
+        return []
+    t_low = _normalizar_sin_acentos(texto_alumno)
+    normas_genericas = [
+        ("TRLGSS / Ley General de la Seguridad Social", r'\b(trlgss|lgss|ley\s+general\s+de\s+la\s+seguridad\s+social|rdl\s*8/2015)\b'),
+        ("Reglamento General de Recaudación (RGR / RD 1415/2004)", r'\b(rgr|reglamento\s+general\s+de\s+recaudacion|1415/2004)\b'),
+        ("Reglamento General de Cotización y Liquidación (RGCL / RD 2064/1995)", r'\b(rgcl|reglamento\s+general\s+(?:sobre|de)\s+cotizacion|2064/1995)\b'),
+        ("Reglamento General de Inscripción y Afiliación (RIA / RD 84/1996)", r'\b(ria|reglamento\s+general\s+(?:sobre|de)\s+inscripcion|84/1996)\b'),
+        ("Orden de Cotización (Orden PJC/297/2026)", r'\b(orden\s+de\s+cotizacion|pjc/297/2026|orden\s+anual)\b'),
+        ("Orden TAS/1562/2005", r'\b(tas/1562/2005|orden\s+de\s+recaudacion)\b'),
+        ("Estatuto de los Trabajadores (ET)", r'\b(estatuto\s+de\s+los\s+trabajadores|\bet\b|\btret\b)\b'),
+        ("Constitución Española (CE)", r'\b(constitucion\s+espanola|\bce\b)\b'),
+    ]
+    detectadas = []
+    for nombre_n, pat_n in normas_genericas:
+        if re.search(pat_n, t_low):
+            detectadas.append(nombre_n)
+    return detectadas
 
 def _normalizar_sin_acentos(s):
     s = ''.join(c for c in unicodedata.normalize('NFD', (s or "").lower()) if unicodedata.category(c) != 'Mn')
@@ -7411,12 +7454,26 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
 
     articulos_omitidos_limpios = []
     articulos_acertados_limpios = []
+    articulos_cita_norma_erronea = []
+
     for nums_grupo, norma_g, lbl_art in etiquetas_ref:
-        if any(n in nums_al for n in nums_grupo):
+        coincidencia_valida = False
+        coincidencia_norma_distinta = False
+        for nums_al_g, norma_al_g, lbl_al_g in etiquetas_al:
+            if any(n in nums_al_g for n in nums_grupo):
+                if not norma_g or not norma_al_g or norma_g == norma_al_g:
+                    coincidencia_valida = True
+                    break
+                else:
+                    coincidencia_norma_distinta = True
+        if coincidencia_valida:
             articulos_acertados_limpios.append(lbl_art)
         else:
             articulos_omitidos_limpios.append(lbl_art)
+            if coincidencia_norma_distinta:
+                articulos_cita_norma_erronea.append(lbl_art)
 
+    citas_solo_ley_sin_articulo = _detectar_citas_genericas_sin_articulo(texto_alumno, etiquetas_al)
     aud_bloques = auditar_pertinencia_y_bloques_epigrafe(enunciado_pregunta, ref_completa, texto_alumno)
 
     articulos_extra_validos = []
@@ -7430,6 +7487,8 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
                     articulos_extra_erroneos.append(f"{lbl_al} (inexistente: el TRLGSS consta de 373 artículos)")
                 elif norma_al == "RIA" and n_int > 64:
                     articulos_extra_erroneos.append(f"{lbl_al} (inexistente en el RD 84/1996)")
+                elif norma_al == "RGR" and n_int > 132:
+                    articulos_extra_erroneos.append(f"{lbl_al} (inexistente en el RD 1415/2004)")
                 else:
                     articulos_extra_validos.append(f"{lbl_al}")
             else:
@@ -7440,6 +7499,9 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
     return {
         "articulos_acertados": articulos_acertados_limpios,
         "articulos_omitidos": articulos_omitidos_limpios,
+        "articulos_cita_norma_erronea": articulos_cita_norma_erronea,
+        "citas_solo_ley_sin_articulo": citas_solo_ley_sin_articulo,
+        "tiene_algun_articulo_concreto_alumno": len(etiquetas_al) > 0,
         "articulos_extra_validos": articulos_extra_validos,
         "articulos_extra_erroneos": articulos_extra_erroneos,
         "siglas_sin_presentar": siglas_sin_presentar,
@@ -7479,9 +7541,20 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     ratio_cobertura_real = aud_b.get("ratio_cobertura_epigrafe", 0.0)
     pts_base_c1 = ratio_cobertura_real * 43.0
-    bonus_extra = min(4.0, len(auditoria["articulos_extra_validos"]) * 0.65)
-    resta_arts_omitidos = min(1.50, len(auditoria["articulos_omitidos"]) * 0.08)
-    pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
+
+    # Si es respaldo de SUPUESTO (detectable por encabezados de supuesto o pregunta numerada), aplicamos peso estricto del artículo principal
+    es_ctx_supuesto = ("RESPUESTA TÉCNICA" in (explicacion_oficial or "").upper()) or bool(re.match(r'^\s*\d{1,2}\.\s+', (enunciado_pregunta or "").strip()))
+    if es_ctx_supuesto and (auditoria["articulos_acertados"] or auditoria["articulos_omitidos"]):
+        if auditoria["articulos_acertados"]:
+            ajuste_normativo_sup = min(6.0, len(auditoria["articulos_acertados"]) * 3.5)
+        else:
+            # Penalización efectiva por omitir el artículo principal o citar solo la ley en abstracto
+            ajuste_normativo_sup = -7.5
+        pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + ajuste_normativo_sup)), 2)
+    else:
+        bonus_extra = min(4.0, len(auditoria["articulos_extra_validos"]) * 0.65)
+        resta_arts_omitidos = min(1.50, len(auditoria["articulos_omitidos"]) * 0.08)
+        pts_criterio_1 = round(max(0.0, min(45.0, pts_base_c1 + bonus_extra - resta_arts_omitidos)), 2)
 
     supera_umbral_20 = pts_criterio_1 >= 20.0
     if supera_umbral_20:
@@ -7521,38 +7594,62 @@ def obtener_gemini_api_key_activa():
         return str(sess_def).strip()
     return GEMINI_API_KEY_DEFAULT
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _obtener_modelos_disponibles_api(clave_limpia):
-    modelos_prioritarios = [
-        "gemini-3.0-flash",
-        "gemini-3.1-pro-preview",
-        "gemini-3.1-flash-lite-preview",
-        "gemini-3.0-pro",
+def _obtener_modelos_rapidos_gemini():
+    """Orden estricto por mínima latencia (modelos Flash sin espera de descubrimiento de red)."""
+    cache_m = _obtener_cache_modelo_rapido_gemini()
+    base = [
         "gemini-2.5-flash",
-        "gemini-2.0-flash"
+        "gemini-2.0-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite-preview",
     ]
-    try:
-        r = requests.get(
-            f"https://generativelanguage.googleapis.com/v1beta/models?key={clave_limpia}",
-            timeout=6
-        )
-        if r.status_code == 200:
-            datos = r.json().get("models", [])
-            disponibles = []
-            for m in datos:
-                metodos = m.get("supportedGenerationMethods", [])
-                nom = (m.get("name") or "").replace("models/", "")
-                if "generateContent" in metodos and "gemini" in nom and "vision" not in nom and "embedding" not in nom and "imagen" not in nom and "tts" not in nom:
-                    disponibles.append(nom)
-            if disponibles:
-                ordenados = [m for m in modelos_prioritarios if m in disponibles]
-                for d in disponibles:
-                    if d not in ordenados and ("3." in d or "flash" in d or "pro" in d):
-                        ordenados.append(d)
-                return ordenados[:6]
-    except Exception:
-        pass
-    return modelos_prioritarios
+    activo = cache_m.get("modelo_activo")
+    if activo and activo in base:
+        return [activo] + [m for m in base if m != activo]
+    return base
+
+def _invocar_gemini_rapido(clave_limpia, prompt_texto, temp=0.15, max_tokens=1050):
+    sesion = _obtener_sesion_http_gemini()
+    cache_m = _obtener_cache_modelo_rapido_gemini()
+    modelos = _obtener_modelos_rapidos_gemini()
+
+    for modelo in modelos:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
+        gen_cfg_rapida = {
+            "temperature": temp,
+            "topP": 0.85,
+            "maxOutputTokens": max_tokens,
+        }
+        if modelo.startswith("gemini-2.5"):
+            gen_cfg_rapida["thinkingConfig"] = {"thinkingBudget": 0}
+        elif modelo.startswith("gemini-3"):
+            gen_cfg_rapida["thinkingConfig"] = {"thinkingLevel": "minimal"}
+
+        payload = {
+            "contents": [{"parts": [{"text": prompt_texto}]}],
+            "generationConfig": gen_cfg_rapida
+        }
+        try:
+            r = sesion.post(url, json=payload, timeout=14)
+            if r.status_code == 400 and "thinkingConfig" in gen_cfg_rapida:
+                gen_sin_think = {k: v for k, v in gen_cfg_rapida.items() if k != "thinkingConfig"}
+                r = sesion.post(
+                    url,
+                    json={"contents": [{"parts": [{"text": prompt_texto}]}], "generationConfig": gen_sin_think},
+                    timeout=14
+                )
+            if r.status_code == 200:
+                cand = (r.json().get("candidates") or [{}])[0]
+                partes = (cand.get("content") or {}).get("parts") or []
+                textos = [p.get("text", "") for p in partes if not p.get("thought", False) and p.get("text")]
+                txt_final = "\n".join(textos).strip()
+                if txt_final:
+                    cache_m["modelo_activo"] = modelo
+                    return txt_final
+        except Exception:
+            continue
+    return None
 
 def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     ev_out = dict(ev_respaldo or {})
@@ -7635,8 +7732,9 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
     omit = aud_b.get("apartados_omitidos", [])
 
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
-    arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
+    arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los artículos principales de aplicación"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno"
+    citas_genericas_list = aud.get("citas_solo_ley_sin_articulo") or []
     siglas_mal_str = (
         ", ".join([f"**{s}** (debiste presentar la primera vez como *«{ej}»*)" for s, ej in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
@@ -7649,13 +7747,21 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
     n10 = ev_fallback.get("nota", 0.0)
 
     if modo == "SUPUESTO":
+        aviso_norma_sup = (
+            f"- **⚖️ Penalización por cita normativa genérica o ausente:** Has citado únicamente la norma general ({', '.join(citas_genericas_list)}) sin precisar el artículo concreto aplicable; en el supuesto práctico la cita sin número de artículo no puntúa y la falta del precepto principal resta puntuación.\n"
+            if citas_genericas_list and not aud["articulos_acertados"] else (
+                "- **⚖️ Penalización normativa:** No has incluido el artículo principal de aplicación al caso, lo cual resta puntos en la calificación del supuesto.\n"
+                if not aud["articulos_acertados"] and aud["articulos_omitidos"] else ""
+            )
+        )
         return (
             f"1. **✅ Lo que has acertado en esta cuestión práctica:**\n"
-            f"- **Preceptos y elementos de la solución citados:** {arts_acertados_str}.\n"
+            f"- **Artículos principales de aplicación citados correctamente:** {arts_acertados_str}.\n"
             f"- **Bloques o cálculos identificados:** {len(comp) + len(inc)} de {tot_ap}.\n\n"
-            f"2. **⚠️ Por qué obtienes esta nota (lo que ha faltado o debes revisar frente a la explicación):**\n"
-            f"- **Artículos de la solución no citados:** {arts_omitidos_str}.\n"
-            f"- Revisa a continuación la **Explicación y Respuesta Técnica oficial** para contrastar los cálculos exactos, plazos y fundamentación normativa.\n\n"
+            f"2. **⚠️ Por qué obtienes esta nota (fundamentación normativa y aspectos a reforzar):**\n"
+            f"{aviso_norma_sup}"
+            f"- **Artículos principales de la solución no citados:** {arts_omitidos_str}.\n"
+            f"- Revisa debajo la **Explicación y Respuesta Técnica oficial** para contrastar los cálculos, plazos y artículos exactos.\n\n"
             f"3. **🎯 Calificación de la cuestión práctica:** **`{n10:.2f} / 10 puntos`**"
         )
 
@@ -7723,8 +7829,11 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     aud_b = aud.get("auditoria_bloques") or {}
 
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
-    arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la explicación"
+    arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la solución oficial"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno adicional detectado"
+    arts_err_str = "; ".join(aud.get("articulos_extra_erroneos", []) + aud.get("articulos_cita_norma_erronea", [])) or "Ninguno"
+    citas_genericas_list = aud.get("citas_solo_ley_sin_articulo") or []
+    citas_genericas_str = ", ".join(citas_genericas_list) if citas_genericas_list else "Ninguna"
     siglas_mal_str = (
         ", ".join([f"{s} (no fue presentada con su nombre completo antes)" for s, _ in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas empleadas por el alumno fueron correctamente presentadas)"
@@ -7737,157 +7846,103 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     if aviso_respaldo_inapropiado is not None:
         etiqueta_cero = "[[NOTA_SUPUESTO: 0.00]]" if modo in ("SUPUESTO", "SUPUESTOS") else "[[NOTAS_TRIBUNAL: C1=0.00 | C2=0.00 | C3=0.00]]"
         prompt_educado = (
-            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual, y PROHIBIDO atribuirte la condición de Tribunal o miembro de un Tribunal oficial: tú eres siempre el equipo de preparadores de Oposiciona).\n"
-            "El alumno ha introducido el siguiente texto en lugar de resolver adecuadamente el ejercicio:\n"
-            f"«{respuesta_alumno}»\n\n"
-            f"Pregunta planteada: {pregunta}\n"
-            f"Solución oficial resumida: {explicacion_limpia_prompt[:900]}\n\n"
-            "=== INSTRUCCIONES ===\n"
+            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar IA, inteligencia artificial, modelo o algoritmo, y PROHIBIDO atribuirte ser Tribunal oficial).\n"
+            f"El alumno ha introducido: «{respuesta_alumno}»\n"
+            f"Pregunta: {pregunta}\nSolución resumida: {explicacion_limpia_prompt[:650]}\n\n"
             f"1. En la PRIMERA LÍNEA escribe exactamente: {etiqueta_cero}\n"
-            "2. A continuación, dirígete al alumno de forma muy educada, serena, profesional y constructiva, adaptando tu respuesta exactamente a lo que ha escrito:\n"
-            "   - Si ha escrito una falta de respeto, desahogo o queja, recuérdale con elegancia y templanza el respeto y el temple propios de un futuro funcionario del Cuerpo de Gestión, comprendiendo que la oposición es dura pero animándole a no perder el tiempo.\n"
-            "   - Si ha escrito «no sé», letras sueltas o una frase evasiva, anímale con cercanía a perder el miedo al papel en blanco.\n"
-            "   - En todos los casos, pídele amablemente que practique lo aprendido redactando una respuesta razonada sobre la cuestión planteada (indicándole 2 o 3 pistas clave del tema sin desvelarle todo, e invitándole a revisar la solución oficial que aparece justo debajo para consolidar el concepto)."
+            "2. En un párrafo breve y educado, anímale a practicar redactando una respuesta jurídica razonada y ofrécele 2 pistas clave del tema."
         )
-        payload_ed = {
-            "contents": [{"parts": [{"text": prompt_educado}]}],
-            "generationConfig": {"temperature": 0.25, "topP": 0.85}
-        }
-        for modelo in _obtener_modelos_disponibles_api(clave_limpia):
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
-                r = requests.post(url, json=payload_ed, headers={"Content-Type": "application/json"}, timeout=25)
-                if r.status_code == 200:
-                    texto_ia = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
-                    if isinstance(ev_fallback, dict):
-                        ev_fallback.update({"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0})
-                    return texto_ia_limpio
-            except Exception:
-                continue
+        texto_ia = _invocar_gemini_rapido(clave_limpia, prompt_educado, temp=0.2, max_tokens=420)
         if isinstance(ev_fallback, dict):
             ev_fallback.update({"nota": 0.0, "nota_50": 0.0, "pts_criterio_1": 0.0, "pts_criterio_2": 0.0, "pts_criterio_3": 0.0})
+        if texto_ia:
+            _, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
+            return texto_ia_limpio
         return aviso_respaldo_inapropiado
 
     if modo in ("SUPUESTO", "SUPUESTOS"):
         instruccion_escueta_sup = (
-            "\n4. **ATENCIÓN A RESPUESTAS MUY BREVES, TELEGRÁFICAS O INADECUADAS:**\n"
-            "   - Si observas que el alumno ha escrito muy poco (solo unas palabras sueltas sin razonar), está contestando sin rigor o con desgana, responde siempre de forma muy educada y constructiva: valóralo en su justa medida pero pídele amablemente que practique lo aprendido desarrollando el razonamiento jurídico completo (la conclusión, el porqué normativo y el artículo aplicable), explicándole que en el examen oficial del Cuerpo de Gestión se exige desarrollar la argumentación jurídica y no solo una palabra suelta.\n"
-            if es_respuesta_muy_escueta else
-            "\n4. **TONO CONSTRUCTIVO ANTE RESPUESTAS CORTAS O DUDOSAS:** Si la respuesta del alumno es demasiado breve o incompleta, anímale de forma muy educada a practicar lo aprendido desarrollando tanto la solución como su fundamentación jurídica.\n"
+            "\n5. **RESPUESTA MUY ESCUETA O TELEGRÁFICA:** El alumno ha escrito muy pocas palabras. Valóralo con rigor (en Gestión se exige razonamiento jurídico + cálculo + artículo aplicable, no una cifra o palabra suelta) y anímale educadamente a desarrollar la fundamentación completa.\n"
+            if es_respuesta_muy_escueta else ""
         )
         prompt = (
-            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar en tu respuesta las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual, y PROHIBIDO atribuirte la condición de Tribunal o miembro de un Tribunal oficial: tú eres siempre el equipo de preparadores de Oposiciona).\n"
-            "Evalúa la respuesta del alumno a esta cuestión de un SUPUESTO PRÁCTICO comparándola directamente con la "
-            "EXPLICACIÓN Y RESPUESTA TÉCNICA OFICIAL de la pregunta (SIN aplicar los subapartados C1/C2/C3 propios de la pregunta de desarrollo).\n\n"
-            "=== REGLAS DE CORRECCIÓN DEL SUPUESTO PRÁCTICO ===\n"
-            "1. Califica la respuesta de **0,00 a 10,00 puntos** (siendo 5,00 el aprobado), aplicando un criterio justo, constructivo y ligeramente indulgente cuando el alumno identifique bien la solución jurídica o el planteamiento del cálculo.\n"
-            "2. Si el alumno falta al respeto, escribe tonterías o demuestra nulo interés, otórgale `0.00` puntos y respóndele de forma sumamente educada, elegante y constructiva pidiéndole que aproveche el estudio y practique lo aprendido.\n"
-            "3. Comprueba si el alumno:\n"
-            "   - Ha detectado la clave o «trampa» jurídica/matemática explicada en el bloque de solución.\n"
-            "   - Ha llegado al resultado numérico, plazo o calificación jurídica correcta.\n"
-            "   - Ha fundamentado su respuesta en la normativa aplicable (no penalices en exceso si omite el número exacto de algún artículo pero aplica bien la regla legal)."
+            "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar IA, inteligencia artificial, modelo o algoritmo, y PROHIBIDO atribuirte ser Tribunal oficial).\n"
+            "Evalúa con agilidad, precisión y rigor jurídico la respuesta del alumno a esta cuestión de SUPUESTO PRÁCTICO comparándola con la SOLUCIÓN Y RESPUESTA TÉCNICA OFICIAL.\n\n"
+            "=== REGLAS ESTRICTAS DE PUNTUACIÓN DEL SUPUESTO PRÁCTICO (0,00 a 10,00 PUNTOS) ===\n"
+            "1. **PESO OBLIGATORIO DE LA REFERENCIA NORMATIVA PRINCIPAL (REGLA CLAVE DE CALIFICACIÓN):**\n"
+            "   - **Omisión de la referencia normativa principal = RESTA PUNTOS:** Si el alumno NO cita la referencia normativa principal aplicable al supuesto, DEBES restarle entre **1,25 y 2,00 puntos** respecto a la nota que obtendría por el fondo/cálculo (ejemplo: una solución con resultado correcto pero sin citar el artículo principal nunca puede tener 9 ni 10; quedará como máximo entre 7,00 y 8,25 si el razonamiento es impecable).\n"
+            "   - **Cita meramente genérica de la Ley/Reglamento SIN artículo = NO CUENTA (ES DEMASIADO GENERAL):** Si el alumno menciona solo el nombre o sigla de la norma general (por ejemplo, «según el TRLGSS», «conforme al RGR», «según el RGCL» o «según la Orden de cotización») sin indicar el **artículo o disposición concreta**, NO se tiene en cuenta como cita normativa válida y se aplica igualmente la resta por falta del precepto principal. Indícaselo expresamente.\n"
+            "   - **Cita exacta y correcta a nivel de ARTÍCULO de aplicación principal = SUBE NOTA:** Comprueba con rigor si el artículo citado por el alumno es correcto, pertenece a la norma adecuada y es efectivamente el **artículo de aplicación principal** que resuelve el supuesto. Si es así, súbele nota (+1,00 a +1,50 puntos, permitiendo alcanzar el 9,00–10,00 si el cálculo y el razonamiento también son correctos).\n"
+            "   - **Cita de artículo erróneo o secundario que no es el principal:** Si cita un número de artículo equivocado o de otra norma distinta, NO le sumes el plus normativo y penaliza ligeramente la imprecisión indicándole cuál era el artículo exacto.\n"
+            "2. **RESOLUCIÓN TÉCNICA Y CÁLCULOS (hasta 8,00–8,50 puntos base antes del ajuste normativo):**\n"
+            "   - Evalúa si detecta la clave o «trampa» jurídica/matemática del supuesto y si llega a la cuantía, fecha límite o calificación jurídica exacta.\n"
+            "3. Sé directo, claro y conciso (máximo 220-280 palabras en total para no alargar innecesariamente el texto)."
             f"{instruccion_escueta_sup}\n"
+            "=== AUDITORÍA NORMATIVA AUTOMÁTICA DEL TEXTO DEL ALUMNO ===\n"
+            f"- Artículos de la solución oficial citados correctamente por el alumno: {arts_acertados_str}\n"
+            f"- Artículos de la solución oficial OMITIDOS por el alumno: {arts_omitidos_str}\n"
+            f"- Citas genéricas de ley sin artículo detectadas (NO puntúan por ser demasiado generales): {citas_genericas_str}\n"
+            f"- Artículos adicionales citados por el alumno: {arts_extra_ok_str} | Posibles errores de cita: {arts_err_str}\n\n"
             f"=== PLANTEAMIENTO DEL SUPUESTO ===\n{enunciado_limpio}\n\n"
             f"=== PREGUNTA PRÁCTICA ===\n{pregunta}\n\n"
-            f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL DE LA PREGUNTA ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
+            f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
             f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
             "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
-            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal):\n"
+            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota final sobre 10 (con punto decimal):\n"
             "[[NOTA_SUPUESTO: X.XX]]\n\n"
-            "A continuación, redacta una valoración clara, educada, directa y formativa estructurada en estos 3 puntos:\n"
-            "1. **✅ Lo que has acertado en la resolución de la pregunta:**\n"
-            "   - Destaca los cálculos, plazos, conclusiones jurídicas y preceptos que el alumno ha resuelto correctamente (o indícale con amabilidad si su respuesta ha sido demasiado escueta para darla por completa).\n"
-            "2. **⚠️ Por qué obtienes esta nota (qué ha faltado y cómo practicar lo aprendido):**\n"
-            "   - Explica con claridad y tono pedagógico qué matiz, cálculo, plazo o precepto de la explicación oficial le ha faltado o en qué punto se ha desviado, invitándole educadamente a practicar lo aprendido razonando su contestación.\n"
-            f"   - Indica en una línea limpia: **Artículos de la solución no citados:** {arts_omitidos_str}\n"
-            "3. **💡 Consejo práctico de tus preparadores para clavar esta pregunta en el examen:**\n"
-            "   - Un consejo breve, cercano y directo para recordar la regla o fórmula aplicada."
+            "Después redacta tu dictamen directo en estos 3 puntos:\n"
+            "1. **✅ Aciertos en la resolución y fundamentación normativa:**\n"
+            "   - Indica qué cálculos, plazos o conclusiones ha acertado y si ha sumado puntos por citar correctamente el **artículo principal de aplicación**.\n"
+            "2. **⚠️ Ajuste de nota (cálculos, matices y control del artículo principal):**\n"
+            "   - Explica con precisión qué le ha faltado en el razonamiento/cálculo y detalla el impacto normativo: si restó puntos por omitir la referencia normativa principal, si citó solo la ley en general sin artículo (explicando que no se computa por ser demasiado general) o si equivocó el precepto.\n"
+            f"   - Incluye la línea: **Artículos principales de la solución no citados:** {arts_omitidos_str}\n"
+            "3. **💡 Clave de examen de tus preparadores:**\n"
+            "   - Una frase breve y directa para fijar el artículo principal y la regla del caso."
         )
+        max_tok_modo = 780
     else:
         alerta_desv_str = (
-            f"\n🚨 ATENCIÓN: Se ha detectado incongruencia con el epígrafe preguntado: {aud_b.get('motivo_desviacion')}\n"
-            "Si el alumno ha contestado un epígrafe distinto al preguntado (por ejemplo, hablar de Altas y Bajas cuando se pregunta Afiliación o Convenio Especial), la nota de Criterio 1 no puede superar los 10,00 puntos.\n"
+            f"\n🚨 ATENCIÓN: Incongruencia con el epígrafe preguntado: {aud_b.get('motivo_desviacion')}\n"
+            "Si el alumno contesta otro epígrafe distinto, el Criterio 1 no puede superar los 10,00 puntos.\n"
             if aud_b.get("desviacion_epigrafe") else ""
         )
 
         prompt = (
-            "Actúa exclusivamente como el Equipo de Preparadores de Oposiciona (Tribunal Oposiciona) para el Cuerpo de Gestión de la Administración de la Seguridad Social. PROHIBIDO mencionar las palabras IA, inteligencia artificial, modelo, algoritmo o asistente virtual, y PROHIBIDO decir o dar a entender que eres el Tribunal oficial o miembro de un tribunal de oposiciones: habla siempre como los preparadores de Oposiciona aplicando el baremo público oficial de la convocatoria.\n"
-            "Realiza un análisis analítico, detallado, justo y constructivo comparando el TEXTO ESCRITO POR EL ALUMNO con la "
-            "EXPLICACIÓN / DESARROLLO OFICIAL DE ESTE EPÍGRAFE CONCRETO que se te facilita más abajo, aplicando un criterio **equilibrado, formativo y ligeramente indulgente** para no desanimar en exceso al opositor cuando sí trabaja el epígrafe:\n\n"
-            "=== REGLAS EQUILIBRADAS DE VALORACIÓN DE LOS PREPARADORES DE OPOSICIONA ===\n"
-            "1. **DISTINCIÓN CLARA ENTRE CONTESTAR OTRO EPÍGRAFE, RESPUESTA MUY ESCUETA O FALTA DE RESPETO VS. RESPUESTA PERTINENTE (`" + pregunta + "`):**\n"
-            "   - **Si el alumno falta al respeto o escribe comentarios improcedentes:** Otórgale `0.00` puntos y respóndele con máxima educación, elegancia y firmeza constructiva pidiéndole que practique lo aprendido.\n"
-            "   - **Si el alumno escribe muy poco (unas pocas líneas esquemáticas):** Respóndele de forma muy educada y motivadora, valorando los conceptos que haya mencionado pero invitándole a practicar lo aprendido desarrollando todos los apartados del epígrafe con redacción jurídica completa.\n"
-            "   - **Cuándo SÍ debes suspender con firmeza (< 12 / 50 ptos):** Únicamente cuando el alumno conteste un epígrafe distinto al preguntado o cuando deje casi todo sin desarrollar.\n"
-            "   - **Cuándo debes ser UN POCO MÁS INDULGENTE Y CONSTRUCTIVO (permitiendo alcanzar o superar los 22-30 / 45 puntos en Criterio 1):** Cuando el alumno SÍ está contestando al epígrafe preguntado, comprende bien el núcleo del tema y desarrolla correctamente una parte relevante.\n"
-            "   - **NO EXIJAS COMO OBLIGATORIO LO QUE NO ESTÉ EN LA EXPLICACIÓN OFICIAL DE ESTE EPÍGRAFE:** Si el alumno adelanta o añade conceptos conexos válidos del tema, súmale puntos adicionales en el Criterio 1 por enriquecer la exposición."
+            "Actúa exclusivamente como el Equipo de Preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar IA, inteligencia artificial, modelo o algoritmo, y PROHIBIDO atribuirte ser Tribunal oficial).\n"
+            "Compara con agilidad y rigor el TEXTO DEL ALUMNO con el DESARROLLO OFICIAL DE ESTE EPÍGRAFE aplicando el baremo oficial (0 a 50 puntos; mínimo 25,00 para aprobar) con criterio constructivo y equilibrado:\n"
+            "- Criterio 1 (0 a 45 ptos): Desarrollo de los apartados del epígrafe + aportaciones conexas válidas - resta leve por artículos omitidos. Si contesta otro epígrafe distinto o deja casi todo vacío: < 12 ptos. Si responde bien al núcleo del epígrafe: valora positivamente entre 22 y 45 ptos según completitud.\n"
+            "- Criterio 2 (0 a 3 ptos): Estructura y orden de ideas (solo puntúa si C1 >= 20,00; si C1 < 20, C2 = 0.00).\n"
+            "- Criterio 3 (0 a 2 ptos): Expresión escrita y presentación de siglas («Nombre completo (SIGLA)» o «..., en adelante, SIGLA»; solo puntúa si C1 >= 20,00; resta 0,15 solo si hay siglas sin presentar en la auditoría)."
             f"{alerta_desv_str}\n"
-            "2. **REGLA EXACTA SOBRE PRESENTACIÓN DE SIGLAS (PROHIBIDO INVENTAR FALSOS POSITIVOS):**\n"
-            "   - Una sigla está **CORRECTAMENTE PRESENTADA** tanto si el alumno escribe su nombre completo seguido de la sigla entre paréntesis como si utiliza la fórmula *«..., en adelante, SIGLA»*.\n"
-            f"   - Auditoría automática verificada sobre el texto del alumno: **Siglas usadas sin presentar detectadas:** `{siglas_mal_str}` (respeta exactamente este dato y resta muy poquito —máximo 0,15 o 0,20 ptos— si hay alguna).\n\n"
-            "3. **FALTA DE ARTÍCULOS INCLUIDOS EN LA EXPLICACIÓN (RESTA MUY LEVE Y FORMATO ESTRICTO «Artículos omitidos: ...»):**\n"
-            "   - Omitir números de artículos incluidos en la explicación oficial debe restar **muy poco** cuando el alumno ha sabido explicar el concepto jurídico.\n"
-            f"   - Relación detectada: **Artículos omitidos:** {arts_omitidos_str}.\n\n"
-            "=== BAREMO PÚBLICO OFICIAL DE LA CONVOCATORIA APLICADO POR OPOSICIONA ===\n"
-            "- Puntuación total: de 0 a 50 puntos (mínimo 25,00 puntos para aprobar).\n"
-            "- Criterio 1 (0 a 45 puntos): Conocimiento y desarrollo de los apartados de la explicación oficial de este epígrafe + puntos extra por conceptos o artículos adicionales conexos válidos que mejoren el epígrafe - resta muy leve por los artículos omitidos de la explicación.\n"
-            "- Criterio 2 (0 a 3 puntos): Orden de las ideas y estructura sistemática (puntúa si Criterio 1 >= 20,00; si Criterio 1 < 20,00, Criterio 2 = 0,00).\n"
-            "- Criterio 3 (0 a 2 puntos): Calidad de la expresión escrita y presentación de siglas (puntúa si Criterio 1 >= 20,00; resta muy levemente solo por las siglas que realmente haya usado el alumno sin presentar su nombre completo).\n\n"
             f"=== EPÍGRAFE PREGUNTADO ===\n{enunciado_limpio}\n{pregunta}\n\n"
-            f"=== EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE (REFERENCIA DE CONTENIDO) ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
-            f"=== TEXTO ESCRITO POR EL ALUMNO ===\n{respuesta_alumno}\n\n"
-            f"=== DATOS DE AUDITORÍA VERIFICADOS ===\n"
-            f"- Artículos de la explicación citados por el alumno: {arts_acertados_str}\n"
-            f"- Artículos omitidos de la explicación: {arts_omitidos_str}\n"
-            f"- Artículos adicionales aportados por el alumno: {arts_extra_ok_str}\n"
-            f"- Siglas usadas por el alumno sin presentación previa: {siglas_mal_str}\n\n"
-            "=== FORMATO OBLIGATORIO DE TU RESPUESTA ===\n"
-            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con las puntuaciones numéricas (con punto decimal) que otorgas:\n"
+            f"=== DESARROLLO OFICIAL DE REFERENCIA ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
+            f"=== TEXTO DEL ALUMNO ===\n{respuesta_alumno}\n\n"
+            "=== AUDITORÍA VERIFICADA ===\n"
+            f"- Artículos de la referencia citados: {arts_acertados_str}\n"
+            f"- Artículos omitidos: {arts_omitidos_str}\n"
+            f"- Artículos adicionales aportados: {arts_extra_ok_str}\n"
+            f"- Siglas sin presentación previa: {siglas_mal_str}\n\n"
+            "=== FORMATO OBLIGATORIO (SÉ ÁGIL Y PRECISO, MÁXIMO 350 PALABRAS) ===\n"
+            "Primera línea exacta:\n"
             "[[NOTAS_TRIBUNAL: C1=XX.XX | C2=X.XX | C3=X.XX]]\n\n"
-            "A continuación, redacta tu dictamen analítico y motivador estructurado en estos 4 apartados:\n"
-            "1. **✅ Análisis de pertinencia, apartados acertados y aportaciones adicionales que enriquecen el epígrafe:**\n"
-            "   - Valora de forma constructiva y positiva todo lo que el alumno ha desarrollado bien respecto al epígrafe.\n"
-            "2. **⚠️ Análisis constructivo de lo que falta por completar respecto a la explicación oficial:**\n"
-            "   - Explica con detalle analítico y tono cercano qué apartados o matices de la `EXPLICACIÓN / DESARROLLO OFICIAL DEL EPÍGRAFE` le han faltado, animándole educadamente a practicar lo aprendido.\n"
-            "3. **⚖️ Rigor normativo y uso de siglas:**\n"
-            "   - Valora las normas y artículos bien citados.\n"
-            f"   - Escribe en una línea limpia: **Artículos omitidos:** {arts_omitidos_str}\n"
-            f"   - Respecto a las siglas sin presentar, indica únicamente: **Siglas sin presentación previa:** {siglas_mal_str}\n"
-            "4. **🎓 Calificación de tus Preparadores de Oposiciona (Baremo Oficial) y Desglose sencillo de puntos sumados y restados:**\n"
-            "   - Muestra las puntuaciones otorgadas en:\n"
-            "     • **Criterio 1 (Conocimiento y normativa: 0 a 45 ptos):** `XX,XX / 45,00 puntos`\n"
-            "     • **Criterio 2 (Orden de las ideas y estructura: 0 a 3 ptos):** `X,XX / 3,00 puntos`\n"
-            "     • **Criterio 3 (Calidad de la expresión escrita y siglas: 0 a 2 ptos):** `X,XX / 2,00 puntos`\n"
-            "     • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
-            "   - Añade el bloque **📊 Resumen sencillo de por qué has sumado y por qué te han restado puntos:**\n"
-            "     • **➕ Qué te ha sumado puntos:** viñetas claras con los puntos aportados por cada bloque bien desarrollado.\n"
-            "     • **➖ Qué te ha restado o impedido sumar hasta los 50 puntos:** viñetas claras con los puntos que faltaron por los apartados no incluidos, la resta leve por **Artículos omitidos** y la resta leve (si procede) por **siglas sin presentación previa**.\n"
-            "   - Cierra con **💡 Orientación motivadora de tus preparadores para seguir subiendo nota en este epígrafe:**."
+            "1. **✅ Apartados acertados y aportaciones válidas:** resumen directo de lo bien desarrollado.\n"
+            "2. **⚠️ Apartados o matices pendientes respecto al texto oficial:** qué faltó concretar.\n"
+            "3. **⚖️ Rigor normativo y siglas:**\n"
+            f"   - **Artículos omitidos:** {arts_omitidos_str}\n"
+            f"   - **Siglas sin presentación previa:** {siglas_mal_str}\n"
+            "4. **🎓 Calificación (Baremo Oficial) y Resumen de puntos:**\n"
+            "   • **Criterio 1:** `XX,XX / 45,00 ptos` | **Criterio 2:** `X,XX / 3,00 ptos` | **Criterio 3:** `X,XX / 2,00 ptos`\n"
+            "   • **🏆 CALIFICACIÓN TOTAL:** **`XX,XX / 50,00 puntos`** *(Equivalencia: **`X,XX / 10`**)*\n"
+            "   • **➕ Qué te ha sumado** y **➖ Qué te ha restado** en 2 viñetas breves + **💡 Consejo final**."
         )
+        max_tok_modo = 1050
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.15,
-            "topP": 0.85,
-        }
-    }
-
-    modelos_a_probar = _obtener_modelos_disponibles_api(clave_limpia)
-    for modelo in modelos_a_probar:
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={clave_limpia}"
-            r = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=35)
-            if r.status_code == 200:
-                data = r.json()
-                texto_ia = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
-                if isinstance(ev_fallback, dict):
-                    ev_fallback.update(ev_actualizado)
-                return texto_ia_limpio
-        except Exception:
-            continue
+    texto_ia = _invocar_gemini_rapido(clave_limpia, prompt, temp=0.15, max_tokens=max_tok_modo)
+    if texto_ia:
+        ev_actualizado, texto_ia_limpio = _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_fallback)
+        if isinstance(ev_fallback, dict):
+            ev_fallback.update(ev_actualizado)
+        return texto_ia_limpio
 
     return generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo=modo)
 # === FIN SECCIÓN 4B ===
@@ -10267,6 +10322,7 @@ elif not st.session_state.finished:
 # === SECCIÓN 5C: PANTALLA DE RESULTADOS FINALES Y REVISIÓN DETALLADA ===
 else:
     import html
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     st.markdown("""<style>
     :root { --background-color: #FFFFFF !important; --secondary-background-color: #F8FAFC !important; --text-color: #1E293B !important; }
     html, body, .stApp, .main, [data-testid='stAppViewContainer'] { background-color: #FFFFFF !important; color: #1E293B !important; }
@@ -10482,18 +10538,62 @@ else:
         st.session_state.animacion_fin_mostrada = True
         st.session_state.fase_deliberacion_tribunal = False
         msg_inicial_anim = (
-            f"El Equipo de Preparadores de Oposiciona está revisando y puntuando {len(pendientes_ia)} respuesta(s) escrita(s) conforme al baremo oficial. Por favor, espera unos segundos..."
+            f"El Equipo de Preparadores de Oposiciona está evaluando simultáneamente {len(pendientes_ia)} respuesta(s) escrita(s). Espera solo unos segundos..."
             if pendientes_ia else
             "El Equipo de Preparadores de Oposiciona está comprobando tu hoja de respuestas y calculando tu nota..."
         )
         slot_animacion_correccion.markdown(
-            _html_animacion_tribunal_corrigiendo(msg_inicial_anim, 25 if pendientes_ia else 85),
+            _html_animacion_tribunal_corrigiendo(msg_inicial_anim, 30 if pendientes_ia else 90),
             unsafe_allow_html=True
         )
-        time.sleep(0.25 if pendientes_ia else 0.9)
+        if not pendientes_ia:
+            time.sleep(0.25)
 
-    realizadas_ia = 0
-    total_pendientes_ia = max(1, len(pendientes_ia))
+    # Evaluación en paralelo ultrarrápida cuando hay 1 o varias preguntas abiertas pendientes
+    if pendientes_ia:
+        clave_activa_batch = obtener_gemini_api_key_activa()
+        tareas_paralelas = []
+        for idx_pend in pendientes_ia:
+            q_pend = st.session_state.questions[idx_pend]
+            txt_pend = (st.session_state.stats[idx_pend].get("selected") or "").strip()
+            modo_pend = "SUPUESTO" if q_pend.get("tipo_abierta") == "SUPUESTO" else "DESARROLLO"
+            ctx_pend = f"{q_pend.get('preamble', '')} {q_pend.get('question_text', '')}".strip()
+            ev_ini = evaluar_respuesta_escrita(txt_pend, q_pend.get("answer_text", ""), q_pend.get("explanation", ""), ctx_pend)
+            tareas_paralelas.append((idx_pend, q_pend, txt_pend, modo_pend, ev_ini))
+
+        def _corregir_item_worker(item_t):
+            idx_w, q_w, txt_w, modo_w, ev_w = item_t
+            fb_w = consultar_ia_gemini_correccion(
+                clave_activa_batch,
+                q_w.get("preamble", ""),
+                q_w["question_text"],
+                txt_w,
+                q_w.get("answer_text", ""),
+                q_w.get("explanation", ""),
+                ev_fallback=ev_w,
+                modo=modo_w
+            )
+            return idx_w, txt_w, ev_w, fb_w
+
+        completadas_batch = 0
+        total_batch = len(tareas_paralelas)
+        max_hilos = min(5, total_batch)
+        with ThreadPoolExecutor(max_workers=max_hilos) as executor:
+            futuros = [executor.submit(_corregir_item_worker, t_it) for t_it in tareas_paralelas]
+            for fut in as_completed(futuros):
+                idx_res, txt_res, ev_res, fb_res = fut.result()
+                st.session_state.stats[idx_res]["ai_feedback"] = fb_res
+                st.session_state.stats[idx_res]["last_evaluated_text"] = txt_res
+                st.session_state.stats[idx_res]["ai_eval"] = ev_res
+                completadas_batch += 1
+                pct_b = int(30 + (completadas_batch / total_batch) * 68)
+                slot_animacion_correccion.markdown(
+                    _html_animacion_tribunal_corrigiendo(
+                        f"Calificadas {completadas_batch} de {total_batch} respuestas escritas...",
+                        pct_b
+                    ),
+                    unsafe_allow_html=True
+                )
 
     for i, q in enumerate(st.session_state.questions):
         stat = st.session_state.stats[i]
@@ -10514,27 +10614,10 @@ else:
                 notas_individuales_50.append((i + 1, 0.0))
                 stat['final_status'] = "⚠️ Respuesta no evaluable (0,00 / 10)" if es_sup_i else "⚠️ Respuesta no evaluable (0,00 / 50 ptos)"
             else:
-                ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
-                if stat.get("last_evaluated_text") == txt_al and stat.get("ai_eval"):
-                    ev = stat["ai_eval"]
-                else:
-                    realizadas_ia += 1
-                    pct_actual = int((realizadas_ia / total_pendientes_ia) * 95)
-                    lbl_tipo_corr = "Cuestión práctica" if es_sup_i else "Epígrafe de desarrollo"
-                    slot_animacion_correccion.markdown(
-                        _html_animacion_tribunal_corrigiendo(
-                            f"Deliberando y corrigiendo tu {lbl_tipo_corr} {i + 1} de {len(st.session_state.questions)} ({realizadas_ia}/{len(pendientes_ia)} pendientes)...",
-                            pct_actual
-                        ),
-                        unsafe_allow_html=True
-                    )
-                    time.sleep(0.08)
+                ev = stat.get("ai_eval")
+                if not ev:
+                    ctx_q = f"{q.get('preamble', '')} {q.get('question_text', '')}".strip()
                     ev = evaluar_respuesta_escrita(txt_al, q.get("answer_text", ""), q.get("explanation", ""), ctx_q)
-                    clave_activa = obtener_gemini_api_key_activa()
-                    stat["ai_feedback"] = consultar_ia_gemini_correccion(
-                        clave_activa, q.get("preamble", ""), q["question_text"], txt_al, q.get("answer_text", ""), q.get("explanation", ""), ev_fallback=ev, modo=modo_i
-                    )
-                    stat["last_evaluated_text"] = txt_al
                     stat["ai_eval"] = ev
                 nota_q = float(ev.get("nota", 0.0))
                 nota_q_50 = float(ev.get("nota_50", 0.0))
