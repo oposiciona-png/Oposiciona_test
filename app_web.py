@@ -2164,7 +2164,8 @@ if not st.session_state.autenticado:
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
 NUEVOS_HOY = [
-    "TEMA 69. LA RECAUDACIÓN EN PERIODO VOLUNTARIO",
+    "TEMA 27 - EL GASTO PÚBLICO",
+    "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO",
     "TEMA 69 - RECAUDACIÓN VOLUNTARIA",
     "TEMA 15 EL ACTO ADMINISTRATIVO",
     "TEMA 05b - RECAUDACIÓN VOLUNTARIA",
@@ -2311,7 +2312,6 @@ TESTS_DISPONIBLES = {
             "Tema 67 COTIZACION ACTUALIZADO": "https://drive.google.com/uc?export=download&id=10oRTI6Rw_yF0yFZTQXhP8f8cHrZUWxK6",
             "TEMA 68 - GESTION RECAUDATORIA": "https://drive.google.com/uc?export=download&id=1ciJMrMtlDhBGQz-Vijo-_XUnvFhCpXVb",
             "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO": "https://drive.google.com/uc?export=download&id=1XTCIwNZ2LI_ObF6gtSeuCTqzb9PcOgX3",
-            "TEMA 69. LA RECAUDACIÓN EN PERIODO VOLUNTARIO": "https://drive.google.com/uc?export=download&id=12rXL-h7QbFuB0kZ-RPu_XDRphkoeJmIE",
             "TEMA 73 - LOS REGIMENES ESPECIALES DE LA S SOCIAL ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1gHCYu7-PUSZB34e4IFlG5twCQJ8r9rXm",
             "TEMA 73 - REPASO 1 - REGIMES ESPECIALES INTEGRADO EN RG ACTUALIZADO": "https://drive.google.com/uc?export=download&id=1Cct-h4j1Pn9g5YUg27ihZ0bNk9dKNUQO",
             "TEMA 74 - RETA, SETA  Y MAR ACTUALIZADO": "https://drive.google.com/uc?export=download&id=18N_VW51u8AsyPx57fBzQ9TUAacy4YEw6",
@@ -2342,6 +2342,7 @@ TESTS_DISPONIBLES = {
             "TEMA 10 - DERECHO MERCANTIL - CONCURSO ACREEDORES": "https://drive.google.com/uc?export=download&id=1Tcn1glkQI4DkbjnHap3SY9B2gU49tWgT",
             "TEMA 25 EL DERECHO PRESUPUESTARIO": "https://drive.google.com/uc?export=download&id=1laSQ9V_KWQsADQ3ltO9TheF3kHOrlJnF",
             "TEMA 26 EL PRESUPUESTO DE LA SEGURIDAD SOCIAL": "https://drive.google.com/uc?export=download&id=1Iplaf0ltUFrl662NgCKO6ZyO5R8JOVvj",
+            "TEMA 27 - EL GASTO PÚBLICO": "https://drive.google.com/uc?export=download&id=1iX-xHCNLPagCeSOwOyyoJy7t_164x3eC",
             "TEMA 40 - IGUALDAD": "https://drive.google.com/uc?export=download&id=1tJ3MrhWg8GafmEfT7zX1hqnFNzPFmhAg",
             "TEMA 41 GOBIERNO ABIERTO Y AGENDA 2030": "https://drive.google.com/uc?export=download&id=1eCF7-MBTZ3SWJX2-agLKqQstxSXkdqJ_",
             "TEMA 42 a 50 REPASO LABORAL GENERAL": "https://drive.google.com/uc?export=download&id=1-XZ-qj8ITF0lPkDJMbOWXS2xcku-pAR6",
