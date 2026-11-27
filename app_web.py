@@ -2164,6 +2164,7 @@ if not st.session_state.autenticado:
 
 # === SECCIÓN 2: CATÁLOGO DE TESTS Y PERMISOS POR ROL ===
 NUEVOS_HOY = [
+    "Tema_69_Epigrafes_GESTION RECAUDATORIA_Social",
     "TEMA 27 - EL GASTO PÚBLICO",
     "TEMA 69 LA RECAUDACION EN PERIODO VOLUNTARIO",
     "TEMA 69 - RECAUDACIÓN VOLUNTARIA",
@@ -2173,7 +2174,6 @@ NUEVOS_HOY = [
     "TEMA 56 REQUISITOS GENERALES DE LAS PRESTACIONES",
     "TEMA 57 INCAPACIDAD TEMPORAL",
     "TEMA 58 NYCM",
-    "TEMA 61 JUBILACION CONTRIBUTIVA",
 ]
 
 TESTS_DISPONIBLES = {
@@ -2281,6 +2281,7 @@ TESTS_DISPONIBLES = {
             "Tema_62_Proteccion_Muerte_y_Supervivencia": "https://drive.google.com/uc?export=download&id=1ATIGJ-0SxfOnN2tJHpQ1Hm6g7LPHAx2s",
             "Tema_67_Asistencia_Sanitaria_Prestaciones_y_Gestion": "https://drive.google.com/uc?export=download&id=1fmLaDtnKASH6GjGATrz363bn26B1BURw",
             "TEMA_68_GESTIÓN RECAUDATORIA": "https://drive.google.com/uc?export=download&id=1hSs73f4MXMjgmD8ZjlFh66f7qGD26xJ6",
+            "Tema_69_Epigrafes_GESTION RECAUDATORIA_Social": "https://drive.google.com/uc?export=download&id=13evfib4M2au48PUyTnPfqbUrXMAizIVh",
             "Tema_73_Regimenes_Integrados_Sistema_Especial_Agrario_y_Empleados_de_Hogar": "https://drive.google.com/uc?export=download&id=1geoGjR6csLIc78aJeU13zQTdt7DPZuYb",
             "Tema_74_Regimen_Especial_Trabajadores_Autonomos_RETA-v2": "https://drive.google.com/uc?export=download&id=1hx4PKcE0NALdBWdvQi1OxqgBzuC4eqFf",
             "Tema_75_Mineria_del_Carbon_Seguro_Escolar_y_Regimenes_Externos": "https://drive.google.com/uc?export=download&id=1RSXfx-Jzri8G0D42JobMx9tVe3DWhQG1",
@@ -7460,12 +7461,14 @@ def auditar_exhaustividad_respuesta_tecnica_supuesto(enunciado_pregunta, texto_a
     datos_facticos_rt = []
     for m in re.finditer(patron_fechas_cifras, rt_n):
         ventana_prev = rt_n[max(0, m.start() - 40):m.start()]
+        # Excluimos fechas que pertenecen al nombre oficial de leyes/reales decretos (ej. "1415/2004, de 11 de junio")
         if re.search(r'\b(\d{1,4}/\d{4}\s*,?\s*de|resolucion\s+de|orden\s+de|ley\s+de|decreto\s+de)\s*$', ventana_prev):
             continue
         d_val = m.group(0).strip()
         if d_val not in datos_facticos_rt:
             datos_facticos_rt.append(d_val)
 
+    datos_citados_al = [d for d in datos_facticos_rt if d in al_n]
     datos_omitidos_rt = [d for d in datos_facticos_rt if d not in al_n]
 
     rt_tiene_descarte_trampa = bool(
@@ -7920,6 +7923,7 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
         nota_50 = round(nota_10 * 5.0, 2)
         texto_ia = re.sub(r'\[\[NOTA_SUPUESTO:[^\]]*\]\]\s*', '', texto_ia, flags=re.IGNORECASE).strip()
 
+        # Si el modelo escribió en el cuerpo una cifra superior al tope combinado (ej. "10,00"), la sincronizamos con la nota real aplicada
         if nota_10_raw > nota_10 + 0.04:
             str_raw_coma = f"{nota_10_raw:.2f}".replace(".", ",")
             str_raw_pto = f"{nota_10_raw:.2f}"
@@ -10831,7 +10835,6 @@ else:
         if not pendientes_ia:
             time.sleep(0.25)
 
-    # Evaluación en paralelo ultrarrápida cuando hay 1 o varias preguntas abiertas pendientes
     if pendientes_ia:
         clave_activa_batch = obtener_gemini_api_key_activa()
         tareas_paralelas = []
@@ -11246,8 +11249,3 @@ else:
     c2_b.button(lbl_cambiar, key="btn_sub_bot", on_click=action_subir_otro, use_container_width=True)
     c3_b.button("🚪 Finalizar Sesión", key="btn_out_bot", on_click=action_finalizar_sesion, use_container_width=True, type="primary")
 # === FIN SECCIÓN 5C ===
-
-
-
-
-
