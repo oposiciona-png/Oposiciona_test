@@ -7353,11 +7353,11 @@ def _extraer_articulos_detallados_de_texto(texto):
 
 def auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explicacion_oficial):
     """
-    Evalúa exactamente en cuál de los 4 escalones de rigor normativo se sitúa la respuesta del alumno en un SUPUESTO:
-    - Nivel 0 (SIN NORMATIVA O NORMA ERRÓNEA): Tope máximo estricto = 5,00 / 10 (cualquier error en el supuesto baja de 5,00 y suspende).
-    - Nivel 1 (SOLO TEXTO LEGAL GENÉRICO ACERTADO, sin artículo): Parte de 5,50 si acierta y tope máximo estricto = 7,90 (< 8,00).
-    - Nivel 2 (NORMA + ARTÍCULO GENÉRICO ACERTADO, sin epígrafe/apartado): Tope máximo estricto = 9,00 / 10.
-    - Nivel 3 (NORMA + ARTÍCULO + EPÍGRAFE/APARTADO EXACTO, o artículo único sin subapartados en la norma oficial): Tope = 10,00 / 10.
+    Evalúa en cuál de los 4 escalones de cita normativa se sitúa el alumno en un SUPUESTO:
+    - Nivel 0 (SIN NORMATIVA O NORMA ERRÓNEA): Tope = 5,00 / 10 (cualquier error baja de 5,00).
+    - Nivel 1 (SOLO TEXTO LEGAL GENÉRICO ACERTADO, sin artículo): Parte de 5,50 si acierta y tope = 7,90 (< 8,00).
+    - Nivel 2 (NORMA + ARTÍCULO GENÉRICO ACERTADO, sin epígrafe/apartado): Tope = 9,00 / 10.
+    - Nivel 3 (NORMA + ARTÍCULO + EPÍGRAFE/APARTADO EXACTO): Habilita optar hasta 10,00 SOLO SI además cumple el rigor argumentativo de la Respuesta Técnica.
     """
     ref_completa = f"{respuesta_oficial or ''} {explicacion_oficial or ''}".strip()
     etiquetas_ref, _ = _extraer_articulos_detallados_de_texto(ref_completa)
@@ -7389,9 +7389,9 @@ def auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explica
     if acierto_art_con_epigrafe:
         return {
             "nivel": 3,
-            "etiqueta": "Nivel 3 — Máximo rigor normativo (cita norma + artículo + epígrafe/apartado exacto)",
+            "etiqueta": "Nivel 3 — Cita norma + artículo + epígrafe/apartado exacto",
             "tope_max": 10.0,
-            "suelo_acierto": 8.5,
+            "suelo_acierto": 8.0,
             "normas_citadas_ok": normas_acertadas_lbl,
             "articulos_con_epigrafe_ok": acierto_art_con_epigrafe,
             "articulos_genericos_ok": acierto_art_generico,
@@ -7402,7 +7402,7 @@ def auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explica
             "nivel": 2,
             "etiqueta": "Nivel 2 — Cita norma y artículo de forma genérica (sin precisar el epígrafe/apartado concreto)",
             "tope_max": 9.0,
-            "suelo_acierto": 7.5,
+            "suelo_acierto": 7.0,
             "normas_citadas_ok": normas_acertadas_lbl,
             "articulos_con_epigrafe_ok": [],
             "articulos_genericos_ok": acierto_art_generico,
@@ -7428,6 +7428,93 @@ def auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explica
         "articulos_con_epigrafe_ok": [],
         "articulos_genericos_ok": [],
         "ref_exige_epigrafe": ref_exige_epigrafe,
+    }
+
+def _extraer_bloque_respuesta_tecnica_supuesto(explicacion_oficial, respuesta_oficial=""):
+    exp_txt = explicacion_oficial or ""
+    m_rt = re.search(r'RESPUESTA\s+T[ÉE]CNICA[^:\n]*:\s*(.+)$', exp_txt, flags=re.IGNORECASE | re.DOTALL)
+    cuerpo_rt = m_rt.group(1).strip() if m_rt else f"{respuesta_oficial or ''}\n{exp_txt}".strip()
+    cuerpo_rt = re.sub(r'<[^>]+>', '', cuerpo_rt.replace("[[H]]", "").replace("[[LI]]", "• ")).strip()
+    return cuerpo_rt
+
+def auditar_exhaustividad_respuesta_tecnica_supuesto(enunciado_pregunta, texto_alumno, respuesta_oficial, explicacion_oficial):
+    """
+    Contrasta la densidad jurídica y argumentativa de la respuesta del alumno frente a la RESPUESTA TÉCNICA OFICIAL (el 10 real):
+    Un 10,00 exige NO SOLO acertar la conclusión y citar el artículo con su epígrafe, sino también:
+    1) Exponer la regla jurídica aplicable del precepto y contraponerla con su excepción cuando proceda.
+    2) Descartar razonadamente las fechas, importes o supuestos distractores («trampas» del caso) recogidos en la solución técnica.
+    3) Subsumir expresamente los hechos, fechas e importes concretos del supuesto planteado (no limitarse a dar una frase corta genérica con la conclusión).
+    """
+    rt_oficial = _extraer_bloque_respuesta_tecnica_supuesto(explicacion_oficial, respuesta_oficial)
+    al_n = _normalizar_sin_acentos(texto_alumno)
+    rt_n = _normalizar_sin_acentos(rt_oficial)
+    exp_full_n = _normalizar_sin_acentos(f"{respuesta_oficial or ''} {explicacion_oficial or ''}")
+
+    palabras_al = re.findall(r'\b[a-z0-9]{2,}\b', al_n)
+    palabras_rt = re.findall(r'\b[a-z0-9]{2,}\b', rt_n)
+    n_pal_al = len(palabras_al)
+    n_pal_rt = max(45, len(palabras_rt))
+    ratio_extension = round(n_pal_al / n_pal_rt, 2)
+
+    patron_fechas_cifras = r'\b(?:\d{1,2}\s+de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\s+de\s+\d{4})?|(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+de\s+\d{4}|\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?\s*(?:euros|€)?|\d+(?:,\d+)?\s*(?:%|por\s+ciento))\b'
+    datos_facticos_rt = []
+    for m in re.finditer(patron_fechas_cifras, rt_n):
+        ventana_prev = rt_n[max(0, m.start() - 40):m.start()]
+        if re.search(r'\b(\d{1,4}/\d{4}\s*,?\s*de|resolucion\s+de|orden\s+de|ley\s+de|decreto\s+de)\s*$', ventana_prev):
+            continue
+        d_val = m.group(0).strip()
+        if d_val not in datos_facticos_rt:
+            datos_facticos_rt.append(d_val)
+
+    datos_omitidos_rt = [d for d in datos_facticos_rt if d not in al_n]
+
+    rt_tiene_descarte_trampa = bool(
+        re.search(r'\b(descarte|aunque|no\s+obstante|salvo\s+que|regla\s+(?:general|inicial)|distractor|no\s+finaliza|no\s+procede|no\s+cabe|no\s+opera|excepcion)\b', exp_full_n)
+    )
+    al_explica_regla_y_descarte = bool(
+        re.search(r'\b(aunque|no\s+obstante|pese\s+a\s+que|si\s+bien|regla\s+general|salvo\s+que|desplaza|no\s+el\s+\d|no\s+finaliza\s+el|notificacion|publicacion|descarta|excepcion)\b', al_n)
+    ) and (len(datos_omitidos_rt) <= max(1, len(datos_facticos_rt) // 3))
+
+    penalizacion_exh = 0.0
+    carencias_rt = []
+
+    if rt_tiene_descarte_trampa and not al_explica_regla_y_descarte:
+        penalizacion_exh += 0.75
+        carencias_rt.append(
+            "No desarrollas la contraposición entre la regla general del precepto y su excepción ni descartas expresamente las fechas/elementos distractores del caso (como exige la Respuesta Técnica de nivel 10)."
+        )
+
+    if len(datos_omitidos_rt) >= 3:
+        penalizacion_exh += 0.55
+        carencias_rt.append(
+            f"Falta subsumir expresamente en tu argumentación los datos fácticos concretos del supuesto analizados en la solución técnica ({', '.join(datos_omitidos_rt[:4])})."
+        )
+    elif len(datos_omitidos_rt) >= 1:
+        penalizacion_exh += 0.30
+        carencias_rt.append(
+            f"Omites integrar en la subsunción fáctica datos concretos del supuesto recogidos en la solución técnica ({', '.join(datos_omitidos_rt[:3])})."
+        )
+
+    if ratio_extension < 0.42 and n_pal_rt >= 95:
+        penalizacion_exh += 0.30
+        carencias_rt.append(
+            "Tu respuesta enuncia correctamente la conclusión directa y el precepto, pero es demasiado sintética frente al desarrollo jurídico desglosado que presenta la Respuesta Técnica oficial."
+        )
+
+    penalizacion_exh = round(min(1.80, penalizacion_exh), 2)
+    tope_exhaustividad = round(max(7.80, 10.00 - penalizacion_exh), 2)
+
+    return {
+        "n_palabras_alumno": n_pal_al,
+        "n_palabras_rt": n_pal_rt,
+        "ratio_extension": ratio_extension,
+        "datos_facticos_rt": datos_facticos_rt,
+        "datos_omitidos_rt": datos_omitidos_rt,
+        "rt_tiene_descarte_trampa": rt_tiene_descarte_trampa,
+        "al_explica_regla_y_descarte": al_explica_regla_y_descarte,
+        "penalizacion_exhaustividad": penalizacion_exh,
+        "tope_exhaustividad": tope_exhaustividad,
+        "carencias_frente_a_respuesta_tecnica": carencias_rt,
     }
 
 def _extraer_bloques_estructurales_epigrafe(explicacion_oficial):
@@ -7599,6 +7686,7 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
                 articulos_cita_norma_erronea.append(lbl_art)
 
     escalera_sup = auditar_escalera_normativa_supuesto(texto_alumno, respuesta_oficial, explicacion_oficial)
+    exhaustividad_sup = auditar_exhaustividad_respuesta_tecnica_supuesto(enunciado_pregunta, texto_alumno, respuesta_oficial, explicacion_oficial)
     aud_bloques = auditar_pertinencia_y_bloques_epigrafe(enunciado_pregunta, ref_completa, texto_alumno)
 
     articulos_extra_validos = []
@@ -7626,6 +7714,7 @@ def auditar_articulos_y_aportaciones_alumno(texto_alumno, respuesta_oficial, exp
         "articulos_omitidos": articulos_omitidos_limpios,
         "articulos_cita_norma_erronea": articulos_cita_norma_erronea,
         "escalera_normativa_supuesto": escalera_sup,
+        "exhaustividad_supuesto": exhaustividad_sup,
         "articulos_extra_validos": articulos_extra_validos,
         "articulos_extra_erroneos": articulos_extra_erroneos,
         "siglas_sin_presentar": siglas_sin_presentar,
@@ -7655,8 +7744,11 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
 
     if es_ctx_supuesto:
         esc = auditoria["escalera_normativa_supuesto"]
+        exh = auditoria["exhaustividad_supuesto"]
         nivel_n = esc["nivel"]
-        tope_n = esc["tope_max"]
+        tope_norm = float(esc["tope_max"])
+        tope_exh = float(exh.get("tope_exhaustividad", 10.0))
+        tope_efectivo = round(min(tope_norm, tope_exh), 2)
         ratio_f = aud_b.get("ratio_cobertura_epigrafe", 0.0)
 
         if nivel_n == 0:
@@ -7673,11 +7765,11 @@ def evaluar_respuesta_escrita(texto_alumno, respuesta_oficial, explicacion_ofici
                 nota_10_s = round(max(1.50, ratio_f * 11.5), 2)
         else:
             if ratio_f >= 0.45:
-                nota_10_s = round(min(10.00, 7.25 + ((ratio_f - 0.45) / 0.55) * 2.75), 2)
+                nota_10_s = round(min(10.00, 7.50 + ((ratio_f - 0.45) / 0.55) * 2.50), 2)
             else:
                 nota_10_s = round(max(2.00, ratio_f * 12.5), 2)
 
-        nota_10_s = min(tope_n, nota_10_s)
+        nota_10_s = round(min(tope_efectivo, nota_10_s), 2)
         nota_50_s = round(nota_10_s * 5.0, 2)
         return {
             "nota": nota_10_s,
@@ -7815,14 +7907,25 @@ def _extraer_puntuaciones_de_respuesta_ia(texto_ia, ev_respaldo):
     aud_b = aud_full.get("auditoria_bloques") or {}
     hay_desviacion = bool(aud_b.get("desviacion_epigrafe", False))
     esc_sup = aud_full.get("escalera_normativa_supuesto") or {}
+    exh_sup = aud_full.get("exhaustividad_supuesto") or {}
 
     m_sup = re.search(r'\[\[NOTA_SUPUESTO:\s*(\d+(?:[\.,]\d+)?)\s*\]\]', texto_ia, flags=re.IGNORECASE)
     if m_sup:
         nota_10_raw = float(m_sup.group(1).replace(",", "."))
         tope_normativo = float(esc_sup.get("tope_max", 10.0))
-        nota_10 = round(max(0.0, min(tope_normativo, min(10.0, nota_10_raw))), 2)
+        tope_exhaustividad = float(exh_sup.get("tope_exhaustividad", 10.0))
+        tope_combinado = round(min(tope_normativo, tope_exhaustividad, 10.0), 2)
+
+        nota_10 = round(max(0.0, min(tope_combinado, nota_10_raw)), 2)
         nota_50 = round(nota_10 * 5.0, 2)
         texto_ia = re.sub(r'\[\[NOTA_SUPUESTO:[^\]]*\]\]\s*', '', texto_ia, flags=re.IGNORECASE).strip()
+
+        if nota_10_raw > nota_10 + 0.04:
+            str_raw_coma = f"{nota_10_raw:.2f}".replace(".", ",")
+            str_raw_pto = f"{nota_10_raw:.2f}"
+            str_fin_coma = f"{nota_10:.2f}".replace(".", ",")
+            texto_ia = texto_ia.replace(str_raw_coma, str_fin_coma).replace(str_raw_pto, str_fin_coma)
+
         ev_out.update({
             "nota": nota_10,
             "nota_50": nota_50,
@@ -7894,6 +7997,7 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los artículos principales de aplicación"
     arts_extra_ok_str = "; ".join(aud["articulos_extra_validos"]) if aud["articulos_extra_validos"] else "Ninguno"
     esc_sup = aud.get("escalera_normativa_supuesto") or {}
+    exh_sup = aud.get("exhaustividad_supuesto") or {}
     siglas_mal_str = (
         ", ".join([f"**{s}** (debiste presentar la primera vez como *«{ej}»*)" for s, ej in aud["siglas_sin_presentar"]])
         if aud["siglas_sin_presentar"] else "Ninguna (todas las siglas fueron correctamente presentadas)"
@@ -7907,23 +8011,24 @@ def generar_informe_analitico_respaldo(pregunta, ev_fallback, aud, modo="DESARRO
 
     if modo == "SUPUESTO":
         niv = esc_sup.get("nivel", 0)
-        tope_v = esc_sup.get("tope_max", 5.0)
+        tope_v = min(float(esc_sup.get("tope_max", 5.0)), float(exh_sup.get("tope_exhaustividad", 10.0)))
+        carencias_exh = exh_sup.get("carencias_frente_a_respuesta_tecnica") or []
+        txt_carencias_exh = "".join(f"- {c_it}\n" for c_it in carencias_exh)
         explicacion_tramo = {
             0: "Al no citar la normativa aplicable, la calificación máxima posible queda limitada a **5,00 / 10**, restando cualquier error o imprecisión.",
             1: "Has citado con acierto el texto legal genérico (partiendo de **5,50** si la solución es correcta), pero al no precisar el artículo aplicable no puede alcanzarse el **8,00** (tope **7,90 / 10**).",
             2: "Has citado la norma y el artículo de forma genérica sin concretar el epígrafe/apartado exacto, por lo que la nota máxima alcanzable es **9,00 / 10**.",
-            3: "Has citado con máximo rigor la norma, el artículo y su epígrafe/apartado específico, habilitando el tramo de hasta **10,00 / 10** según la exactitud del fondo."
+            3: "Has cumplido la cita normativa exacta (norma, artículo y epígrafe), pero la puntuación final se ajusta según el grado de desarrollo técnico comparado con la **Respuesta Técnica oficial** (que exige exponer regla general, descarte de distractores y subsunción completa de hechos y fechas)."
         }.get(niv, "")
         return (
             f"1. **✅ Lo que has acertado en esta cuestión práctica:**\n"
-            f"- **Nivel de rigor normativo alcanzado:** {esc_sup.get('etiqueta', '')} *(tope del tramo: {tope_v:.2f}/10)*.\n"
-            f"- **Preceptos de la solución citados:** {arts_acertados_str}.\n"
-            f"- **Bloques o cálculos identificados:** {len(comp) + len(inc)} de {tot_ap}.\n\n"
-            f"2. **⚠️ Por qué obtienes esta nota (escalera de rigor normativo y solución):**\n"
+            f"- **Escalón normativo alcanzado:** {esc_sup.get('etiqueta', '')}.\n"
+            f"- **Preceptos de la solución citados:** {arts_acertados_str}.\n\n"
+            f"2. **⚠️ Por qué obtienes `{n10:.2f} / 10` al comparar tu respuesta con la Respuesta Técnica de nivel 10:**\n"
             f"- {explicacion_tramo}\n"
-            f"- **Preceptos exactos de la solución no completados:** {arts_omitidos_str}.\n"
-            f"- Revisa debajo la **Explicación y Respuesta Técnica oficial** para contrastar cálculos, plazos y epígrafes exactos.\n\n"
-            f"3. **🎯 Calificación de la cuestión práctica:** **`{n10:.2f} / 10 puntos`**"
+            f"{txt_carencias_exh}"
+            f"- **Preceptos pendientes de completar:** {arts_omitidos_str}.\n\n"
+            f"3. **🎯 Calificación de la cuestión práctica:** **`{n10:.2f} / 10 puntos`** *(techo aplicable a tu nivel de desarrollo técnico: {tope_v:.2f}/10)*"
         )
 
     partes = []
@@ -7989,6 +8094,7 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
     )
     aud_b = aud.get("auditoria_bloques") or {}
     esc_sup = aud.get("escalera_normativa_supuesto") or {}
+    exh_sup = aud.get("exhaustividad_supuesto") or {}
 
     arts_omitidos_str = ", ".join(aud["articulos_omitidos"]) if aud["articulos_omitidos"] else "Ninguno"
     arts_acertados_str = ", ".join(aud["articulos_acertados"]) if aud["articulos_acertados"] else "Ninguno de los incluidos en la solución oficial"
@@ -8021,12 +8127,16 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
         return aviso_respaldo_inapropiado
 
     if modo in ("SUPUESTO", "SUPUESTOS"):
-        nivel_det = esc_sup.get("nivel", 0)
-        tope_det = float(esc_sup.get("tope_max", 5.0))
+        tope_norm_det = float(esc_sup.get("tope_max", 5.0))
+        tope_exh_det = float(exh_sup.get("tope_exhaustividad", 10.0))
+        tope_final_det = round(min(tope_norm_det, tope_exh_det), 2)
         etiqueta_det = esc_sup.get("etiqueta", "")
         normas_ok_det = ", ".join(esc_sup.get("normas_citadas_ok", [])) or "Ninguna"
         arts_ep_det = ", ".join(esc_sup.get("articulos_con_epigrafe_ok", [])) or "Ninguno"
         arts_gen_det = ", ".join(esc_sup.get("articulos_genericos_ok", [])) or "Ninguno"
+        carencias_exh_list = exh_sup.get("carencias_frente_a_respuesta_tecnica") or []
+        carencias_exh_str = " | ".join(carencias_exh_list) if carencias_exh_list else "Ninguna (desarrollo técnico completo)"
+        datos_omit_rt_str = ", ".join(exh_sup.get("datos_omitidos_rt", [])[:5]) or "Ninguno"
 
         instruccion_escueta_sup = (
             "\n- **ATENCIÓN A RESPUESTA MUY BREVE:** El alumno ha escrito muy pocas palabras. Penaliza la falta de desarrollo jurídico y recuérdale educadamente que en el 2.º ejercicio de Gestión debe razonar jurídicamente el supuesto y citar norma, artículo y apartado.\n"
@@ -8035,43 +8145,43 @@ def consultar_ia_gemini_correccion(api_key, enunciado_supuesto, pregunta, respue
 
         prompt = (
             "Actúa exclusivamente como el equipo de preparadores de Oposiciona para el Cuerpo de Gestión de la Administración de la Seguridad Social (PROHIBIDO mencionar IA, inteligencia artificial, modelo o algoritmo, y PROHIBIDO atribuirte ser Tribunal oficial).\n"
-            "Evalúa con agilidad y rigor la respuesta del alumno a esta cuestión de SUPUESTO PRÁCTICO comparándola con la SOLUCIÓN OFICIAL y aplicando de forma **INQUEBRANTABLE** la siguiente ESCALERA DE RIGOR NORMATIVO (de 0,00 a 10,00 puntos):\n\n"
-            "=== ESCALERA OBLIGATORIA DE RIGOR NORMATIVO EN SUPUESTOS PRÁCTICOS ===\n"
-            "1. **ESCALÓN 0 — SIN CITA DE NORMATIVA (o citando una norma equivocada) ➔ TOPE MÁXIMO ESTRICTO: `5,00 / 10`:**\n"
-            "   - Si el alumno NO cita ninguna norma aplicable, **NUNCA puede superar el `5,00`** aunque clave todos los cálculos y conclusiones.\n"
-            "   - Solo alcanza `5,00` si la resolución práctica y los cálculos son 100 % exactos. **Cualquier error, omisión o fallo en el cálculo o en el fondo le resta puntos por debajo de 5,00 (suspenso, ej. 2,50 a 4,50 según el fallo).**\n"
-            "2. **ESCALÓN 1 — CITA CON ACIERTO SOLO EL TEXTO LEGAL GENÉRICO (ej. TRLGSS, RGR, RGCL, Orden PJC/297/2026) SIN ARTÍCULO ➔ TRAMO `5,50 a 7,90` (PROHIBIDO ALCANZAR EL `8,00`):**\n"
-            "   - Si cita acertadamente la ley/reglamento aplicable de forma genérica y acierta en la respuesta al supuesto, **parte de `5,50`** y sube progresivamente según la calidad de su razonamiento y cálculos, pero **SIN ALCANZAR NUNCA EL `8,00` (máximo `7,75` o `7,90`)** por carecer de referencia a nivel de artículo.\n"
-            "   - Si pese a citar la ley genérica se equivoca en el fondo o en el cálculo del supuesto, resta puntos igualmente pudiendo bajar del aprobado (< 5,00).\n"
-            "3. **ESCALÓN 2 — CITA LA NORMA Y EL ARTÍCULO PRINCIPAL DE FORMA GENÉRICA (ej. «art. 33 del RGR» sin especificar el apartado/epígrafe concreto cuando el precepto lo tiene) ➔ TOPE MÁXIMO ESTRICTO: `9,00 / 10`:**\n"
-            "   - Comprueba que el artículo citado sea correcto y sea el de aplicación principal. Si acierta todo en la pregunta, puede alcanzar **hasta `9,00`**, pero **NO supera el `9,00`** por no concretar el epígrafe/apartado exacto del artículo. Los fallos en cálculos o matices restan proporcionalmente desde ese techo.\n"
-            "4. **ESCALÓN 3 — MÁXIMO RIGOR: CITA NORMA + ARTÍCULO + EPÍGRAFE/APARTADO EXACTO (ej. «art. 33.4.b) del RGR», «art. 56.1.c).2.º del RGR», «art. 29.1 del TRLGSS», o el artículo completo si carece de apartados) ➔ PUEDE ALCANZAR HASTA `10,00 / 10`:**\n"
-            "   - Si cita con exactitud norma, artículo y apartado/epígrafe aplicable y clava todos los cálculos y matices jurídicos de la pregunta, alcanza entre **`9,25 y 10,00`**.\n\n"
-            "=== AUDITORÍA AUTOMÁTICA VERIFICADA SOBRE EL TEXTO DEL ALUMNO (RESPETA SU TOPE MÁXIMO) ===\n"
-            f"- Escalón detectado: **{etiqueta_det}**\n"
-            f"- **TOPE MÁXIMO PERMITIDO PARA ESTA RESPUESTA: `{tope_det:.2f} / 10`** (jamás otorgues una nota superior a `{tope_det:.2f}`).\n"
-            f"- Normas genéricas válidas detectadas: {normas_ok_det}\n"
-            f"- Artículos con epígrafe/apartado exacto detectados: {arts_ep_det}\n"
-            f"- Artículos genéricos (sin epígrafe) detectados: {arts_gen_det}\n"
-            f"- Preceptos de la solución oficial NO citados o incompletos: {arts_omitidos_str} | Posibles errores de cita: {arts_err_str}"
+            "Evalúa con rigor exigente de oposición la respuesta del alumno a esta cuestión de SUPUESTO PRÁCTICO comparándola directamente con la **RESPUESTA TÉCNICA Y FUNDAMENTACIÓN JURÍDICA OFICIAL** (que representa el modelo real de **10,00 puntos**).\n\n"
+            "=== DOBLE REGLA INQUEBRANTABLE DE CALIFICACIÓN (0,00 a 10,00 PUNTOS) ===\n"
+            "**REGLA A — ESCALERA DE CITA NORMATIVA (primer límite de nota):**\n"
+            "1. **Sin cita normativa (o norma errónea):** NUNCA supera **`5,00`**; cualquier error de fondo o cálculo baja de 5,00 (suspenso).\n"
+            "2. **Solo texto legal genérico acertado (sin artículo):** parte de `5,50` si acierta y NUNCA alcanza el `8,00` (tope **`7,90`**).\n"
+            "3. **Norma + artículo genérico acertado (sin epígrafe/apartado concreto):** tope máximo **`9,00`**.\n"
+            "4. **Norma + artículo + epígrafe/apartado exacto (ej. art. 56.1.c).2.º RGR):** habilita optar hasta `10,00`, **PERO SOLO SI ADEMÁS CUMPLE LA REGLA B DE RIGOR ARGUMENTATIVO COMPLETO**.\n\n"
+            "**REGLA B — CONTRASTE CON EL RIGOR DE LA «RESPUESTA TÉCNICA OFICIAL» (PROHIBIDO REGALAR EL 10,00 A RESPUESTAS SINTÉTICAS):**\n"
+            "- Fíjate bien: la **Respuesta Técnica oficial** es el patrón de excelencia de **10,00**. Para alcanzar entre **`9,50 y 10,00`** NO basta con copiar o resumir en un párrafo corto la frase final («Respuesta Directa Oficial») aunque incluya el número de artículo y epígrafe exacto.\n"
+            "- Si el alumno acierta la conclusión y cita el artículo + epígrafe exacto, obtendrá una **nota alta (entre `8,00 y 8,75`)**, pero **DEBES RESTAR PUNTOS DESDE EL 10,00** por cada elemento de rigor de la Respuesta Técnica que haya omitido:\n"
+            "  • **No exponer la regla general del precepto y su articulación con la excepción aplicable** (resta **-0,50 a -0,75 ptos**).\n"
+            "  • **No descartar razonadamente las fechas, cifras o elementos distractores («trampas») del planteamiento** explicando por qué no se aplican (ej. explicar por qué no rige la fecha de notificación o publicación ni el mes siguiente a ellas) (resta **-0,50 a -0,75 ptos**).\n"
+            "  • **No subsumir expresamente los hechos concretos del caso** (fechas exactas del supuesto, mes fijado en el fallo, fecha concreta de acreditación del pago, nombre de la entidad o desglose aritmético paso a paso) limitándose a una paráfrasis genérica (resta **-0,30 a -0,60 ptos**).\n\n"
+            "=== AUDITORÍA VERIFICADA SOBRE LA RESPUESTA DEL ALUMNO (OBLIGATORIO RESPETAR EL TOPE) ===\n"
+            f"- Escalón normativo detectado: **{etiqueta_det}** (tope normativo: `{tope_norm_det:.2f}`)\n"
+            f"- Carencias detectadas frente al rigor de 10 de la Respuesta Técnica: **{carencias_exh_str}**\n"
+            f"- Datos/fechas concretos de la Respuesta Técnica omitidos por el alumno: **{datos_omit_rt_str}**\n"
+            f"- **TOPE MÁXIMO ESTRICTO PERMITIDO PARA ESTA RESPUESTA: `{tope_final_det:.2f} / 10`** (JAMÁS otorgues una puntuación superior a `{tope_final_det:.2f}`).\n"
+            f"- Normas citadas: {normas_ok_det} | Artículos con epígrafe: {arts_ep_det} | Artículos sin epígrafe: {arts_gen_det} | Errores/omisiones normativas: {arts_omitidos_str} / {arts_err_str}"
             f"{instruccion_escueta_sup}\n\n"
             f"=== PLANTEAMIENTO DEL SUPUESTO ===\n{enunciado_limpio}\n\n"
             f"=== PREGUNTA PRÁCTICA ===\n{pregunta}\n\n"
-            f"=== EXPLICACIÓN Y SOLUCIÓN OFICIAL ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
+            f"=== SOLUCIÓN Y RESPUESTA TÉCNICA OFICIAL (EL MODELO DE 10,00) ===\n{respuesta_oficial}\n{explicacion_limpia_prompt}\n\n"
             f"=== RESPUESTA DEL ALUMNO ===\n{respuesta_alumno}\n\n"
-            "=== FORMATO OBLIGATORIO DE TU RESPUESTA (CONCISO Y DIRECTO, MÁXIMO 240 PALABRAS) ===\n"
-            "En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal y sin superar el tope permitido):\n"
+            "=== FORMATO OBLIGATORIO DE TU RESPUESTA (CONCISO Y PRECISO, MÁXIMO 250 PALABRAS) ===\n"
+            f"En la PRIMERA LÍNEA escribe siempre esta etiqueta exacta con la nota sobre 10 (con punto decimal y NUNCA mayor que `{tope_final_det:.2f}`):\n"
             "[[NOTA_SUPUESTO: X.XX]]\n\n"
-            "Después redacta tu valoración en estos 3 puntos:\n"
-            "1. **✅ Resolución del supuesto y escalón de rigor normativo alcanzado:**\n"
-            "   - Indica qué cálculos, plazos o conclusiones ha resuelto bien y en qué escalón normativo se sitúa su cita (sin norma / norma genérica / norma + artículo / norma + artículo + epígrafe).\n"
-            "2. **⚠️ Justificación exacta de tu nota (por qué llegas a esta puntuación y qué restó o limitó el techo):**\n"
-            "   - Explica con total transparencia cómo han influido tanto el techo de su escalón normativo (5,00 / <8,00 / 9,00 / 10,00) como cualquier error o matiz omitido en la solución del supuesto.\n"
+            "Después redacta tu dictamen en estos 3 puntos:\n"
+            "1. **✅ Aciertos de fondo y rigor normativo alcanzado:**\n"
+            "   - Reconoce el acierto en la solución/fecha/cálculo y el nivel de precisión normativa alcanzado (norma, artículo y apartado).\n"
+            "2. **⚠️ Por qué obtienes esta nota y qué te ha faltado frente a la Respuesta Técnica de 10,00:**\n"
+            "   - Explica con claridad y rigor qué puntos se han restado al comparar su texto con la **Respuesta Técnica oficial**: señala expresamente qué desarrollo de la regla general vs. excepción, qué descarte razonado de las fechas/datos trampa del supuesto o qué subsunción de datos concretos del caso omitió en su redacción.\n"
             f"   - Indica en una línea limpia: **Referencia normativa exacta de la solución:** {arts_omitidos_str if arts_omitidos_str != 'Ninguno' else arts_acertados_str}\n"
-            "3. **💡 Clave de examen de tus preparadores:**\n"
-            "   - Una frase directa para memorizar la cita exacta (norma + artículo + apartado) y no perder puntos en el examen."
+            "3. **💡 Cómo convertir esta buena respuesta en un 10,00 de examen oficial:**\n"
+            "   - Una pauta práctica concreta indicando la estructura completa que debe escribir (Precepto exacto ➔ Regla general ➔ Descarte de fechas/datos trampa del enunciado ➔ Excepción y subsunción con fechas del caso)."
         )
-        max_tok_modo = 780
+        max_tok_modo = 820
     else:
         alerta_desv_str = (
             f"\n🚨 ATENCIÓN: Incongruencia con el epígrafe preguntado: {aud_b.get('motivo_desviacion')}\n"
